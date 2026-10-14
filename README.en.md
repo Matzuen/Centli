@@ -1,36 +1,36 @@
 # Centli
 
-#### Description
-厘记，厘清每一笔账单
+Local-first personal bookkeeping: **clear every bill**.
 
-#### Software Architecture
-Software architecture description
+- Flutter · Drift (SQLite) · Riverpod · go_router
+- Version: `1.0.0+1`
 
-#### Installation
+## Features
 
-1.  xxxx
-2.  xxxx
-3.  xxxx
+- Manual transactions (expense / income / transfer) with soft-delete recycle bin
+- Multi-ledger: create, switch, archive
+- Accounts, stats, monthly budgets
+- Android notification capture → pending confirm / ignore history
+- FX rates; hide amounts; app lock
+- Theme: light / dark / system
+- Backup: full **JSON** restore; **Excel** human export + best-effort import
+- Android home widget (MVP); no iOS widget yet
 
-#### Instructions
+## Run
 
-1.  xxxx
-2.  xxxx
-3.  xxxx
+```bash
+flutter pub get
+flutter run
+dart run build_runner build --delete-conflicting-outputs   # after schema changes
+flutter test
+```
 
-#### Contribution
+## Backup
 
-1.  Fork the repository
-2.  Create Feat_xxx branch
-3.  Commit your code
-4.  Create Pull Request
+Prefer JSON (`format: centli-export`). Excel import is best-effort (no fx/settings sheets). See Chinese README for details.
 
+## Docs
 
-#### Gitee Feature
-
-1.  You can use Readme\_XXX.md to support different languages, such as Readme\_en.md, Readme\_zh.md
-2.  Gitee blog [blog.gitee.com](https://blog.gitee.com)
-3.  Explore open source project [https://gitee.com/explore](https://gitee.com/explore)
-4.  The most valuable open source project [GVP](https://gitee.com/gvp)
-5.  The manual of Gitee [https://gitee.com/help](https://gitee.com/help)
-6.  The most popular members  [https://gitee.com/gitee-stars/](https://gitee.com/gitee-stars/)
+- `docs/Centli_schema.md`
+- `docs/Centli_pages_wireframes.md`
+- `docs/remaining_features_gap.md`

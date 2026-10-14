@@ -1,0 +1,264 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../data/db/database_provider.dart';
+import '../../data/export/import_service.dart';
+
+class ImportPage extends ConsumerStatefulWidget {
+  const ImportPage({super.key});
+
+  @override
+  ConsumerState<ImportPage> createState() => _ImportPageState();
+}
+
+class _ImportPageState extends ConsumerState<ImportPage> {
+  ImportPreview? _preview;
+  bool _busy = false;
+  String? _error;
+
+  Future<void> _pick() async {
+    setState(() {
+      _error = null;
+      _busy = true;
+    });
+    try {
+      final files = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['json', 'xlsx'],
+      );
+      if (files.isEmpty) {
+        return;
+      }
+      final picked = files.single;
+      final svc = ImportService(ref.read(databaseProvider));
+      ImportPreview preview;
+      final name = picked.name.toLowerCase();
+      final path = picked.path;
+      final isExcel = name.endsWith('.xlsx');
+
+      if (isExcel) {
+        if (path != null && path.isNotEmpty) {
+          preview = await svc.previewExcelFile(File(path));
+        } else {
+          final bytes = await picked.readAsBytes();
+          preview = await svc.previewExcelBytes(
+            bytes,
+            sourceLabel: picked.name,
+          );
+        }
+      } else if (path != null && path.isNotEmpty) {
+        preview = await svc.previewPath(path);
+      } else {
+        final bytes = await picked.readAsBytes();
+        final decoded = utf8.decode(bytes);
+        final bundle = svc.parseJsonString(decoded);
+        preview = ImportPreview(bundle: bundle, sourceLabel: picked.name);
+      }
+      if (!mounted) return;
+      setState(() {
+        _preview = preview;
+        _error = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _preview = null;
+        _error = '$e';
+      });
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _restore() async {
+    final preview = _preview;
+    if (preview == null || _busy) return;
+
+    final b = preview.bundle;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('\u786e\u8ba4\u8fd8\u539f\uff1f'),
+        content: Text(
+          '\u5c06\u6e05\u7a7a\u672c\u673a\u5168\u90e8\u8d26\u672c\u6570\u636e\uff08\u8d26\u6237/\u5206\u7c7b/\u6d41\u6c34/\u5f85\u786e\u8ba4/\u89c4\u5219/\u9884\u7b97/\u6c47\u7387\u7f13\u5b58\uff09\uff0c'
+          '\u5e76\u5199\u5165\u5907\u4efd\u4e2d\u7684\u8d26\u672c\u300c${b.ledgerName}\u300d\u3002\n\n'
+          '\u4e0d\u4f1a\u6539\u52a8\u672c\u673a PIN\uff08\u5e94\u7528\u9501\u5f00\u5173\u4e5f\u4e0d\u4f1a\u4ece\u5907\u4efd\u8986\u76d6\uff09\u3002\n\n'
+          '\u6b64\u64cd\u4f5c\u4e0d\u53ef\u64a4\u9500\u3002',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('\u53d6\u6d88'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('\u6e05\u7a7a\u5e76\u8fd8\u539f'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final svc = ImportService(ref.read(databaseProvider));
+      final result = await svc.restore(b);
+      ref.invalidate(currentLedgerIdProvider);
+      ref.invalidate(currentLedgerProvider);
+      ref.invalidate(fxBookProvider);
+      ref.invalidate(onboardingDoneProvider);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '\u5df2\u8fd8\u539f\u300c${result.ledgerName}\u300d\uff1a'
+            '${result.transactions} \u7b14\u6d41\u6c34 / '
+            '${result.accounts} \u8d26\u6237 / '
+            '${result.categories} \u5206\u7c7b / '
+            '${result.budgets} \u9884\u7b97',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = '$e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('\u8fd8\u539f\u5931\u8d25\uff1a$e')),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final preview = _preview;
+    return Scaffold(
+      appBar: AppBar(title: const Text('\u5bfc\u5165 / \u8fd8\u539f')),
+      body: ListView(
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Text(
+              '\u4ece\u672c\u673a\u9009\u62e9 Centli \u5bfc\u51fa\u6587\u4ef6\uff1aJSON\uff08\u5b8c\u6574\uff09\u6216 Excel .xlsx\uff08\u5c3d\u529b\u800c\u4e3a\uff09\u3002'
+              '\u9884\u89c8\u540e\u53ef\u4e00\u952e\u8fd8\u539f\u3002Excel \u4e0d\u542b\u6c47\u7387/\u8bbe\u7f6e\uff0c\u5efa\u8bae\u4f18\u5148\u4f7f\u7528 JSON\u3002',
+              style: TextStyle(height: 1.4),
+            ),
+          ),
+          const Divider(),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: FilledButton.tonalIcon(
+              onPressed: _busy ? null : _pick,
+              icon: _busy && preview == null
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.folder_open),
+              label: Text(
+                _busy && preview == null
+                    ? '\u8bfb\u53d6\u4e2d\u2026'
+                    : '\u9009\u62e9 JSON / Excel \u6587\u4ef6',
+              ),
+            ),
+          ),
+          if (_error != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+              child: Text(
+                _error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ),
+          if (preview != null) ...[
+            const Divider(),
+            ListTile(
+              title: const Text('\u6587\u4ef6'),
+              subtitle: Text(
+                '${preview.sourceLabel}\n'
+                '\u6765\u6e90: ${preview.sourceKind == 'excel' ? 'Excel (\u5c3d\u529b\u800c\u4e3a)' : 'JSON'}',
+              ),
+              isThreeLine: true,
+            ),
+            if (preview.warnings.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Text(
+                  preview.warnings.map((w) => '\u2022 $w').join('\n'),
+                  style: TextStyle(
+                    height: 1.4,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ListTile(
+              title: const Text('\u8d26\u672c'),
+              subtitle: Text(
+                '${preview.bundle.ledgerName} \u00b7 ${preview.bundle.baseCurrency}\n'
+                'id: ${preview.bundle.ledgerId}',
+              ),
+              isThreeLine: true,
+            ),
+            ListTile(
+              title: const Text('\u5143\u6570\u636e'),
+              subtitle: Text(
+                'export_version ${preview.bundle.exportVersion} \u00b7 '
+                'schema ${preview.bundle.schemaVersion}\n'
+                'exported_at: ${preview.bundle.exportedAt ?? '\u2014'}\n'
+                'app: ${preview.bundle.appVersion ?? '\u2014'}',
+              ),
+              isThreeLine: true,
+            ),
+            ListTile(
+              title: const Text('\u5185\u5bb9\u7edf\u8ba1'),
+              subtitle: Text(
+                '\u8d26\u6237 ${preview.bundle.accounts.length} \u00b7 '
+                '\u5206\u7c7b ${preview.bundle.categories.length} \u00b7 '
+                '\u6d41\u6c34 ${preview.bundle.transactions.length}\n'
+                '\u5f85\u786e\u8ba4 ${preview.bundle.pendingCaptures.length} \u00b7 '
+                '\u89c4\u5219 ${preview.bundle.merchantRules.length} \u00b7 '
+                '\u6c47\u7387 ${preview.bundle.fxRates.length} \u00b7 '
+                '\u9884\u7b97 ${preview.bundle.budgets.length} \u00b7 '
+                '\u8bbe\u7f6e\u952e ${preview.bundle.settings.length}',
+              ),
+              isThreeLine: true,
+            ),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
+              child: Text(
+                '\u8fd8\u539f\u4f1a\u5220\u9664\u672c\u673a\u73b0\u6709\u8d26\u672c\u6570\u636e\u540e\u5199\u5165\u5907\u4efd\u3002\u5e94\u7528\u9501 PIN \u4fdd\u7559\u5728\u672c\u673a\u5b89\u5168\u5b58\u50a8\u4e2d\u3002',
+                style: TextStyle(height: 1.4),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: FilledButton.icon(
+                onPressed: _busy ? null : _restore,
+                icon: _busy
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.restore),
+                label: Text(
+                  _busy ? '\u8fd8\u539f\u4e2d\u2026' : '\u6e05\u7a7a\u5e76\u8fd8\u539f',
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 32),
+        ],
+      ),
+    );
+  }
+}

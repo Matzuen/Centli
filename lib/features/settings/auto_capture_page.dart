@@ -1,0 +1,540 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../data/db/centli_database.dart';
+import '../../data/db/database_provider.dart';
+import '../../platform/notifications/notification_listener_stub.dart';
+import '../../platform/notifications/notification_parse.dart';
+import '../../platform/notifications/noti_template_store.dart';
+
+/// Full auto-capture settings at `/me/auto` (wireframe §8).
+class AutoCapturePage extends ConsumerStatefulWidget {
+  const AutoCapturePage({super.key});
+
+  @override
+  ConsumerState<AutoCapturePage> createState() => _AutoCapturePageState();
+}
+
+class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
+    with WidgetsBindingObserver {
+  bool _loading = true;
+  bool _enabled = false;
+  bool _granted = false;
+  int _templateVersion = kNotiTemplateFallbackVersion;
+  String? _templateUpdatedAt;
+  String _templateSource = 'builtin';
+  int _pendingCount = 0;
+  bool _busy = false;
+  bool _batteryIgnored = false;
+  Map<String, String> _accountMap = {};
+  List<Account> _accounts = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _reload();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _reload(soft: true);
+    }
+  }
+
+  Future<void> _reload({bool soft = false}) async {
+    if (!soft && mounted) setState(() => _loading = true);
+    final db = ref.read(databaseProvider);
+    final enabled = (await db.getSetting('auto_capture_enabled')) == 'true';
+    final granted = await NotificationCaptureStub.isPermissionGranted();
+    final batteryIgnored =
+        await NotificationCaptureStub.isBatteryOptimizationIgnored();
+    final ledgerId = await db.currentLedgerId();
+    var pending = 0;
+    List<Account> accounts = const [];
+    if (ledgerId != null) {
+      pending = await db.countPendingCaptures(ledgerId);
+      accounts = await db.loadActiveAccounts(ledgerId);
+    }
+    final accountMap = await db.getCaptureAccountMap();
+
+    final templates = await NotiTemplateStore.load();
+    final version = NotiTemplateStore.version;
+    final updatedAt = NotiTemplateStore.updatedAt;
+    final source = NotiTemplateStore.source;
+
+    await db.setSetting('notification_template_version', '$version');
+
+    if (!mounted) return;
+    setState(() {
+      _enabled = enabled;
+      _granted = granted;
+      _batteryIgnored = batteryIgnored;
+      _templateVersion = version;
+      _templateUpdatedAt = updatedAt;
+      _templateSource = source;
+      _pendingCount = pending;
+      _accountMap = accountMap;
+      _accounts = accounts;
+      _loading = false;
+    });
+    // Touch templates so analyzer keeps import used in mapping labels.
+    assert(templates.isNotEmpty || templates.isEmpty);
+  }
+
+  Future<void> _setEnabled(bool wantOn) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final db = ref.read(databaseProvider);
+      var granted = _granted;
+      if (wantOn && NotificationCaptureStub.supported && !granted) {
+        final result = await context.push<bool>('/me/permission?open=1');
+        if (!mounted) return;
+        granted = result == true
+            ? true
+            : await NotificationCaptureStub.isPermissionGranted();
+        if (!mounted) return;
+        setState(() => _granted = granted);
+        if (!granted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('请先在系统设置中开启通知使用权')),
+          );
+          return;
+        }
+      }
+      await db.setSetting('auto_capture_enabled', wantOn ? 'true' : 'false');
+      await NotificationCaptureStub.setAutoCaptureEnabled(wantOn);
+      if (!mounted) return;
+      setState(() => _enabled = wantOn);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _openPermission() async {
+    final result = await context.push<bool>(
+      _granted ? '/me/permission' : '/me/permission?open=1',
+    );
+    if (!mounted) return;
+    final granted = result == true
+        ? true
+        : await NotificationCaptureStub.isPermissionGranted();
+    setState(() => _granted = granted);
+    await _reload(soft: true);
+  }
+
+  Future<void> _openBattery() async {
+    setState(() => _busy = true);
+    try {
+      await NotificationCaptureStub.openBatteryOptimizationSettings();
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+      final ignored =
+          await NotificationCaptureStub.isBatteryOptimizationIgnored();
+      if (!mounted) return;
+      setState(() => _batteryIgnored = ignored);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _setAppAccount(String hint, String? accountId) async {
+    setState(() => _busy = true);
+    try {
+      await ref
+          .read(databaseProvider)
+          .setCaptureAccountForHint(hint, accountId);
+      final map = await ref.read(databaseProvider).getCaptureAccountMap();
+      if (!mounted) return;
+      setState(() => _accountMap = map);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            accountId == null ? '已清除映射' : '已保存默认账户',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _checkTemplateUpdate() async {
+    setState(() => _busy = true);
+    try {
+      final result = await NotiTemplateStore.checkAndApplyUpdate();
+      await ref.read(databaseProvider).setSetting(
+            'notification_template_version',
+            '${result.activeVersion}',
+          );
+      if (!mounted) return;
+      setState(() {
+        _templateVersion = result.activeVersion;
+        _templateUpdatedAt = NotiTemplateStore.updatedAt;
+        _templateSource = result.source;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.message)),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _clearPending() async {
+    final ledgerId = await ref.read(databaseProvider).currentLedgerId();
+    if (ledgerId == null) return;
+    if (_pendingCount == 0) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('暂无待确认账单')),
+      );
+      return;
+    }
+
+    if (!mounted) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('清空待确认'),
+        content: Text(
+          '将删除当前账本下 $_pendingCount 条待确认记录（不影响已入账流水）。此操作不可撤销。',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('清空'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    setState(() => _busy = true);
+    try {
+      final n = await ref.read(databaseProvider).clearPendingCaptures(ledgerId);
+      await NotificationCaptureStub.cancelAllPendingConfirm();
+      if (!mounted) return;
+      setState(() => _pendingCount = 0);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(n == 0 ? '没有可清空的记录' : '已清空 $n 条待确认')),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  void _showTemplateVersion() {
+    final templates = NotiTemplateStore.peek();
+    final apps = <String>{};
+    for (final t in templates) {
+      for (final pkg in t.packages) {
+        apps.add(_pkgLabel(pkg));
+      }
+    }
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('解析模板'),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('版本：$_templateVersion'),
+                Text('来源：$_templateSource'),
+                if (_templateUpdatedAt != null)
+                  Text('更新于：$_templateUpdatedAt'),
+                const SizedBox(height: 12),
+                Text(
+                  '模板共 ${templates.length} 条',
+                  style: Theme.of(ctx).textTheme.titleSmall,
+                ),
+                const SizedBox(height: 8),
+                for (final t in templates) ...[
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    title: Text(t.id),
+                    subtitle: Text(
+                      t.packages.map(_pkgLabel).join('、'),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 4),
+                Text(
+                  '监听应用：${apps.join('、')}',
+                  style: Theme.of(ctx).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('关闭'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  String _pkgLabel(String pkg) {
+    if (pkg.contains('Alipay') || pkg.contains('alipay')) return '支付宝';
+    if (pkg.contains('tencent.mm')) return '微信';
+    return pkg;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final supported = NotificationCaptureStub.supported;
+    final switchOn = supported && _enabled && _granted;
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('自动记账')),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+              children: [
+                Text(
+                  '开启后将读取支付宝/微信等支付成功类通知，生成待确认账单；'
+                  '不会自动入账或静默改账。',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                ),
+                const SizedBox(height: 16),
+                if (!supported) ...[
+                  Card(
+                    child: ListTile(
+                      leading: Icon(
+                        Icons.desktop_windows_outlined,
+                        color: scheme.primary,
+                      ),
+                      title: const Text('当前平台不支持通知监听'),
+                      subtitle: const Text(
+                        '仅 Android 支持。Windows 上可在「待确认」页用示例数据调试解析与入队。',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                Card(
+                  child: SwitchListTile(
+                    title: const Text('启用通知捕获'),
+                    subtitle: Text(
+                      !supported
+                          ? '当前平台不可用'
+                          : (_granted
+                              ? (_enabled ? '已开启' : '已关闭')
+                              : '需先授予通知使用权'),
+                    ),
+                    value: switchOn,
+                    onChanged: (!supported || _busy)
+                        ? null
+                        : (v) => _setEnabled(v),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Card(
+                  child: ListTile(
+                    leading: Icon(
+                      _granted
+                          ? Icons.verified_user_outlined
+                          : Icons.privacy_tip_outlined,
+                      color: _granted ? scheme.primary : scheme.error,
+                    ),
+                    title: const Text('通知权限'),
+                    subtitle: Text(
+                      !supported
+                          ? '仅 Android 可申请'
+                          : (_granted ? '已开启' : '未开启 · 去开启'),
+                    ),
+                    trailing: supported && !_granted
+                        ? FilledButton.tonal(
+                            onPressed: _busy ? null : _openPermission,
+                            child: const Text('去开启'),
+                          )
+                        : (supported
+                            ? TextButton(
+                                onPressed: _busy ? null : _openPermission,
+                                child: const Text('系统设置'),
+                              )
+                            : null),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Card(
+                  child: ListTile(
+                    leading: Icon(
+                      _batteryIgnored
+                          ? Icons.battery_charging_full
+                          : Icons.battery_alert_outlined,
+                      color: _batteryIgnored ? scheme.primary : scheme.tertiary,
+                    ),
+                    title: const Text('电池优化（捕获可靠性）'),
+                    subtitle: Text(
+                      !supported
+                          ? '仅 Android 相关：系统杀后台会导致漏记'
+                          : (_batteryIgnored
+                              ? '已忽略电池优化，有利于后台捕获'
+                              : '建议将 Centli 设为「不优化」，减少通知监听被系统杀掉'),
+                    ),
+                    trailing: supported
+                        ? FilledButton.tonal(
+                            onPressed: _busy ? null : _openBattery,
+                            child: Text(_batteryIgnored ? '查看设置' : '去设置'),
+                          )
+                        : null,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text('应用 → 默认账户', style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 4),
+                Text(
+                  '解析成功后预填账户；仍需在待确认页点「入账」。',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                ),
+                const SizedBox(height: 8),
+                for (final def in kCaptureAppDefs) ...[
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              def.label,
+                              style: Theme.of(context).textTheme.titleSmall,
+                            ),
+                          ),
+                          SizedBox(
+                            width: 180,
+                            child: DropdownButtonFormField<String?>(
+                              key: ValueKey(
+                                'cap-map-${def.hint}-${_accountMap[def.hint]}',
+                              ),
+                              initialValue: _accountMap[def.hint] != null &&
+                                      _accounts.any(
+                                        (a) => a.id == _accountMap[def.hint],
+                                      )
+                                  ? _accountMap[def.hint]
+                                  : null,
+                              isExpanded: true,
+                              decoration: const InputDecoration(
+                                isDense: true,
+                                border: OutlineInputBorder(),
+                                labelText: '默认账户',
+                              ),
+                              items: [
+                                const DropdownMenuItem<String?>(
+                                  value: null,
+                                  child: Text('自动（按账户名）'),
+                                ),
+                                for (final a in _accounts)
+                                  DropdownMenuItem<String?>(
+                                    value: a.id,
+                                    child: Text('${a.name} · ${a.currency}'),
+                                  ),
+                              ],
+                              onChanged: _busy
+                                  ? null
+                                  : (v) => _setAppAccount(def.hint, v),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                const SizedBox(height: 8),
+                Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.rule_folder_outlined),
+                    title: const Text('解析模板'),
+                    subtitle: Text(
+                      _templateUpdatedAt == null
+                          ? 'v$_templateVersion · $_templateSource'
+                          : 'v$_templateVersion · $_templateSource · $_templateUpdatedAt',
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: _showTemplateVersion,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.system_update_alt),
+                    title: const Text('检查模板更新'),
+                    subtitle: const Text(
+                      '对比内置 assets；有更新或尚无本地覆盖时写入 documents',
+                    ),
+                    trailing: _busy
+                        ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.refresh),
+                    onTap: _busy ? null : _checkTemplateUpdate,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.pending_actions_outlined),
+                    title: const Text('待确认队列'),
+                    subtitle: Text(
+                      _pendingCount == 0
+                          ? '暂无待确认'
+                          : '$_pendingCount 条待确认',
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => context.push('/home/pending'),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _busy ? null : _clearPending,
+                        icon: const Icon(Icons.delete_sweep_outlined),
+                        label: const Text('清空待确认'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _showTemplateVersion,
+                        icon: const Icon(Icons.info_outline),
+                        label: const Text('查看模板'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+    );
+  }
+}

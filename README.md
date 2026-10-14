@@ -1,37 +1,79 @@
-# Centli
+# Centli（厘记）
 
-#### 介绍
-厘记，厘清每一笔账单
+本地优先的个人记账应用：**厘清每一笔账**。
 
-#### 软件架构
-软件架构说明
+- Flutter · Drift (SQLite) · Riverpod · go_router
+- 当前版本：`1.0.0+1`（见 `pubspec.yaml`）
 
+## 功能概览
 
-#### 安装教程
+| 模块 | 说明 |
+|------|------|
+| 流水记账 | 支出 / 收入 / 转账；手动记一笔；软删除进回收站可恢复 |
+| 多账本 | 账本管理：新建、切换当前、归档；各账本独立账户/分类/流水 |
+| 资产 | 多账户余额；账户明细 |
+| 统计 | 区间汇总、分类下钻、预算进度 |
+| 预算 | 月度总额 / 分类限额（本位币） |
+| 自动记账 | Android 通知监听 → 待确认入账；可忽略并在「已忽略」中恢复 |
+| 汇率 | 手动 + 远程日频；首页/统计/资产按本位币折算 |
+| 备份 | **JSON** 完整导出/还原；**Excel** 人类可读导出 + **尽力而为**还原 |
+| 安全 | 应用锁（PIN / 生物识别）、隐藏金额 |
+| 主题 | 浅色 / 深色 / 跟随系统 |
+| 桌面小组件 | Android 首页小组件（MVP）；iOS 未做 |
 
-1.  xxxx
-2.  xxxx
-3.  xxxx
+## 运行
 
-#### 使用说明
+```bash
+flutter pub get
+flutter run
+```
 
-1.  xxxx
-2.  xxxx
-3.  xxxx
+可选平台：Android / iOS / Windows / Web（通知自动记账与桌面小组件以 Android 为主）。
 
-#### 参与贡献
+生成 Drift 代码（改表结构后）：
 
-1.  Fork 本仓库
-2.  新建 Feat_xxx 分支
-3.  提交代码
-4.  新建 Pull Request
+```bash
+dart run build_runner build --delete-conflicting-outputs
+```
 
+测试：
 
-#### 特技
+```bash
+flutter test
+```
 
-1.  使用 Readme\_XXX.md 来支持不同的语言，例如 Readme\_en.md, Readme\_zh.md
-2.  Gitee 官方博客 [blog.gitee.com](https://blog.gitee.com)
-3.  你可以 [https://gitee.com/explore](https://gitee.com/explore) 这个地址来了解 Gitee 上的优秀开源项目
-4.  [GVP](https://gitee.com/gvp) 全称是 Gitee 最有价值开源项目，是综合评定出的优秀开源项目
-5.  Gitee 官方提供的使用手册 [https://gitee.com/help](https://gitee.com/help)
-6.  Gitee 封面人物是一档用来展示 Gitee 会员风采的栏目 [https://gitee.com/gitee-stars/](https://gitee.com/gitee-stars/)
+## 备份与还原
+
+- **推荐**：`我的 → 导出` 勾选 JSON，再在 `我的 → 导入` 还原。格式 `centli-export`，`export_version: 1`，`schema_version: 2`（含预算）。
+- **Excel**：适合表格查看；导入为尽力而为——**不含** `fx_rates` / `settings` 工作表，缺省字段会补默认值。无损迁移请用 JSON。
+- 还原会清空本机账本相关数据后写入备份；应用锁 PIN 留在本机安全存储，不会被备份覆盖。
+
+## 项目结构（简）
+
+```
+lib/
+  app/           # 主题、路由、Shell
+  data/db/       # Drift 表与 CentliDatabase
+  data/export/   # JSON/Excel 导出与导入
+  features/      # 首页、统计、资产、待确认、设置…
+  platform/      # 通知解析、Android 小组件
+docs/            # 方案与缺口说明
+```
+
+更细的表结构见 `docs/Centli_schema.md`，页面线框见 `docs/Centli_pages_wireframes.md`。
+
+## 隐私
+
+数据默认仅存本机 SQLite。通知监听仅用于解析支付类通知并写入「待确认」。详见应用内「关于 → 隐私政策」与 `assets/legal/privacy_zh.txt`。
+
+## 已知未做 / 范围外
+
+- iOS 桌面小组件
+- 通知解析多币种扩展（仍以 CNY 为 MVP）
+- 云同步（刻意不做，本地优先）
+
+缺口跟踪：`docs/remaining_features_gap.md`。
+
+## 许可
+
+依赖许可证见应用内「关于 → 开源许可」。

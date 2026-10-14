@@ -1,0 +1,734 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../data/db/centli_database.dart';
+import '../../data/db/database_provider.dart';
+
+final _categoriesProvider =
+    StreamProvider.family<List<Category>, (String, String)>((ref, key) {
+  final (ledgerId, kind) = key;
+  return ref.watch(databaseProvider).watchCategories(ledgerId, kind);
+});
+
+final _archivedCategoriesProvider =
+    StreamProvider.family<List<Category>, (String, String)>((ref, key) {
+  final (ledgerId, kind) = key;
+  return ref.watch(databaseProvider).watchArchivedCategories(ledgerId, kind);
+});
+
+/// Category manager: expense / income tabs, add / rename / archive / unarchive,
+/// and P2 drag-to-reorder (active list only; sort_order persisted).
+class CategoriesPage extends ConsumerStatefulWidget {
+  const CategoriesPage({super.key});
+
+  @override
+  ConsumerState<CategoriesPage> createState() => _CategoriesPageState();
+}
+
+class _CategoriesPageState extends ConsumerState<CategoriesPage>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabs;
+  /// false = 使用中, true = 已归档
+  bool _showArchived = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabs = TabController(length: 2, vsync: this);
+    _tabs.addListener(() {
+      if (!_tabs.indexIsChanging) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _tabs.dispose();
+    super.dispose();
+  }
+
+  String get _kind => _tabs.index == 0 ? 'out' : 'in';
+
+  @override
+  Widget build(BuildContext context) {
+    final ledgerAsync = ref.watch(currentLedgerIdProvider);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('分类管理'),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(96),
+          child: Column(
+            children: [
+              TabBar(
+                controller: _tabs,
+                tabs: const [
+                  Tab(text: '支出'),
+                  Tab(text: '收入'),
+                ],
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                child: SegmentedButton<bool>(
+                  segments: const [
+                    ButtonSegment<bool>(
+                      value: false,
+                      label: Text('使用中'),
+                      icon: Icon(Icons.folder_outlined, size: 18),
+                    ),
+                    ButtonSegment<bool>(
+                      value: true,
+                      label: Text('已归档'),
+                      icon: Icon(Icons.inventory_2_outlined, size: 18),
+                    ),
+                  ],
+                  selected: {_showArchived},
+                  onSelectionChanged: (s) {
+                    setState(() => _showArchived = s.first);
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      floatingActionButton: (!_showArchived && ledgerAsync.valueOrNull != null)
+          ? FloatingActionButton(
+              tooltip: '新建分类',
+              onPressed: () => promptCreateCategory(
+                context,
+                ref,
+                ledgerId: ledgerAsync.valueOrNull!,
+                kind: _kind,
+              ),
+              child: const Icon(Icons.add),
+            )
+          : null,
+      body: ledgerAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(child: Text('$e')),
+        data: (ledgerId) {
+          if (ledgerId == null) {
+            return const Center(child: Text('尚未初始化账本'));
+          }
+          return TabBarView(
+            controller: _tabs,
+            children: [
+              _CategoryKindList(
+                ledgerId: ledgerId,
+                kind: 'out',
+                showArchived: _showArchived,
+              ),
+              _CategoryKindList(
+                ledgerId: ledgerId,
+                kind: 'in',
+                showArchived: _showArchived,
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _CategoryKindList extends ConsumerWidget {
+  const _CategoryKindList({
+    required this.ledgerId,
+    required this.kind,
+    required this.showArchived,
+  });
+
+  final String ledgerId;
+  final String kind;
+  final bool showArchived;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = showArchived
+        ? ref.watch(_archivedCategoriesProvider((ledgerId, kind)))
+        : ref.watch(_categoriesProvider((ledgerId, kind)));
+    return async.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Center(child: Text('$e')),
+      data: (cats) {
+        final roots = cats.where((c) => c.parentId == null).toList();
+        final childrenOf = <String, List<Category>>{};
+        for (final c in cats) {
+          final p = c.parentId;
+          if (p != null) {
+            childrenOf.putIfAbsent(p, () => []).add(c);
+          }
+        }
+
+        // Orphan archived children (parent still active or not in this list)
+        final rootIds = roots.map((r) => r.id).toSet();
+        final orphans = cats
+            .where(
+              (c) =>
+                  c.parentId != null && !rootIds.contains(c.parentId),
+            )
+            .toList();
+
+        if (roots.isEmpty && orphans.isEmpty) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    showArchived
+                        ? Icons.inventory_2_outlined
+                        : Icons.category_outlined,
+                    size: 56,
+                    color: Theme.of(context).colorScheme.outline,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    showArchived ? '暂无已归档分类' : '暂无分类',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    showArchived ? '归档的分类会出现在这里' : '点右下角 + 添加',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        Future<void> persistOrder(List<Category> ordered) {
+          return ref.read(databaseProvider).reorderCategories(
+                ordered.map((c) => c.id).toList(),
+              );
+        }
+
+        void onReorderRoots(int oldIndex, int newIndex) {
+          final next = List<Category>.of(roots);
+          final item = next.removeAt(oldIndex);
+          next.insert(newIndex, item);
+          persistOrder(next);
+        }
+
+        const listPadding = EdgeInsets.fromLTRB(16, 12, 16, 88);
+
+        Widget rootTile(Category root, int index, {required bool reorderable}) {
+          return _CategoryTreeNode(
+            key: ValueKey(root.id),
+            category: root,
+            children: childrenOf[root.id] ?? const <Category>[],
+            showArchived: showArchived,
+            reorderable: reorderable,
+            dragIndex: index,
+            onReorderChildren: showArchived
+                ? null
+                : (ordered) => persistOrder(ordered),
+            onAddChild: showArchived
+                ? null
+                : () => promptCreateCategory(
+                      context,
+                      ref,
+                      ledgerId: ledgerId,
+                      kind: kind,
+                      parentId: root.id,
+                    ),
+            onRename: showArchived
+                ? null
+                : () => promptRenameCategory(context, ref, root),
+            onArchive: showArchived
+                ? null
+                : () => promptArchiveCategory(context, ref, root),
+            onUnarchive: showArchived
+                ? () => promptUnarchiveCategory(context, ref, root)
+                : null,
+            onRenameChild: showArchived
+                ? null
+                : (child) => promptRenameCategory(context, ref, child),
+            onArchiveChild: showArchived
+                ? null
+                : (child) => promptArchiveCategory(context, ref, child),
+            onUnarchiveChild: showArchived
+                ? (child) => promptUnarchiveCategory(context, ref, child)
+                : null,
+          );
+        }
+
+        if (showArchived) {
+          return ListView(
+            padding: listPadding,
+            children: [
+              for (var i = 0; i < roots.length; i++)
+                rootTile(roots[i], i, reorderable: false),
+              if (orphans.isNotEmpty) ...[
+                Padding(
+                  padding: const EdgeInsets.only(top: 8, bottom: 4),
+                  child: Text(
+                    '已归档子分类',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                ),
+                for (final child in orphans)
+                  Card(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    child: ListTile(
+                      leading: CircleAvatar(
+                        child: Text(_initial(child.name)),
+                      ),
+                      title: Text(child.name),
+                      subtitle: const Text('二级'),
+                      trailing: PopupMenuButton<String>(
+                        onSelected: (v) {
+                          if (v == 'unarchive') {
+                            promptUnarchiveCategory(context, ref, child);
+                          }
+                        },
+                        itemBuilder: (ctx) => const [
+                          PopupMenuItem(
+                            value: 'unarchive',
+                            child: Text('取消归档'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ],
+          );
+        }
+
+        // Active list: drag-to-reorder roots (and children inside each node).
+        if (orphans.isEmpty) {
+          return ReorderableListView.builder(
+            padding: listPadding,
+            buildDefaultDragHandles: false,
+            itemCount: roots.length,
+            onReorderItem: onReorderRoots,
+            itemBuilder: (context, index) =>
+                rootTile(roots[index], index, reorderable: true),
+          );
+        }
+
+        return Column(
+          children: [
+            Expanded(
+              child: ReorderableListView.builder(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                buildDefaultDragHandles: false,
+                itemCount: roots.length,
+                onReorderItem: onReorderRoots,
+                itemBuilder: (context, index) =>
+                    rootTile(roots[index], index, reorderable: true),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  '已归档子分类',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+              ),
+            ),
+            Flexible(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 88),
+                children: [
+                  for (final child in orphans)
+                    Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          child: Text(_initial(child.name)),
+                        ),
+                        title: Text(child.name),
+                        subtitle: const Text('二级'),
+                        trailing: PopupMenuButton<String>(
+                          onSelected: (v) {
+                            if (v == 'unarchive') {
+                              promptUnarchiveCategory(context, ref, child);
+                            }
+                          },
+                          itemBuilder: (ctx) => const [
+                            PopupMenuItem(
+                              value: 'unarchive',
+                              child: Text('取消归档'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  String _initial(String name) =>
+      name.isEmpty ? '?' : String.fromCharCodes(name.runes.take(1));
+}
+
+class _CategoryTreeNode extends StatelessWidget {
+  const _CategoryTreeNode({
+    super.key,
+    required this.category,
+    required this.children,
+    required this.showArchived,
+    this.reorderable = false,
+    this.dragIndex = 0,
+    this.onReorderChildren,
+    this.onAddChild,
+    this.onRename,
+    this.onArchive,
+    this.onUnarchive,
+    this.onRenameChild,
+    this.onArchiveChild,
+    this.onUnarchiveChild,
+  });
+
+  final Category category;
+  final List<Category> children;
+  final bool showArchived;
+  final bool reorderable;
+  final int dragIndex;
+  final ValueChanged<List<Category>>? onReorderChildren;
+  final VoidCallback? onAddChild;
+  final VoidCallback? onRename;
+  final VoidCallback? onArchive;
+  final VoidCallback? onUnarchive;
+  final ValueChanged<Category>? onRenameChild;
+  final ValueChanged<Category>? onArchiveChild;
+  final ValueChanged<Category>? onUnarchiveChild;
+
+  String _initial(String name) =>
+      name.isEmpty ? '?' : String.fromCharCodes(name.runes.take(1));
+
+  PopupMenuButton<String> _menu({
+    VoidCallback? onRename,
+    VoidCallback? onArchive,
+    VoidCallback? onUnarchive,
+    VoidCallback? onAddChild,
+  }) {
+    return PopupMenuButton<String>(
+      onSelected: (v) {
+        switch (v) {
+          case 'rename':
+            onRename?.call();
+          case 'child':
+            onAddChild?.call();
+          case 'archive':
+            onArchive?.call();
+          case 'unarchive':
+            onUnarchive?.call();
+        }
+      },
+      itemBuilder: (ctx) {
+        if (showArchived) {
+          return const [
+            PopupMenuItem(value: 'unarchive', child: Text('取消归档')),
+          ];
+        }
+        return [
+          const PopupMenuItem(value: 'rename', child: Text('重命名')),
+          if (onAddChild != null)
+            const PopupMenuItem(
+              value: 'child',
+              child: Text('添加子分类'),
+            ),
+          const PopupMenuItem(value: 'archive', child: Text('归档')),
+        ];
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final canReorderChildren =
+        reorderable && onReorderChildren != null && children.length > 1;
+
+    final Widget childList;
+    if (children.isEmpty) {
+      childList = ListTile(
+        dense: true,
+        contentPadding: const EdgeInsets.only(left: 40, right: 8),
+        title: Text(
+          '暂无子分类',
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      );
+    } else if (canReorderChildren) {
+      childList = ReorderableListView(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        buildDefaultDragHandles: false,
+        onReorderItem: (oldIndex, newIndex) {
+          final next = List<Category>.of(children);
+          final item = next.removeAt(oldIndex);
+          next.insert(newIndex, item);
+          onReorderChildren!(next);
+        },
+        children: [
+          for (var i = 0; i < children.length; i++)
+            ListTile(
+              key: ValueKey(children[i].id),
+              contentPadding: const EdgeInsets.only(left: 8, right: 4),
+              leading: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ReorderableDragStartListener(
+                    index: i,
+                    child: const Padding(
+                      padding: EdgeInsets.only(right: 4),
+                      child: Icon(Icons.drag_handle),
+                    ),
+                  ),
+                  CircleAvatar(
+                    radius: 16,
+                    child: Text(_initial(children[i].name)),
+                  ),
+                ],
+              ),
+              title: Text(children[i].name),
+              subtitle: const Text('二级'),
+              trailing: _menu(
+                onRename: onRenameChild == null
+                    ? null
+                    : () => onRenameChild!(children[i]),
+                onArchive: onArchiveChild == null
+                    ? null
+                    : () => onArchiveChild!(children[i]),
+                onUnarchive: onUnarchiveChild == null
+                    ? null
+                    : () => onUnarchiveChild!(children[i]),
+              ),
+              onTap: onRenameChild == null
+                  ? null
+                  : () => onRenameChild!(children[i]),
+            ),
+        ],
+      );
+    } else {
+      childList = Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final child in children)
+            ListTile(
+              contentPadding: const EdgeInsets.only(left: 40, right: 4),
+              leading: CircleAvatar(
+                radius: 16,
+                child: Text(_initial(child.name)),
+              ),
+              title: Text(child.name),
+              subtitle: Text(showArchived ? '已归档 · 二级' : '二级'),
+              trailing: _menu(
+                onRename: onRenameChild == null
+                    ? null
+                    : () => onRenameChild!(child),
+                onArchive: onArchiveChild == null
+                    ? null
+                    : () => onArchiveChild!(child),
+                onUnarchive: onUnarchiveChild == null
+                    ? null
+                    : () => onUnarchiveChild!(child),
+              ),
+              onTap: showArchived
+                  ? (onUnarchiveChild == null
+                      ? null
+                      : () => onUnarchiveChild!(child))
+                  : (onRenameChild == null
+                      ? null
+                      : () => onRenameChild!(child)),
+            ),
+        ],
+      );
+    }
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      clipBehavior: Clip.antiAlias,
+      child: Theme(
+        data: theme.copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          initiallyExpanded: children.isNotEmpty,
+          leading: reorderable
+              ? ReorderableDragStartListener(
+                  index: dragIndex,
+                  child: const Icon(Icons.drag_handle),
+                )
+              : CircleAvatar(child: Text(_initial(category.name))),
+          title: Row(
+            children: [
+              if (reorderable) ...[
+                CircleAvatar(child: Text(_initial(category.name))),
+                const SizedBox(width: 12),
+              ],
+              Expanded(child: Text(category.name)),
+              _menu(
+                onRename: onRename,
+                onArchive: onArchive,
+                onUnarchive: onUnarchive,
+                onAddChild: onAddChild,
+              ),
+            ],
+          ),
+          subtitle: Text(showArchived ? '已归档 · 一级' : '一级'),
+          childrenPadding: const EdgeInsets.only(left: 12, right: 8, bottom: 8),
+          children: [childList],
+        ),
+      ),
+    );
+  }
+}
+
+Future<void> promptCreateCategory(
+  BuildContext context,
+  WidgetRef ref, {
+  required String ledgerId,
+  required String kind,
+  String? parentId,
+}) async {
+  final name = await _promptName(
+    context,
+    title: parentId == null ? '新建分类' : '新建子分类',
+  );
+  if (name == null) return;
+  await ref.read(databaseProvider).createCategory(
+        ledgerId: ledgerId,
+        name: name,
+        kind: kind,
+        parentId: parentId,
+      );
+}
+
+Future<void> promptRenameCategory(
+  BuildContext context,
+  WidgetRef ref,
+  Category cat,
+) async {
+  final name = await _promptName(
+    context,
+    title: '重命名',
+    initial: cat.name,
+  );
+  if (name == null || name == cat.name) return;
+  await ref.read(databaseProvider).renameCategory(id: cat.id, name: name);
+}
+
+Future<void> promptArchiveCategory(
+  BuildContext context,
+  WidgetRef ref,
+  Category cat,
+) async {
+  final db = ref.read(databaseProvider);
+  final txnCount = await db.countTransactionsForCategory(cat.id);
+  if (!context.mounted) return;
+  final msg = txnCount > 0
+      ? '「${cat.name}」已有 $txnCount 笔流水，将归档（不再出现在记账面板），历史账单保留。'
+      : '确定归档「${cat.name}」？';
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('归档分类'),
+      content: Text(msg),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(ctx, true),
+          child: const Text('归档'),
+        ),
+      ],
+    ),
+  );
+  if (ok != true) return;
+  await db.archiveCategory(cat.id);
+  if (context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('已归档 ${cat.name}')),
+    );
+  }
+}
+
+Future<void> promptUnarchiveCategory(
+  BuildContext context,
+  WidgetRef ref,
+  Category cat,
+) async {
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('取消归档'),
+      content: Text(
+        '确定取消归档「${cat.name}」？将重新出现在分类管理与记账面板。'
+        '${cat.parentId == null ? '其子分类也会一并恢复。' : ''}',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(ctx, true),
+          child: const Text('取消归档'),
+        ),
+      ],
+    ),
+  );
+  if (ok != true) return;
+  await ref.read(databaseProvider).unarchiveCategory(cat.id);
+  if (context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('已取消归档 ${cat.name}')),
+    );
+  }
+}
+
+Future<String?> _promptName(
+  BuildContext context, {
+  required String title,
+  String initial = '',
+}) async {
+  final ctrl = TextEditingController(text: initial);
+  final result = await showDialog<String>(
+    context: context,
+    builder: (ctx) {
+      return AlertDialog(
+        title: Text(title),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: '名称',
+            border: OutlineInputBorder(),
+          ),
+          onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+            child: const Text('保存'),
+          ),
+        ],
+      );
+    },
+  );
+  ctrl.dispose();
+  if (result == null || result.isEmpty) return null;
+  return result;
+}
