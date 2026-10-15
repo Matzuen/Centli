@@ -9,7 +9,7 @@ import 'notification_parse.dart';
 /// (Windows / macOS / Linux / iOS).
 abstract final class NotificationCaptureStub {
   static const String channelName = 'centli/notification_capture';
-  static const int templateVersion = 2;
+  static const int templateVersion = 3;
 
   static const MethodChannel _channel = MethodChannel(channelName);
 
@@ -30,6 +30,32 @@ abstract final class NotificationCaptureStub {
       return false;
     } on PlatformException {
       return false;
+    }
+  }
+
+  /// Whether NotificationListenerService.onListenerConnected has fired.
+  /// Permission can be ON while this is false (OEM dropped the binding).
+  static Future<bool> isListenerConnected() async {
+    if (!supported) return false;
+    try {
+      final v = await _channel.invokeMethod<bool>('isListenerConnected');
+      return v ?? false;
+    } on MissingPluginException {
+      return false;
+    } on PlatformException {
+      return false;
+    }
+  }
+
+  /// Ask the system to re-bind the notification listener service.
+  static Future<void> ensureListenerRebind() async {
+    if (!supported) return;
+    try {
+      await _channel.invokeMethod<void>('ensureListenerRebind');
+    } on MissingPluginException {
+      // no-op
+    } on PlatformException {
+      // no-op
     }
   }
 

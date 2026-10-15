@@ -91,6 +91,13 @@ class MePage extends ConsumerWidget {
             onTap: () => context.push('/me/auto'),
           ),
           ListTile(
+            leading: const Icon(Icons.auto_awesome),
+            title: const Text('智能填单'),
+            subtitle: const Text('本地解析 · 可选大模型增强'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.push('/me/smart-fill'),
+          ),
+          ListTile(
             leading: const Icon(Icons.widgets_outlined),
             title: const Text('桌面小组件'),
             subtitle: Text(

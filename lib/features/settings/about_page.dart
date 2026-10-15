@@ -6,7 +6,7 @@ import 'package:go_router/go_router.dart';
 class AboutPage extends StatelessWidget {
   const AboutPage({super.key});
 
-  static const String appVersion = '1.0.0+1';
+  static const String appVersion = '1.0.1+2';
 
   @override
   Widget build(BuildContext context) {

@@ -113,7 +113,7 @@ List<NotiTemplate> builtinNotiTemplates() => const [
         id: 'alipay_pay_success_zh',
         packages: ['com.eg.android.AlipayGphone'],
         mustContainRegex: '支付成功|付款成功',
-        excludeTextRegex: '验证码|登录|收款到账提醒',
+        excludeTextRegex: '验证码|登录|收款到账提醒|服务通知|余额宝收益',
         amountRegex: kAmountRegex,
         merchantRegex: r'(?:向|给|商户)\s*(.+?)(?:\s|$)',
         defaultAccountHint: 'alipay',
@@ -122,7 +122,7 @@ List<NotiTemplate> builtinNotiTemplates() => const [
         id: 'wechat_pay_success_zh',
         packages: ['com.tencent.mm'],
         mustContainRegex: '微信支付|支付成功|已支付',
-        excludeTextRegex: '验证码|登录|朋友圈',
+        excludeTextRegex: '验证码|登录|朋友圈|微信消息|发来一条|会话|拍了拍|互动消息|新的朋友|群聊|语音通话|视频通话|收到一条|发来一个红包|领取了你的红包',
         amountRegex: kAmountRegex,
         merchantRegex: r'(.+?)(?:-微信支付|付款)',
         merchantFromTitle: true,
@@ -246,6 +246,13 @@ String dedupeKey(RawNotification raw, ParseResult r) {
   final merchant = (r.merchant ?? '').trim().toLowerCase();
   final amt = r.amountMinor?.toString() ?? 'na';
   final bucket = raw.whenMs ~/ 120000; // 2-minute window
+  // Failed parses must not collapse all same-pkg notices in the window
+  // into one key (that caused "first capture works, later ones vanish").
+  if (!r.ok || r.amountMinor == null) {
+    final tip = '${raw.title}\n${raw.text}'.trim();
+    final tipKey = tip.isEmpty ? 'empty' : tip.hashCode.toRadixString(16);
+    return '${raw.pkg}|raw|$tipKey|$bucket';
+  }
   return '${raw.pkg}|$merchant|$amt|$bucket';
 }
 

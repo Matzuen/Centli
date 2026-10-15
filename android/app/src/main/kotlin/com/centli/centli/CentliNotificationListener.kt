@@ -5,6 +5,10 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import android.content.ComponentName
+import android.content.pm.PackageManager
+import android.os.Build
+import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -14,6 +18,25 @@ import org.json.JSONObject
  * payloads are queued in SharedPreferences and flushed on next attach.
  */
 class CentliNotificationListener : NotificationListenerService() {
+
+    override fun onListenerConnected() {
+        super.onListenerConnected()
+        connected = true
+        Log.i(TAG, "onListenerConnected")
+    }
+
+    override fun onListenerDisconnected() {
+        connected = false
+        Log.w(TAG, "onListenerDisconnected — requesting rebind")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            try {
+                requestRebind(ComponentName(this, CentliNotificationListener::class.java))
+            } catch (e: Exception) {
+                Log.e(TAG, "requestRebind failed", e)
+            }
+        }
+        super.onListenerDisconnected()
+    }
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         if (sbn == null) return
@@ -46,6 +69,14 @@ class CentliNotificationListener : NotificationListenerService() {
             "channelId" to channelId,
         )
 
+        // Native SQLite path first — survives process kill / no Flutter engine.
+        try {
+            NativeCaptureIngest.ingestAndNotify(this, payload)
+        } catch (e: Exception) {
+            Log.e(TAG, "native ingest error", e)
+            enqueue(this, payload)
+        }
+        // Flutter path for live UI (Dart dedupes if native already wrote).
         MainActivity.emitNotificationCapture(this, payload)
     }
 
@@ -54,9 +85,14 @@ class CentliNotificationListener : NotificationListenerService() {
     }
 
     companion object {
+        private const val TAG = "CentliNotiListener"
         private const val PREFS = "centli_notification_capture"
         private const val KEY_AUTO = "auto_capture_enabled"
         private const val KEY_QUEUE = "pending_queue"
+
+        @Volatile
+        var connected: Boolean = false
+            private set
 
         /** Packages mirrored from assets/noti_templates.json */
         val WATCHED_PACKAGES = setOf(
@@ -111,5 +147,28 @@ class CentliNotificationListener : NotificationListenerService() {
                 emptyList()
             }
         }
+
+        fun ensureRebind(context: Context) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return
+            val cn = ComponentName(context, CentliNotificationListener::class.java)
+            try {
+                val pm = context.packageManager
+                pm.setComponentEnabledSetting(
+                    cn,
+                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                    PackageManager.DONT_KILL_APP,
+                )
+                pm.setComponentEnabledSetting(
+                    cn,
+                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                    PackageManager.DONT_KILL_APP,
+                )
+                requestRebind(cn)
+                Log.i(TAG, "ensureRebind requested for $cn")
+            } catch (e: Exception) {
+                Log.e(TAG, "ensureRebind failed", e)
+            }
+        }
+
     }
 }

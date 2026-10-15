@@ -1,6 +1,6 @@
 {
-  "version": 2,
-  "updated_at": "2026-10-14",
+  "version": 3,
+  "updated_at": "2026-10-15",
   "templates": [
     {
       "id": "alipay_pay_success_zh",
@@ -10,7 +10,7 @@
       "defaultCurrency": "CNY",
       "titleRegex": null,
       "mustContainRegex": "支付成功|付款成功",
-      "excludeTextRegex": "验证码|登录|收款到账提醒",
+      "excludeTextRegex": "验证码|登录|收款到账提醒|服务通知|余额宝收益",
       "amountRegex": "(?:(?:USD|EUR|CNY|HKD|TWD|JPY)\\s*)?(?:¥|￥|\\$|€)?\\s*([0-9]+(?:,[0-9]{3})*(?:\\.[0-9]{1,2})?)",
       "merchantRegex": "(?:向|给|商户)\\s*(.+?)(?:\\s|$)",
       "merchantFromTitle": false,
@@ -23,7 +23,7 @@
       ],
       "defaultCurrency": "CNY",
       "mustContainRegex": "微信支付|支付成功|已支付",
-      "excludeTextRegex": "验证码|登录|朋友圈",
+      "excludeTextRegex": "验证码|登录|朋友圈|微信消息|发来一条|会话|拍了拍|互动消息|新的朋友|群聊|语音通话|视频通话|收到一条|发来一个红包|领取了你的红包",
       "amountRegex": "(?:(?:USD|EUR|CNY|HKD|TWD|JPY)\\s*)?(?:¥|￥|\\$|€)?\\s*([0-9]+(?:,[0-9]{3})*(?:\\.[0-9]{1,2})?)",
       "merchantRegex": "(.+?)(?:-微信支付|付款)",
       "merchantFromTitle": true,

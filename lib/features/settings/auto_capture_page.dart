@@ -21,6 +21,7 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
   bool _loading = true;
   bool _enabled = false;
   bool _granted = false;
+  bool _listenerConnected = false;
   int _templateVersion = kNotiTemplateFallbackVersion;
   String? _templateUpdatedAt;
   String _templateSource = 'builtin';
@@ -55,6 +56,10 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
     final db = ref.read(databaseProvider);
     final enabled = (await db.getSetting('auto_capture_enabled')) == 'true';
     final granted = await NotificationCaptureStub.isPermissionGranted();
+    if (granted) {
+      await NotificationCaptureStub.ensureListenerRebind();
+    }
+    final connected = await NotificationCaptureStub.isListenerConnected();
     final batteryIgnored =
         await NotificationCaptureStub.isBatteryOptimizationIgnored();
     final ledgerId = await db.currentLedgerId();
@@ -77,6 +82,7 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
     setState(() {
       _enabled = enabled;
       _granted = granted;
+      _listenerConnected = connected;
       _batteryIgnored = batteryIgnored;
       _templateVersion = version;
       _templateUpdatedAt = updatedAt;
@@ -121,6 +127,18 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
   }
 
   Future<void> _openPermission() async {
+    if (_granted && !_listenerConnected) {
+      await NotificationCaptureStub.ensureListenerRebind();
+      final connected = await NotificationCaptureStub.isListenerConnected();
+      if (!mounted) return;
+      setState(() => _listenerConnected = connected);
+      if (connected) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('已请求重新连接通知监听')),
+        );
+        return;
+      }
+    }
     final result = await context.push<bool>(
       _granted ? '/me/permission' : '/me/permission?open=1',
     );
@@ -365,7 +383,11 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
                     subtitle: Text(
                       !supported
                           ? '仅 Android 可申请'
-                          : (_granted ? '已开启' : '未开启 · 去开启'),
+                          : (!_granted
+                              ? '未开启 · 去开启'
+                              : (_listenerConnected
+                                  ? '已开启 · 监听已连接'
+                                  : '已开启 · 监听未连接（请点此重连或开关一次通知使用权）')),
                     ),
                     trailing: supported && !_granted
                         ? FilledButton.tonal(

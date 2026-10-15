@@ -75,6 +75,8 @@ class _PermissionExplainPageState extends ConsumerState<PermissionExplainPage>
       final db = ref.read(databaseProvider);
       await db.setSetting('auto_capture_enabled', 'true');
       await NotificationCaptureStub.setAutoCaptureEnabled(true);
+      // Binding often stays dead until an explicit rebind after toggle.
+      await NotificationCaptureStub.ensureListenerRebind();
     }
   }
 

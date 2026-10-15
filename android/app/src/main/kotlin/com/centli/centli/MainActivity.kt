@@ -10,6 +10,7 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.text.TextUtils
+import android.util.Log
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -30,6 +31,17 @@ class MainActivity : FlutterFragmentActivity() {
                 "isPermissionGranted" -> {
                     result.success(isNotificationAccessGranted())
                 }
+                "isListenerConnected" -> {
+                    result.success(CentliNotificationListener.connected)
+                }
+                "ensureListenerRebind" -> {
+                    try {
+                        CentliNotificationListener.ensureRebind(this)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("rebind_failed", e.message, null)
+                    }
+                }
                 "openPermissionSettings" -> {
                     try {
                         startActivity(
@@ -44,6 +56,9 @@ class MainActivity : FlutterFragmentActivity() {
                 "setAutoCaptureEnabled" -> {
                     val enabled = call.arguments as? Boolean ?: true
                     CentliNotificationListener.setAutoCaptureEnabled(this, enabled)
+                    if (enabled && isNotificationAccessGranted()) {
+                        CentliNotificationListener.ensureRebind(this)
+                    }
                     result.success(null)
                 }
                 "isAutoCaptureEnabled" -> {
@@ -97,6 +112,16 @@ class MainActivity : FlutterFragmentActivity() {
         mainHandler.post {
             flushQueuedCaptures()
             deliverOpenRoute(intent)
+            if (isNotificationAccessGranted() && !CentliNotificationListener.connected) {
+                CentliNotificationListener.ensureRebind(this)
+            }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (isNotificationAccessGranted() && !CentliNotificationListener.connected) {
+            CentliNotificationListener.ensureRebind(this)
         }
     }
 
@@ -133,8 +158,13 @@ class MainActivity : FlutterFragmentActivity() {
         ) ?: return false
         if (TextUtils.isEmpty(flat)) return false
         val cn = ComponentName(this, CentliNotificationListener::class.java)
-        val expected = cn.flattenToString()
-        return flat.split(':').any { it.equals(expected, ignoreCase = true) }
+        val full = cn.flattenToString()
+        val shortName = ComponentName(cn.packageName, cn.shortClassName).flattenToString()
+        return flat.split(':').any {
+            it.equals(full, ignoreCase = true) ||
+                it.equals(shortName, ignoreCase = true) ||
+                it.contains(cn.className, ignoreCase = true)
+        }
     }
 
     private fun flushQueuedCaptures() {
@@ -217,12 +247,14 @@ class MainActivity : FlutterFragmentActivity() {
                 Handler(Looper.getMainLooper()).post {
                     try {
                         ch.invokeMethod("notification_capture", payload)
-                    } catch (_: Exception) {
+                    } catch (e: Exception) {
+                        Log.w("CentliMain", "invoke notification_capture failed", e)
+                        // Native ingest already attempted; keep queue as backup.
                         CentliNotificationListener.enqueue(context, payload)
                     }
                 }
             } else {
-                CentliNotificationListener.enqueue(context, payload)
+                Log.d("CentliMain", "Flutter channel null; native path owns ingest")
             }
         }
     }

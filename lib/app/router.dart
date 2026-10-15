@@ -11,6 +11,7 @@ import '../features/ledger/ledger_detail_page.dart';
 import '../features/ledger/search_page.dart';
 import '../features/security/app_lock_page.dart';
 import '../features/settings/auto_capture_page.dart';
+import '../features/settings/smart_fill_settings_page.dart';
 import '../features/settings/permission_explain_page.dart';
 import '../features/settings/categories_page.dart';
 import '../features/settings/me_page.dart';
@@ -143,6 +144,11 @@ GoRouter createRouter({
                     path: 'auto',
                     parentNavigatorKey: rootNavigatorKey,
                     builder: (context, state) => const AutoCapturePage(),
+                  ),
+                  GoRoute(
+                    path: 'smart-fill',
+                    parentNavigatorKey: rootNavigatorKey,
+                    builder: (context, state) => const SmartFillSettingsPage(),
                   ),
                   GoRoute(
                     path: 'export',

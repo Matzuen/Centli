@@ -46,22 +46,32 @@ abstract final class NotificationIngestBridge {
 
     final templates = await NotiTemplateStore.load();
     final parsed = parseNotification(notification, templates);
+    // No payment template matched (mustContain / exclude) → drop chat & other pushes.
+    if (parsed.templateId == null) {
+      return null;
+    }
     final key = dedupeKey(notification, parsed);
 
     final currency = parsed.currency ?? 'CNY';
-    final id = await db.ingestParsedNotification(
-      ledgerId: ledgerId,
-      sourcePkg: notification.pkg,
-      rawTitle: notification.title,
-      rawText: notification.text,
-      dedupeKey: key,
-      amountMinor: parsed.amountMinor,
-      currency: currency,
-      merchant: parsed.merchant,
-      happenAt: parsed.happenAt?.millisecondsSinceEpoch ?? notification.whenMs,
-      parseOk: parsed.ok,
-      accountHint: parsed.accountHint,
-    );
+    String? id;
+    try {
+      id = await db.ingestParsedNotification(
+        ledgerId: ledgerId,
+        sourcePkg: notification.pkg,
+        rawTitle: notification.title,
+        rawText: notification.text,
+        dedupeKey: key,
+        amountMinor: parsed.amountMinor,
+        currency: currency,
+        merchant: parsed.merchant,
+        happenAt: parsed.happenAt?.millisecondsSinceEpoch ?? notification.whenMs,
+        parseOk: parsed.ok,
+        accountHint: parsed.accountHint,
+      );
+    } catch (e) {
+      // Native path may have inserted the same dedupe_key already.
+      return null;
+    }
 
     if (id != null) {
       await _showLocalPendingPush(

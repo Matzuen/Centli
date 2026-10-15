@@ -3,7 +3,7 @@
 Local-first personal bookkeeping: **clear every bill**.
 
 - Flutter · Drift (SQLite) · Riverpod · go_router
-- Version: `1.0.0+1`
+- Version: `1.0.1+2`
 
 ## Features
 

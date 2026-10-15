@@ -17,7 +17,10 @@ void main() {
       expect(r.type, 'out');
       expect(r.amount, 28.5);
       expect(r.categoryName, '餐饮');
+      expect(r.hasConfidentCategory, isTrue);
       expect(r.hasUsefulFill, isTrue);
+      // Must NOT dump whole input into note.
+      expect(r.note, isNot('午餐花了28.5'));
     });
 
     test('metro with yuan unit', () {
@@ -30,6 +33,7 @@ void main() {
       expect(r.type, 'out');
       expect(r.amount, 4);
       expect(r.categoryName, '交通');
+      expect(r.note, isNull);
     });
 
     test('salary income', () {
@@ -83,6 +87,7 @@ void main() {
       expect(r.amount, 35);
       expect(r.merchant, '星巴克');
       expect(r.categoryName, '餐饮');
+      expect(r.note, isNot('在星巴克花了35元'));
     });
 
     test('empty input', () {
@@ -99,6 +104,88 @@ void main() {
       );
       expect(r.amount, 56.8);
       expect(r.categoryName, '日用');
+    });
+
+    test('amount-only leaves category unset', () {
+      final r = parseBookkeepingText(
+        '花了88',
+        categoryNames: cats,
+        accountNames: accounts,
+        now: now,
+      );
+      expect(r.amount, 88);
+      expect(r.type, 'out');
+      expect(r.hasConfidentCategory, isFalse);
+      expect(r.categoryName, isNull);
+      expect(r.note, isNull);
+    });
+
+    test('waimai maps to dining', () {
+      final r = parseBookkeepingText(
+        '美团外卖 42',
+        categoryNames: cats,
+        accountNames: accounts,
+        now: now,
+      );
+      expect(r.amount, 42);
+      expect(r.categoryName, '餐饮');
+      expect(r.merchant, '美团');
+    });
+
+    test('rent maps to housing', () {
+      final r = parseBookkeepingText(
+        '房租3000',
+        categoryNames: cats,
+        accountNames: accounts,
+        now: now,
+      );
+      expect(r.amount, 3000);
+      expect(r.categoryName, '居住');
+    });
+
+    test('prefers leaf category when tree provided', () {
+      final refs = [
+        const CategoryRef(name: '餐饮', id: 'p1', kind: 'out'),
+        const CategoryRef(name: '外卖', id: 'c1', parentId: 'p1', kind: 'out'),
+        const CategoryRef(name: '交通', id: 'p2', kind: 'out'),
+      ];
+      final r = parseBookkeepingText(
+        '外卖35',
+        categories: refs,
+        accountNames: accounts,
+        now: now,
+      );
+      expect(r.categoryName, '外卖');
+      expect(r.hasConfidentCategory, isTrue);
+    });
+
+    test('leftover remark kept as note', () {
+      final r = parseBookkeepingText(
+        '午餐花了28.5 和同事聚餐',
+        categoryNames: cats,
+        accountNames: accounts,
+        now: now,
+      );
+      expect(r.amount, 28.5);
+      expect(r.categoryName, '餐饮');
+      expect(r.note, isNotNull);
+      expect(r.note!.contains('同事'), isTrue);
+      expect(r.note, isNot(contains('28.5')));
+    });
+
+    test('mapCategoryHintToLocal fuzzy', () {
+      expect(
+        mapCategoryHintToLocal('餐饮美食', categoryNames: cats),
+        '餐饮',
+      );
+      expect(
+        mapCategoryHintToLocal('地铁出行', categoryNames: cats),
+        '交通',
+      );
+      expect(
+        mapCategoryHintToLocal('完全没听说过的类', categoryNames: cats),
+        isNull,
+      );
     });
   });
 }

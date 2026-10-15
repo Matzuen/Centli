@@ -5,12 +5,16 @@ import 'notification_parse.dart';
 abstract final class NotificationCaptureStub {
   static const bool supported = false;
   static const String channelName = 'centli/notification_capture';
-  static const int templateVersion = 2;
+  static const int templateVersion = 3;
 
   /// Optional deep-link handler (local-push tap). Stub never invokes it.
   static void Function(String route, String? pendingId)? onOpenRoute;
 
   static Future<bool> isPermissionGranted() async => false;
+
+  static Future<bool> isListenerConnected() async => false;
+
+  static Future<void> ensureListenerRebind() async {}
 
   static Future<void> openPermissionSettings() async {
     // No-op on platforms without NotificationListenerService.

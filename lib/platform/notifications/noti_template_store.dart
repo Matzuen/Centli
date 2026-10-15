@@ -219,4 +219,4 @@ class TemplateUpdateResult {
 }
 
 /// Keep in sync with assets/noti_templates.json `version`.
-const int kNotiTemplateFallbackVersion = 2;
+const int kNotiTemplateFallbackVersion = 3;
