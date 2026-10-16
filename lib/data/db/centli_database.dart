@@ -1386,6 +1386,18 @@ class CentliDatabase extends _$CentliDatabase {
     return id;
   }
 
+
+  /// Map pending `sourcePkg` to transactions.source for detail display.
+  /// `manual:ocr` → `ocr`; real notification pkgs → `notification`.
+  static String _txnSourceFromPendingPkg(String sourcePkg) {
+    if (sourcePkg.startsWith('manual:')) {
+      final kind = sourcePkg.substring('manual:'.length);
+      if (kind.isEmpty) return 'manual';
+      return kind;
+    }
+    return 'notification';
+  }
+
   Future<void> confirmPendingCapture({
     required String pendingId,
     required int amountMinor,
@@ -1403,6 +1415,9 @@ class CentliDatabase extends _$CentliDatabase {
     }
 
     final ts = nowMs();
+    // Derive real source from pending.sourcePkg (manual:ocr / clipboard / …)
+    // so screenshot imports are not mislabeled as notification.
+    final source = _txnSourceFromPendingPkg(pending.sourcePkg);
     await transaction(() async {
       await into(transactions).insert(
         TransactionsCompanion.insert(
@@ -1415,7 +1430,7 @@ class CentliDatabase extends _$CentliDatabase {
           categoryId: Value(categoryId),
           merchant: Value(merchant ?? pending.merchant),
           happenAt: pending.happenAt ?? ts,
-          source: const Value('notification'),
+          source: Value(source),
           pendingId: Value(pending.id),
           createdAt: ts,
           updatedAt: ts,

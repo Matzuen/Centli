@@ -275,7 +275,7 @@ class _DetailBody extends ConsumerWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('\u5220\u9664\u8d26\u5355'),
-        content: const Text('\u786e\u5b9a\u5220\u9664\u8fd9\u7b14\u8d26\u5355\uff1f\u53ef\u4ee5\u5728\u6570\u636e\u5e93\u4e2d\u4ee5\u8f6f\u5220\u9664\u4fdd\u7559\u3002'),
+        content: const Text('\u786e\u5b9a\u5220\u9664\u8fd9\u7b14\u8d26\u5355\uff1f\u53ef\u5728\u300c\u56de\u6536\u7ad9\u300d\u6062\u590d\u3002'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -313,6 +313,18 @@ class _DetailBody extends ConsumerWidget {
     switch (source) {
       case 'notification':
         return '\u901a\u77e5\u81ea\u52a8';
+      case 'ocr':
+        return '\u622a\u56fe\u5bfc\u5165';
+      case 'clipboard':
+        return '\u526a\u8d34\u677f\u5bfc\u5165';
+      case 'share':
+        return '\u5206\u4eab\u5bfc\u5165';
+      case 'share_image':
+        return '\u5206\u4eab\u56fe\u7247';
+      case 'url':
+        return '\u94fe\u63a5\u5bfc\u5165';
+      case 'manual':
+        return '\u624b\u52a8';
       default:
         return '\u624b\u52a8';
     }

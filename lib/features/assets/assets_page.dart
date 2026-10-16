@@ -492,18 +492,18 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
   }) {
     final day = FxBook.todayLocal();
     final groups = <String, List<Account>>{
-      '在线': [],
-      '储蓄': [],
+      '电子钱包': [],
+      '银行卡': [],
       '现金': [],
       '其他': [],
     };
     for (final a in accounts) {
       switch (a.type) {
         case 'ewallet':
-          groups['在线']!.add(a);
+          groups['电子钱包']!.add(a);
           break;
         case 'bank':
-          groups['储蓄']!.add(a);
+          groups['银行卡']!.add(a);
           break;
         case 'cash':
           groups['现金']!.add(a);
@@ -623,7 +623,7 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
       case 'ewallet':
         return '电子钱包';
       case 'bank':
-        return '银行';
+        return '银行卡';
       default:
         return '其他';
     }
@@ -761,7 +761,7 @@ Future<void> showAccountEditor(
                     initialValue: type,
                     items: const [
                       DropdownMenuItem(value: 'cash', child: Text('现金')),
-                      DropdownMenuItem(value: 'bank', child: Text('银行')),
+                      DropdownMenuItem(value: 'bank', child: Text('银行卡')),
                       DropdownMenuItem(value: 'ewallet', child: Text('电子钱包')),
                       DropdownMenuItem(value: 'other', child: Text('其他')),
                     ],

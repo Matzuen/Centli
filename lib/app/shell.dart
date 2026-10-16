@@ -15,7 +15,7 @@ class AppShell extends ConsumerWidget {
   static const _tabs = [
     (icon: Icons.home_outlined, selected: Icons.home_rounded, label: '首页'),
     (icon: Icons.bar_chart_outlined, selected: Icons.bar_chart_rounded, label: '统计'),
-    (icon: Icons.add_circle_outline, selected: Icons.add_circle, label: '记账'),
+    (icon: Icons.add_circle_outline, selected: Icons.add_circle, label: '记一笔'),
     (
       icon: Icons.account_balance_wallet_outlined,
       selected: Icons.account_balance_wallet_rounded,

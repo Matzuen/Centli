@@ -70,7 +70,7 @@ class MePage extends ConsumerWidget {
                             Text(
                               ledger == null
                                   ? '未初始化'
-                                  : '本位币 ${ledger.baseCurrency}',
+                                  : '本位币 ${currencyLabel(ledger.baseCurrency)}',
                               style: TextStyle(
                                 color: scheme.onSurfaceVariant,
                                 fontSize: 13,

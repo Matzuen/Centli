@@ -36,9 +36,9 @@ const Map<String, String> currencyNamesZh = {
   'EUR': '欧元',
 };
 
-/// e.g. `CNY · 人民币`. Falls back to the ISO code alone if unknown.
+/// e.g. `CNY（人民币）`. Falls back to the ISO code alone if unknown.
 String currencyLabel(String code) {
   final name = currencyNamesZh[code];
   if (name == null || name.isEmpty) return code;
-  return '$code · $name';
+  return '$code（$name）';
 }
