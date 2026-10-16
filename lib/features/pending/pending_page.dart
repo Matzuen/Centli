@@ -796,6 +796,14 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
     }
     setState(() => _busy = true);
     try {
+      // Resolve type from already-loaded category lists (parent provider).
+      final inCats = widget.categories.where((x) => x.kind == 'in');
+      final outCats = widget.categories.where((x) => x.kind == 'out');
+      final known = outCats.any((x) => x.id == _categoryId) ||
+          inCats.any((x) => x.id == _categoryId);
+      final txnType = !known
+          ? 'out' // deleted/archived category → fallback expense
+          : (inCats.any((x) => x.id == _categoryId) ? 'in' : 'out');
       await ref.read(databaseProvider).confirmPendingCapture(
             pendingId: c.id,
             amountMinor: toMinor(ccy, major),
@@ -805,6 +813,7 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
             merchant: _merchantCtrl.text.trim().isEmpty
                 ? null
                 : _merchantCtrl.text.trim(),
+            type: txnType,
           );
       await NotificationCaptureStub.cancelPendingConfirm(c.id);
       if (mounted) {
