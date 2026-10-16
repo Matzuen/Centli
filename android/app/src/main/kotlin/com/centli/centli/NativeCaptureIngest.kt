@@ -146,8 +146,8 @@ object NativeCaptureIngest {
             val tipKey = if (tip.isEmpty()) "empty" else Integer.toHexString(tip.hashCode())
             return "$pkg|raw|$tipKey|$bucket"
         }
-        val m = (merchant ?: "").trim().lowercase()
-        return "$pkg|$m|$amountMinor|$bucket"
+        // T2-3: omit merchant (align with Dart dedupeKey).
+        return "$pkg|$amountMinor|$bucket"
     }
 
     private data class Parsed(

@@ -527,7 +527,6 @@ _ExtractedAmount? _extractAmount(
 }
 
 String dedupeKey(RawNotification raw, ParseResult r) {
-  final merchant = (r.merchant ?? '').trim().toLowerCase();
   final amt = r.amountMinor?.toString() ?? 'na';
   final bucket = raw.whenMs ~/ 120000; // 2-minute window
   // Failed parses must not collapse all same-pkg notices in the window
@@ -537,7 +536,8 @@ String dedupeKey(RawNotification raw, ParseResult r) {
     final tipKey = tip.isEmpty ? 'empty' : tip.hashCode.toRadixString(16);
     return '${raw.pkg}|raw|$tipKey|$bucket';
   }
-  return '${raw.pkg}|$merchant|$amt|$bucket';
+  // T2-3: omit merchant so native/Dart keys stay aligned when extractors differ.
+  return '${raw.pkg}|$amt|$bucket';
 }
 
 String normalizeMerchantKey(String merchant) =>
