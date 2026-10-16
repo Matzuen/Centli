@@ -1313,7 +1313,7 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
                             ),
                           ),
 
-                          // Finch rhythm: short amount row (top-right), chips flush under.
+                          // Amount row (centered); category/account form selects below.
                           Padding(
                             padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
                             child: Column(
@@ -1376,103 +1376,98 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
                             ),
                           ),
                           Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 6, 0, 0),
-                            // One Finch-style row: time + category + account (or transfer legs)
-                            child: _ChipScrollRow(
+                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                            // L4: two-column form selects (label + value dropdown)
+                            child: Row(
                               children: [
-                                _MetaChip(
-                                  icon: Icons.schedule_rounded,
-                                  label: _happenAtLabel,
-                                  onTap: _pickHappenAt,
-                                ),
                                 if (_type != 'transfer') ...[
-                                  Builder(
-                                    builder: (context) {
-                                      final cat = _categoryById(_categoryId);
-                                      return _MetaChip(
-                                        leading: cat == null
-                                            ? null
-                                            : CentliIconChip(
-                                                name: cat.name,
-                                                kind: cat.kind,
-                                                iconKey: cat.icon,
-                                                size: 22,
-                                              ),
-                                        icon: cat == null
-                                            ? Icons.category_outlined
-                                            : null,
-                                        label: cat?.name ?? '\u5206\u7c7b',
-                                        onTap: _pickCategory,
-                                      );
-                                    },
+                                  Expanded(
+                                    child: Builder(
+                                      builder: (context) {
+                                        final cat = _categoryById(_categoryId);
+                                        return _FormSelectTile(
+                                          label: '\u5206\u7c7b',
+                                          value: cat?.name ?? '\u8bf7\u9009\u62e9',
+                                          leading: cat == null
+                                              ? null
+                                              : CentliIconChip(
+                                                  name: cat.name,
+                                                  kind: cat.kind,
+                                                  iconKey: cat.icon,
+                                                  size: 22,
+                                                ),
+                                          onTap: _pickCategory,
+                                        );
+                                      },
+                                    ),
                                   ),
-                                  Builder(
-                                    builder: (context) {
-                                      final acc = _accountById(_accountId);
-                                      return _MetaChip(
-                                        leading: acc == null
-                                            ? null
-                                            : CentliIconChip(
-                                                name: acc.name,
-                                                kind: 'account',
-                                                iconKey: acc.icon,
-                                                size: 22,
-                                              ),
-                                        icon: acc == null
-                                            ? Icons
-                                                  .account_balance_wallet_outlined
-                                            : null,
-                                        // Short: 现金 · CNY (no 人民币)
-                                        label: acc == null
-                                            ? '\u8d26\u6237'
-                                            : '${acc.name} \u00b7 ${acc.currency}',
-                                        onTap: () =>
-                                            _pickAccount(toAccount: false),
-                                      );
-                                    },
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Builder(
+                                      builder: (context) {
+                                        final acc = _accountById(_accountId);
+                                        return _FormSelectTile(
+                                          label: '\u8d26\u6237',
+                                          value: acc == null
+                                              ? '\u8bf7\u9009\u62e9'
+                                              : '${acc.name} \u00b7 ${acc.currency}',
+                                          leading: acc == null
+                                              ? null
+                                              : CentliIconChip(
+                                                  name: acc.name,
+                                                  kind: 'account',
+                                                  iconKey: acc.icon,
+                                                  size: 22,
+                                                ),
+                                          onTap: () =>
+                                              _pickAccount(toAccount: false),
+                                        );
+                                      },
+                                    ),
                                   ),
                                 ] else ...[
-                                  Builder(
-                                    builder: (context) {
-                                      final acc = _accountById(_accountId);
-                                      return _MetaChip(
-                                        leading: acc == null
-                                            ? null
-                                            : CentliIconChip(
-                                                name: acc.name,
-                                                kind: 'account',
-                                                iconKey: acc.icon,
-                                                size: 22,
-                                              ),
-                                        icon: Icons.south_west_rounded,
-                                        label: acc == null
-                                            ? '\u8f6c\u51fa'
-                                            : '\u8f6c\u51fa \u00b7 ${acc.name}',
-                                        onTap: () =>
-                                            _pickAccount(toAccount: false),
-                                      );
-                                    },
+                                  Expanded(
+                                    child: Builder(
+                                      builder: (context) {
+                                        final acc = _accountById(_accountId);
+                                        return _FormSelectTile(
+                                          label: '\u8f6c\u51fa',
+                                          value: acc?.name ?? '\u8bf7\u9009\u62e9',
+                                          leading: acc == null
+                                              ? null
+                                              : CentliIconChip(
+                                                  name: acc.name,
+                                                  kind: 'account',
+                                                  iconKey: acc.icon,
+                                                  size: 22,
+                                                ),
+                                          onTap: () =>
+                                              _pickAccount(toAccount: false),
+                                        );
+                                      },
+                                    ),
                                   ),
-                                  Builder(
-                                    builder: (context) {
-                                      final acc = _accountById(_toAccountId);
-                                      return _MetaChip(
-                                        leading: acc == null
-                                            ? null
-                                            : CentliIconChip(
-                                                name: acc.name,
-                                                kind: 'account',
-                                                iconKey: acc.icon,
-                                                size: 22,
-                                              ),
-                                        icon: Icons.north_east_rounded,
-                                        label: acc == null
-                                            ? '\u8f6c\u5165'
-                                            : '\u8f6c\u5165 \u00b7 ${acc.name}',
-                                        onTap: () =>
-                                            _pickAccount(toAccount: true),
-                                      );
-                                    },
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Builder(
+                                      builder: (context) {
+                                        final acc = _accountById(_toAccountId);
+                                        return _FormSelectTile(
+                                          label: '\u8f6c\u5165',
+                                          value: acc?.name ?? '\u8bf7\u9009\u62e9',
+                                          leading: acc == null
+                                              ? null
+                                              : CentliIconChip(
+                                                  name: acc.name,
+                                                  kind: 'account',
+                                                  iconKey: acc.icon,
+                                                  size: 22,
+                                                ),
+                                          onTap: () =>
+                                              _pickAccount(toAccount: true),
+                                        );
+                                      },
+                                    ),
                                   ),
                                 ],
                               ],
@@ -1526,6 +1521,23 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
                                   vertical: 10,
                                 ),
                               ),
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                            // L5: time (tags remain on note suffix; do not change tags input)
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: _FormSelectTile(
+                                    label: '\u65f6\u95f4',
+                                    value: _happenAtLabel,
+                                    onTap: _pickHappenAt,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                const Expanded(child: SizedBox.shrink()),
+                              ],
                             ),
                           ),
                         ],
@@ -1695,93 +1707,67 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
   }
 }
 
-/// One Finch-style chip row: left-aligned, horizontal drag when overflowing.
-class _ChipScrollRow extends StatelessWidget {
-  const _ChipScrollRow({required this.children});
-
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    if (children.isEmpty) return const SizedBox.shrink();
-    return SizedBox(
-      height: 40,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.only(right: 16),
-        child: Row(
-          children: [
-            for (var i = 0; i < children.length; i++) ...[
-              if (i > 0) const SizedBox(width: CentliSpacing.item),
-              children[i],
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _MetaChip extends StatelessWidget {
-  const _MetaChip({
+/// Two-column form select: label (labelMedium) + tappable value (bodyLarge) with ▾.
+class _FormSelectTile extends StatelessWidget {
+  const _FormSelectTile({
     required this.label,
+    required this.value,
     required this.onTap,
-    this.icon,
     this.leading,
   });
 
   final String label;
+  final String value;
   final VoidCallback onTap;
-  final IconData? icon;
   final Widget? leading;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Material(
-      color: scheme.surface,
-      borderRadius: BorderRadius.circular(20),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(10, 6, 12, 6),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: scheme.outlineVariant),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF6B7A99).withValues(alpha: 0.04),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (leading != null) ...[
-                leading!,
-                const SizedBox(width: 6),
-              ] else if (icon != null) ...[
-                Icon(icon, size: 18, color: scheme.onSurfaceVariant),
-                const SizedBox(width: 6),
-              ],
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 180),
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelLarge
-                      ?.copyWith(fontWeight: FontWeight.w600, fontSize: 13),
-                ),
-              ),
-            ],
+    final textTheme = Theme.of(context).textTheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: textTheme.labelMedium?.copyWith(
+            color: scheme.onSurfaceVariant,
           ),
         ),
-      ),
+        const SizedBox(height: 4),
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  if (leading != null) ...[
+                    leading!,
+                    const SizedBox(width: 6),
+                  ],
+                  Expanded(
+                    child: Text(
+                      value,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: textTheme.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  Icon(
+                    Icons.arrow_drop_down,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

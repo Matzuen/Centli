@@ -1,0 +1,2653 @@
+diff --git a/lib/app/shell.dart b/lib/app/shell.dart
+index 2f22f4e..ae15dbb 100644
+--- a/lib/app/shell.dart
++++ b/lib/app/shell.dart
+@@ -15,7 +15,7 @@ class AppShell extends ConsumerWidget {
+   static const _tabs = [
+     (icon: Icons.home_outlined, selected: Icons.home_rounded, label: '首页'),
+     (icon: Icons.bar_chart_outlined, selected: Icons.bar_chart_rounded, label: '统计'),
+-    (icon: Icons.add_circle_outline, selected: Icons.add_circle, label: '记账'),
++    (icon: Icons.add_circle_outline, selected: Icons.add_circle, label: '记一笔'),
+     (
+       icon: Icons.account_balance_wallet_outlined,
+       selected: Icons.account_balance_wallet_rounded,
+diff --git a/lib/core/constants/currencies.dart b/lib/core/constants/currencies.dart
+index 159c205..87f19e7 100644
+--- a/lib/core/constants/currencies.dart
++++ b/lib/core/constants/currencies.dart
+@@ -36,9 +36,9 @@ const Map<String, String> currencyNamesZh = {
+   'EUR': '欧元',
+ };
+ 
+-/// e.g. `CNY · 人民币`. Falls back to the ISO code alone if unknown.
++/// e.g. `CNY（人民币）`. Falls back to the ISO code alone if unknown.
+ String currencyLabel(String code) {
+   final name = currencyNamesZh[code];
+   if (name == null || name.isEmpty) return code;
+-  return '$code · $name';
++  return '$code（$name）';
+ }
+diff --git a/lib/core/widgets/txn_list_tile.dart b/lib/core/widgets/txn_list_tile.dart
+index bc9d9a6..bc1280b 100644
+--- a/lib/core/widgets/txn_list_tile.dart
++++ b/lib/core/widgets/txn_list_tile.dart
+@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
+ import 'package:intl/intl.dart';
+ 
+ import '../../data/db/centli_database.dart';
++import '../../data/db/txn_tags.dart';
+ import '../../data/db/database_provider.dart';
+ import '../constants/currencies.dart';
+ import '../utils/fx.dart';
+@@ -110,6 +111,10 @@ class TxnListTile extends ConsumerWidget {
+                           );
+                         },
+                       ),
++                      if (decodeTxnTags(txn.tags).isNotEmpty) ...[
++                        const SizedBox(height: 4),
++                        _TxnTagChips(tags: decodeTxnTags(txn.tags)),
++                      ],
+                     ],
+                   ),
+                 ),
+@@ -233,3 +238,43 @@ class _CatMeta {
+   final String name;
+   final String? icon;
+ }
++
++
++class _TxnTagChips extends StatelessWidget {
++  const _TxnTagChips({required this.tags});
++  final List<String> tags;
++
++  @override
++  Widget build(BuildContext context) {
++    final scheme = Theme.of(context).colorScheme;
++    final shown = tags.take(2).toList();
++    final extra = tags.length - shown.length;
++    return Wrap(
++      spacing: 4,
++      runSpacing: 2,
++      children: [
++        for (final t in shown)
++          Container(
++            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
++            decoration: BoxDecoration(
++              color: scheme.surfaceContainerHighest.withValues(alpha: 0.7),
++              borderRadius: BorderRadius.circular(6),
++            ),
++            child: Text(
++              t,
++              style: Theme.of(context).textTheme.labelSmall?.copyWith(
++                    color: scheme.onSurfaceVariant,
++                  ),
++            ),
++          ),
++        if (extra > 0)
++          Text(
++            '+$extra',
++            style: Theme.of(context).textTheme.labelSmall?.copyWith(
++                  color: scheme.onSurfaceVariant,
++                ),
++          ),
++      ],
++    );
++  }
++}
+diff --git a/lib/data/db/centli_database.dart b/lib/data/db/centli_database.dart
+index 52f7a79..3c5c8ba 100644
+--- a/lib/data/db/centli_database.dart
++++ b/lib/data/db/centli_database.dart
+@@ -18,6 +18,7 @@ import 'tables/merchant_rules.dart';
+ import 'tables/pending_captures.dart';
+ import 'tables/budgets.dart';
+ import 'tables/transactions.dart';
++import 'txn_tags.dart';
+ 
+ part 'centli_database.g.dart';
+ 
+@@ -40,7 +41,7 @@ class CentliDatabase extends _$CentliDatabase {
+   CentliDatabase.forTesting(super.e);
+ 
+   @override
+-  int get schemaVersion => 3;
++  int get schemaVersion => 4;
+ 
+   @override
+   MigrationStrategy get migration => MigrationStrategy(
+@@ -56,12 +57,42 @@ class CentliDatabase extends _$CentliDatabase {
+             await m.addColumn(accounts, accounts.icon);
+             await backfillDefaultIcons();
+           }
++          if (from < 4) {
++            await m.addColumn(transactions, transactions.tags);
++          }
++          await _ensureQueryIndexes();
+         },
+         beforeOpen: (details) async {
+           await customStatement('PRAGMA foreign_keys = ON');
++          await _ensureQueryIndexes();
+         },
+       );
+ 
++
++  /// Hot-path indexes (idempotent). Called from onUpgrade + beforeOpen.
++  Future<void> _ensureQueryIndexes() async {
++    await customStatement(
++      'CREATE INDEX IF NOT EXISTS idx_txn_ledger_happen '
++      'ON transactions(ledger_id, happen_at)',
++    );
++    await customStatement(
++      'CREATE INDEX IF NOT EXISTS idx_txn_account_happen '
++      'ON transactions(account_id, happen_at)',
++    );
++    await customStatement(
++      'CREATE INDEX IF NOT EXISTS idx_accounts_ledger_archived '
++      'ON accounts(ledger_id, archived)',
++    );
++    await customStatement(
++      'CREATE INDEX IF NOT EXISTS idx_categories_ledger_kind_archived '
++      'ON categories(ledger_id, kind, archived)',
++    );
++    await customStatement(
++      'CREATE INDEX IF NOT EXISTS idx_pending_status_created '
++      'ON pending_captures(status, created_at)',
++    );
++  }
++
+   Future<void> seedDefaults() async {
+     final existing = await (select(ledgers)..limit(1)).get();
+     if (existing.isNotEmpty) return;
+@@ -515,7 +546,8 @@ class CentliDatabase extends _$CentliDatabase {
+ 
+             if (pattern != null) {
+               Expression<bool> textHit = t.merchant.lower().like(pattern) |
+-                  t.note.lower().like(pattern);
++                  t.note.lower().like(pattern) |
++                  t.tags.lower().like(pattern);
+               if (amountMinors.isEmpty) {
+                 pred = pred & textHit;
+               } else {
+@@ -697,6 +729,7 @@ class CentliDatabase extends _$CentliDatabase {
+     String? categoryId,
+     String? merchant,
+     String? note,
++    List<String>? tags,
+     DateTime? happenAt,
+     double? fxRate,
+     int? toAmountMinor,
+@@ -717,6 +750,7 @@ class CentliDatabase extends _$CentliDatabase {
+         categoryId: Value(categoryId),
+         merchant: Value(merchant),
+         note: Value(note),
++        tags: Value(encodeTxnTags(tags)),
+         happenAt: happen,
+         fxRate: Value(fxRate),
+         toAmountMinor: Value(toAmountMinor),
+@@ -974,6 +1008,33 @@ class CentliDatabase extends _$CentliDatabase {
+ 
+ 
+   /// Soft-delete (sets deleted_at). Home / range queries already filter null deletedAt.
++
++  /// Distinct tags across non-deleted txns in [ledgerId] (for chip suggestions).
++  Future<List<String>> listDistinctTags(String ledgerId) async {
++    final rows = await (select(transactions)
++          ..where((t) => t.ledgerId.equals(ledgerId) & t.deletedAt.isNull() & t.tags.isNotNull()))
++        .get();
++    final seen = <String>{};
++    for (final r in rows) {
++      for (final tag in decodeTxnTags(r.tags)) {
++        seen.add(tag);
++      }
++    }
++    final list = seen.toList()..sort();
++    return list;
++  }
++
++  /// Replace tags on an existing transaction (detail editor).
++  Future<void> updateTransactionTags(String id, List<String> tags) async {
++    final ts = nowMs();
++    await (update(transactions)..where((t) => t.id.equals(id))).write(
++      TransactionsCompanion(
++        tags: Value(encodeTxnTags(tags)),
++        updatedAt: Value(ts),
++      ),
++    );
++  }
++
+   Future<void> softDeleteTransaction(String id) async {
+     final ts = nowMs();
+     await (update(transactions)..where((t) => t.id.equals(id))).write(
+@@ -1051,6 +1112,7 @@ class CentliDatabase extends _$CentliDatabase {
+     String? categoryId,
+     String? merchant,
+     String? note,
++    List<String>? tags,
+     DateTime? happenAt,
+     double? fxRate,
+     int? toAmountMinor,
+@@ -1067,6 +1129,7 @@ class CentliDatabase extends _$CentliDatabase {
+         categoryId: Value(categoryId),
+         merchant: Value(merchant),
+         note: Value(note),
++        tags: Value(encodeTxnTags(tags)),
+         happenAt: happen != null ? Value(happen) : const Value.absent(),
+         fxRate: Value(fxRate),
+         toAmountMinor: Value(toAmountMinor),
+@@ -1386,6 +1449,18 @@ class CentliDatabase extends _$CentliDatabase {
+     return id;
+   }
+ 
++
++  /// Map pending `sourcePkg` to transactions.source for detail display.
++  /// `manual:ocr` → `ocr`; real notification pkgs → `notification`.
++  static String _txnSourceFromPendingPkg(String sourcePkg) {
++    if (sourcePkg.startsWith('manual:')) {
++      final kind = sourcePkg.substring('manual:'.length);
++      if (kind.isEmpty) return 'manual';
++      return kind;
++    }
++    return 'notification';
++  }
++
+   Future<void> confirmPendingCapture({
+     required String pendingId,
+     required int amountMinor,
+@@ -1394,6 +1469,7 @@ class CentliDatabase extends _$CentliDatabase {
+     required String categoryId,
+     String? merchant,
+     String type = 'out',
++    List<String>? tags,
+   }) async {
+     final pending = await (select(pendingCaptures)
+           ..where((t) => t.id.equals(pendingId)))
+@@ -1403,6 +1479,9 @@ class CentliDatabase extends _$CentliDatabase {
+     }
+ 
+     final ts = nowMs();
++    // Derive real source from pending.sourcePkg (manual:ocr / clipboard / …)
++    // so screenshot imports are not mislabeled as notification.
++    final source = _txnSourceFromPendingPkg(pending.sourcePkg);
+     await transaction(() async {
+       await into(transactions).insert(
+         TransactionsCompanion.insert(
+@@ -1415,7 +1494,8 @@ class CentliDatabase extends _$CentliDatabase {
+           categoryId: Value(categoryId),
+           merchant: Value(merchant ?? pending.merchant),
+           happenAt: pending.happenAt ?? ts,
+-          source: const Value('notification'),
++          source: Value(source),
++          tags: Value(encodeTxnTags(tags)),
+           pendingId: Value(pending.id),
+           createdAt: ts,
+           updatedAt: ts,
+diff --git a/lib/data/db/centli_database.g.dart b/lib/data/db/centli_database.g.dart
+index ec1a7b2..f1be8cd 100644
+--- a/lib/data/db/centli_database.g.dart
++++ b/lib/data/db/centli_database.g.dart
+@@ -1694,6 +1694,15 @@ class $TransactionsTable extends Transactions
+     type: DriftSqlType.string,
+     requiredDuringInsert: false,
+   );
++  static const VerificationMeta _tagsMeta = const VerificationMeta('tags');
++  @override
++  late final GeneratedColumn<String> tags = GeneratedColumn<String>(
++    'tags',
++    aliasedName,
++    true,
++    type: DriftSqlType.string,
++    requiredDuringInsert: false,
++  );
+   static const VerificationMeta _happenAtMeta = const VerificationMeta(
+     'happenAt',
+   );
+@@ -1826,6 +1835,7 @@ class $TransactionsTable extends Transactions
+     categoryId,
+     merchant,
+     note,
++    tags,
+     happenAt,
+     includeInStat,
+     includeInBudget,
+@@ -1925,6 +1935,12 @@ class $TransactionsTable extends Transactions
+         note.isAcceptableOrUnknown(data['note']!, _noteMeta),
+       );
+     }
++    if (data.containsKey('tags')) {
++      context.handle(
++        _tagsMeta,
++        tags.isAcceptableOrUnknown(data['tags']!, _tagsMeta),
++      );
++    }
+     if (data.containsKey('happen_at')) {
+       context.handle(
+         _happenAtMeta,
+@@ -2058,6 +2074,10 @@ class $TransactionsTable extends Transactions
+         DriftSqlType.string,
+         data['${effectivePrefix}note'],
+       ),
++      tags: attachedDatabase.typeMapping.read(
++        DriftSqlType.string,
++        data['${effectivePrefix}tags'],
++      ),
+       happenAt: attachedDatabase.typeMapping.read(
+         DriftSqlType.int,
+         data['${effectivePrefix}happen_at'],
+@@ -2122,6 +2142,9 @@ class Transaction extends DataClass implements Insertable<Transaction> {
+   final String? categoryId;
+   final String? merchant;
+   final String? note;
++
++  /// JSON array string, e.g. `["报销","旅行"]`. Null/empty = no tags.
++  final String? tags;
+   final int happenAt;
+   final int includeInStat;
+   final int includeInBudget;
+@@ -2144,6 +2167,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
+     this.categoryId,
+     this.merchant,
+     this.note,
++    this.tags,
+     required this.happenAt,
+     required this.includeInStat,
+     required this.includeInBudget,
+@@ -2177,6 +2201,9 @@ class Transaction extends DataClass implements Insertable<Transaction> {
+     if (!nullToAbsent || note != null) {
+       map['note'] = Variable<String>(note);
+     }
++    if (!nullToAbsent || tags != null) {
++      map['tags'] = Variable<String>(tags);
++    }
+     map['happen_at'] = Variable<int>(happenAt);
+     map['include_in_stat'] = Variable<int>(includeInStat);
+     map['include_in_budget'] = Variable<int>(includeInBudget);
+@@ -2219,6 +2246,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
+           ? const Value.absent()
+           : Value(merchant),
+       note: note == null && nullToAbsent ? const Value.absent() : Value(note),
++      tags: tags == null && nullToAbsent ? const Value.absent() : Value(tags),
+       happenAt: Value(happenAt),
+       includeInStat: Value(includeInStat),
+       includeInBudget: Value(includeInBudget),
+@@ -2259,6 +2287,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
+       categoryId: serializer.fromJson<String?>(json['categoryId']),
+       merchant: serializer.fromJson<String?>(json['merchant']),
+       note: serializer.fromJson<String?>(json['note']),
++      tags: serializer.fromJson<String?>(json['tags']),
+       happenAt: serializer.fromJson<int>(json['happenAt']),
+       includeInStat: serializer.fromJson<int>(json['includeInStat']),
+       includeInBudget: serializer.fromJson<int>(json['includeInBudget']),
+@@ -2286,6 +2315,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
+       'categoryId': serializer.toJson<String?>(categoryId),
+       'merchant': serializer.toJson<String?>(merchant),
+       'note': serializer.toJson<String?>(note),
++      'tags': serializer.toJson<String?>(tags),
+       'happenAt': serializer.toJson<int>(happenAt),
+       'includeInStat': serializer.toJson<int>(includeInStat),
+       'includeInBudget': serializer.toJson<int>(includeInBudget),
+@@ -2311,6 +2341,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
+     Value<String?> categoryId = const Value.absent(),
+     Value<String?> merchant = const Value.absent(),
+     Value<String?> note = const Value.absent(),
++    Value<String?> tags = const Value.absent(),
+     int? happenAt,
+     int? includeInStat,
+     int? includeInBudget,
+@@ -2333,6 +2364,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
+     categoryId: categoryId.present ? categoryId.value : this.categoryId,
+     merchant: merchant.present ? merchant.value : this.merchant,
+     note: note.present ? note.value : this.note,
++    tags: tags.present ? tags.value : this.tags,
+     happenAt: happenAt ?? this.happenAt,
+     includeInStat: includeInStat ?? this.includeInStat,
+     includeInBudget: includeInBudget ?? this.includeInBudget,
+@@ -2367,6 +2399,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
+           : this.categoryId,
+       merchant: data.merchant.present ? data.merchant.value : this.merchant,
+       note: data.note.present ? data.note.value : this.note,
++      tags: data.tags.present ? data.tags.value : this.tags,
+       happenAt: data.happenAt.present ? data.happenAt.value : this.happenAt,
+       includeInStat: data.includeInStat.present
+           ? data.includeInStat.value
+@@ -2402,6 +2435,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
+           ..write('categoryId: $categoryId, ')
+           ..write('merchant: $merchant, ')
+           ..write('note: $note, ')
++          ..write('tags: $tags, ')
+           ..write('happenAt: $happenAt, ')
+           ..write('includeInStat: $includeInStat, ')
+           ..write('includeInBudget: $includeInBudget, ')
+@@ -2429,6 +2463,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
+     categoryId,
+     merchant,
+     note,
++    tags,
+     happenAt,
+     includeInStat,
+     includeInBudget,
+@@ -2455,6 +2490,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
+           other.categoryId == this.categoryId &&
+           other.merchant == this.merchant &&
+           other.note == this.note &&
++          other.tags == this.tags &&
+           other.happenAt == this.happenAt &&
+           other.includeInStat == this.includeInStat &&
+           other.includeInBudget == this.includeInBudget &&
+@@ -2479,6 +2515,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
+   final Value<String?> categoryId;
+   final Value<String?> merchant;
+   final Value<String?> note;
++  final Value<String?> tags;
+   final Value<int> happenAt;
+   final Value<int> includeInStat;
+   final Value<int> includeInBudget;
+@@ -2502,6 +2539,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
+     this.categoryId = const Value.absent(),
+     this.merchant = const Value.absent(),
+     this.note = const Value.absent(),
++    this.tags = const Value.absent(),
+     this.happenAt = const Value.absent(),
+     this.includeInStat = const Value.absent(),
+     this.includeInBudget = const Value.absent(),
+@@ -2526,6 +2564,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
+     this.categoryId = const Value.absent(),
+     this.merchant = const Value.absent(),
+     this.note = const Value.absent(),
++    this.tags = const Value.absent(),
+     required int happenAt,
+     this.includeInStat = const Value.absent(),
+     this.includeInBudget = const Value.absent(),
+@@ -2558,6 +2597,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
+     Expression<String>? categoryId,
+     Expression<String>? merchant,
+     Expression<String>? note,
++    Expression<String>? tags,
+     Expression<int>? happenAt,
+     Expression<int>? includeInStat,
+     Expression<int>? includeInBudget,
+@@ -2582,6 +2622,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
+       if (categoryId != null) 'category_id': categoryId,
+       if (merchant != null) 'merchant': merchant,
+       if (note != null) 'note': note,
++      if (tags != null) 'tags': tags,
+       if (happenAt != null) 'happen_at': happenAt,
+       if (includeInStat != null) 'include_in_stat': includeInStat,
+       if (includeInBudget != null) 'include_in_budget': includeInBudget,
+@@ -2608,6 +2649,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
+     Value<String?>? categoryId,
+     Value<String?>? merchant,
+     Value<String?>? note,
++    Value<String?>? tags,
+     Value<int>? happenAt,
+     Value<int>? includeInStat,
+     Value<int>? includeInBudget,
+@@ -2632,6 +2674,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
+       categoryId: categoryId ?? this.categoryId,
+       merchant: merchant ?? this.merchant,
+       note: note ?? this.note,
++      tags: tags ?? this.tags,
+       happenAt: happenAt ?? this.happenAt,
+       includeInStat: includeInStat ?? this.includeInStat,
+       includeInBudget: includeInBudget ?? this.includeInBudget,
+@@ -2680,6 +2723,9 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
+     if (note.present) {
+       map['note'] = Variable<String>(note.value);
+     }
++    if (tags.present) {
++      map['tags'] = Variable<String>(tags.value);
++    }
+     if (happenAt.present) {
+       map['happen_at'] = Variable<int>(happenAt.value);
+     }
+@@ -2732,6 +2778,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
+           ..write('categoryId: $categoryId, ')
+           ..write('merchant: $merchant, ')
+           ..write('note: $note, ')
++          ..write('tags: $tags, ')
+           ..write('happenAt: $happenAt, ')
+           ..write('includeInStat: $includeInStat, ')
+           ..write('includeInBudget: $includeInBudget, ')
+@@ -6994,6 +7041,7 @@ typedef $$TransactionsTableCreateCompanionBuilder =
+       Value<String?> categoryId,
+       Value<String?> merchant,
+       Value<String?> note,
++      Value<String?> tags,
+       required int happenAt,
+       Value<int> includeInStat,
+       Value<int> includeInBudget,
+@@ -7019,6 +7067,7 @@ typedef $$TransactionsTableUpdateCompanionBuilder =
+       Value<String?> categoryId,
+       Value<String?> merchant,
+       Value<String?> note,
++      Value<String?> tags,
+       Value<int> happenAt,
+       Value<int> includeInStat,
+       Value<int> includeInBudget,
+@@ -7145,6 +7194,11 @@ class $$TransactionsTableFilterComposer
+     builder: (column) => ColumnFilters(column),
+   );
+ 
++  ColumnFilters<String> get tags => $composableBuilder(
++    column: $table.tags,
++    builder: (column) => ColumnFilters(column),
++  );
++
+   ColumnFilters<int> get happenAt => $composableBuilder(
+     column: $table.happenAt,
+     builder: (column) => ColumnFilters(column),
+@@ -7332,6 +7386,11 @@ class $$TransactionsTableOrderingComposer
+     builder: (column) => ColumnOrderings(column),
+   );
+ 
++  ColumnOrderings<String> get tags => $composableBuilder(
++    column: $table.tags,
++    builder: (column) => ColumnOrderings(column),
++  );
++
+   ColumnOrderings<int> get happenAt => $composableBuilder(
+     column: $table.happenAt,
+     builder: (column) => ColumnOrderings(column),
+@@ -7509,6 +7568,9 @@ class $$TransactionsTableAnnotationComposer
+   GeneratedColumn<String> get note =>
+       $composableBuilder(column: $table.note, builder: (column) => column);
+ 
++  GeneratedColumn<String> get tags =>
++      $composableBuilder(column: $table.tags, builder: (column) => column);
++
+   GeneratedColumn<int> get happenAt =>
+       $composableBuilder(column: $table.happenAt, builder: (column) => column);
+ 
+@@ -7686,6 +7748,7 @@ class $$TransactionsTableTableManager
+                 Value<String?> categoryId = const Value.absent(),
+                 Value<String?> merchant = const Value.absent(),
+                 Value<String?> note = const Value.absent(),
++                Value<String?> tags = const Value.absent(),
+                 Value<int> happenAt = const Value.absent(),
+                 Value<int> includeInStat = const Value.absent(),
+                 Value<int> includeInBudget = const Value.absent(),
+@@ -7709,6 +7772,7 @@ class $$TransactionsTableTableManager
+                 categoryId: categoryId,
+                 merchant: merchant,
+                 note: note,
++                tags: tags,
+                 happenAt: happenAt,
+                 includeInStat: includeInStat,
+                 includeInBudget: includeInBudget,
+@@ -7734,6 +7798,7 @@ class $$TransactionsTableTableManager
+                 Value<String?> categoryId = const Value.absent(),
+                 Value<String?> merchant = const Value.absent(),
+                 Value<String?> note = const Value.absent(),
++                Value<String?> tags = const Value.absent(),
+                 required int happenAt,
+                 Value<int> includeInStat = const Value.absent(),
+                 Value<int> includeInBudget = const Value.absent(),
+@@ -7757,6 +7822,7 @@ class $$TransactionsTableTableManager
+                 categoryId: categoryId,
+                 merchant: merchant,
+                 note: note,
++                tags: tags,
+                 happenAt: happenAt,
+                 includeInStat: includeInStat,
+                 includeInBudget: includeInBudget,
+diff --git a/lib/data/db/tables/transactions.dart b/lib/data/db/tables/transactions.dart
+index 9e456ad..592429f 100644
+--- a/lib/data/db/tables/transactions.dart
++++ b/lib/data/db/tables/transactions.dart
+@@ -19,6 +19,8 @@ class Transactions extends Table {
+       text().named('category_id').nullable().references(Categories, #id)();
+   TextColumn get merchant => text().nullable()();
+   TextColumn get note => text().nullable()();
++  /// JSON array string, e.g. `["报销","旅行"]`. Null/empty = no tags.
++  TextColumn get tags => text().nullable()();
+   IntColumn get happenAt => integer().named('happen_at')();
+   IntColumn get includeInStat =>
+       integer().named('include_in_stat').withDefault(const Constant(1))();
+diff --git a/lib/data/db/txn_tags.dart b/lib/data/db/txn_tags.dart
+new file mode 100644
+index 0000000..45df4f2
+--- /dev/null
++++ b/lib/data/db/txn_tags.dart
+@@ -0,0 +1,36 @@
++import 'dart:convert';
++
++/// Encode tag list for DB / export. Empty → null. Max 5 tags, each ≤ 12 chars.
++String? encodeTxnTags(List<String>? tags) {
++  if (tags == null || tags.isEmpty) return null;
++  final cleaned = <String>[];
++  for (final raw in tags) {
++    var t = raw.trim();
++    if (t.isEmpty) continue;
++    if (t.length > 12) t = t.substring(0, 12);
++    if (!cleaned.contains(t)) cleaned.add(t);
++    if (cleaned.length >= 5) break;
++  }
++  if (cleaned.isEmpty) return null;
++  return jsonEncode(cleaned);
++}
++
++/// Decode tags JSON from DB. Invalid / empty → [].
++List<String> decodeTxnTags(String? raw) {
++  if (raw == null || raw.trim().isEmpty) return const [];
++  try {
++    final decoded = jsonDecode(raw);
++    if (decoded is! List) return const [];
++    final out = <String>[];
++    for (final e in decoded) {
++      if (e is! String) continue;
++      final t = e.trim();
++      if (t.isEmpty) continue;
++      out.add(t.length > 12 ? t.substring(0, 12) : t);
++      if (out.length >= 5) break;
++    }
++    return out;
++  } catch (_) {
++    return const [];
++  }
++}
+diff --git a/lib/data/export/export_service.dart b/lib/data/export/export_service.dart
+index 28d70ef..b1e75df 100644
+--- a/lib/data/export/export_service.dart
++++ b/lib/data/export/export_service.dart
+@@ -86,7 +86,7 @@ class ExportService {
+     return <String, dynamic>{
+       'format': 'centli-export',
+       'export_version': exportVersion,
+-      'schema_version': 3,
++      'schema_version': 4,
+       'exported_at': DateTime.now().toUtc().toIso8601String(),
+       'app_version': await currentAppVersion(),
+       'ledger': ledger.toJson(),
+@@ -344,6 +344,7 @@ class ExportService {
+       TextCellValue('category_name'),
+       TextCellValue('merchant'),
+       TextCellValue('note'),
++      TextCellValue('tags'),
+       TextCellValue('source'),
+       TextCellValue('include_in_stat'),
+       TextCellValue('fx_rate'),
+@@ -380,6 +381,7 @@ class ExportService {
+         ),
+         TextCellValue('${t['merchant'] ?? ''}'),
+         TextCellValue('${t['note'] ?? ''}'),
++        TextCellValue('${t['tags'] ?? ''}'),
+         TextCellValue('${t['source'] ?? ''}'),
+         IntCellValue(t['includeInStat'] as int? ?? 1),
+         fx == null ? TextCellValue('') : DoubleCellValue((fx as num).toDouble()),
+diff --git a/lib/data/export/import_service.dart b/lib/data/export/import_service.dart
+index 8183bec..d4016fe 100644
+--- a/lib/data/export/import_service.dart
++++ b/lib/data/export/import_service.dart
+@@ -124,7 +124,7 @@ class ImportService {
+       );
+     }
+     final schemaVersion = _asInt(map['schema_version'], 'schema_version');
+-    if (schemaVersion < 1 || schemaVersion > 3) {
++    if (schemaVersion < 1 || schemaVersion > 4) {
+       throw StateError('不支持的数据版本 schema_version=$schemaVersion');
+     }
+ 
+@@ -317,6 +317,14 @@ class ImportService {
+     m.putIfAbsent('includeInStat', () => 1);
+     m.putIfAbsent('includeInBudget', () => 1);
+     m.putIfAbsent('source', () => 'manual');
++    // Old backups may omit tags; treat as empty.
++    if (!m.containsKey('tags') || m['tags'] == null) {
++      m['tags'] = null;
++    } else if (m['tags'] is List) {
++      m['tags'] = jsonEncode(m['tags']);
++    } else if (m['tags'] is! String) {
++      m['tags'] = null;
++    }
+     final ts = DateTime.now().millisecondsSinceEpoch;
+     m.putIfAbsent('createdAt', () => ts);
+     m.putIfAbsent('updatedAt', () => ts);
+@@ -480,9 +488,10 @@ class ImportService {
+       final categoryId = _cellStr(row, 10);
+       final merchant = _cellStr(row, 12);
+       final note = _cellStr(row, 13);
+-      final fxRaw = _cellStr(row, 16);
+-      final toAmtRaw = _cellStr(row, 17);
+-      final delRaw = _cellStr(row, 18);
++      final tags = _cellStr(row, 14);
++      final fxRaw = _cellStr(row, 17);
++      final toAmtRaw = _cellStr(row, 18);
++      final delRaw = _cellStr(row, 19);
+       transactions.add({
+         'id': id,
+         'ledgerId': ledgerId,
+@@ -495,8 +504,9 @@ class ImportService {
+         'categoryId': categoryId.isEmpty ? null : categoryId,
+         'merchant': merchant.isEmpty ? null : merchant,
+         'note': note.isEmpty ? null : note,
+-        'source': _cellStr(row, 14, fallback: 'manual'),
+-        'includeInStat': _cellInt(row, 15, fallback: 1),
++        'tags': tags.isEmpty ? null : tags,
++        'source': _cellStr(row, 15, fallback: 'manual'),
++        'includeInStat': _cellInt(row, 16, fallback: 1),
+         'includeInBudget': 1,
+         'fxRate': fxRaw.isEmpty ? null : double.tryParse(fxRaw),
+         'toAmountMinor': toAmtRaw.isEmpty ? null : int.tryParse(toAmtRaw),
+diff --git a/lib/features/assets/assets_page.dart b/lib/features/assets/assets_page.dart
+index 1efee18..f45a442 100644
+--- a/lib/features/assets/assets_page.dart
++++ b/lib/features/assets/assets_page.dart
+@@ -88,9 +88,10 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
+               }
+               final ledgerId = ledger.id;
+               final base = ledger.baseCurrency;
++              final activeAccountsAsync = ref.watch(_accountsProvider(ledgerId));
+               final accountsAsync = _showArchived
+                   ? ref.watch(_archivedAccountsProvider(ledgerId))
+-                  : ref.watch(_accountsProvider(ledgerId));
++                  : activeAccountsAsync;
+               final balancesAsync = ref.watch(_balancesProvider(ledgerId));
+               return accountsAsync.when(
+                 loading: () => const Center(child: CircularProgressIndicator()),
+@@ -98,9 +99,10 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
+                 data: (accounts) {
+                   final balances = balancesAsync.valueOrNull ?? {};
+                   final nwArgs = (ledgerId: ledgerId, base: base);
+-                  final netWorthAsync = _showArchived
+-                      ? null
+-                      : ref.watch(_netWorthBaseProvider(nwArgs));
++                  // Always show net-worth card (active accounts); avoid empty gap in archive tab.
++                  final netWorthAsync = ref.watch(_netWorthBaseProvider(nwArgs));
++                  final cardAccounts =
++                      activeAccountsAsync.valueOrNull ?? const <Account>[];
+ 
+                   return ListView(
+                     padding: CentliSpacing.pagePaddingNav,
+@@ -158,8 +160,7 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
+                         ),
+                       ),
+                       const SizedBox(height: CentliSpacing.section),
+-                      if (!_showArchived && netWorthAsync != null)
+-                        netWorthAsync.when(
++                      netWorthAsync.when(
+                           loading: () => const CentliSoftCard(
+                             padding: EdgeInsets.all(24),
+                             child: Center(child: CircularProgressIndicator()),
+@@ -174,7 +175,7 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
+                                 ? null
+                                 : assetLiabilityInBase(
+                                     accounts: [
+-                                      for (final a in accounts)
++                                      for (final a in cardAccounts)
+                                         (
+                                           currency: a.currency,
+                                           balanceMinor: balances[a.id] ??
+@@ -188,7 +189,7 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
+                             final assetSum = split?.assetMinor ?? 0;
+                             final liabilitySum = split?.liabilityMinor ?? 0;
+                             final positives = <({Account a, int bal})>[];
+-                            for (final a in accounts) {
++                            for (final a in cardAccounts) {
+                               final bal =
+                                   balances[a.id] ?? a.openingBalanceMinor;
+                               if (bal >= 0) {
+@@ -433,15 +434,16 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
+                             );
+                           },
+                         ),
+-                      if (_showArchived)
+-                        Padding(
+-                          padding: const EdgeInsets.only(bottom: 12, top: 4),
+-                          child: Text(
+-                            '已归档账户不计入总资产，可点进详情取消归档。',
+-                            style: Theme.of(context).textTheme.bodySmall
+-                                ?.copyWith(color: scheme.onSurfaceVariant),
+-                          ),
++                      Padding(
++                        padding: const EdgeInsets.only(bottom: 12, top: 4),
++                        child: Text(
++                          _showArchived
++                              ? '已归档账户不计入总资产，可点进详情取消归档。'
++                              : '找不到账户？可到「已归档」查看；归档账户不计入总资产。',
++                          style: Theme.of(context).textTheme.bodySmall
++                              ?.copyWith(color: scheme.onSurfaceVariant),
+                         ),
++                      ),
+                       if (accounts.isEmpty)
+                         CentliSoftCard(
+                           child: CentliEmptyState(
+@@ -492,18 +494,18 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
+   }) {
+     final day = FxBook.todayLocal();
+     final groups = <String, List<Account>>{
+-      '在线': [],
+-      '储蓄': [],
++      '电子钱包': [],
++      '银行卡': [],
+       '现金': [],
+       '其他': [],
+     };
+     for (final a in accounts) {
+       switch (a.type) {
+         case 'ewallet':
+-          groups['在线']!.add(a);
++          groups['电子钱包']!.add(a);
+           break;
+         case 'bank':
+-          groups['储蓄']!.add(a);
++          groups['银行卡']!.add(a);
+           break;
+         case 'cash':
+           groups['现金']!.add(a);
+@@ -623,7 +625,7 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
+       case 'ewallet':
+         return '电子钱包';
+       case 'bank':
+-        return '银行';
++        return '银行卡';
+       default:
+         return '其他';
+     }
+@@ -761,7 +763,7 @@ Future<void> showAccountEditor(
+                     initialValue: type,
+                     items: const [
+                       DropdownMenuItem(value: 'cash', child: Text('现金')),
+-                      DropdownMenuItem(value: 'bank', child: Text('银行')),
++                      DropdownMenuItem(value: 'bank', child: Text('银行卡')),
+                       DropdownMenuItem(value: 'ewallet', child: Text('电子钱包')),
+                       DropdownMenuItem(value: 'other', child: Text('其他')),
+                     ],
+diff --git a/lib/features/ledger/bookkeeping_sheet.dart b/lib/features/ledger/bookkeeping_sheet.dart
+index 51062a8..e79e8ca 100644
+--- a/lib/features/ledger/bookkeeping_sheet.dart
++++ b/lib/features/ledger/bookkeeping_sheet.dart
+@@ -7,6 +7,7 @@ import '../../core/constants/currencies.dart';
+ import '../../core/utils/money.dart';
+ import '../../core/widgets/centli_icon.dart';
+ import '../../data/db/centli_database.dart';
++import '../../data/db/txn_tags.dart';
+ import '../../data/db/database_provider.dart';
+ import 'ai_text_fill.dart';
+ import 'llm_text_fill.dart';
+@@ -51,6 +52,7 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
+   String? _categoryId;
+   String? _merchant;
+   final _noteCtrl = TextEditingController();
++  List<String> _tags = [];
+   final _aiTextCtrl = TextEditingController();
+   bool _aiExpanded = false;
+   final _speech = LocalSpeechService();
+@@ -129,6 +131,7 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
+         _categoryId = existing.categoryId;
+         _merchant = existing.merchant;
+         _noteCtrl.text = existing.note ?? '';
++        _tags = List<String>.from(decodeTxnTags(existing.tags));
+         _happenAt = DateTime.fromMillisecondsSinceEpoch(
+           existing.happenAt,
+           isUtc: true,
+@@ -548,6 +551,7 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
+           categoryId: cat,
+           merchant: merchant,
+           note: note,
++          tags: _tags,
+           happenAt: _happenAt,
+           fxRate: fxRate,
+           toAmountMinor: toAmountMinor,
+@@ -563,6 +567,7 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
+           categoryId: cat,
+           merchant: merchant,
+           note: note,
++          tags: _tags,
+           happenAt: _happenAt,
+           fxRate: fxRate,
+           toAmountMinor: toAmountMinor,
+@@ -1089,6 +1094,121 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
+     });
+   }
+ 
++  bool get _isDirty {
++    final amt = _evalAmount(_amountText) ?? 0;
++    return amt > 0 || _noteCtrl.text.trim().isNotEmpty || _tags.isNotEmpty;
++  }
++
++  Future<bool> _confirmDiscardIfNeeded() async {
++    if (!_isDirty) return true;
++    final major = _evalAmount(_amountText) ?? 0;
++    final label = major > 0
++        ? formatMinor(_currency, toMinor(_currency, major))
++        : (_noteCtrl.text.trim().isNotEmpty ? '备注' : '标签');
++    final ok = await showDialog<bool>(
++      context: context,
++      builder: (ctx) => AlertDialog(
++        title: const Text('放弃这笔记账？'),
++        content: Text('已输入 $label，确定放弃？'),
++        actions: [
++          TextButton(
++            onPressed: () => Navigator.pop(ctx, false),
++            child: const Text('继续记账'),
++          ),
++          FilledButton(
++            onPressed: () => Navigator.pop(ctx, true),
++            child: const Text('放弃'),
++          ),
++        ],
++      ),
++    );
++    return ok == true;
++  }
++
++  Future<void> _editSheetTags() async {
++    final current = List<String>.from(_tags);
++    final ctrl = TextEditingController();
++    final suggestions = _ledgerId == null
++        ? <String>[]
++        : await ref.read(databaseProvider).listDistinctTags(_ledgerId!);
++    if (!mounted) return;
++    final result = await showDialog<List<String>>(
++      context: context,
++      builder: (ctx) {
++        return StatefulBuilder(
++          builder: (ctx, setLocal) {
++            void addTag(String raw) {
++              var t = raw.trim();
++              if (t.isEmpty) return;
++              if (t.length > 12) t = t.substring(0, 12);
++              if (current.contains(t) || current.length >= 5) return;
++              setLocal(() => current.add(t));
++              ctrl.clear();
++            }
++
++            return AlertDialog(
++              title: const Text('标签'),
++              content: SizedBox(
++                width: 360,
++                child: Column(
++                  mainAxisSize: MainAxisSize.min,
++                  crossAxisAlignment: CrossAxisAlignment.stretch,
++                  children: [
++                    Wrap(
++                      spacing: 6,
++                      children: [
++                        for (final t in current)
++                          InputChip(
++                            label: Text(t),
++                            onDeleted: () => setLocal(() => current.remove(t)),
++                          ),
++                      ],
++                    ),
++                    const SizedBox(height: 8),
++                    TextField(
++                      controller: ctrl,
++                      decoration: const InputDecoration(
++                        labelText: '新标签',
++                        border: OutlineInputBorder(),
++                      ),
++                      onSubmitted: addTag,
++                    ),
++                    if (suggestions.isNotEmpty) ...[
++                      const SizedBox(height: 8),
++                      Wrap(
++                        spacing: 6,
++                        children: [
++                          for (final s in suggestions.take(12))
++                            ActionChip(
++                              label: Text(s),
++                              onPressed: () => addTag(s),
++                            ),
++                        ],
++                      ),
++                    ],
++                  ],
++                ),
++              ),
++              actions: [
++                TextButton(
++                  onPressed: () => Navigator.pop(ctx),
++                  child: const Text('取消'),
++                ),
++                FilledButton(
++                  onPressed: () =>
++                      Navigator.pop(ctx, List<String>.from(current)),
++                  child: const Text('确定'),
++                ),
++              ],
++            );
++          },
++        );
++      },
++    );
++    ctrl.dispose();
++    if (result != null) setState(() => _tags = result);
++  }
++
+   @override
+   Widget build(BuildContext context) {
+     final scheme = Theme.of(context).colorScheme;
+@@ -1096,7 +1216,15 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
+     final viewInsets = MediaQuery.viewInsetsOf(context).bottom;
+     final safeBottom = MediaQuery.paddingOf(context).bottom;
+ 
+-    return Padding(
++    return PopScope(
++      canPop: false,
++      onPopInvokedWithResult: (didPop, _) async {
++        if (didPop) return;
++        if (await _confirmDiscardIfNeeded() && context.mounted) {
++          Navigator.pop(context);
++        }
++      },
++      child: Padding(
+       padding: EdgeInsets.only(bottom: viewInsets),
+       child: ConstrainedBox(
+         constraints: BoxConstraints(maxHeight: maxHeight),
+@@ -1124,179 +1252,63 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
+                             ),
+                           ),
+                           Padding(
+-                            padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+-                            child: Row(
+-                              children: [
+-                                Expanded(
+-                                  child: SegmentedButton<String>(
+-                                    segments: const [
+-                                      ButtonSegment(
+-                                        value: 'out',
+-                                        label: Text('\u652f\u51fa'),
+-                                      ),
+-                                      ButtonSegment(
+-                                        value: 'in',
+-                                        label: Text('\u6536\u5165'),
+-                                      ),
+-                                      ButtonSegment(
+-                                        value: 'transfer',
+-                                        label: Text('\u8f6c\u8d26'),
+-                                      ),
+-                                    ],
+-                                    selected: {_type},
+-                                    onSelectionChanged: (s) {
+-                                      setState(() => _type = s.first);
+-                                      _reloadCategories(resetSelection: true);
+-                                    },
+-                                  ),
+-                                ),
+-                                IconButton(
+-                                  onPressed: () => Navigator.pop(context),
+-                                  icon: const Icon(Icons.close),
+-                                ),
+-                              ],
++                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
++                            child: Align(
++                              alignment: Alignment.centerLeft,
++                              child: Text(
++                                '记一笔 · ${ref.watch(currentLedgerProvider).valueOrNull?.name ?? ''}',
++                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
++                                      fontWeight: FontWeight.w700,
++                                    ),
++                              ),
+                             ),
+                           ),
+-
+                           Padding(
+-                            padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+-                            child: Column(
+-                              crossAxisAlignment: CrossAxisAlignment.stretch,
++                            padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
++                            child: Row(
+                               children: [
+-                                InkWell(
+-                                  onTap: () => setState(
+-                                    () => _aiExpanded = !_aiExpanded,
+-                                  ),
+-                                  borderRadius: BorderRadius.circular(8),
+-                                  child: Padding(
+-                                    padding: const EdgeInsets.symmetric(
+-                                      vertical: 4,
+-                                    ),
+-                                    child: Row(
+-                                      children: [
+-                                        Icon(
+-                                          Icons.auto_awesome,
+-                                          size: 18,
+-                                          color: scheme.primary,
+-                                        ),
+-                                        const SizedBox(width: 8),
++                                Expanded(
++                                  child: Row(
++                                    children: [
++                                      for (final entry in [
++                                        ('out', '支出'),
++                                        ('in', '收入'),
++                                        ('transfer', '转账'),
++                                      ])
+                                         Expanded(
+-                                          child: Text(
+-                                            '智能填单',
+-                                            style: Theme.of(context)
+-                                                .textTheme
+-                                                .labelLarge
+-                                                ?.copyWith(
+-                                                  color: scheme.primary,
++                                          child: InkWell(
++                                            onTap: () {
++                                              setState(() => _type = entry.$1);
++                                              _reloadCategories(resetSelection: true);
++                                            },
++                                            child: Column(
++                                              children: [
++                                                Text(
++                                                  entry.$2,
++                                                  textAlign: TextAlign.center,
++                                                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
++                                                        fontWeight: _type == entry.$1
++                                                            ? FontWeight.w700
++                                                            : FontWeight.w500,
++                                                        color: _type == entry.$1
++                                                            ? scheme.primary
++                                                            : scheme.onSurfaceVariant,
++                                                      ),
+                                                 ),
++                                                const SizedBox(height: 6),
++                                                Container(
++                                                  height: 2,
++                                                  color: _type == entry.$1
++                                                      ? scheme.primary
++                                                      : Colors.transparent,
++                                                ),
++                                              ],
++                                            ),
+                                           ),
+                                         ),
+-                                        Text(
+-                                          '话术/语音 · 本地/大模型',
+-                                          style: Theme.of(context)
+-                                              .textTheme
+-                                              .bodySmall
+-                                              ?.copyWith(
+-                                                color: scheme.onSurfaceVariant,
+-                                              ),
+-                                        ),
+-                                        Icon(
+-                                          _aiExpanded
+-                                              ? Icons.expand_less
+-                                              : Icons.expand_more,
+-                                          color: scheme.onSurfaceVariant,
+-                                        ),
+-                                      ],
+-                                    ),
+-                                  ),
+-                                ),
+-                                if (_aiExpanded) ...[
+-                                  const SizedBox(height: 6),
+-                                  Row(
+-                                    crossAxisAlignment:
+-                                        CrossAxisAlignment.start,
+-                                    children: [
+-                                      Expanded(
+-                                        child: TextField(
+-                                          controller: _aiTextCtrl,
+-                                          minLines: 1,
+-                                          maxLines: 3,
+-                                          textInputAction: TextInputAction.done,
+-                                          onSubmitted: (_) =>
+-                                              _applyAiTextFill(),
+-                                          decoration: InputDecoration(
+-                                            hintText:
+-                                                _speechPhase == 'listening'
+-                                                ? '正在听，请说出记账内容…'
+-                                                : _speechPhase == 'recognizing'
+-                                                ? '识别中…'
+-                                                : '例：午餐花了28.5 / 昨天支付宝地铁4元',
+-                                            border: const OutlineInputBorder(),
+-                                            isDense: true,
+-                                          ),
+-                                        ),
+-                                      ),
+-                                      const SizedBox(width: 8),
+-                                      IconButton.filledTonal(
+-                                        tooltip:
+-                                            (_speechListening ||
+-                                                _speechPhase == 'recognizing')
+-                                            ? '停止'
+-                                            : '语音填单',
+-                                        onPressed: (_saving || _speechBusy)
+-                                            ? null
+-                                            : _toggleVoiceFill,
+-                                        style: _speechPhase == 'listening'
+-                                            ? IconButton.styleFrom(
+-                                                foregroundColor: Theme.of(
+-                                                  context,
+-                                                ).colorScheme.error,
+-                                              )
+-                                            : null,
+-                                        icon: _speechPhase == 'starting'
+-                                            ? const SizedBox(
+-                                                width: 22,
+-                                                height: 22,
+-                                                child:
+-                                                    CircularProgressIndicator(
+-                                                      strokeWidth: 2,
+-                                                    ),
+-                                              )
+-                                            : Icon(
+-                                                _speechPhase == 'listening'
+-                                                    ? Icons.mic
+-                                                    : _speechPhase ==
+-                                                          'recognizing'
+-                                                    ? Icons.hearing
+-                                                    : Icons.mic_none,
+-                                              ),
+-                                      ),
+-                                      const SizedBox(width: 4),
+-                                      FilledButton(
+-                                        onPressed:
+-                                            (_saving ||
+-                                                _aiFilling ||
+-                                                _speechPhase == 'listening')
+-                                            ? null
+-                                            : _applyAiTextFill,
+-                                        child: Text(_aiFilling ? '…' : '填入'),
+-                                      ),
+                                     ],
+                                   ),
+-                                  if (_speechPhase != 'idle') ...[
+-                                    const SizedBox(height: 8),
+-                                    _SpeechStatusBanner(
+-                                      label: _speechStatusLabel,
+-                                      phase: _speechPhase,
+-                                      level: _speechLevel,
+-                                      onStop: (_speechBusy)
+-                                          ? null
+-                                          : () => _stopSpeech(
+-                                              userInitiated: true,
+-                                            ),
+-                                    ),
+-                                  ],
+-                                ],
++                                ),
+                               ],
+                             ),
+                           ),
+@@ -1312,7 +1324,7 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
+                                     padding: const EdgeInsets.only(bottom: 2),
+                                     child: Text(
+                                       _amountText,
+-                                      textAlign: TextAlign.right,
++                                      textAlign: TextAlign.center,
+                                       style: Theme.of(context)
+                                           .textTheme
+                                           .labelLarge
+@@ -1322,24 +1334,41 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
+                                           ),
+                                     ),
+                                   ),
+-                                Text(
+-                                  formatMinor(
+-                                    _currency,
+-                                    toMinor(
++                                Row(
++                                  mainAxisAlignment: MainAxisAlignment.center,
++                                  crossAxisAlignment: CrossAxisAlignment.baseline,
++                                  textBaseline: TextBaseline.alphabetic,
++                                  children: [
++                                    Text(
++                                      formatMinor(
++                                        _currency,
++                                        toMinor(
++                                          _currency,
++                                          _evalAmount(_amountText) ?? 0,
++                                        ),
++                                      ),
++                                      textAlign: TextAlign.center,
++                                      style: Theme.of(context)
++                                          .textTheme
++                                          .displaySmall
++                                          ?.copyWith(
++                                            fontWeight: FontWeight.w700,
++                                            letterSpacing: -0.8,
++                                            height: 1.0,
++                                          ),
++                                    ),
++                                    const SizedBox(width: 8),
++                                    Text(
+                                       _currency,
+-                                      _evalAmount(_amountText) ?? 0,
++                                      style: Theme.of(context)
++                                          .textTheme
++                                          .titleMedium
++                                          ?.copyWith(
++                                            color: scheme.onSurfaceVariant,
++                                            fontWeight: FontWeight.w600,
++                                          ),
+                                     ),
+-                                  ),
+-                                  textAlign: TextAlign.right,
+-                                  style: Theme.of(context)
+-                                      .textTheme
+-                                      .headlineMedium
+-                                      ?.copyWith(
+-                                        fontWeight: FontWeight.w800,
+-                                        letterSpacing: -0.8,
+-                                        height: 1.0,
+-                                        fontSize: 36,
+-                                      ),
++                                  ],
+                                 ),
+                                 const SizedBox(height: CentliSpacing.dense),
+                                 const Divider(height: 1, thickness: 0.5),
+@@ -1470,6 +1499,14 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
+                                   size: 20,
+                                   color: scheme.onSurfaceVariant,
+                                 ),
++                                suffixIcon: IconButton(
++                                  tooltip: '标签',
++                                  icon: Icon(
++                                    _tags.isEmpty ? Icons.sell_outlined : Icons.sell,
++                                    size: 20,
++                                  ),
++                                  onPressed: _editSheetTags,
++                                ),
+                                 filled: true,
+                                 fillColor: scheme.surfaceContainerHighest,
+                                 border: OutlineInputBorder(
+@@ -1495,6 +1532,150 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
+                       ),
+                     ),
+                   ),
++                  // L7: voice/text above keypad
++                          Padding(
++                            padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
++                            child: Column(
++                              crossAxisAlignment: CrossAxisAlignment.stretch,
++                              children: [
++                                InkWell(
++                                  onTap: () => setState(
++                                    () => _aiExpanded = !_aiExpanded,
++                                  ),
++                                  borderRadius: BorderRadius.circular(8),
++                                  child: Padding(
++                                    padding: const EdgeInsets.symmetric(
++                                      vertical: 4,
++                                    ),
++                                    child: Row(
++                                      children: [
++                                        Icon(
++                                          Icons.auto_awesome,
++                                          size: 18,
++                                          color: scheme.primary,
++                                        ),
++                                        const SizedBox(width: 8),
++                                        Expanded(
++                                          child: Text(
++                                            '文字记账',
++                                            style: Theme.of(context)
++                                                .textTheme
++                                                .labelLarge
++                                                ?.copyWith(
++                                                  color: scheme.primary,
++                                                ),
++                                          ),
++                                        ),
++                                        Text(
++                                          '\u8bed\u97f3\u00b7\u6587\u5b57',
++                                          style: Theme.of(context)
++                                              .textTheme
++                                              .bodySmall
++                                              ?.copyWith(
++                                                color: scheme.onSurfaceVariant,
++                                              ),
++                                        ),
++                                        Icon(
++                                          _aiExpanded
++                                              ? Icons.expand_less
++                                              : Icons.expand_more,
++                                          color: scheme.onSurfaceVariant,
++                                        ),
++                                      ],
++                                    ),
++                                  ),
++                                ),
++                                if (_aiExpanded) ...[
++                                  const SizedBox(height: 6),
++                                  Row(
++                                    crossAxisAlignment:
++                                        CrossAxisAlignment.start,
++                                    children: [
++                                      Expanded(
++                                        child: TextField(
++                                          controller: _aiTextCtrl,
++                                          minLines: 1,
++                                          maxLines: 3,
++                                          textInputAction: TextInputAction.done,
++                                          onSubmitted: (_) =>
++                                              _applyAiTextFill(),
++                                          decoration: InputDecoration(
++                                            hintText:
++                                                _speechPhase == 'listening'
++                                                ? '正在听，请说出记账内容…'
++                                                : _speechPhase == 'recognizing'
++                                                ? '识别中…'
++                                                : '例：午餐花了28.5 / 昨天支付宝地铁4元',
++                                            border: const OutlineInputBorder(),
++                                            isDense: true,
++                                          ),
++                                        ),
++                                      ),
++                                      const SizedBox(width: 8),
++                                      IconButton.filledTonal(
++                                        tooltip:
++                                            (_speechListening ||
++                                                _speechPhase == 'recognizing')
++                                            ? '停止'
++                                            : '语音填单',
++                                        onPressed: (_saving || _speechBusy)
++                                            ? null
++                                            : _toggleVoiceFill,
++                                        style: _speechPhase == 'listening'
++                                            ? IconButton.styleFrom(
++                                                foregroundColor: Theme.of(
++                                                  context,
++                                                ).colorScheme.error,
++                                              )
++                                            : null,
++                                        icon: _speechPhase == 'starting'
++                                            ? const SizedBox(
++                                                width: 22,
++                                                height: 22,
++                                                child:
++                                                    CircularProgressIndicator(
++                                                      strokeWidth: 2,
++                                                    ),
++                                              )
++                                            : Icon(
++                                                _speechPhase == 'listening'
++                                                    ? Icons.mic
++                                                    : _speechPhase ==
++                                                          'recognizing'
++                                                    ? Icons.hearing
++                                                    : Icons.mic_none,
++                                              ),
++                                      ),
++                                      const SizedBox(width: 4),
++                                      FilledButton(
++                                        onPressed:
++                                            (_saving ||
++                                                _aiFilling ||
++                                                _speechPhase == 'listening')
++                                            ? null
++                                            : _applyAiTextFill,
++                                        child: Text(_aiFilling ? '…' : '填入'),
++                                      ),
++                                    ],
++                                  ),
++                                  if (_speechPhase != 'idle') ...[
++                                    const SizedBox(height: 8),
++                                    _SpeechStatusBanner(
++                                      label: _speechStatusLabel,
++                                      phase: _speechPhase,
++                                      level: _speechLevel,
++                                      onStop: (_speechBusy)
++                                          ? null
++                                          : () => _stopSpeech(
++                                              userInitiated: true,
++                                            ),
++                                    ),
++                                  ],
++                                ],
++                              ],
++                            ),
++                          ),
++
+                   SizedBox(height: CentliSpacing.sheetGap),
+                   _Keypad(
+                     onKey: _onKey,
+@@ -1509,6 +1690,7 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
+                 ],
+               ),
+       ),
++    ),
+     );
+   }
+ }
+@@ -1737,7 +1919,9 @@ class _Keypad extends StatelessWidget {
+                       padding: const EdgeInsets.all(3),
+                       child: SizedBox(
+                         height: 52,
+-                        child: Material(
++                        child: Tooltip(
++                          message: k == '\u2713' ? '\u957f\u6309\u518d\u8bb0\u4e00\u7b14' : '',
++                          child: Material(
+                           color: _bg(context, k),
+                           borderRadius: BorderRadius.circular(14),
+                           child: InkWell(
+@@ -1761,6 +1945,7 @@ class _Keypad extends StatelessWidget {
+                               ),
+                             ),
+                           ),
++                          ),
+                         ),
+                       ),
+                     ),
+diff --git a/lib/features/ledger/ledger_detail_page.dart b/lib/features/ledger/ledger_detail_page.dart
+index 45a4d2c..4187929 100644
+--- a/lib/features/ledger/ledger_detail_page.dart
++++ b/lib/features/ledger/ledger_detail_page.dart
+@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
+ 
+ import '../../core/utils/money.dart';
+ import '../../data/db/centli_database.dart';
++import '../../data/db/txn_tags.dart';
+ import '../../data/db/database_provider.dart';
+ import 'bookkeeping_sheet.dart' deferred as bookkeeping;
+ import '../../app/theme.dart';
+@@ -123,7 +124,9 @@ class _DetailBody extends ConsumerWidget {
+           const SizedBox(height: 24),
+           CentliSoftCard(
+             child: Column(
++              crossAxisAlignment: CrossAxisAlignment.stretch,
+               children: [
++                _sectionHeader(context, '\u57fa\u672c\u4fe1\u606f'),
+                 _row(
+                   context,
+                   label: isTransfer ? '\u8f6c\u51fa\u8d26\u6237' : '\u8d26\u6237',
+@@ -182,7 +185,7 @@ class _DetailBody extends ConsumerWidget {
+                     ),
+                   ],
+                 ],
+-                const Divider(height: 1),
++                _sectionHeader(context, '\u6765\u6e90\u4e0e\u65f6\u95f4'),
+                 ListTile(
+                   title: const Text('\u65f6\u95f4'),
+                   trailing: Text(timeLabel),
+@@ -192,24 +195,46 @@ class _DetailBody extends ConsumerWidget {
+                   title: const Text('\u6765\u6e90'),
+                   trailing: Text(_sourceLabel(txn.source)),
+                 ),
+-                if (txn.merchant != null && txn.merchant!.isNotEmpty) ...[
+-                  const Divider(height: 1),
+-                  ListTile(
+-                    title: const Text('\u5546\u6237'),
+-                    trailing: Text(txn.merchant!),
++                const Divider(height: 1),
++                ListTile(
++                  title: const Text('\u5546\u6237'),
++                  trailing: Text(
++                    (txn.merchant == null || txn.merchant!.isEmpty)
++                        ? '\u2014'
++                        : txn.merchant!,
+                   ),
+-                ],
++                ),
++                _sectionHeader(context, '\u5176\u5b83'),
++                ListTile(
++                  title: const Text('\u6807\u7b7e'),
++                  subtitle: decodeTxnTags(txn.tags).isEmpty
++                      ? const Text('\\u2014')
++                      : Wrap(
++                          spacing: 6,
++                          runSpacing: 4,
++                          children: [
++                            for (final t in decodeTxnTags(txn.tags))
++                              Chip(
++                                label: Text(t),
++                                visualDensity: VisualDensity.compact,
++                                materialTapTargetSize:
++                                    MaterialTapTargetSize.shrinkWrap,
++                              ),
++                          ],
++                        ),
++                  trailing: IconButton(
++                    tooltip: '\\u7f16\\u8f91\\u6807\\u7b7e',
++                    icon: const Icon(Icons.sell_outlined),
++                    onPressed: () => _editTags(context, ref),
++                  ),
++                ),
+                 const Divider(height: 1),
+                 ListTile(
+                   title: const Text('\u5907\u6ce8'),
+-                  trailing: ConstrainedBox(
+-                    constraints: const BoxConstraints(maxWidth: 200),
+-                    child: Text(
+-                      (txn.note == null || txn.note!.isEmpty)
+-                          ? '\u2014'
+-                          : txn.note!,
+-                      textAlign: TextAlign.end,
+-                    ),
++                  subtitle: Text(
++                    (txn.note == null || txn.note!.isEmpty)
++                        ? '\u2014'
++                        : txn.note!,
+                   ),
+                 ),
+                 const Divider(height: 1),
+@@ -248,6 +273,20 @@ class _DetailBody extends ConsumerWidget {
+     return (cat, acc?.name, toAcc);
+   }
+ 
++
++  Widget _sectionHeader(BuildContext context, String title) {
++    return Padding(
++      padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
++      child: Text(
++        title,
++        style: Theme.of(context).textTheme.titleSmall?.copyWith(
++              fontWeight: FontWeight.w700,
++              color: Theme.of(context).colorScheme.onSurfaceVariant,
++            ),
++      ),
++    );
++  }
++
+   Widget _row(
+     BuildContext context, {
+     required String label,
+@@ -270,12 +309,98 @@ class _DetailBody extends ConsumerWidget {
+     await bookkeeping.showBookkeepingSheet(context, existing: txn);
+   }
+ 
++
++  Future<void> _editTags(BuildContext context, WidgetRef ref) async {
++    final current = List<String>.from(decodeTxnTags(txn.tags));
++    final ctrl = TextEditingController();
++    final suggestions =
++        await ref.read(databaseProvider).listDistinctTags(txn.ledgerId);
++    if (!context.mounted) return;
++    final result = await showDialog<List<String>>(
++      context: context,
++      builder: (ctx) {
++        return StatefulBuilder(
++          builder: (ctx, setLocal) {
++            void addTag(String raw) {
++              var t = raw.trim();
++              if (t.isEmpty) return;
++              if (t.length > 12) t = t.substring(0, 12);
++              if (current.contains(t) || current.length >= 5) return;
++              setLocal(() => current.add(t));
++              ctrl.clear();
++            }
++
++            return AlertDialog(
++              title: const Text('\u7f16\u8f91\u6807\u7b7e'),
++              content: SizedBox(
++                width: 360,
++                child: Column(
++                  mainAxisSize: MainAxisSize.min,
++                  crossAxisAlignment: CrossAxisAlignment.stretch,
++                  children: [
++                    Wrap(
++                      spacing: 6,
++                      runSpacing: 4,
++                      children: [
++                        for (final t in current)
++                          InputChip(
++                            label: Text(t),
++                            onDeleted: () => setLocal(() => current.remove(t)),
++                          ),
++                      ],
++                    ),
++                    const SizedBox(height: 8),
++                    TextField(
++                      controller: ctrl,
++                      decoration: const InputDecoration(
++                        labelText: '\u65b0\u6807\u7b7e',
++                        hintText: '\u56de\u8f66\u786e\u8ba4\uff0c\u6700\u591a 5 \u4e2a',
++                        border: OutlineInputBorder(),
++                      ),
++                      onSubmitted: addTag,
++                    ),
++                    if (suggestions.isNotEmpty) ...[
++                      const SizedBox(height: 8),
++                      Wrap(
++                        spacing: 6,
++                        children: [
++                          for (final s in suggestions.take(12))
++                            ActionChip(
++                              label: Text(s),
++                              onPressed: () => addTag(s),
++                            ),
++                        ],
++                      ),
++                    ],
++                  ],
++                ),
++              ),
++              actions: [
++                TextButton(
++                  onPressed: () => Navigator.pop(ctx),
++                  child: const Text('\u53d6\u6d88'),
++                ),
++                FilledButton(
++                  onPressed: () => Navigator.pop(ctx, List<String>.from(current)),
++                  child: const Text('\u4fdd\u5b58'),
++                ),
++              ],
++            );
++          },
++        );
++      },
++    );
++    ctrl.dispose();
++    if (result == null || !context.mounted) return;
++    await ref.read(databaseProvider).updateTransactionTags(txn.id, result);
++  }
++
+   Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
+     final ok = await showDialog<bool>(
+       context: context,
+       builder: (ctx) => AlertDialog(
+         title: const Text('\u5220\u9664\u8d26\u5355'),
+-        content: const Text('\u786e\u5b9a\u5220\u9664\u8fd9\u7b14\u8d26\u5355\uff1f\u53ef\u4ee5\u5728\u6570\u636e\u5e93\u4e2d\u4ee5\u8f6f\u5220\u9664\u4fdd\u7559\u3002'),
++        content: const Text('\u786e\u5b9a\u5220\u9664\u8fd9\u7b14\u8d26\u5355\uff1f\u53ef\u5728\u300c\u56de\u6536\u7ad9\u300d\u6062\u590d\u3002'),
+         actions: [
+           TextButton(
+             onPressed: () => Navigator.pop(ctx, false),
+@@ -313,6 +438,18 @@ class _DetailBody extends ConsumerWidget {
+     switch (source) {
+       case 'notification':
+         return '\u901a\u77e5\u81ea\u52a8';
++      case 'ocr':
++        return '\u622a\u56fe\u5bfc\u5165';
++      case 'clipboard':
++        return '\u526a\u8d34\u677f\u5bfc\u5165';
++      case 'share':
++        return '\u5206\u4eab\u5bfc\u5165';
++      case 'share_image':
++        return '\u5206\u4eab\u56fe\u7247';
++      case 'url':
++        return '\u94fe\u63a5\u5bfc\u5165';
++      case 'manual':
++        return '\u624b\u52a8';
+       default:
+         return '\u624b\u52a8';
+     }
+diff --git a/lib/features/pending/pending_page.dart b/lib/features/pending/pending_page.dart
+index 899d727..beb92af 100644
+--- a/lib/features/pending/pending_page.dart
++++ b/lib/features/pending/pending_page.dart
+@@ -41,6 +41,20 @@ class PendingPage extends ConsumerStatefulWidget {
+ }
+ 
+ class _PendingPageBodyState extends ConsumerState<PendingPage> {
++  Future<({List<Category> cats, List<Account> accounts})>? _listsFuture;
++
++  Future<({List<Category> cats, List<Account> accounts})> _loadLists(
++    String ledgerId,
++  ) {
++    return _listsFuture ??= () async {
++      final db = ref.read(databaseProvider);
++      final out = await db.loadCategories(ledgerId, 'out');
++      final inn = await db.loadCategories(ledgerId, 'in');
++      final accounts = await db.loadActiveAccounts(ledgerId);
++      return (cats: [...out, ...inn], accounts: accounts);
++    }();
++  }
++
+   @override
+   void initState() {
+     super.initState();
+@@ -207,17 +221,37 @@ class _PendingPageBodyState extends ConsumerState<PendingPage> {
+                             : null,
+                       );
+                     }
+-                    return ListView.separated(
+-                      padding: const EdgeInsets.fromLTRB(CentliSpacing.pageH, CentliSpacing.section, CentliSpacing.pageH, CentliSpacing.pageBottom),
+-                      itemCount: items.length,
+-                      separatorBuilder: (context, index) =>
+-                          const SizedBox(height: 8),
+-                      itemBuilder: (context, i) {
+-                        final capture = items[i];
+-                        return _PendingCard(
+-                          key: ValueKey(capture.id),
+-                          capture: capture,
+-                          ledgerId: ledger.id,
++                    return FutureBuilder<
++                        ({List<Category> cats, List<Account> accounts})>(
++                      future: _loadLists(ledger.id),
++                      builder: (context, snap) {
++                        if (!snap.hasData) {
++                          return const Center(
++                            child: CircularProgressIndicator(),
++                          );
++                        }
++                        final cats = snap.data!.cats;
++                        final accounts = snap.data!.accounts;
++                        return ListView.separated(
++                          padding: const EdgeInsets.fromLTRB(
++                            CentliSpacing.pageH,
++                            CentliSpacing.section,
++                            CentliSpacing.pageH,
++                            CentliSpacing.pageBottom,
++                          ),
++                          itemCount: items.length,
++                          separatorBuilder: (context, index) =>
++                              const SizedBox(height: 8),
++                          itemBuilder: (context, i) {
++                            final capture = items[i];
++                            return _PendingCard(
++                              key: ValueKey(capture.id),
++                              capture: capture,
++                              ledgerId: ledger.id,
++                              categories: cats,
++                              accounts: accounts,
++                            );
++                          },
+                         );
+                       },
+                     );
+@@ -369,9 +403,17 @@ class _PendingPageBodyState extends ConsumerState<PendingPage> {
+ }
+ 
+ class _PendingCard extends ConsumerStatefulWidget {
+-  const _PendingCard({super.key, required this.capture, required this.ledgerId});
++  const _PendingCard({
++    super.key,
++    required this.capture,
++    required this.ledgerId,
++    required this.categories,
++    required this.accounts,
++  });
+   final PendingCapture capture;
+   final String ledgerId;
++  final List<Category> categories;
++  final List<Account> accounts;
+ 
+   @override
+   ConsumerState<_PendingCard> createState() => _PendingCardState();
+@@ -383,14 +425,15 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
+   late final TextEditingController _merchantCtrl;
+   late final TextEditingController _amountCtrl;
+   bool _busy = false;
++  bool _expanded = false;
++  bool _categoryFallback = false;
++  bool _accountFallback = false;
+ 
+   PendingCapture get c => widget.capture;
+ 
+   @override
+   void initState() {
+     super.initState();
+-    _categoryId = c.suggestedCategoryId;
+-    _accountId = c.suggestedAccountId;
+     _merchantCtrl = TextEditingController(text: c.merchant ?? '');
+     final ccy = c.currency ?? 'CNY';
+     final amt = c.amountMinor;
+@@ -401,6 +444,46 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
+               (ccy == 'JPY') ? 0 : 2,
+             ),
+     );
++    _applySuggestions();
++  }
++
++  @override
++  void didUpdateWidget(covariant _PendingCard oldWidget) {
++    super.didUpdateWidget(oldWidget);
++    if (oldWidget.categories != widget.categories ||
++        oldWidget.accounts != widget.accounts ||
++        oldWidget.capture.id != widget.capture.id) {
++      _applySuggestions();
++    }
++  }
++
++  void _applySuggestions() {
++    final cats = widget.categories;
++    final accounts = widget.accounts;
++    var catId = c.suggestedCategoryId;
++    var catFb = false;
++    if (cats.isNotEmpty) {
++      if (catId == null || !cats.any((x) => x.id == catId)) {
++        catId = cats.first.id;
++        catFb = catId != c.suggestedCategoryId;
++      }
++    } else {
++      catId = null;
++    }
++    var accId = c.suggestedAccountId;
++    var accFb = false;
++    if (accounts.isNotEmpty) {
++      if (accId == null || !accounts.any((x) => x.id == accId)) {
++        accId = accounts.first.id;
++        accFb = accId != c.suggestedAccountId;
++      }
++    } else {
++      accId = null;
++    }
++    _categoryId = catId;
++    _accountId = accId;
++    _categoryFallback = catFb;
++    _accountFallback = accFb;
+   }
+ 
+   @override
+@@ -410,6 +493,36 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
+     super.dispose();
+   }
+ 
++  String get _categoryName {
++    final id = _categoryId;
++    if (id == null) return '未选分类';
++    for (final cat in widget.categories) {
++      if (cat.id == id) return cat.name;
++    }
++    return '未选分类';
++  }
++
++  String get _accountName {
++    final id = _accountId;
++    if (id == null) return '未选账户';
++    for (final a in widget.accounts) {
++      if (a.id == id) return a.name;
++    }
++    return '未选账户';
++  }
++
++  String get _amountLabel {
++    final ccy = c.currency ?? 'CNY';
++    final raw = _amountCtrl.text.trim();
++    if (raw.isEmpty) {
++      if (c.amountMinor == null) return '金额未知';
++      return formatMinor(ccy, c.amountMinor!);
++    }
++    final major = double.tryParse(raw.replaceAll(',', ''));
++    if (major == null) return raw;
++    return formatMinor(ccy, toMinor(ccy, major));
++  }
++
+   @override
+   Widget build(BuildContext context) {
+     final scheme = Theme.of(context).colorScheme;
+@@ -420,6 +533,9 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
+             DateTime.fromMillisecondsSinceEpoch(c.happenAt!),
+           );
+     final isPending = c.status == 'pending';
++    final merchant = _merchantCtrl.text.trim().isEmpty
++        ? ((c.merchant ?? '').isEmpty ? '无商户' : c.merchant!)
++        : _merchantCtrl.text.trim();
+ 
+     return CentliSoftCard(
+       child: Padding(
+@@ -448,106 +564,180 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
+                   ),
+               ],
+             ),
+-            const SizedBox(height: 4),
+             if (isPending) ...[
+-              TextField(
+-                controller: _amountCtrl,
+-                keyboardType:
+-                    const TextInputType.numberWithOptions(decimal: true),
+-                decoration: InputDecoration(
+-                  labelText: '金额 ($ccy)',
+-                  border: const OutlineInputBorder(),
+-                  isDense: true,
++              if (!_expanded) ...[
++                const SizedBox(height: 6),
++                Text(
++                  '$_amountLabel · $merchant · $_categoryName · $_accountName',
++                  maxLines: 2,
++                  overflow: TextOverflow.ellipsis,
++                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
++                        fontWeight: FontWeight.w600,
++                      ),
+                 ),
+-              ),
+-              const SizedBox(height: 8),
+-              TextField(
+-                controller: _merchantCtrl,
+-                decoration: const InputDecoration(
+-                  labelText: '商户',
+-                  border: OutlineInputBorder(),
+-                  isDense: true,
++                if (_categoryFallback || _accountFallback)
++                  Padding(
++                    padding: const EdgeInsets.only(top: 4),
++                    child: Text(
++                      [
++                        if (_categoryFallback) '分类已回落第一项',
++                        if (_accountFallback) '账户已回落第一项',
++                      ].join(' · '),
++                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
++                            color: scheme.error,
++                          ),
++                    ),
++                  ),
++                const SizedBox(height: 8),
++                Row(
++                  children: [
++                    TextButton(
++                      onPressed: _busy ? null : _ignore,
++                      child: const Text('忽略'),
++                    ),
++                    const Spacer(),
++                    TextButton(
++                      onPressed: _busy
++                          ? null
++                          : () => setState(() => _expanded = true),
++                      child: const Text('调整'),
++                    ),
++                    const SizedBox(width: 8),
++                    FilledButton(
++                      onPressed: _busy ? null : _confirm,
++                      child: const Text('入账'),
++                    ),
++                  ],
+                 ),
+-              ),
+-              const SizedBox(height: 8),
+-              FutureBuilder<List<Category>>(
+-                future: () async {
+-                  final db = ref.read(databaseProvider);
+-                  final out = await db.loadCategories(widget.ledgerId, 'out');
+-                  final inn = await db.loadCategories(widget.ledgerId, 'in');
+-                  return [...out, ...inn];
+-                }(),
+-                builder: (context, snap) {
+-                  final cats = snap.data ?? const <Category>[];
+-                  return DropdownButtonFormField<String>(
+-                    initialValue: _categoryId != null &&
+-                            cats.any((x) => x.id == _categoryId)
+-                        ? _categoryId
++              ] else ...[
++                const SizedBox(height: 8),
++                TextField(
++                  controller: _amountCtrl,
++                  keyboardType: const TextInputType.numberWithOptions(
++                    decimal: true,
++                  ),
++                  decoration: InputDecoration(
++                    labelText: '金额 ($ccy)',
++                    border: const OutlineInputBorder(),
++                    isDense: true,
++                  ),
++                  onChanged: (_) => setState(() {}),
++                ),
++                const SizedBox(height: 8),
++                TextField(
++                  controller: _merchantCtrl,
++                  decoration: const InputDecoration(
++                    labelText: '商户',
++                    border: OutlineInputBorder(),
++                    isDense: true,
++                  ),
++                  onChanged: (_) => setState(() {}),
++                ),
++                const SizedBox(height: 8),
++                DropdownButtonFormField<String>(
++                  initialValue: _categoryId != null &&
++                          widget.categories.any((x) => x.id == _categoryId)
++                      ? _categoryId
++                      : null,
++                  items: [
++                    for (final cat in widget.categories)
++                      DropdownMenuItem(value: cat.id, child: Text(cat.name)),
++                  ],
++                  onChanged: (v) => setState(() {
++                    _categoryId = v;
++                    _categoryFallback = false;
++                  }),
++                  decoration: InputDecoration(
++                    labelText: '分类',
++                    border: const OutlineInputBorder(),
++                    isDense: true,
++                    enabledBorder: _categoryFallback
++                        ? OutlineInputBorder(
++                            borderSide: BorderSide(
++                              color: scheme.error,
++                              width: 1.2,
++                            ),
++                          )
+                         : null,
+-                    items: [
+-                      for (final cat in cats)
+-                        DropdownMenuItem(value: cat.id, child: Text(cat.name)),
+-                    ],
+-                    onChanged: (v) => setState(() => _categoryId = v),
+-                    decoration: const InputDecoration(
+-                      labelText: '分类',
+-                      border: OutlineInputBorder(),
+-                      isDense: true,
+-                    ),
+-                  );
+-                },
+-              ),
+-              const SizedBox(height: 8),
+-              FutureBuilder<List<Account>>(
+-                future: ref
+-                    .read(databaseProvider)
+-                    .loadActiveAccounts(widget.ledgerId),
+-                builder: (context, snap) {
+-                  final accounts = snap.data ?? const <Account>[];
+-                  return DropdownButtonFormField<String>(
+-                    initialValue: _accountId != null &&
+-                            accounts.any((x) => x.id == _accountId)
+-                        ? _accountId
++                  ),
++                ),
++                const SizedBox(height: 8),
++                DropdownButtonFormField<String>(
++                  initialValue: _accountId != null &&
++                          widget.accounts.any((x) => x.id == _accountId)
++                      ? _accountId
++                      : null,
++                  items: [
++                    for (final a in widget.accounts)
++                      DropdownMenuItem(
++                        value: a.id,
++                        child: Text('${a.name} · ${a.currency}'),
++                      ),
++                  ],
++                  onChanged: (v) => setState(() {
++                    _accountId = v;
++                    _accountFallback = false;
++                  }),
++                  decoration: InputDecoration(
++                    labelText: '账户',
++                    border: const OutlineInputBorder(),
++                    isDense: true,
++                    enabledBorder: _accountFallback
++                        ? OutlineInputBorder(
++                            borderSide: BorderSide(
++                              color: scheme.error,
++                              width: 1.2,
++                            ),
++                          )
+                         : null,
+-                    items: [
+-                      for (final a in accounts)
+-                        DropdownMenuItem(
+-                          value: a.id,
+-                          child: Text('${a.name} · ${a.currency}'),
++                  ),
++                ),
++                const SizedBox(height: 4),
++                Theme(
++                  data: Theme.of(context)
++                      .copyWith(dividerColor: Colors.transparent),
++                  child: ExpansionTile(
++                    tilePadding: EdgeInsets.zero,
++                    childrenPadding: EdgeInsets.zero,
++                    title: Text(
++                      '原文',
++                      style: Theme.of(context).textTheme.bodySmall,
++                    ),
++                    children: [
++                      Align(
++                        alignment: Alignment.centerLeft,
++                        child: Text(
++                          c.rawText,
++                          style:
++                              Theme.of(context).textTheme.bodySmall?.copyWith(
++                                    color: scheme.onSurfaceVariant,
++                                  ),
+                         ),
++                      ),
+                     ],
+-                    onChanged: (v) => setState(() => _accountId = v),
+-                    decoration: const InputDecoration(
+-                      labelText: '账户',
+-                      border: OutlineInputBorder(),
+-                      isDense: true,
++                  ),
++                ),
++                const SizedBox(height: 8),
++                Row(
++                  children: [
++                    TextButton(
++                      onPressed: _busy ? null : _ignore,
++                      child: const Text('忽略'),
+                     ),
+-                  );
+-                },
+-              ),
+-              const SizedBox(height: 8),
+-              Text(
+-                c.rawText,
+-                maxLines: 2,
+-                overflow: TextOverflow.ellipsis,
+-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+-                      color: scheme.onSurfaceVariant,
++                    TextButton(
++                      onPressed: _busy
++                          ? null
++                          : () => setState(() => _expanded = false),
++                      child: const Text('收起'),
+                     ),
+-              ),
+-              const SizedBox(height: 12),
+-              Row(
+-                children: [
+-                  TextButton(
+-                    onPressed: _busy ? null : _ignore,
+-                    child: const Text('忽略'),
+-                  ),
+-                  const Spacer(),
+-                  FilledButton(
+-                    onPressed: _busy ? null : _confirm,
+-                    child: const Text('入账'),
+-                  ),
+-                ],
+-              ),
++                    const Spacer(),
++                    FilledButton(
++                      onPressed: _busy ? null : _confirm,
++                      child: const Text('入账'),
++                    ),
++                  ],
++                ),
++              ],
+             ] else ...[
+               Text(
+                 c.amountMinor == null
+@@ -566,17 +756,6 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
+                       color: scheme.onSurfaceVariant,
+                     ),
+               ),
+-              if (c.status == 'ignored') ...[
+-                const SizedBox(height: 12),
+-                Align(
+-                  alignment: Alignment.centerRight,
+-                  child: FilledButton.tonalIcon(
+-                    onPressed: _busy ? null : _unignore,
+-                    icon: const Icon(Icons.undo),
+-                    label: const Text('恢复待确认'),
+-                  ),
+-                ),
+-              ],
+             ],
+           ],
+         ),
+@@ -584,21 +763,11 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
+     );
+   }
+ 
+-  Future<void> _unignore() async {
++  Future<void> _ignore() async {
+     setState(() => _busy = true);
+     try {
+-      await ref.read(databaseProvider).unignorePendingCapture(c.id);
+-      if (mounted) {
+-        ScaffoldMessenger.of(context).showSnackBar(
+-          const SnackBar(content: Text('已恢复为待确认')),
+-        );
+-      }
+-    } catch (e) {
+-      if (mounted) {
+-        ScaffoldMessenger.of(context).showSnackBar(
+-          SnackBar(content: Text('恢复失败：$e')),
+-        );
+-      }
++      await ref.read(databaseProvider).ignorePendingCapture(c.id);
++      await NotificationCaptureStub.cancelPendingConfirm(c.id);
+     } finally {
+       if (mounted) setState(() => _busy = false);
+     }
+@@ -654,16 +823,6 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
+     }
+   }
+ 
+-  Future<void> _ignore() async {
+-    setState(() => _busy = true);
+-    try {
+-      await ref.read(databaseProvider).ignorePendingCapture(c.id);
+-      await NotificationCaptureStub.cancelPendingConfirm(c.id);
+-    } finally {
+-      if (mounted) setState(() => _busy = false);
+-    }
+-  }
+-
+   String _pkgLabel(String pkg) {
+     if (pkg.contains('Alipay') || pkg.contains('alipay')) return '支付宝';
+     if (pkg.contains('tencent.mm')) return '微信';
+diff --git a/lib/features/settings/me_page.dart b/lib/features/settings/me_page.dart
+index 4fc5d6a..e0de33e 100644
+--- a/lib/features/settings/me_page.dart
++++ b/lib/features/settings/me_page.dart
+@@ -1,3 +1,4 @@
++import 'package:flutter/foundation.dart';
+ import 'package:flutter/material.dart';
+ import 'package:flutter_riverpod/flutter_riverpod.dart';
+ import 'package:go_router/go_router.dart';
+@@ -70,7 +71,7 @@ class MePage extends ConsumerWidget {
+                             Text(
+                               ledger == null
+                                   ? '未初始化'
+-                                  : '本位币 ${ledger.baseCurrency}',
++                                  : '本位币 ${currencyLabel(ledger.baseCurrency)}',
+                               style: TextStyle(
+                                 color: scheme.onSurfaceVariant,
+                                 fontSize: 13,
+@@ -85,6 +86,7 @@ class MePage extends ConsumerWidget {
+                 ),
+               ),
+               const SizedBox(height: CentliSpacing.section),
++              _sectionHeader(context, '通用'),
+               CentliSoftCard(
+                 child: Column(
+                   children: [
+@@ -103,13 +105,6 @@ class MePage extends ConsumerWidget {
+                       onTap: () => context.push('/me/ledgers'),
+                     ),
+                     const Divider(height: 1),
+-                    _tile(
+-                      context,
+-                      icon: Icons.account_balance_wallet_outlined,
+-                      title: '账户管理',
+-                      onTap: () => context.go('/assets'),
+-                    ),
+-                    const Divider(height: 1),
+                     _tile(
+                       context,
+                       icon: Icons.category_outlined,
+@@ -129,6 +124,7 @@ class MePage extends ConsumerWidget {
+                 ),
+               ),
+               const SizedBox(height: CentliSpacing.section),
++              _sectionHeader(context, '功能'),
+               CentliSoftCard(
+                 child: Column(
+                   children: [
+@@ -204,6 +200,7 @@ class MePage extends ConsumerWidget {
+                 ),
+               ),
+               const SizedBox(height: CentliSpacing.section),
++              _sectionHeader(context, '数据'),
+               CentliSoftCard(
+                 child: Column(
+                   children: [
+@@ -242,6 +239,7 @@ class MePage extends ConsumerWidget {
+                 ),
+               ),
+               const SizedBox(height: CentliSpacing.section),
++              _sectionHeader(context, '关于'),
+               CentliSoftCard(
+                 child: Column(
+                   children: [
+@@ -259,25 +257,26 @@ class MePage extends ConsumerWidget {
+                           context,
+                           icon: Icons.info_outline,
+                           title: '关于 Centli',
+-                          subtitle: '厘记 · 版本 $v\n隐私政策 · 开源许可',
+-                          threeLine: true,
++                          subtitle: '版本 $v',
+                           onTap: () => context.push('/me/about'),
+                         );
+                       },
+                     ),
+-                    const Divider(height: 1),
+-                    _tile(
+-                      context,
+-                      icon: Icons.tour_outlined,
+-                      title: '重新查看引导',
+-                      subtitle: '测试：重置引导完成标记并打开引导',
+-                      onTap: () async {
+-                        await ref
+-                            .read(databaseProvider)
+-                            .setSetting('onboarding_done', 'false');
+-                        if (context.mounted) context.go('/onboarding');
+-                      },
+-                    ),
++                    if (kDebugMode) ...[
++                      const Divider(height: 1),
++                      _tile(
++                        context,
++                        icon: Icons.tour_outlined,
++                        title: '重新查看引导',
++                        subtitle: '测试：重置引导完成标记并打开引导',
++                        onTap: () async {
++                          await ref
++                              .read(databaseProvider)
++                              .setSetting('onboarding_done', 'false');
++                          if (context.mounted) context.go('/onboarding');
++                        },
++                      ),
++                    ],
+                   ],
+                 ),
+               ),
+@@ -288,6 +287,19 @@ class MePage extends ConsumerWidget {
+     );
+   }
+ 
++  Widget _sectionHeader(BuildContext context, String title) {
++    return Padding(
++      padding: const EdgeInsets.only(left: 4, bottom: 8),
++      child: Text(
++        title,
++        style: Theme.of(context).textTheme.titleSmall?.copyWith(
++              fontWeight: FontWeight.w700,
++              color: Theme.of(context).colorScheme.onSurfaceVariant,
++            ),
++      ),
++    );
++  }
++
+   Widget _tile(
+     BuildContext context, {
+     required IconData icon,
+diff --git a/test/pending_card_key_test.dart b/test/pending_card_key_test.dart
+index fb6a3d8..6e938ca 100644
+--- a/test/pending_card_key_test.dart
++++ b/test/pending_card_key_test.dart
+@@ -16,7 +16,8 @@ void main() {
+           '(controllers keep previous card data)',
+     );
+     expect(
+-      src.contains('const _PendingCard({super.key, required this.capture'),
++      RegExp(r'_PendingCard\(\{[^}]*super\.key', multiLine: true, dotAll: true)
++          .hasMatch(src),
+       isTrue,
+       reason: '_PendingCard must accept super.key so ValueKey can be applied',
+     );
+diff --git a/test/schema_v4_tags_migration_test.dart b/test/schema_v4_tags_migration_test.dart
+new file mode 100644
+index 0000000..ad91ec1
+--- /dev/null
++++ b/test/schema_v4_tags_migration_test.dart
+@@ -0,0 +1,215 @@
++﻿import 'dart:convert';
++import 'package:centli/data/db/centli_database.dart';
++import 'package:centli/data/db/txn_tags.dart';
++import 'package:centli/data/export/import_service.dart';
++import 'package:drift/native.dart';
++import 'package:flutter_test/flutter_test.dart';
++
++void main() {
++  test('encode/decode txn tags round-trip and limits', () {
++    expect(encodeTxnTags(null), isNull);
++    expect(encodeTxnTags([]), isNull);
++    expect(encodeTxnTags(['  ']), isNull);
++    expect(decodeTxnTags(null), isEmpty);
++    expect(decodeTxnTags(''), isEmpty);
++
++    final encoded = encodeTxnTags(['报销', '旅行', '家庭', 'a', 'b', 'c']);
++    expect(encoded, isNotNull);
++    final list = decodeTxnTags(encoded);
++    expect(list.length, 5);
++    expect(list.first, '报销');
++
++    final long = encodeTxnTags(['一二三四五六七八九十一二三']);
++    expect(decodeTxnTags(long).single.length, 12);
++  });
++
++  test('v4 onCreate: tags column, indexes (PRAGMA), soft-delete keeps tags', () async {
++    final db = CentliDatabase.forTesting(NativeDatabase.memory());
++    addTearDown(db.close);
++    await db.seedDefaults();
++
++    final ledger = await (db.select(db.ledgers)..limit(1)).getSingle();
++    final account = (await (db.select(db.accounts)
++          ..where((t) => t.ledgerId.equals(ledger.id)))
++        .get())
++        .first;
++
++    await db.insertManualTransaction(
++      ledgerId: ledger.id,
++      type: 'out',
++      amountMinor: 1250,
++      currency: 'CNY',
++      accountId: account.id,
++      tags: ['报销', '旅行'],
++    );
++    final rows = (await (db.select(db.transactions)
++          ..where((t) => t.ledgerId.equals(ledger.id)))
++        .get())
++        .where((t) => t.deletedAt == null)
++        .toList();
++    expect(rows.length, 1);
++    expect(decodeTxnTags(rows.first.tags), ['报销', '旅行']);
++
++    // PRAGMA index evidence (created in beforeOpen / onUpgrade)
++    final idxRows =
++        await db.customSelect("PRAGMA index_list('transactions')").get();
++    final names = idxRows.map((r) => r.read<String>('name')).toSet();
++    expect(names.contains('idx_txn_ledger_happen'), isTrue);
++    expect(names.contains('idx_txn_account_happen'), isTrue);
++
++    final accIdx =
++        await db.customSelect("PRAGMA index_list('accounts')").get();
++    expect(
++      accIdx
++          .map((r) => r.read<String>('name'))
++          .contains('idx_accounts_ledger_archived'),
++      isTrue,
++    );
++
++    final catIdx =
++        await db.customSelect("PRAGMA index_list('categories')").get();
++    expect(
++      catIdx
++          .map((r) => r.read<String>('name'))
++          .contains('idx_categories_ledger_kind_archived'),
++      isTrue,
++    );
++
++    final pendIdx =
++        await db.customSelect("PRAGMA index_list('pending_captures')").get();
++    expect(
++      pendIdx
++          .map((r) => r.read<String>('name'))
++          .contains('idx_pending_status_created'),
++      isTrue,
++    );
++
++    final ver = await db.customSelect('PRAGMA user_version').getSingle();
++    expect(ver.read<int>('user_version'), 4);
++
++    await db.softDeleteTransaction(rows.first.id);
++    final deleted = await (db.select(db.transactions)
++          ..where((t) => t.id.equals(rows.first.id)))
++        .getSingle();
++    expect(deleted.deletedAt, isNotNull);
++    expect(decodeTxnTags(deleted.tags), ['报销', '旅行']);
++  });
++
++  test('searchTransactions matches tags JSON', () async {
++    final db = CentliDatabase.forTesting(NativeDatabase.memory());
++    addTearDown(db.close);
++    await db.seedDefaults();
++    final ledger = await (db.select(db.ledgers)..limit(1)).getSingle();
++    final account = (await (db.select(db.accounts)
++          ..where((t) => t.ledgerId.equals(ledger.id)))
++        .get())
++        .first;
++
++    await db.insertManualTransaction(
++      ledgerId: ledger.id,
++      type: 'out',
++      amountMinor: 300,
++      currency: 'CNY',
++      accountId: account.id,
++      tags: ['旅行'],
++      note: 'plain',
++    );
++    await db.insertManualTransaction(
++      ledgerId: ledger.id,
++      type: 'out',
++      amountMinor: 100,
++      currency: 'CNY',
++      accountId: account.id,
++      note: 'no-tag-here',
++    );
++
++    final hit = await db.searchTransactions(ledger.id, '旅行');
++    expect(hit.length, 1);
++    expect(decodeTxnTags(hit.first.tags), ['旅行']);
++  });
++
++  test('import schema_version 3 bundle without tags succeeds', () async {
++    final db = CentliDatabase.forTesting(NativeDatabase.memory());
++    addTearDown(db.close);
++    final svc = ImportService(db);
++    final ts = DateTime.now().millisecondsSinceEpoch;
++    const ledgerId = 'led-imp';
++    const accountId = 'acc-imp';
++    const categoryId = 'cat-imp';
++    final bundleMap = {
++      'format': 'centli-export',
++      'export_version': 1,
++      'schema_version': 3,
++      'exported_at': '2026-10-16T00:00:00Z',
++      'app_version': '1.0.0+1',
++      'ledger': {
++        'id': ledgerId,
++        'name': '导入账本',
++        'baseCurrency': 'CNY',
++        'createdAt': ts,
++        'archived': 0,
++      },
++      'accounts': [
++        {
++          'id': accountId,
++          'ledgerId': ledgerId,
++          'name': '现金',
++          'currency': 'CNY',
++          'type': 'cash',
++          'openingBalanceMinor': 0,
++          'sortOrder': 0,
++          'archived': 0,
++          'createdAt': ts,
++          'updatedAt': ts,
++        },
++      ],
++      'categories': [
++        {
++          'id': categoryId,
++          'ledgerId': ledgerId,
++          'name': '其他',
++          'parentId': null,
++          'kind': 'out',
++          'icon': null,
++          'sortOrder': 0,
++          'archived': 0,
++          'createdAt': ts,
++        },
++      ],
++      'transactions': [
++        {
++          'id': 'txn-old',
++          'ledgerId': ledgerId,
++          'type': 'out',
++          'amountMinor': 42,
++          'currency': 'CNY',
++          'accountId': accountId,
++          'toAccountId': null,
++          'categoryId': categoryId,
++          'merchant': null,
++          'note': null,
++          'happenAt': ts,
++          'includeInStat': 1,
++          'includeInBudget': 1,
++          'source': 'manual',
++          'createdAt': ts,
++          'updatedAt': ts,
++          // no tags key — old backup
++        },
++      ],
++      'merchant_rules': <Map<String, dynamic>>[],
++      'pending_captures': <Map<String, dynamic>>[],
++      'fx_rates': <Map<String, dynamic>>[],
++      'budgets': <Map<String, dynamic>>[],
++      'settings': <String, String>{'onboarding_done': '1'},
++    };
++    final bundle = svc.parseJsonString(jsonEncode(bundleMap));
++    expect(bundle.schemaVersion, 3);
++    await svc.restore(bundle, replaceFxRates: false);
++    final row = await (db.select(db.transactions)
++          ..where((t) => t.id.equals('txn-old')))
++        .getSingle();
++    expect(row.amountMinor, 42);
++    expect(row.tags, isNull);
++  });
++}
