@@ -166,8 +166,10 @@ abstract final class CentliTheme {
       scaffoldBackgroundColor: gradientTop,
       appBarTheme: AppBarTheme(
         centerTitle: false,
-        backgroundColor: Colors.transparent,
+        // Match gradient top so transparent routes never show a black AppBar strip.
+        backgroundColor: gradientTop,
         foregroundColor: scheme.onSurface,
+        surfaceTintColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
         titleTextStyle: TextStyle(
@@ -175,6 +177,22 @@ abstract final class CentliTheme {
           fontSize: 22,
           fontWeight: FontWeight.w700,
           letterSpacing: -0.2,
+        ),
+      ),
+      segmentedButtonTheme: SegmentedButtonThemeData(
+        style: ButtonStyle(
+          foregroundColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) {
+              return scheme.onSecondaryContainer;
+            }
+            return scheme.onSurface;
+          }),
+          backgroundColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) {
+              return scheme.secondaryContainer;
+            }
+            return null;
+          }),
         ),
       ),
       navigationBarTheme: NavigationBarThemeData(
@@ -290,10 +308,33 @@ abstract final class CentliTheme {
       ),
       appBarTheme: AppBarTheme(
         centerTitle: false,
-        backgroundColor: Colors.transparent,
+        backgroundColor: const Color(0xFF1A1F2E),
         foregroundColor: scheme.onSurface,
+        surfaceTintColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
+        titleTextStyle: TextStyle(
+          color: scheme.onSurface,
+          fontSize: 22,
+          fontWeight: FontWeight.w700,
+          letterSpacing: -0.2,
+        ),
+      ),
+      segmentedButtonTheme: SegmentedButtonThemeData(
+        style: ButtonStyle(
+          foregroundColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) {
+              return scheme.onSecondaryContainer;
+            }
+            return scheme.onSurface;
+          }),
+          backgroundColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) {
+              return scheme.secondaryContainer;
+            }
+            return null;
+          }),
+        ),
       ),
       navigationBarTheme: NavigationBarThemeData(
         height: 68,
@@ -347,7 +388,9 @@ class CentliGradientScaffold extends StatelessWidget {
     final dark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
       extendBody: extendBody,
-      backgroundColor: Colors.transparent,
+      // Fill AppBar strip; body DecoratedBox still paints the full gradient.
+      backgroundColor:
+          dark ? const Color(0xFF1A1F2E) : CentliTheme.gradientTop,
       appBar: appBar,
       floatingActionButton: floatingActionButton,
       bottomNavigationBar: bottomNavigationBar,

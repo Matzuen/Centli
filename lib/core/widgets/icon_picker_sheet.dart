@@ -467,8 +467,17 @@ class _SegTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    // Selected pill must keep label contrast in dark mode (white + onSurface was unreadable).
+    final bg = !selected
+        ? Colors.transparent
+        : (dark ? scheme.primaryContainer : Colors.white);
+    final fg = !selected
+        ? scheme.onSurfaceVariant
+        : (dark ? scheme.onPrimaryContainer : scheme.onSurface);
     return Material(
-      color: selected ? Colors.white : Colors.transparent,
+      color: bg,
       borderRadius: BorderRadius.circular(18),
       child: InkWell(
         borderRadius: BorderRadius.circular(18),
@@ -480,6 +489,7 @@ class _SegTab extends StatelessWidget {
             textAlign: TextAlign.center,
             style: TextStyle(
               fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              color: fg,
               fontSize: 13,
             ),
           ),
