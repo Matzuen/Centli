@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -85,6 +86,7 @@ class MePage extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: CentliSpacing.section),
+              _sectionHeader(context, '通用'),
               CentliSoftCard(
                 child: Column(
                   children: [
@@ -101,13 +103,6 @@ class MePage extends ConsumerWidget {
                       icon: Icons.menu_book_outlined,
                       title: '账本管理',
                       onTap: () => context.push('/me/ledgers'),
-                    ),
-                    const Divider(height: 1),
-                    _tile(
-                      context,
-                      icon: Icons.account_balance_wallet_outlined,
-                      title: '账户管理',
-                      onTap: () => context.go('/assets'),
                     ),
                     const Divider(height: 1),
                     _tile(
@@ -129,6 +124,7 @@ class MePage extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: CentliSpacing.section),
+              _sectionHeader(context, '功能'),
               CentliSoftCard(
                 child: Column(
                   children: [
@@ -204,6 +200,7 @@ class MePage extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: CentliSpacing.section),
+              _sectionHeader(context, '数据'),
               CentliSoftCard(
                 child: Column(
                   children: [
@@ -242,6 +239,7 @@ class MePage extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: CentliSpacing.section),
+              _sectionHeader(context, '关于'),
               CentliSoftCard(
                 child: Column(
                   children: [
@@ -259,31 +257,45 @@ class MePage extends ConsumerWidget {
                           context,
                           icon: Icons.info_outline,
                           title: '关于 Centli',
-                          subtitle: '厘记 · 版本 $v\n隐私政策 · 开源许可',
-                          threeLine: true,
+                          subtitle: '版本 $v',
                           onTap: () => context.push('/me/about'),
                         );
                       },
                     ),
-                    const Divider(height: 1),
-                    _tile(
-                      context,
-                      icon: Icons.tour_outlined,
-                      title: '重新查看引导',
-                      subtitle: '测试：重置引导完成标记并打开引导',
-                      onTap: () async {
-                        await ref
-                            .read(databaseProvider)
-                            .setSetting('onboarding_done', 'false');
-                        if (context.mounted) context.go('/onboarding');
-                      },
-                    ),
+                    if (kDebugMode) ...[
+                      const Divider(height: 1),
+                      _tile(
+                        context,
+                        icon: Icons.tour_outlined,
+                        title: '重新查看引导',
+                        subtitle: '测试：重置引导完成标记并打开引导',
+                        onTap: () async {
+                          await ref
+                              .read(databaseProvider)
+                              .setSetting('onboarding_done', 'false');
+                          if (context.mounted) context.go('/onboarding');
+                        },
+                      ),
+                    ],
                   ],
                 ),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _sectionHeader(BuildContext context, String title) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, bottom: 8),
+      child: Text(
+        title,
+        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
       ),
     );
   }

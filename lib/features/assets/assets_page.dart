@@ -88,9 +88,10 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
               }
               final ledgerId = ledger.id;
               final base = ledger.baseCurrency;
+              final activeAccountsAsync = ref.watch(_accountsProvider(ledgerId));
               final accountsAsync = _showArchived
                   ? ref.watch(_archivedAccountsProvider(ledgerId))
-                  : ref.watch(_accountsProvider(ledgerId));
+                  : activeAccountsAsync;
               final balancesAsync = ref.watch(_balancesProvider(ledgerId));
               return accountsAsync.when(
                 loading: () => const Center(child: CircularProgressIndicator()),
@@ -98,9 +99,10 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                 data: (accounts) {
                   final balances = balancesAsync.valueOrNull ?? {};
                   final nwArgs = (ledgerId: ledgerId, base: base);
-                  final netWorthAsync = _showArchived
-                      ? null
-                      : ref.watch(_netWorthBaseProvider(nwArgs));
+                  // Always show net-worth card (active accounts); avoid empty gap in archive tab.
+                  final netWorthAsync = ref.watch(_netWorthBaseProvider(nwArgs));
+                  final cardAccounts =
+                      activeAccountsAsync.valueOrNull ?? const <Account>[];
 
                   return ListView(
                     padding: CentliSpacing.pagePaddingNav,
@@ -158,8 +160,7 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                         ),
                       ),
                       const SizedBox(height: CentliSpacing.section),
-                      if (!_showArchived && netWorthAsync != null)
-                        netWorthAsync.when(
+                      netWorthAsync.when(
                           loading: () => const CentliSoftCard(
                             padding: EdgeInsets.all(24),
                             child: Center(child: CircularProgressIndicator()),
@@ -174,7 +175,7 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                                 ? null
                                 : assetLiabilityInBase(
                                     accounts: [
-                                      for (final a in accounts)
+                                      for (final a in cardAccounts)
                                         (
                                           currency: a.currency,
                                           balanceMinor: balances[a.id] ??
@@ -188,7 +189,7 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                             final assetSum = split?.assetMinor ?? 0;
                             final liabilitySum = split?.liabilityMinor ?? 0;
                             final positives = <({Account a, int bal})>[];
-                            for (final a in accounts) {
+                            for (final a in cardAccounts) {
                               final bal =
                                   balances[a.id] ?? a.openingBalanceMinor;
                               if (bal >= 0) {
@@ -433,15 +434,16 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                             );
                           },
                         ),
-                      if (_showArchived)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 12, top: 4),
-                          child: Text(
-                            '已归档账户不计入总资产，可点进详情取消归档。',
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(color: scheme.onSurfaceVariant),
-                          ),
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12, top: 4),
+                        child: Text(
+                          _showArchived
+                              ? '已归档账户不计入总资产，可点进详情取消归档。'
+                              : '找不到账户？可到「已归档」查看；归档账户不计入总资产。',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: scheme.onSurfaceVariant),
                         ),
+                      ),
                       if (accounts.isEmpty)
                         CentliSoftCard(
                           child: CentliEmptyState(

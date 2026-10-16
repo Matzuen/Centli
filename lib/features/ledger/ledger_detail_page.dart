@@ -123,7 +123,9 @@ class _DetailBody extends ConsumerWidget {
           const SizedBox(height: 24),
           CentliSoftCard(
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                _sectionHeader(context, '\u57fa\u672c\u4fe1\u606f'),
                 _row(
                   context,
                   label: isTransfer ? '\u8f6c\u51fa\u8d26\u6237' : '\u8d26\u6237',
@@ -182,7 +184,7 @@ class _DetailBody extends ConsumerWidget {
                     ),
                   ],
                 ],
-                const Divider(height: 1),
+                _sectionHeader(context, '\u6765\u6e90\u4e0e\u65f6\u95f4'),
                 ListTile(
                   title: const Text('\u65f6\u95f4'),
                   trailing: Text(timeLabel),
@@ -192,24 +194,22 @@ class _DetailBody extends ConsumerWidget {
                   title: const Text('\u6765\u6e90'),
                   trailing: Text(_sourceLabel(txn.source)),
                 ),
-                if (txn.merchant != null && txn.merchant!.isNotEmpty) ...[
-                  const Divider(height: 1),
-                  ListTile(
-                    title: const Text('\u5546\u6237'),
-                    trailing: Text(txn.merchant!),
-                  ),
-                ],
                 const Divider(height: 1),
                 ListTile(
+                  title: const Text('\u5546\u6237'),
+                  trailing: Text(
+                    (txn.merchant == null || txn.merchant!.isEmpty)
+                        ? '\u2014'
+                        : txn.merchant!,
+                  ),
+                ),
+                _sectionHeader(context, '\u5176\u5b83'),
+                ListTile(
                   title: const Text('\u5907\u6ce8'),
-                  trailing: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 200),
-                    child: Text(
-                      (txn.note == null || txn.note!.isEmpty)
-                          ? '\u2014'
-                          : txn.note!,
-                      textAlign: TextAlign.end,
-                    ),
+                  subtitle: Text(
+                    (txn.note == null || txn.note!.isEmpty)
+                        ? '\u2014'
+                        : txn.note!,
                   ),
                 ),
                 const Divider(height: 1),
@@ -246,6 +246,20 @@ class _DetailBody extends ConsumerWidget {
       toAcc = t?.name;
     }
     return (cat, acc?.name, toAcc);
+  }
+
+
+  Widget _sectionHeader(BuildContext context, String title) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+      child: Text(
+        title,
+        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+      ),
+    );
   }
 
   Widget _row(
