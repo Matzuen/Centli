@@ -59,6 +59,8 @@ final _netWorthHomeProvider =
       args,
     ) async {
       await ref.watch(txnWriteSignalProvider(args.ledgerId).future);
+      // Opening balance lives on accounts — refresh when accounts change.
+      await ref.watch(_homeAccountsProvider(args.ledgerId).future);
       await ref.watch(fxBookProvider.future);
       return ref
           .read(databaseProvider)
@@ -657,6 +659,16 @@ class _LedgerSummaryCard extends StatelessWidget {
                 ),
             ],
           ),
+          if (nw != null && nw.hasUnconverted) ...[
+            const SizedBox(height: CentliSpacing.item),
+            Text(
+              '\u672a\u6298\u7b97\uff1a${nw.unconvertedByCcy.entries.map((e) => '${e.key} ${formatMinor(e.key, e.value, hide: hide)}').join('\u3001')}',
+              style: TextStyle(
+                fontSize: 12,
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+          ],
           const SizedBox(height: CentliSpacing.section),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
