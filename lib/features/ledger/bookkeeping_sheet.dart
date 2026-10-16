@@ -7,6 +7,7 @@ import '../../core/constants/currencies.dart';
 import '../../core/utils/money.dart';
 import '../../core/widgets/centli_icon.dart';
 import '../../data/db/centli_database.dart';
+import '../../data/db/txn_tags.dart';
 import '../../data/db/database_provider.dart';
 import 'ai_text_fill.dart';
 import 'llm_text_fill.dart';
@@ -51,6 +52,7 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
   String? _categoryId;
   String? _merchant;
   final _noteCtrl = TextEditingController();
+  List<String> _tags = [];
   final _aiTextCtrl = TextEditingController();
   bool _aiExpanded = false;
   final _speech = LocalSpeechService();
@@ -129,6 +131,7 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
         _categoryId = existing.categoryId;
         _merchant = existing.merchant;
         _noteCtrl.text = existing.note ?? '';
+        _tags = List<String>.from(decodeTxnTags(existing.tags));
         _happenAt = DateTime.fromMillisecondsSinceEpoch(
           existing.happenAt,
           isUtc: true,
@@ -548,6 +551,7 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
           categoryId: cat,
           merchant: merchant,
           note: note,
+          tags: _tags,
           happenAt: _happenAt,
           fxRate: fxRate,
           toAmountMinor: toAmountMinor,
@@ -563,6 +567,7 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
           categoryId: cat,
           merchant: merchant,
           note: note,
+          tags: _tags,
           happenAt: _happenAt,
           fxRate: fxRate,
           toAmountMinor: toAmountMinor,
@@ -1089,6 +1094,121 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
     });
   }
 
+  bool get _isDirty {
+    final amt = _evalAmount(_amountText) ?? 0;
+    return amt > 0 || _noteCtrl.text.trim().isNotEmpty || _tags.isNotEmpty;
+  }
+
+  Future<bool> _confirmDiscardIfNeeded() async {
+    if (!_isDirty) return true;
+    final major = _evalAmount(_amountText) ?? 0;
+    final label = major > 0
+        ? formatMinor(_currency, toMinor(_currency, major))
+        : (_noteCtrl.text.trim().isNotEmpty ? '备注' : '标签');
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('放弃这笔记账？'),
+        content: Text('已输入 $label，确定放弃？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('继续记账'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('放弃'),
+          ),
+        ],
+      ),
+    );
+    return ok == true;
+  }
+
+  Future<void> _editSheetTags() async {
+    final current = List<String>.from(_tags);
+    final ctrl = TextEditingController();
+    final suggestions = _ledgerId == null
+        ? <String>[]
+        : await ref.read(databaseProvider).listDistinctTags(_ledgerId!);
+    if (!mounted) return;
+    final result = await showDialog<List<String>>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setLocal) {
+            void addTag(String raw) {
+              var t = raw.trim();
+              if (t.isEmpty) return;
+              if (t.length > 12) t = t.substring(0, 12);
+              if (current.contains(t) || current.length >= 5) return;
+              setLocal(() => current.add(t));
+              ctrl.clear();
+            }
+
+            return AlertDialog(
+              title: const Text('标签'),
+              content: SizedBox(
+                width: 360,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Wrap(
+                      spacing: 6,
+                      children: [
+                        for (final t in current)
+                          InputChip(
+                            label: Text(t),
+                            onDeleted: () => setLocal(() => current.remove(t)),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: ctrl,
+                      decoration: const InputDecoration(
+                        labelText: '新标签',
+                        border: OutlineInputBorder(),
+                      ),
+                      onSubmitted: addTag,
+                    ),
+                    if (suggestions.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 6,
+                        children: [
+                          for (final s in suggestions.take(12))
+                            ActionChip(
+                              label: Text(s),
+                              onPressed: () => addTag(s),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('取消'),
+                ),
+                FilledButton(
+                  onPressed: () =>
+                      Navigator.pop(ctx, List<String>.from(current)),
+                  child: const Text('确定'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    ctrl.dispose();
+    if (result != null) setState(() => _tags = result);
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -1096,7 +1216,15 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
     final viewInsets = MediaQuery.viewInsetsOf(context).bottom;
     final safeBottom = MediaQuery.paddingOf(context).bottom;
 
-    return Padding(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        if (await _confirmDiscardIfNeeded() && context.mounted) {
+          Navigator.pop(context);
+        }
+      },
+      child: Padding(
       padding: EdgeInsets.only(bottom: viewInsets),
       child: ConstrainedBox(
         constraints: BoxConstraints(maxHeight: maxHeight),
@@ -1124,179 +1252,63 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
                             ),
                           ),
                           Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                '记一笔 · ${ref.watch(currentLedgerProvider).valueOrNull?.name ?? ''}',
+                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                              ),
+                            ),
+                          ),
+                          Padding(
                             padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
                             child: Row(
                               children: [
                                 Expanded(
-                                  child: SegmentedButton<String>(
-                                    segments: const [
-                                      ButtonSegment(
-                                        value: 'out',
-                                        label: Text('\u652f\u51fa'),
-                                      ),
-                                      ButtonSegment(
-                                        value: 'in',
-                                        label: Text('\u6536\u5165'),
-                                      ),
-                                      ButtonSegment(
-                                        value: 'transfer',
-                                        label: Text('\u8f6c\u8d26'),
-                                      ),
-                                    ],
-                                    selected: {_type},
-                                    onSelectionChanged: (s) {
-                                      setState(() => _type = s.first);
-                                      _reloadCategories(resetSelection: true);
-                                    },
-                                  ),
-                                ),
-                                IconButton(
-                                  onPressed: () => Navigator.pop(context),
-                                  icon: const Icon(Icons.close),
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                InkWell(
-                                  onTap: () => setState(
-                                    () => _aiExpanded = !_aiExpanded,
-                                  ),
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 4,
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        Icon(
-                                          Icons.auto_awesome,
-                                          size: 18,
-                                          color: scheme.primary,
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Expanded(
-                                          child: Text(
-                                            '智能填单',
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .labelLarge
-                                                ?.copyWith(
-                                                  color: scheme.primary,
-                                                ),
-                                          ),
-                                        ),
-                                        Text(
-                                          '话术/语音 · 本地/大模型',
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodySmall
-                                              ?.copyWith(
-                                                color: scheme.onSurfaceVariant,
-                                              ),
-                                        ),
-                                        Icon(
-                                          _aiExpanded
-                                              ? Icons.expand_less
-                                              : Icons.expand_more,
-                                          color: scheme.onSurfaceVariant,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                                if (_aiExpanded) ...[
-                                  const SizedBox(height: 6),
-                                  Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                                  child: Row(
                                     children: [
-                                      Expanded(
-                                        child: TextField(
-                                          controller: _aiTextCtrl,
-                                          minLines: 1,
-                                          maxLines: 3,
-                                          textInputAction: TextInputAction.done,
-                                          onSubmitted: (_) =>
-                                              _applyAiTextFill(),
-                                          decoration: InputDecoration(
-                                            hintText:
-                                                _speechPhase == 'listening'
-                                                ? '正在听，请说出记账内容…'
-                                                : _speechPhase == 'recognizing'
-                                                ? '识别中…'
-                                                : '例：午餐花了28.5 / 昨天支付宝地铁4元',
-                                            border: const OutlineInputBorder(),
-                                            isDense: true,
+                                      for (final entry in [
+                                        ('out', '支出'),
+                                        ('in', '收入'),
+                                        ('transfer', '转账'),
+                                      ])
+                                        Expanded(
+                                          child: InkWell(
+                                            onTap: () {
+                                              setState(() => _type = entry.$1);
+                                              _reloadCategories(resetSelection: true);
+                                            },
+                                            child: Column(
+                                              children: [
+                                                Text(
+                                                  entry.$2,
+                                                  textAlign: TextAlign.center,
+                                                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                                        fontWeight: _type == entry.$1
+                                                            ? FontWeight.w700
+                                                            : FontWeight.w500,
+                                                        color: _type == entry.$1
+                                                            ? scheme.primary
+                                                            : scheme.onSurfaceVariant,
+                                                      ),
+                                                ),
+                                                const SizedBox(height: 6),
+                                                Container(
+                                                  height: 2,
+                                                  color: _type == entry.$1
+                                                      ? scheme.primary
+                                                      : Colors.transparent,
+                                                ),
+                                              ],
+                                            ),
                                           ),
                                         ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      IconButton.filledTonal(
-                                        tooltip:
-                                            (_speechListening ||
-                                                _speechPhase == 'recognizing')
-                                            ? '停止'
-                                            : '语音填单',
-                                        onPressed: (_saving || _speechBusy)
-                                            ? null
-                                            : _toggleVoiceFill,
-                                        style: _speechPhase == 'listening'
-                                            ? IconButton.styleFrom(
-                                                foregroundColor: Theme.of(
-                                                  context,
-                                                ).colorScheme.error,
-                                              )
-                                            : null,
-                                        icon: _speechPhase == 'starting'
-                                            ? const SizedBox(
-                                                width: 22,
-                                                height: 22,
-                                                child:
-                                                    CircularProgressIndicator(
-                                                      strokeWidth: 2,
-                                                    ),
-                                              )
-                                            : Icon(
-                                                _speechPhase == 'listening'
-                                                    ? Icons.mic
-                                                    : _speechPhase ==
-                                                          'recognizing'
-                                                    ? Icons.hearing
-                                                    : Icons.mic_none,
-                                              ),
-                                      ),
-                                      const SizedBox(width: 4),
-                                      FilledButton(
-                                        onPressed:
-                                            (_saving ||
-                                                _aiFilling ||
-                                                _speechPhase == 'listening')
-                                            ? null
-                                            : _applyAiTextFill,
-                                        child: Text(_aiFilling ? '…' : '填入'),
-                                      ),
                                     ],
                                   ),
-                                  if (_speechPhase != 'idle') ...[
-                                    const SizedBox(height: 8),
-                                    _SpeechStatusBanner(
-                                      label: _speechStatusLabel,
-                                      phase: _speechPhase,
-                                      level: _speechLevel,
-                                      onStop: (_speechBusy)
-                                          ? null
-                                          : () => _stopSpeech(
-                                              userInitiated: true,
-                                            ),
-                                    ),
-                                  ],
-                                ],
+                                ),
                               ],
                             ),
                           ),
@@ -1312,7 +1324,7 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
                                     padding: const EdgeInsets.only(bottom: 2),
                                     child: Text(
                                       _amountText,
-                                      textAlign: TextAlign.right,
+                                      textAlign: TextAlign.center,
                                       style: Theme.of(context)
                                           .textTheme
                                           .labelLarge
@@ -1322,24 +1334,41 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
                                           ),
                                     ),
                                   ),
-                                Text(
-                                  formatMinor(
-                                    _currency,
-                                    toMinor(
-                                      _currency,
-                                      _evalAmount(_amountText) ?? 0,
-                                    ),
-                                  ),
-                                  textAlign: TextAlign.right,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .headlineMedium
-                                      ?.copyWith(
-                                        fontWeight: FontWeight.w800,
-                                        letterSpacing: -0.8,
-                                        height: 1.0,
-                                        fontSize: 36,
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                                  textBaseline: TextBaseline.alphabetic,
+                                  children: [
+                                    Text(
+                                      formatMinor(
+                                        _currency,
+                                        toMinor(
+                                          _currency,
+                                          _evalAmount(_amountText) ?? 0,
+                                        ),
                                       ),
+                                      textAlign: TextAlign.center,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .displaySmall
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w700,
+                                            letterSpacing: -0.8,
+                                            height: 1.0,
+                                          ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      _currency,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleMedium
+                                          ?.copyWith(
+                                            color: scheme.onSurfaceVariant,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                    ),
+                                  ],
                                 ),
                                 const SizedBox(height: CentliSpacing.dense),
                                 const Divider(height: 1, thickness: 0.5),
@@ -1470,6 +1499,14 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
                                   size: 20,
                                   color: scheme.onSurfaceVariant,
                                 ),
+                                suffixIcon: IconButton(
+                                  tooltip: '标签',
+                                  icon: Icon(
+                                    _tags.isEmpty ? Icons.sell_outlined : Icons.sell,
+                                    size: 20,
+                                  ),
+                                  onPressed: _editSheetTags,
+                                ),
                                 filled: true,
                                 fillColor: scheme.surfaceContainerHighest,
                                 border: OutlineInputBorder(
@@ -1495,6 +1532,150 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
                       ),
                     ),
                   ),
+                  // L7: voice/text above keypad
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                InkWell(
+                                  onTap: () => setState(
+                                    () => _aiExpanded = !_aiExpanded,
+                                  ),
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 4,
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          Icons.auto_awesome,
+                                          size: 18,
+                                          color: scheme.primary,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            '文字记账',
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .labelLarge
+                                                ?.copyWith(
+                                                  color: scheme.primary,
+                                                ),
+                                          ),
+                                        ),
+                                        Text(
+                                          '\u8bed\u97f3\u00b7\u6587\u5b57',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodySmall
+                                              ?.copyWith(
+                                                color: scheme.onSurfaceVariant,
+                                              ),
+                                        ),
+                                        Icon(
+                                          _aiExpanded
+                                              ? Icons.expand_less
+                                              : Icons.expand_more,
+                                          color: scheme.onSurfaceVariant,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                if (_aiExpanded) ...[
+                                  const SizedBox(height: 6),
+                                  Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Expanded(
+                                        child: TextField(
+                                          controller: _aiTextCtrl,
+                                          minLines: 1,
+                                          maxLines: 3,
+                                          textInputAction: TextInputAction.done,
+                                          onSubmitted: (_) =>
+                                              _applyAiTextFill(),
+                                          decoration: InputDecoration(
+                                            hintText:
+                                                _speechPhase == 'listening'
+                                                ? '正在听，请说出记账内容…'
+                                                : _speechPhase == 'recognizing'
+                                                ? '识别中…'
+                                                : '例：午餐花了28.5 / 昨天支付宝地铁4元',
+                                            border: const OutlineInputBorder(),
+                                            isDense: true,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      IconButton.filledTonal(
+                                        tooltip:
+                                            (_speechListening ||
+                                                _speechPhase == 'recognizing')
+                                            ? '停止'
+                                            : '语音填单',
+                                        onPressed: (_saving || _speechBusy)
+                                            ? null
+                                            : _toggleVoiceFill,
+                                        style: _speechPhase == 'listening'
+                                            ? IconButton.styleFrom(
+                                                foregroundColor: Theme.of(
+                                                  context,
+                                                ).colorScheme.error,
+                                              )
+                                            : null,
+                                        icon: _speechPhase == 'starting'
+                                            ? const SizedBox(
+                                                width: 22,
+                                                height: 22,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                      strokeWidth: 2,
+                                                    ),
+                                              )
+                                            : Icon(
+                                                _speechPhase == 'listening'
+                                                    ? Icons.mic
+                                                    : _speechPhase ==
+                                                          'recognizing'
+                                                    ? Icons.hearing
+                                                    : Icons.mic_none,
+                                              ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      FilledButton(
+                                        onPressed:
+                                            (_saving ||
+                                                _aiFilling ||
+                                                _speechPhase == 'listening')
+                                            ? null
+                                            : _applyAiTextFill,
+                                        child: Text(_aiFilling ? '…' : '填入'),
+                                      ),
+                                    ],
+                                  ),
+                                  if (_speechPhase != 'idle') ...[
+                                    const SizedBox(height: 8),
+                                    _SpeechStatusBanner(
+                                      label: _speechStatusLabel,
+                                      phase: _speechPhase,
+                                      level: _speechLevel,
+                                      onStop: (_speechBusy)
+                                          ? null
+                                          : () => _stopSpeech(
+                                              userInitiated: true,
+                                            ),
+                                    ),
+                                  ],
+                                ],
+                              ],
+                            ),
+                          ),
+
                   SizedBox(height: CentliSpacing.sheetGap),
                   _Keypad(
                     onKey: _onKey,
@@ -1509,6 +1690,7 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
                 ],
               ),
       ),
+    ),
     );
   }
 }
@@ -1737,7 +1919,9 @@ class _Keypad extends StatelessWidget {
                       padding: const EdgeInsets.all(3),
                       child: SizedBox(
                         height: 52,
-                        child: Material(
+                        child: Tooltip(
+                          message: k == '\u2713' ? '\u957f\u6309\u518d\u8bb0\u4e00\u7b14' : '',
+                          child: Material(
                           color: _bg(context, k),
                           borderRadius: BorderRadius.circular(14),
                           child: InkWell(
@@ -1760,6 +1944,7 @@ class _Keypad extends StatelessWidget {
                                 ),
                               ),
                             ),
+                          ),
                           ),
                         ),
                       ),
