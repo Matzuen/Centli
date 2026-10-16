@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
@@ -190,6 +191,15 @@ abstract final class NotiTemplateStore {
     }
     return out;
   }
+
+  /// Test-only wrapper around [_merge].
+  @visibleForTesting
+  static List<NotiTemplate> mergeForTesting(
+    List<NotiTemplate> user,
+    List<NotiTemplate> official,
+    Set<String> disabled,
+  ) =>
+      _merge(user, official, disabled);
 
   /// Compare bundled assets version with active official (documents/assets).
   /// If assets is newer (or documents missing), copy assets → documents.
