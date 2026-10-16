@@ -153,7 +153,7 @@ object NativeCaptureIngest {
     )
 
     /** Alipay mustContain — mirrors assets/noti_templates.json */
-    private val MUST_ALIPAY: Pattern = Pattern.compile("支付成功|付款成功|交易成功|交易提醒|交易通知|消费成功|已支付|扣款成功|扣款提醒|已扣款|支出\s*[¥￥]|向.+付款|付款|支付金额|支付\s*[¥￥]|付款\s*[¥￥]|商户消费|成功付款")
+    private val MUST_ALIPAY: Pattern = Pattern.compile("支付成功|付款成功|交易成功|交易提醒|交易通知|消费成功|已支付|扣款成功|扣款提醒|已扣款|支出\\s*[¥￥]|向.+付款|付款|支付金额|支付\\s*[¥￥]|付款\\s*[¥￥]|商户消费|成功付款")
 
     /** WeChat mustContain — mirrors assets/noti_templates.json */
     private val MUST_WECHAT: Pattern = Pattern.compile("微信支付|支付成功|已支付|付款成功|商户消费|支付金额|付款金额|已付款|扣款成功")
