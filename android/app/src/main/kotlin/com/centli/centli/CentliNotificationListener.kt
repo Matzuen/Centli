@@ -101,6 +101,7 @@ class CentliNotificationListener : NotificationListenerService() {
         )
 
         private const val KEY_WATCHED = "watched_packages"
+        private const val KEY_RULES = "rules_json"
 
         fun prefs(context: Context): SharedPreferences =
             context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -140,6 +141,13 @@ class CentliNotificationListener : NotificationListenerService() {
             }
             prefs(context).edit().putString(KEY_WATCHED, arr.toString()).apply()
         }
+
+        fun setRulesJson(context: Context, raw: String) {
+            prefs(context).edit().putString(KEY_RULES, raw).apply()
+        }
+
+        fun rulesJson(context: Context): String? =
+            prefs(context).getString(KEY_RULES, null)
 
         fun enqueue(context: Context, payload: Map<String, Any?>) {
             val p = prefs(context)

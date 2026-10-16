@@ -71,6 +71,11 @@ class MainActivity : FlutterFragmentActivity() {
                     CentliNotificationListener.setWatchedPackages(this, packages)
                     result.success(null)
                 }
+                "setRulesJson" -> {
+                    val raw = call.arguments as? String ?: "[]"
+                    CentliNotificationListener.setRulesJson(this, raw)
+                    result.success(null)
+                }
                 "isAutoCaptureEnabled" -> {
                     result.success(CentliNotificationListener.isAutoCaptureEnabled(this))
                 }

@@ -27,6 +27,8 @@ abstract final class NotificationCaptureStub {
 
   static Future<void> setWatchedPackages(List<String> packages) async {}
 
+  static Future<void> setRulesJson(String rulesJson) async {}
+
   static Future<bool> isAutoCaptureEnabled() async => false;
 
   /// Register a handler for native `notification_capture` events.

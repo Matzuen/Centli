@@ -102,6 +102,18 @@ abstract final class NotificationCaptureStub {
     }
   }
 
+  /// Push merged recognition rules JSON for native kill-path matching (T2-2).
+  static Future<void> setRulesJson(String rulesJson) async {
+    if (!supported) return;
+    try {
+      await _channel.invokeMethod<void>('setRulesJson', rulesJson);
+    } on MissingPluginException {
+      // no-op
+    } on PlatformException {
+      // no-op
+    }
+  }
+
   static Future<bool> isAutoCaptureEnabled() async {
     if (!supported) return false;
     try {

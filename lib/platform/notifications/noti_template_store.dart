@@ -475,12 +475,28 @@ abstract final class NotiTemplateStore {
     return const JsonEncoder.withIndent('  ').convert(map);
   }
 
-  /// Push union of official + user package names to native SharedPreferences.
+  /// Push union of official + user package names + rules_json to native.
   /// Safe no-op on non-Android / missing plugin.
+  ///
+  /// Scheme A (T2-2): native matches from this single Dart-merged source;
+  /// hardcode remains fallback only when JSON empty/corrupt.
   static Future<void> syncWatchedPackagesToNative() async {
     final pkgs = <String>{};
+    final rules = <Map<String, dynamic>>[];
     for (final t in peek()) {
       pkgs.addAll(t.packages);
+      for (final pkg in t.packages) {
+        rules.add({
+          'pkg': pkg,
+          'direction': NotiTemplate.normalizeDirection(t.direction),
+          'must': t.mustContainRegex,
+          'exclude': t.excludeTextRegex,
+          'amount': t.amountRegex,
+          'merchant': t.merchantRegex,
+          'merchantFromTitle': t.merchantFromTitle,
+          'id': t.id,
+        });
+      }
     }
     if (pkgs.isEmpty) {
       pkgs.addAll(const [
@@ -489,6 +505,7 @@ abstract final class NotiTemplateStore {
       ]);
     }
     await NotificationCaptureStub.setWatchedPackages(pkgs.toList()..sort());
+    await NotificationCaptureStub.setRulesJson(jsonEncode(rules));
   }
 
   static Future<File> _officialDocumentsFile() async {

@@ -22,10 +22,14 @@ object NativeCaptureIngest {
         if (title.isBlank() && text.isBlank()) return null
 
         // Strict: only payment-success style notices (aligned with Dart noti_templates).
-        if (!isPaymentCandidate(pkg, title, text)) {
+        val match = matchPaymentRule(context, pkg, title, text)
+        if (match == null) {
             Log.i(TAG, "drop non-payment pkg=$pkg")
             return null
         }
+        // Soft-allow and hardcode paths may have null direction → default out.
+        val direction = match.direction ?: "out"
+        Log.d(TAG, "rule match direction=$direction soft=${match.softAllow}")
 
         val whenMs = when (val w = payload["when"]) {
             is Long -> w
@@ -152,37 +156,120 @@ object NativeCaptureIngest {
         val merchant: String?,
     )
 
-    /** Alipay mustContain — mirrors assets/noti_templates.json */
+    // Fallback hardcode when rules_json empty/corrupt (pre-T2-2 behavior).
     private val MUST_ALIPAY: Pattern = Pattern.compile("支付成功|付款成功|交易成功|交易提醒|交易通知|消费成功|已支付|扣款成功|扣款提醒|已扣款|支出\\s*[¥￥]|向.+付款|付款|支付金额|支付\\s*[¥￥]|付款\\s*[¥￥]|商户消费|成功付款")
-
-    /** WeChat mustContain — mirrors assets/noti_templates.json */
     private val MUST_WECHAT: Pattern = Pattern.compile("微信支付|支付成功|已支付|付款成功|商户消费|支付金额|付款金额|已付款|扣款成功")
-
-    /**
-     * Chat / non-payment excludes (strengthened vs Dart templates).
-     * Drop message pushes, Moments, OTP, non-pay service chatter.
-     */
     private val EXCLUDE_COMMON: Pattern = Pattern.compile(
         "验证码|登录|朋友圈|微信消息|发来一条|会话|拍了拍|互动消息|新的朋友|群聊|" +
-            "语音通话|视频通话|收到一条|发来一个红包|领取了你的红包|收款到账提醒|服务通知|余额宝收益|生活号",
+            "语音通话|视频通话|收到一条|发来一个红包|领取了你的红包|服务通知|余额宝收益|生活号",
+    )
+
+    private data class RuleMatch(
+        val direction: String?,
+        val softAllow: Boolean = false,
     )
 
     /**
-     * True only when body matches payment mustContain for the package
-     * and does not hit excludeText-style chat/OTP patterns.
+     * Match against Dart-synced rules_json (Scheme A).
+     * - Valid rules for pkg → must/exclude from rule; first hit wins
+     * - No rule for pkg → soft allow (enqueue; Dart refines when alive)
+     * - Empty/bad JSON → fallback to alipay/wechat hardcode only
+     * Returns null to drop.
      */
-    private fun isPaymentCandidate(pkg: String, title: String, text: String): Boolean {
+    private fun matchPaymentRule(
+        context: Context,
+        pkg: String,
+        title: String,
+        text: String,
+    ): RuleMatch? {
         val body = "$title\n$text"
-        if (EXCLUDE_COMMON.matcher(body).find()) return false
-        val must = when (pkg) {
-            "com.eg.android.AlipayGphone" -> MUST_ALIPAY
-            "com.tencent.mm" -> MUST_WECHAT
-            else -> return false
+        val rules = loadRules(context)
+        if (rules == null) {
+            // Fallback hardcode
+            if (EXCLUDE_COMMON.matcher(body).find()) return null
+            val must = when (pkg) {
+                "com.eg.android.AlipayGphone" -> MUST_ALIPAY
+                "com.tencent.mm" -> MUST_WECHAT
+                else -> return null
+            }
+            return if (must.matcher(body).find()) RuleMatch("out") else null
         }
-        return must.matcher(body).find()
+        val forPkg = rules.filter { it.pkg == pkg }
+        if (forPkg.isEmpty()) {
+            // Soft allow: watched custom package with no rule body yet
+            return RuleMatch(direction = "out", softAllow = true)
+        }
+        for (rule in forPkg) {
+            try {
+                val exclude = rule.exclude
+                if (!exclude.isNullOrBlank() && Pattern.compile(exclude).matcher(body).find()) {
+                    continue
+                }
+                val must = rule.must
+                if (!must.isNullOrBlank() && !Pattern.compile(must).matcher(body).find()) {
+                    continue
+                }
+                val dir = when (rule.direction) {
+                    "in", "out", "refund" -> rule.direction
+                    else -> "out"
+                }
+                return RuleMatch(dir)
+            } catch (e: Exception) {
+                Log.w(TAG, "bad rule regex id=${rule.id}", e)
+                continue
+            }
+        }
+        return null
     }
 
-        private val AMOUNT: Pattern = Pattern.compile(
+    private data class NativeRule(
+        val id: String?,
+        val pkg: String,
+        val direction: String?,
+        val must: String?,
+        val exclude: String?,
+        val amount: String?,
+        val merchant: String?,
+        val merchantFromTitle: Boolean,
+    )
+
+    /** null = empty/corrupt → use hardcode fallback */
+    private fun loadRules(context: Context): List<NativeRule>? {
+        val raw = try {
+            CentliNotificationListener.rulesJson(context)
+        } catch (_: Exception) {
+            null
+        }
+        if (raw.isNullOrBlank()) return null
+        return try {
+            val arr = org.json.JSONArray(raw)
+            if (arr.length() == 0) return null
+            buildList {
+                for (i in 0 until arr.length()) {
+                    val o = arr.optJSONObject(i) ?: continue
+                    val pkg = o.optString("pkg")
+                    if (pkg.isBlank()) continue
+                    add(
+                        NativeRule(
+                            id = o.optString("id").ifBlank { null },
+                            pkg = pkg,
+                            direction = o.optString("direction").ifBlank { "out" },
+                            must = o.optString("must").ifBlank { null },
+                            exclude = o.optString("exclude").ifBlank { null },
+                            amount = o.optString("amount").ifBlank { null },
+                            merchant = o.optString("merchant").ifBlank { null },
+                            merchantFromTitle = o.optBoolean("merchantFromTitle", false),
+                        ),
+                    )
+                }
+            }.ifEmpty { null }
+        } catch (e: Exception) {
+            Log.w(TAG, "rules_json parse failed; fallback hardcode", e)
+            null
+        }
+    }
+
+    private val AMOUNT: Pattern = Pattern.compile(
         "(?:(?:USD|EUR|CNY|HKD|TWD|JPY)\\s*|(?:[¥￥]|\\$|€))\\s*([0-9]+(?:,[0-9]{3})*(?:\\.[0-9]{1,2})?)",
     )
 
