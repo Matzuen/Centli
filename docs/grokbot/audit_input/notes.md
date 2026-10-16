@@ -83,3 +83,12 @@
 4. **工单11 来源**：仅新确认的 pending 会写入 ocr/share 等；历史已落库为 `notification` 的截图账单不会回写修正。
 5. **Excel 导入列序**：新增 tags 列后按新列序号解析；旧 Excel（无 tags 列）可能错位——与既有「按列序号」风险一致（§7 备查），JSON 路径已兼容。
 6. **stash@{0}** `pre-r2-workdir-auto-accounting-wip` 未弹出、未丢弃。
+
+## 文字/语音记账独立面板（2026-10-16）
+
+- 新增独立 bottom sheet：`text_bookkeeping_sheet.dart`、`voice_bookkeeping_sheet.dart`；共享入账 `smart_bookkeeping_submit.dart`（复用 `parseBookkeepingText` + 可选 LLM，不重写解析引擎）。
+- 底栏「记一笔」短按仍打开传统手动面板；长按菜单分别打开文字/语音独立面板（不再 `expandAi`/`startVoice` 塞进传统 sheet）。
+- 传统 `bookkeeping_sheet.dart` 已删除 L7 语音/文字辅助行及全部 AI 展开路径；标签、×÷、芯片行保留。
+- **长录音模式**：现有 `LocalSpeechService` 无独立长录音引擎，语音面板暂不展示「切换到长录音模式」入口；若产品需要，后续可加入口并落到同一录音流程或接入长录音。
+- 「每日剩余」无本地配额体系，文字/语音面板均未展示，未做付费墙。
+- 标题用「文字记账」（本地规则解析为主；LLM 仅设置页可选增强），不用「AI 文字记账」。

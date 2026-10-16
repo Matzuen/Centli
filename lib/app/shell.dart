@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import '../data/db/database_provider.dart';
 import '../features/ledger/bookkeeping_sheet.dart' deferred as bookkeeping;
+import '../features/ledger/text_bookkeeping_sheet.dart' deferred as text_bk;
+import '../features/ledger/voice_bookkeeping_sheet.dart' deferred as voice_bk;
 import 'theme.dart';
 
 /// Flat 5-tab shell: \u9996\u9875 / \u7edf\u8ba1 / \u8bb0\u8d26(+) / \u8d44\u4ea7 / \u6211\u7684
@@ -90,19 +92,11 @@ class AppShell extends ConsumerWidget {
     );
   }
 
-  /// Load speech / LLM bookkeeping code only when the user opens \u8bb0\u8d26.
-  static Future<void> _openBookkeeping(
-    BuildContext context, {
-    bool expandAi = false,
-    bool startVoice = false,
-  }) async {
+  /// Load traditional manual bookkeeping sheet (deferred).
+  static Future<void> _openBookkeeping(BuildContext context) async {
     await bookkeeping.loadLibrary();
     if (!context.mounted) return;
-    await bookkeeping.showBookkeepingSheet(
-      context,
-      expandAi: expandAi,
-      startVoice: startVoice,
-    );
+    await bookkeeping.showBookkeepingSheet(context);
   }
 
   static Future<void> _openBookkeepingMenu(BuildContext context) async {
@@ -132,9 +126,13 @@ class AppShell extends ConsumerWidget {
     );
     if (!context.mounted || choice == null) return;
     if (choice == 'text') {
-      await _openBookkeeping(context, expandAi: true);
+      await text_bk.loadLibrary();
+      if (!context.mounted) return;
+      await text_bk.showTextBookkeepingSheet(context);
     } else if (choice == 'voice') {
-      await _openBookkeeping(context, expandAi: true, startVoice: true);
+      await voice_bk.loadLibrary();
+      if (!context.mounted) return;
+      await voice_bk.showVoiceBookkeepingSheet(context);
     }
   }
 }
