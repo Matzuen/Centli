@@ -247,10 +247,10 @@ class MePage extends ConsumerWidget {
                       future: PackageInfo.fromPlatform().then((info) {
                         final name = info.version.trim();
                         final build = info.buildNumber.trim();
-                        if (name.isEmpty) return '1.1.0+3';
+                        if (name.isEmpty) return '1.1.1+4';
                         if (build.isEmpty) return name;
                         return '$name+$build';
-                      }).catchError((_) => '1.1.0+3'),
+                      }).catchError((_) => '1.1.1+4'),
                       builder: (context, snap) {
                         final v = snap.data ?? '…';
                         return _tile(

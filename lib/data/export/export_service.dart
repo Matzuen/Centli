@@ -52,11 +52,11 @@ class ExportService {
       final info = await PackageInfo.fromPlatform();
       final name = info.version.trim();
       final build = info.buildNumber.trim();
-      if (name.isEmpty) return '1.1.0+3';
+      if (name.isEmpty) return '1.1.1+4';
       if (build.isEmpty) return name;
       return '$name+$build';
     } catch (_) {
-      return '1.1.0+3';
+      return '1.1.1+4';
     }
   }
 

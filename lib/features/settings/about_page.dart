@@ -15,7 +15,7 @@ class AboutPage extends StatefulWidget {
 
 class _AboutPageState extends State<AboutPage> {
   /// Fallback when [PackageInfo] is unavailable (tests / early frame).
-  static const String _fallbackVersion = '1.1.0+3';
+  static const String _fallbackVersion = '1.1.1+4';
 
   late final Future<String> _versionFuture = _loadVersion();
 
