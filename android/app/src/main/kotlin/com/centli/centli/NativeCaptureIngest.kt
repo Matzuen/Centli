@@ -30,6 +30,11 @@ object NativeCaptureIngest {
         // Soft-allow and hardcode paths may have null direction → default out.
         val direction = match.direction ?: "out"
         Log.d(TAG, "rule match direction=$direction soft=${match.softAllow}")
+        // T2-4: carry direction on payload for queue / Flutter flush.
+        val enriched = HashMap(payload)
+        enriched["direction"] = direction
+        @Suppress("UNCHECKED_CAST")
+        (payload as? MutableMap<String, Any?>)?.put("direction", direction)
 
         val whenMs = when (val w = payload["when"]) {
             is Long -> w
@@ -41,7 +46,7 @@ object NativeCaptureIngest {
         val dbFile = File(context.applicationContext.getDir("flutter", Context.MODE_PRIVATE), DB_NAME)
         if (!dbFile.exists()) {
             Log.w(TAG, "DB missing at ${dbFile.absolutePath}; queueing")
-            CentliNotificationListener.enqueue(context, payload)
+            CentliNotificationListener.enqueue(context, enriched)
             return null
         }
 
@@ -105,7 +110,7 @@ object NativeCaptureIngest {
             return id
         } catch (e: Exception) {
             Log.e(TAG, "native ingest failed", e)
-            CentliNotificationListener.enqueue(context, payload)
+            CentliNotificationListener.enqueue(context, enriched)
             return null
         } finally {
             try { db?.close() } catch (_: Exception) {}
