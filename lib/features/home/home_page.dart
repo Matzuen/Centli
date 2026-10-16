@@ -126,7 +126,7 @@ class _HomePageState extends ConsumerState<HomePage> {
           bottom: false,
           child: ledgerAsync.when(
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => Center(child: Text('加载失败: $e')),
+            error: (e, _) => Center(child: Text('加载失败，下拉重试')),
             data: (ledger) {
               if (ledger == null) {
                 return const Center(child: Text('尚未初始化账本'));
@@ -183,10 +183,30 @@ class _HomePageState extends ConsumerState<HomePage> {
                     padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
                     child: Row(
                       children: [
-                        Text(
-                          'Centli',
-                          style: Theme.of(context).textTheme.titleLarge
-                              ?.copyWith(fontWeight: FontWeight.w800),
+                        InkWell(
+                          onTap: () => context.push('/me/ledgers'),
+                          borderRadius: BorderRadius.circular(8),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 4,
+                              horizontal: 2,
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  ledger.name,
+                                  style: Theme.of(context).textTheme.titleLarge,
+                                ),
+                                const SizedBox(width: 4),
+                                Icon(
+                                  Icons.unfold_more,
+                                  size: 20,
+                                  color: scheme.onSurfaceVariant,
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                         const Spacer(),
                         IconButton(
@@ -278,14 +298,14 @@ class _HomePageState extends ConsumerState<HomePage> {
                               summary: summary,
                             ),
                             const SizedBox(height: CentliSpacing.section),
+                            _HomePendingSection(ledgerId: ledgerId, hide: hide),
+                            const SizedBox(height: CentliSpacing.section),
                             _NetChangeChartCard(
                               base: base,
                               hide: hide,
                               incomeSeries: incomeSeries,
                               expenseSeries: expenseSeries,
                             ),
-                            const SizedBox(height: CentliSpacing.section),
-                            _HomePendingSection(ledgerId: ledgerId, hide: hide),
                             const SizedBox(height: CentliSpacing.item),
                             CentliSoftCard(
                               padding: const EdgeInsets.all(CentliSpacing.cardPad),
@@ -308,7 +328,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                                         child: CircularProgressIndicator(),
                                       ),
                                     ),
-                                    error: (e, _) => Text('$e'),
+                                    error: (e, _) => Text('加载失败，下拉重试'),
                                     data: (txns) {
                                       if (txns.isEmpty) {
                                         return Padding(
@@ -382,7 +402,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                                     child: CircularProgressIndicator(),
                                   ),
                                 ),
-                                error: (e, _) => Text('$e'),
+                                error: (e, _) => Text('加载失败，下拉重试'),
                                 data: (txns) {
                                   var list = txns;
                                   final day = _calendarDay;
@@ -483,15 +503,40 @@ class _LedgerSummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final loading = netWorth.isLoading || summary.isLoading;
+    final failed = netWorth.hasError || summary.hasError;
     final nw = netWorth.valueOrNull;
     final s = summary.valueOrNull;
     final income = s?.incomeMinor ?? 0;
     final expense = s?.expenseMinor ?? 0;
     final delta = income - expense;
-    // Assets ≈ net when no explicit liabilities; show negative balances as 负债.
     final net = nw?.totalMinor ?? 0;
     final assetTotal = net >= 0 ? net : 0;
     final liability = net < 0 ? -net : 0;
+
+    if (failed) {
+      return CentliSoftCard(
+        padding: const EdgeInsets.all(CentliSpacing.cardPad),
+        child: Text(
+          '加载失败，下拉重试',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      );
+    }
+    if (loading && nw == null && s == null) {
+      return CentliSoftCard(
+        padding: const EdgeInsets.all(CentliSpacing.cardPad),
+        child: SizedBox(
+          height: 120,
+          child: Center(
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: scheme.primary,
+            ),
+          ),
+        ),
+      );
+    }
 
     return CentliSoftCard(
       padding: const EdgeInsets.all(CentliSpacing.cardPad),
@@ -620,7 +665,7 @@ class _NetChangeChartCard extends StatelessWidget {
           ),
           const SizedBox(height: CentliSpacing.item),
           SizedBox(
-            height: 140,
+            height: 110,
             child: spots.length < 2
                 ? const Center(child: Text('暂无趋势数据'))
                 : LineChart(
@@ -652,13 +697,7 @@ class _NetChangeChartCard extends StatelessWidget {
                     ),
                   ),
           ),
-          if (!hide)
-            Text(
-              '区间累计净流入（$base）',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
+
         ],
       ),
     );

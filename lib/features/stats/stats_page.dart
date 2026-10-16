@@ -109,7 +109,7 @@ class StatsPage extends ConsumerWidget {
       appBar: AppBar(title: const Text('\u7edf\u8ba1')),
       body: ledgerAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('$e')),
+        error: (e, _) => Center(child: Text('加载失败，下拉重试')),
         data: (ledger) {
           if (ledger == null) {
             return const Center(
@@ -169,7 +169,7 @@ class StatsPage extends ConsumerWidget {
               const SizedBox(height: CentliSpacing.item),
               summary.when(
                 loading: () => const LinearProgressIndicator(),
-                error: (e, _) => Text('$e'),
+                error: (e, _) => Text('加载失败，下拉重试'),
                 data: (s) {
                   final others = s.unconverted.entries.toList()
                     ..sort((a, b) => a.key.compareTo(b.key));
@@ -278,7 +278,7 @@ class StatsPage extends ConsumerWidget {
                   height: 180,
                   child: Center(child: CircularProgressIndicator()),
                 ),
-                error: (e, _) => Text('$e'),
+                error: (e, _) => Text('加载失败，下拉重试'),
                 data: (series) {
                   final hasAny = series.any((e) => e.totalMinor > 0);
                   if (!hasAny) {
@@ -333,7 +333,7 @@ class StatsPage extends ConsumerWidget {
                   padding: EdgeInsets.all(24),
                   child: Center(child: CircularProgressIndicator()),
                 ),
-                error: (e, _) => Text('$e'),
+                error: (e, _) => Text('加载失败，下拉重试'),
                 data: (items) {
                   if (items.isEmpty) {
                     return _EmptyChartCard(
@@ -488,7 +488,7 @@ class _StatsBudgetSection extends ConsumerWidget {
 
     return async.when(
       loading: () => const SizedBox.shrink(),
-      error: (e, _) => Text('$e'),
+      error: (e, _) => Text('加载失败，下拉重试'),
       data: (p) {
         final hasTotal = p.totalLimitMinor != null && p.totalLimitMinor! > 0;
         if (!p.hasAnyBudget) {
