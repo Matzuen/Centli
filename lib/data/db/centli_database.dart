@@ -1102,6 +1102,16 @@ class CentliDatabase extends _$CentliDatabase {
     );
   }
 
+  Future<void> setIncludeInBudget(String id, bool include) async {
+    final ts = nowMs();
+    await (update(transactions)..where((t) => t.id.equals(id))).write(
+      TransactionsCompanion(
+        includeInBudget: Value(include ? 1 : 0),
+        updatedAt: Value(ts),
+      ),
+    );
+  }
+
   Future<void> updateManualTransaction({
     required String id,
     required String type,

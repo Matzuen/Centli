@@ -93,7 +93,7 @@ class BudgetPage extends ConsumerWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                '\u91d1\u989d\u6309\u672c\u4f4d\u5e01 $base\uff1b\u4ec5\u7edf\u8ba1 include_in_budget=1 \u7684\u652f\u51fa\u3002'
+                '\u91d1\u989d\u6309\u672c\u4f4d\u5e01 $base\uff1b\u4ec5\u7edf\u8ba1\u5df2\u5f00\u542f\u300c\u8ba1\u5165\u9884\u7b97\u300d\u7684\u652f\u51fa\u3002'
                 '\u5206\u7c7b\u9884\u7b97\u4e0e\u603b\u9884\u7b97\u72ec\u7acb\uff08\u4e0d\u81ea\u52a8\u52a0\u603b\uff09\u3002',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: scheme.onSurfaceVariant,

@@ -240,6 +240,7 @@ class _DetailBody extends ConsumerWidget {
                 const Divider(height: 1),
                 SwitchListTile(
                   title: const Text('\u8ba1\u5165\u7edf\u8ba1'),
+                  subtitle: const Text('\u5f71\u54cd\u6536\u652f\u7edf\u8ba1\u4e0e\u8d8b\u52bf'),
                   value: txn.includeInStat == 1,
                   onChanged: isTransfer
                       ? null
@@ -247,6 +248,18 @@ class _DetailBody extends ConsumerWidget {
                           await ref
                               .read(databaseProvider)
                               .setIncludeInStat(txn.id, v);
+                        },
+                ),
+                SwitchListTile(
+                  title: const Text('\u8ba1\u5165\u9884\u7b97'),
+                  subtitle: const Text('\u5f71\u54cd\u6708\u5ea6\u9884\u7b97\u8fdb\u5ea6'),
+                  value: txn.includeInBudget == 1,
+                  onChanged: isTransfer
+                      ? null
+                      : (v) async {
+                          await ref
+                              .read(databaseProvider)
+                              .setIncludeInBudget(txn.id, v);
                         },
                 ),
               ],
