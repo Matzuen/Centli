@@ -509,10 +509,7 @@ class _LedgerSummaryCard extends StatelessWidget {
     final s = summary.valueOrNull;
     final income = s?.incomeMinor ?? 0;
     final expense = s?.expenseMinor ?? 0;
-    final delta = income - expense;
     final net = nw?.totalMinor ?? 0;
-    final assetTotal = net >= 0 ? net : 0;
-    final liability = net < 0 ? -net : 0;
 
     if (failed) {
       return CentliSoftCard(
@@ -527,7 +524,7 @@ class _LedgerSummaryCard extends StatelessWidget {
       return CentliSoftCard(
         padding: const EdgeInsets.all(CentliSpacing.cardPad),
         child: SizedBox(
-          height: 120,
+          height: 96,
           child: Center(
             child: CircularProgressIndicator(
               strokeWidth: 2,
@@ -545,7 +542,9 @@ class _LedgerSummaryCard extends StatelessWidget {
         children: [
           Text(
             '${range.label}支出',
-            style: Theme.of(context).textTheme.labelMedium,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
           ),
           const SizedBox(height: CentliSpacing.dense),
           Text(
@@ -553,72 +552,69 @@ class _LedgerSummaryCard extends StatelessWidget {
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
               color: CentliTheme.expenseRed,
               letterSpacing: -0.4,
+              fontWeight: FontWeight.w700,
             ),
           ),
-          const SizedBox(height: CentliSpacing.item),
+          const SizedBox(height: CentliSpacing.section),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Expanded(
-                child: _kv(context, 
+                child: _kv(
+                  context,
                   '${range.label}收入',
                   formatMinor(base, income, hide: hide),
                   valueColor: CentliTheme.incomeGreen,
                 ),
               ),
               Expanded(
-                child: _kv(context, 
+                child: _kv(
+                  context,
                   '全期净资产',
                   formatMinor(base, net, hide: hide),
+                  muted: true,
                 ),
               ),
             ],
           ),
-          if (delta != 0) ...[
-            const SizedBox(height: CentliSpacing.dense),
-            Text(
-              '区间净流入 ${delta > 0 ? '▲' : '▼'} ${formatMinor(base, delta.abs(), hide: hide)}',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: delta > 0
-                    ? CentliTheme.incomeGreen
-                    : CentliTheme.expenseRed,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
           const SizedBox(height: CentliSpacing.item),
-          Row(
-            children: [
-              Expanded(
-                child: _kv(context, '资产', formatMinor(base, assetTotal, hide: hide)),
-              ),
-              Expanded(
-                child: _kv(context, '负债', formatMinor(base, liability, hide: hide)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
           Text(
             '本位币 $base（按发生日汇率折算）',
-            style: Theme.of(context).textTheme.bodySmall
-                ?.copyWith(color: scheme.onSurfaceVariant),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _kv(BuildContext context, String k, String v, {Color? valueColor}) {
+  Widget _kv(
+    BuildContext context,
+    String k,
+    String v, {
+    Color? valueColor,
+    bool muted = false,
+  }) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(k, style: theme.textTheme.bodySmall),
+        Text(
+          k,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: scheme.onSurfaceVariant,
+          ),
+        ),
         const SizedBox(height: 2),
         Text(
           v,
-          style: theme.textTheme.labelMedium?.copyWith(
-            fontWeight: FontWeight.w700,
-            color: valueColor,
+          style: (muted ? theme.textTheme.bodyMedium : theme.textTheme.labelLarge)
+              ?.copyWith(
+            fontWeight: muted ? FontWeight.w600 : FontWeight.w700,
+            color: valueColor ??
+                (muted ? scheme.onSurfaceVariant : scheme.onSurface),
           ),
         ),
       ],
@@ -639,18 +635,215 @@ class _NetChangeChartCard extends StatelessWidget {
   final AsyncValue<List<({DateTime dayLocal, int totalMinor})>> incomeSeries;
   final AsyncValue<List<({DateTime dayLocal, int totalMinor})>> expenseSeries;
 
+  String _fmtMajor(double major) {
+    if (hide) return '****';
+    return formatMinor(base, (major * 100).round(), hide: false);
+  }
+
+  String _axisLabel(double value) {
+    if (hide) return '****';
+    final abs = value.abs();
+    if (abs >= 1000) return '${(value / 1000).toStringAsFixed(1)}k';
+    if (abs >= 10) return value.toStringAsFixed(0);
+    return value.toStringAsFixed(1);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final income = incomeSeries.valueOrNull ?? const [];
     final expense = expenseSeries.valueOrNull ?? const [];
     final n = income.length > expense.length ? income.length : expense.length;
     var running = 0.0;
+    var changeDays = 0;
     final spots = <FlSpot>[];
+    final dayLabels = <DateTime>[];
     for (var i = 0; i < n; i++) {
       final inV = i < income.length ? income[i].totalMinor : 0;
       final outV = i < expense.length ? expense[i].totalMinor : 0;
-      running += (inV - outV) / 100.0;
+      final dayNet = inV - outV;
+      if (dayNet != 0) changeDays++;
+      running += dayNet / 100.0;
       spots.add(FlSpot(i.toDouble(), running));
+      final day = i < income.length
+          ? income[i].dayLocal
+          : (i < expense.length
+                ? expense[i].dayLocal
+                : DateTime.fromMillisecondsSinceEpoch(0));
+      dayLabels.add(day);
+    }
+
+    final muted = Theme.of(context).textTheme.bodySmall?.copyWith(
+      color: scheme.onSurfaceVariant,
+    );
+
+    Widget body;
+    String? caption;
+    if (spots.length < 2) {
+      body = Center(child: Text('暂无趋势数据', style: muted));
+    } else {
+      final ys = spots.map((s) => s.y);
+      final yMinRaw = ys.reduce((a, b) => a < b ? a : b);
+      final yMaxRaw = ys.reduce((a, b) => a > b ? a : b);
+      final end = spots.last.y;
+      caption =
+          '末值 ${_fmtMajor(end)} · 最大 ${_fmtMajor(yMaxRaw)} · 最小 ${_fmtMajor(yMinRaw)}';
+
+      if (changeDays < 2) {
+        body = Center(
+          child: Text(
+            '区间变动较少，累计 ${_fmtMajor(end)}',
+            style: muted,
+            textAlign: TextAlign.center,
+          ),
+        );
+      } else {
+        final span = (yMaxRaw - yMinRaw).abs();
+        final pad = span < 1 ? 1.0 : span * 0.18;
+        var minY = yMinRaw - pad;
+        var maxY = yMaxRaw + pad;
+        if (yMinRaw >= 0) minY = 0;
+        if (yMaxRaw <= 0) maxY = 0;
+        if ((maxY - minY).abs() < 1) {
+          minY -= 1;
+          maxY += 1;
+        }
+        final yInterval = (maxY - minY) / 2;
+        final useCurve = changeDays >= 4;
+        final labelEvery = n <= 7 ? 1 : (n <= 14 ? 2 : (n / 5).ceil());
+
+        body = LineChart(
+          LineChartData(
+            minX: 0,
+            maxX: (n - 1).clamp(0, 9999).toDouble(),
+            minY: minY,
+            maxY: maxY,
+            clipData: const FlClipData.all(),
+            gridData: FlGridData(
+              show: true,
+              drawVerticalLine: false,
+              horizontalInterval: yInterval,
+              getDrawingHorizontalLine: (v) => FlLine(
+                color: scheme.outlineVariant.withValues(alpha: 0.45),
+                strokeWidth: 1,
+              ),
+            ),
+            borderData: FlBorderData(show: false),
+            titlesData: FlTitlesData(
+              topTitles: const AxisTitles(
+                sideTitles: SideTitles(showTitles: false),
+              ),
+              rightTitles: const AxisTitles(
+                sideTitles: SideTitles(showTitles: false),
+              ),
+              leftTitles: AxisTitles(
+                sideTitles: SideTitles(
+                  showTitles: true,
+                  reservedSize: 40,
+                  interval: yInterval,
+                  getTitlesWidget: (value, meta) {
+                    if (value < minY - 0.01 || value > maxY + 0.01) {
+                      return const SizedBox.shrink();
+                    }
+                    // Prefer top / mid / bottom ticks only.
+                    final nearTop = (value - maxY).abs() <= yInterval * 0.15;
+                    final nearBot = (value - minY).abs() <= yInterval * 0.15;
+                    final nearMid =
+                        (value - (minY + maxY) / 2).abs() <= yInterval * 0.15;
+                    if (!nearTop && !nearBot && !nearMid) {
+                      return const SizedBox.shrink();
+                    }
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 4),
+                      child: Text(
+                        _axisLabel(value),
+                        style: Theme.of(context).textTheme.labelSmall,
+                        maxLines: 1,
+                      ),
+                    );
+                  },
+                ),
+              ),
+              bottomTitles: AxisTitles(
+                sideTitles: SideTitles(
+                  showTitles: true,
+                  reservedSize: 22,
+                  interval: 1,
+                  getTitlesWidget: (value, meta) {
+                    final i = value.round();
+                    if (i < 0 || i >= n) return const SizedBox.shrink();
+                    if (i % labelEvery != 0 && i != n - 1) {
+                      return const SizedBox.shrink();
+                    }
+                    final d = dayLabels[i];
+                    if (d.millisecondsSinceEpoch == 0) {
+                      return const SizedBox.shrink();
+                    }
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        '${d.month}/${d.day}',
+                        style: Theme.of(context).textTheme.labelSmall,
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+            lineTouchData: LineTouchData(
+              handleBuiltInTouches: true,
+              touchTooltipData: LineTouchTooltipData(
+                getTooltipItems: (touched) {
+                  return touched.map((t) {
+                    final i = t.x.round().clamp(0, n - 1);
+                    final d = dayLabels[i];
+                    final dayLabel = d.millisecondsSinceEpoch == 0
+                        ? ''
+                        : '${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+                    final amt = _fmtMajor(t.y);
+                    return LineTooltipItem(
+                      dayLabel.isEmpty ? amt : '$dayLabel\n$amt',
+                      TextStyle(
+                        color: scheme.onInverseSurface,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                      ),
+                    );
+                  }).toList();
+                },
+              ),
+            ),
+            lineBarsData: [
+              LineChartBarData(
+                spots: spots,
+                isCurved: useCurve,
+                curveSmoothness: 0.2,
+                color: CentliTheme.incomeGreen,
+                barWidth: 2.2,
+                isStrokeCapRound: true,
+                dotData: FlDotData(
+                  show: true,
+                  checkToShowDot: (spot, bar) {
+                    if (spot.x == spots.last.x) return true;
+                    final i = spot.x.round();
+                    if (i <= 0) return spot.y != 0;
+                    return (spot.y - spots[i - 1].y).abs() > 0.001;
+                  },
+                  getDotPainter: (spot, pct, bar, index) => FlDotCirclePainter(
+                    radius: spot.x == spots.last.x ? 3.5 : 2.5,
+                    color: CentliTheme.incomeGreen,
+                    strokeWidth: 0,
+                  ),
+                ),
+                belowBarData: BarAreaData(
+                  show: true,
+                  color: CentliTheme.incomeGreen.withValues(alpha: 0.12),
+                ),
+              ),
+            ],
+          ),
+        );
+      }
     }
 
     return CentliSoftCard(
@@ -660,44 +853,16 @@ class _NetChangeChartCard extends StatelessWidget {
         children: [
           Text(
             '区间累计净流入',
-            style: Theme.of(context).textTheme.titleMedium
-                ?.copyWith(fontWeight: FontWeight.w700),
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
           ),
+          if (caption != null) ...[
+            const SizedBox(height: 2),
+            Text(caption, style: muted),
+          ],
           const SizedBox(height: CentliSpacing.item),
-          SizedBox(
-            height: 110,
-            child: spots.length < 2
-                ? const Center(child: Text('暂无趋势数据'))
-                : LineChart(
-                    LineChartData(
-                      minY:
-                          spots
-                              .map((s) => s.y)
-                              .reduce((a, b) => a < b ? a : b) -
-                          1,
-                      gridData: const FlGridData(show: false),
-                      borderData: FlBorderData(show: false),
-                      titlesData: const FlTitlesData(show: false),
-                      lineTouchData: const LineTouchData(enabled: false),
-                      lineBarsData: [
-                        LineChartBarData(
-                          spots: spots,
-                          isCurved: true,
-                          color: CentliTheme.incomeGreen,
-                          barWidth: 2.5,
-                          dotData: const FlDotData(show: false),
-                          belowBarData: BarAreaData(
-                            show: true,
-                            color: CentliTheme.incomeGreen.withValues(
-                              alpha: 0.18,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-          ),
-
+          SizedBox(height: 120, child: body),
         ],
       ),
     );
@@ -881,30 +1046,57 @@ class _DailyTrendCard extends StatelessWidget {
           ),
           const SizedBox(height: CentliSpacing.item),
           SizedBox(
-            height: 120,
-            child: spots.length < 2
-                ? const Center(child: Text('暂无趋势数据'))
-                : LineChart(
-                    LineChartData(
-                      gridData: const FlGridData(show: false),
-                      borderData: FlBorderData(show: false),
-                      titlesData: const FlTitlesData(show: false),
-                      lineTouchData: const LineTouchData(enabled: false),
-                      lineBarsData: [
-                        LineChartBarData(
-                          spots: spots,
-                          isCurved: true,
-                          color: CentliTheme.softBlue,
-                          barWidth: 2.5,
-                          dotData: const FlDotData(show: false),
-                          belowBarData: BarAreaData(
-                            show: true,
-                            color: CentliTheme.softBlue.withValues(alpha: 0.2),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+            height: 88,
+            child: _buildDailyTrendChart(context, spots),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDailyTrendChart(BuildContext context, List<FlSpot> spots) {
+    final scheme = Theme.of(context).colorScheme;
+    final muted = Theme.of(context).textTheme.bodySmall?.copyWith(
+      color: scheme.onSurfaceVariant,
+    );
+    if (spots.length < 2) {
+      return Center(child: Text('暂无趋势数据', style: muted));
+    }
+    final active = spots.where((s) => s.y > 0).length;
+    if (active < 2) {
+      return Center(child: Text('本月变动较少', style: muted));
+    }
+    final maxYRaw = spots.map((s) => s.y).reduce((a, b) => a > b ? a : b);
+    final maxY = maxYRaw <= 0 ? 1.0 : maxYRaw * 1.15;
+    return LineChart(
+      LineChartData(
+        minY: 0,
+        maxY: maxY,
+        clipData: const FlClipData.all(),
+        gridData: FlGridData(
+          show: true,
+          drawVerticalLine: false,
+          horizontalInterval: maxY / 2,
+          getDrawingHorizontalLine: (v) => FlLine(
+            color: scheme.outlineVariant.withValues(alpha: 0.45),
+            strokeWidth: 1,
+          ),
+        ),
+        borderData: FlBorderData(show: false),
+        titlesData: const FlTitlesData(show: false),
+        lineTouchData: const LineTouchData(enabled: false),
+        lineBarsData: [
+          LineChartBarData(
+            spots: spots,
+            isCurved: active >= 4,
+            curveSmoothness: 0.2,
+            color: CentliTheme.softBlue,
+            barWidth: 2.2,
+            dotData: const FlDotData(show: false),
+            belowBarData: BarAreaData(
+              show: true,
+              color: CentliTheme.softBlue.withValues(alpha: 0.14),
+            ),
           ),
         ],
       ),

@@ -213,72 +213,76 @@ class _CategoryPickerBodyState extends State<_CategoryPickerBody> {
                         ),
                       ),
                       Expanded(
-                        child: GridView.builder(
-                          padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
-                          gridDelegate:
-                              const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 3,
-                            mainAxisSpacing: 12,
-                            crossAxisSpacing: 8,
-                            childAspectRatio: 0.82,
-                          ),
-                          itemCount: _gridItems.length,
-                          itemBuilder: (context, i) {
-                            final c = _gridItems[i];
-                            final selected = c.id == _selectedId;
-                            return InkWell(
-                              borderRadius: BorderRadius.circular(16),
-                              onTap: () => Navigator.pop(context, c.id),
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 160),
-                                decoration: BoxDecoration(
-                                  color: selected
-                                      ? CentliTheme.softBlue
-                                          .withValues(alpha: 0.10)
-                                      : Colors.transparent,
-                                  borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(
+                        child: MediaQuery.withClampedTextScaling(
+                          maxScaleFactor: 1.2,
+                          child: GridView.builder(
+                            padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+                            gridDelegate:
+                                const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 3,
+                              mainAxisSpacing: 10,
+                              crossAxisSpacing: 8,
+                              childAspectRatio: 0.72,
+                            ),
+                            itemCount: _gridItems.length,
+                            itemBuilder: (context, i) {
+                              final c = _gridItems[i];
+                              final selected = c.id == _selectedId;
+                              return InkWell(
+                                borderRadius: BorderRadius.circular(16),
+                                onTap: () => Navigator.pop(context, c.id),
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 160),
+                                  decoration: BoxDecoration(
                                     color: selected
                                         ? CentliTheme.softBlue
-                                            .withValues(alpha: 0.45)
+                                            .withValues(alpha: 0.10)
                                         : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(
+                                      color: selected
+                                          ? CentliTheme.softBlue
+                                              .withValues(alpha: 0.45)
+                                          : Colors.transparent,
+                                    ),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 4,
+                                    vertical: 6,
+                                  ),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      CentliIconChip(
+                                        name: c.name,
+                                        kind: c.kind,
+                                        iconKey: c.icon,
+                                        size: 44,
+                                        roundedSquare: true,
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        c.name,
+                                        textAlign: TextAlign.center,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          height: 1.15,
+                                          fontWeight: selected
+                                              ? FontWeight.w700
+                                              : FontWeight.w500,
+                                          color: selected
+                                              ? CentliTheme.softBlue
+                                              : scheme.onSurface,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 4,
-                                  vertical: 8,
-                                ),
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    CentliIconChip(
-                                      name: c.name,
-                                      kind: c.kind,
-                                      iconKey: c.icon,
-                                      size: 48,
-                                      roundedSquare: true,
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      c.name,
-                                      textAlign: TextAlign.center,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: selected
-                                            ? FontWeight.w700
-                                            : FontWeight.w500,
-                                        color: selected
-                                            ? CentliTheme.softBlue
-                                            : scheme.onSurface,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
+                              );
+                            },
+                          ),
                         ),
                       ),
                     ],

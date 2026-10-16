@@ -280,67 +280,108 @@ class _IconLibraryPageState extends State<IconLibraryPage> {
                                 color: const Color(0xFFEEEEEE),
                               ),
                               Expanded(
-                                child: GridView.builder(
-                                  padding: const EdgeInsets.all(12),
-                                  gridDelegate:
-                                      const SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: 4,
-                                    mainAxisSpacing: 12,
-                                    crossAxisSpacing: 10,
-                                    childAspectRatio: 0.82,
+                                child: MediaQuery.withClampedTextScaling(
+                                  maxScaleFactor: 1.2,
+                                  child: GridView.builder(
+                                    padding: const EdgeInsets.all(12),
+                                    gridDelegate:
+                                        const SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: 4,
+                                      mainAxisSpacing: 10,
+                                      crossAxisSpacing: 8,
+                                      childAspectRatio: 0.68,
+                                    ),
+                                    itemCount: group.entries.length,
+                                    itemBuilder: (context, i) {
+                                      final e = group.entries[i];
+                                      final selected = _selected == e.key;
+                                      return InkWell(
+                                        borderRadius: BorderRadius.circular(14),
+                                        onTap: () {
+                                          setState(() => _selected = e.key);
+                                          Navigator.pop(
+                                            context,
+                                            IconPickerResult(iconKey: e.key),
+                                          );
+                                        },
+                                        child: LayoutBuilder(
+                                          builder: (context, constraints) {
+                                            final labelH = 14.0;
+                                            final gap = 2.0;
+                                            final iconSize = (constraints
+                                                        .maxHeight -
+                                                    labelH -
+                                                    gap)
+                                                .clamp(32.0, 48.0);
+                                            final side = iconSize <
+                                                    constraints.maxWidth
+                                                ? iconSize
+                                                : constraints.maxWidth;
+                                            return Column(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.center,
+                                              children: [
+                                                SizedBox(
+                                                  width: side,
+                                                  height: side,
+                                                  child: DecoratedBox(
+                                                    decoration: BoxDecoration(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                        14,
+                                                      ),
+                                                      border: Border.all(
+                                                        color: selected
+                                                            ? CentliTheme
+                                                                .softBlue
+                                                            : const Color(
+                                                                0xFFE8E8E8,
+                                                              ),
+                                                        width:
+                                                            selected ? 2 : 1,
+                                                      ),
+                                                    ),
+                                                    child: CentliIconChip(
+                                                      name: e.label,
+                                                      iconKey: e.key,
+                                                      size: (side - 4)
+                                                          .clamp(28.0, 44.0),
+                                                      roundedSquare: true,
+                                                    ),
+                                                  ),
+                                                ),
+                                                SizedBox(height: gap),
+                                                SizedBox(
+                                                  height: labelH,
+                                                  width: constraints.maxWidth,
+                                                  child: Text(
+                                                    e.label,
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    textAlign: TextAlign.center,
+                                                    style: Theme.of(context)
+                                                        .textTheme
+                                                        .labelSmall
+                                                        ?.copyWith(
+                                                          fontSize: 10,
+                                                          height: 1.1,
+                                                          color: scheme
+                                                              .onSurfaceVariant,
+                                                          fontWeight: selected
+                                                              ? FontWeight.w700
+                                                              : FontWeight
+                                                                  .w500,
+                                                        ),
+                                                  ),
+                                                ),
+                                              ],
+                                            );
+                                          },
+                                        ),
+                                      );
+                                    },
                                   ),
-                                  itemCount: group.entries.length,
-                                  itemBuilder: (context, i) {
-                                    final e = group.entries[i];
-                                    final selected = _selected == e.key;
-                                    return InkWell(
-                                      borderRadius: BorderRadius.circular(14),
-                                      onTap: () {
-                                        setState(() => _selected = e.key);
-                                        Navigator.pop(
-                                          context,
-                                          IconPickerResult(iconKey: e.key),
-                                        );
-                                      },
-                                      child: Column(
-                                        children: [
-                                          Container(
-                                            width: 52,
-                                            height: 52,
-                                            decoration: BoxDecoration(
-                                              borderRadius:
-                                                  BorderRadius.circular(14),
-                                              border: Border.all(
-                                                color: selected
-                                                    ? CentliTheme.softBlue
-                                                    : const Color(0xFFE8E8E8),
-                                                width: selected ? 2 : 1,
-                                              ),
-                                            ),
-                                            child: CentliIconChip(
-                                              name: e.label,
-                                              iconKey: e.key,
-                                              size: 48,
-                                              roundedSquare: true,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            e.label,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(
-                                              fontSize: 11,
-                                              color: scheme.onSurfaceVariant,
-                                              fontWeight: selected
-                                                  ? FontWeight.w700
-                                                  : FontWeight.w500,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                  },
                                 ),
                               ),
                             ],
