@@ -37,7 +37,7 @@ class TxnListTile extends ConsumerWidget {
     final isTransfer = txn.type == 'transfer';
     final amountColor = isTransfer
         ? Theme.of(context).colorScheme.onSurface
-        : (isOut ? kTxnExpenseRed : kTxnIncomeGreen);
+        : (isOut ? kTxnExpenseRed : kTxnIncomeGreen); // refund → income green
     final time = DateTime.fromMillisecondsSinceEpoch(txn.happenAt, isUtc: true)
         .toLocal();
     final timeLabel = DateFormat('HH:mm').format(time);
@@ -193,12 +193,14 @@ class TxnListTile extends ConsumerWidget {
   /// Bold title: category only (转账 / 未分类 fallback).
   Future<String> _categoryTitle(CentliDatabase db) async {
     if (txn.type == 'transfer') return '\u8f6c\u8d26';
+    String base = '\u672a\u5206\u7c7b';
     if (txn.categoryId != null && txn.categoryId!.isNotEmpty) {
       final cat = await db.getCategory(txn.categoryId!);
       final name = (cat?.name ?? '').trim();
-      if (name.isNotEmpty) return name;
+      if (name.isNotEmpty) base = name;
     }
-    return '\u672a\u5206\u7c7b';
+    if (txn.type == 'refund') return '\u9000\u6b3e \u00b7 $base';
+    return base;
   }
 
   /// Subtitle: 账户 · 备注/商家 (account always preferred visible).

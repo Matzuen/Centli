@@ -748,6 +748,7 @@ List<Account> _accounts = [];
                                       for (final entry in [
                                         ('out', '支出'),
                                         ('in', '收入'),
+                                        ('refund', '退款'),
                                         ('transfer', '转账'),
                                       ])
                                         Expanded(

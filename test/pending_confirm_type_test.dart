@@ -13,9 +13,14 @@ void main() {
       reason: 'confirmPendingCapture must pass type: txnType',
     );
     expect(
-      RegExp(r"final txnType = !known").hasMatch(src),
+      src.contains("inCats.any((x) => x.id == _categoryId) ? 'in' : 'out'"),
       isTrue,
-      reason: 'txnType must be resolved from category lists',
+      reason: 'txnType must still resolve from category lists (B1-2)',
+    );
+    expect(
+      src.contains("if (_direction == 'refund')"),
+      isTrue,
+      reason: 'refund direction must map to type refund (T4-2)',
     );
   });
 

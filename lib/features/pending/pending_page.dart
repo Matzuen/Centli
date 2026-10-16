@@ -839,9 +839,15 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
       final outCats = widget.categories.where((x) => x.kind == 'out');
       final known = outCats.any((x) => x.id == _categoryId) ||
           inCats.any((x) => x.id == _categoryId);
-      final txnType = !known
-          ? 'out' // deleted/archived category → fallback expense
-          : (inCats.any((x) => x.id == _categoryId) ? 'in' : 'out');
+      // T4-2: direction refund maps to type refund (never income).
+      final String txnType;
+      if (_direction == 'refund') {
+        txnType = 'refund';
+      } else if (!known) {
+        txnType = 'out'; // deleted/archived category → fallback expense
+      } else {
+        txnType = inCats.any((x) => x.id == _categoryId) ? 'in' : 'out';
+      }
       await ref.read(databaseProvider).confirmPendingCapture(
             pendingId: c.id,
             amountMinor: toMinor(ccy, major),

@@ -616,12 +616,17 @@ class CentliDatabase extends _$CentliDatabase {
 
     final map = <String, ({int income, int expense})>{};
     for (final r in rows) {
-      if (r.type != 'in' && r.type != 'out') continue;
+      if (r.type != 'in' && r.type != 'out' && r.type != 'refund') continue;
       final cur = map[r.currency] ?? (income: 0, expense: 0);
       if (r.type == 'in') {
         map[r.currency] =
             (income: cur.income + r.amountMinor, expense: cur.expense);
+      } else if (r.type == 'refund') {
+        // Refund reduces net expense; never income.
+        map[r.currency] =
+            (income: cur.income, expense: cur.expense - r.amountMinor);
       } else {
+        // out (may be negative for partial refunds)
         map[r.currency] =
             (income: cur.income, expense: cur.expense + r.amountMinor);
       }
@@ -697,7 +702,7 @@ class CentliDatabase extends _$CentliDatabase {
         .get();
 
     for (final r in rows) {
-      if (r.type == 'in') {
+      if (r.type == 'in' || r.type == 'refund') {
         balances[r.accountId] = (balances[r.accountId] ?? 0) + r.amountMinor;
       } else if (r.type == 'out') {
         balances[r.accountId] = (balances[r.accountId] ?? 0) - r.amountMinor;
@@ -1787,7 +1792,7 @@ class CentliDatabase extends _$CentliDatabase {
     final leftover = <String, ({int income, int expense})>{};
 
     for (final r in rows) {
-      if (r.type != 'in' && r.type != 'out') continue;
+      if (r.type != 'in' && r.type != 'out' && r.type != 'refund') continue;
       final day = FxBook.dayFromHappenAtMs(r.happenAt);
       final asBase = book.convertMinor(
         fromCcy: r.currency,
@@ -1801,6 +1806,9 @@ class CentliDatabase extends _$CentliDatabase {
         if (r.type == 'in') {
           leftover[r.currency] =
               (income: cur.income + r.amountMinor, expense: cur.expense);
+        } else if (r.type == 'refund') {
+          leftover[r.currency] =
+              (income: cur.income, expense: cur.expense - r.amountMinor);
         } else {
           leftover[r.currency] =
               (income: cur.income, expense: cur.expense + r.amountMinor);
@@ -1810,6 +1818,8 @@ class CentliDatabase extends _$CentliDatabase {
       converted += 1;
       if (r.type == 'in') {
         income += asBase;
+      } else if (r.type == 'refund') {
+        expense -= asBase;
       } else {
         expense += asBase;
       }
@@ -2127,7 +2137,7 @@ class CentliDatabase extends _$CentliDatabase {
                 t.ledgerId.equals(ledgerId) &
                 t.deletedAt.isNull() &
                 t.includeInBudget.equals(1) &
-                t.type.equals('out') &
+                (t.type.equals('out') | t.type.equals('refund')) &
                 t.happenAt.isBiggerOrEqualValue(startMs) &
                 t.happenAt.isSmallerThanValue(endMs),
           ))
@@ -2145,10 +2155,11 @@ class CentliDatabase extends _$CentliDatabase {
         onDay: day,
       );
       if (asBase == null) continue;
-      spentTotal += asBase;
+      final signed = r.type == 'refund' ? -asBase : asBase;
+      spentTotal += signed;
       final cid = r.categoryId;
       if (cid != null && cid.isNotEmpty) {
-        spentByCat[cid] = (spentByCat[cid] ?? 0) + asBase;
+        spentByCat[cid] = (spentByCat[cid] ?? 0) + signed;
       }
     }
 

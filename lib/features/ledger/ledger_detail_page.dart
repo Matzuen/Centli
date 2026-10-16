@@ -65,7 +65,7 @@ class _DetailBody extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final isOut = txn.type == 'out';
     final isTransfer = txn.type == 'transfer';
-    final prefix = isTransfer ? '' : (isOut ? '-' : '+');
+    final prefix = isTransfer ? '' : (isOut ? '-' : '+'); // refund → +
     final amountColor = isTransfer
         ? scheme.onSurface
         : (isOut ? scheme.error : scheme.primary);
@@ -442,6 +442,8 @@ class _DetailBody extends ConsumerWidget {
         return '\u6536\u5165';
       case 'transfer':
         return '\u8f6c\u8d26';
+      case 'refund':
+        return '\u9000\u6b3e';
       default:
         return '\u652f\u51fa';
     }
