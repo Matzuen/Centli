@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../app/theme.dart';
 import '../../core/constants/currencies.dart';
 import '../../core/utils/money.dart';
+import '../../core/utils/amount_expr.dart';
 import '../../core/widgets/centli_icon.dart';
 import '../../data/db/centli_database.dart';
 import '../../data/db/txn_tags.dart';
@@ -17,6 +18,8 @@ import 'category_picker_sheet.dart';
 Future<void> showBookkeepingSheet(
   BuildContext context, {
   Transaction? existing,
+  bool expandAi = false,
+  bool startVoice = false,
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -26,14 +29,25 @@ Future<void> showBookkeepingSheet(
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
     ),
-    builder: (context) => BookkeepingSheet(existing: existing),
+    builder: (context) => BookkeepingSheet(
+      existing: existing,
+      expandAi: expandAi,
+      startVoice: startVoice,
+    ),
   );
 }
 
 class BookkeepingSheet extends ConsumerStatefulWidget {
-  const BookkeepingSheet({super.key, this.existing});
+  const BookkeepingSheet({
+    super.key,
+    this.existing,
+    this.expandAi = false,
+    this.startVoice = false,
+  });
 
   final Transaction? existing;
+  final bool expandAi;
+  final bool startVoice;
 
   @override
   ConsumerState<BookkeepingSheet> createState() => _BookkeepingSheetState();
@@ -74,7 +88,20 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
   @override
   void initState() {
     super.initState();
+    if (widget.expandAi || widget.startVoice) {
+      _aiExpanded = true;
+    }
     _load();
+    if (widget.startVoice) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _bootAiMode();
+      });
+    }
+  }
+
+  Future<void> _bootAiMode() async {
+    if (!mounted) return;
+    await _toggleVoiceFill();
   }
 
   @override
@@ -213,139 +240,24 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
     setState(() {
       if (key == 'AC') {
         _amountText = '0';
-      } else if (key == '+' || key == '-') {
-        _amountText = _applyOperator(_amountText, key);
+      } else if (key == '+' ||
+          key == '-' ||
+          key == '\u00d7' ||
+          key == '\u00f7' ||
+          key == '*' ||
+          key == '/') {
+        _amountText = applyAmountOperator(_amountText, key);
       } else {
-        _amountText = _applyKey(_amountText, key, _maxDecimals);
+        _amountText = applyAmountKey(_amountText, key, _maxDecimals);
       }
     });
   }
 
-  /// Left-to-right + / - over non-negative operands (calculator-style keypad).
-  double? _evalAmount(String expr) {
-    var s = expr.trim();
-    if (s.endsWith('+') || s.endsWith('-')) {
-      s = s.substring(0, s.length - 1);
-    }
-    if (s.isEmpty) return null;
-    final tokens = <String>[];
-    final buf = StringBuffer();
-    for (var i = 0; i < s.length; i++) {
-      final c = s[i];
-      if (c == '+' || c == '-') {
-        if (buf.isEmpty) return null;
-        tokens.add(buf.toString());
-        tokens.add(c);
-        buf.clear();
-      } else {
-        buf.write(c);
-      }
-    }
-    if (buf.isEmpty) return null;
-    tokens.add(buf.toString());
+  double? _evalAmount(String expr) => evalAmountExpr(expr);
 
-    final first = double.tryParse(tokens.first);
-    if (first == null) return null;
-    var acc = first;
-    for (var i = 1; i + 1 < tokens.length; i += 2) {
-      final op = tokens[i];
-      final n = double.tryParse(tokens[i + 1]);
-      if (n == null) return null;
-      if (op == '+') {
-        acc += n;
-      } else {
-        acc -= n;
-      }
-    }
-    return acc;
-  }
+  bool get _amountHasOperator => amountExprHasOperator(_amountText);
 
-  bool get _amountHasOperator {
-    final s = _amountText;
-    for (var i = 0; i < s.length; i++) {
-      final c = s[i];
-      if (c == '+' || c == '-') return true;
-    }
-    return false;
-  }
-
-  int _lastOperatorIndex(String s) {
-    for (var i = s.length - 1; i >= 0; i--) {
-      final c = s[i];
-      if (c == '+' || c == '-') return i;
-    }
-    return -1;
-  }
-
-  String _applyOperator(String current, String op) {
-    if (current.isEmpty || current == '0') return '0';
-    if (current.endsWith('+') || current.endsWith('-')) {
-      return '${current.substring(0, current.length - 1)}$op';
-    }
-    var s = current;
-    if (s.endsWith('.')) {
-      s = s.substring(0, s.length - 1);
-    }
-    if (s.isEmpty) return '0';
-    return '$s$op';
-  }
-
-  String _applyDigitToOperand(String operand, String key, int maxDecimals) {
-    if (key == '\u232b') {
-      if (operand.length <= 1) return '0';
-      return operand.substring(0, operand.length - 1);
-    }
-    if (key == '.') {
-      if (maxDecimals == 0) return operand;
-      if (!operand.contains('.')) return '$operand.';
-      return operand;
-    }
-    if (key == '00') {
-      if (operand == '0') return operand;
-      final parts = operand.split('.');
-      if (parts.length == 2) {
-        final room = maxDecimals - parts[1].length;
-        if (room <= 0) return operand;
-        return '$operand${'0' * room}';
-      }
-      if (operand.length >= 12) return operand;
-      return '${operand}00';
-    }
-    if (operand == '0') return key;
-    final parts = operand.split('.');
-    if (parts.length == 2 && parts[1].length >= maxDecimals) return operand;
-    if (operand.length >= 12) return operand;
-    return '$operand$key';
-  }
-
-  String _applyKey(String current, String key, int maxDecimals) {
-    if (key == '\u232b') {
-      if (current.isEmpty || current == '0') return '0';
-      if (current.endsWith('+') || current.endsWith('-')) {
-        return current.substring(0, current.length - 1);
-      }
-      final opIdx = _lastOperatorIndex(current);
-      if (opIdx < 0) {
-        return _applyDigitToOperand(current, key, maxDecimals);
-      }
-      final prefix = current.substring(0, opIdx + 1);
-      final operand = current.substring(opIdx + 1);
-      if (operand.length <= 1) {
-        // Drop last digit of operand; leave trailing operator.
-        return prefix;
-      }
-      return '$prefix${_applyDigitToOperand(operand, key, maxDecimals)}';
-    }
-
-    final opIdx = _lastOperatorIndex(current);
-    final prefix = opIdx < 0 ? '' : current.substring(0, opIdx + 1);
-    var operand = opIdx < 0 ? current : current.substring(opIdx + 1);
-    if (operand.isEmpty) operand = '0';
-    operand = _applyDigitToOperand(operand, key, maxDecimals);
-    return '$prefix$operand';
-  }
-
-  Future<void> _promptCrossCurrency({bool keepOpen = false}) async {
+    Future<void> _promptCrossCurrency({bool keepOpen = false}) async {
     final fromCcy = _currency;
     final toCcy = _toCurrency;
     final major = _evalAmount(_amountText) ?? 0;
@@ -1313,7 +1225,7 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
                             ),
                           ),
 
-                          // Amount row (centered); category/account form selects below.
+                          // Finch rhythm: compact amount (right), chips flush under.
                           Padding(
                             padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
                             child: Column(
@@ -1324,7 +1236,7 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
                                     padding: const EdgeInsets.only(bottom: 2),
                                     child: Text(
                                       _amountText,
-                                      textAlign: TextAlign.center,
+                                      textAlign: TextAlign.right,
                                       style: Theme.of(context)
                                           .textTheme
                                           .labelLarge
@@ -1335,7 +1247,7 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
                                     ),
                                   ),
                                 Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  mainAxisAlignment: MainAxisAlignment.end,
                                   crossAxisAlignment: CrossAxisAlignment.baseline,
                                   textBaseline: TextBaseline.alphabetic,
                                   children: [
@@ -1347,14 +1259,15 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
                                           _evalAmount(_amountText) ?? 0,
                                         ),
                                       ),
-                                      textAlign: TextAlign.center,
+                                      textAlign: TextAlign.right,
                                       style: Theme.of(context)
                                           .textTheme
-                                          .displaySmall
+                                          .headlineMedium
                                           ?.copyWith(
-                                            fontWeight: FontWeight.w700,
+                                            fontWeight: FontWeight.w800,
                                             letterSpacing: -0.8,
                                             height: 1.0,
+                                            fontSize: 36,
                                           ),
                                     ),
                                     const SizedBox(width: 8),
@@ -1376,98 +1289,102 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
                             ),
                           ),
                           Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                            // L4: two-column form selects (label + value dropdown)
-                            child: Row(
+                            padding: const EdgeInsets.fromLTRB(16, 6, 0, 0),
+                            // Finch chip row: time + category + account (or transfer legs)
+                            child: _ChipScrollRow(
                               children: [
+                                _MetaChip(
+                                  icon: Icons.schedule_rounded,
+                                  label: _happenAtLabel,
+                                  onTap: _pickHappenAt,
+                                ),
                                 if (_type != 'transfer') ...[
-                                  Expanded(
-                                    child: Builder(
-                                      builder: (context) {
-                                        final cat = _categoryById(_categoryId);
-                                        return _FormSelectTile(
-                                          label: '\u5206\u7c7b',
-                                          value: cat?.name ?? '\u8bf7\u9009\u62e9',
-                                          leading: cat == null
-                                              ? null
-                                              : CentliIconChip(
-                                                  name: cat.name,
-                                                  kind: cat.kind,
-                                                  iconKey: cat.icon,
-                                                  size: 22,
-                                                ),
-                                          onTap: _pickCategory,
-                                        );
-                                      },
-                                    ),
+                                  Builder(
+                                    builder: (context) {
+                                      final cat = _categoryById(_categoryId);
+                                      return _MetaChip(
+                                        leading: cat == null
+                                            ? null
+                                            : CentliIconChip(
+                                                name: cat.name,
+                                                kind: cat.kind,
+                                                iconKey: cat.icon,
+                                                size: 22,
+                                              ),
+                                        icon: cat == null
+                                            ? Icons.category_outlined
+                                            : null,
+                                        label: cat?.name ?? '\u5206\u7c7b',
+                                        onTap: _pickCategory,
+                                      );
+                                    },
                                   ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Builder(
-                                      builder: (context) {
-                                        final acc = _accountById(_accountId);
-                                        return _FormSelectTile(
-                                          label: '\u8d26\u6237',
-                                          value: acc == null
-                                              ? '\u8bf7\u9009\u62e9'
-                                              : '${acc.name} \u00b7 ${acc.currency}',
-                                          leading: acc == null
-                                              ? null
-                                              : CentliIconChip(
-                                                  name: acc.name,
-                                                  kind: 'account',
-                                                  iconKey: acc.icon,
-                                                  size: 22,
-                                                ),
-                                          onTap: () =>
-                                              _pickAccount(toAccount: false),
-                                        );
-                                      },
-                                    ),
+                                  Builder(
+                                    builder: (context) {
+                                      final acc = _accountById(_accountId);
+                                      return _MetaChip(
+                                        leading: acc == null
+                                            ? null
+                                            : CentliIconChip(
+                                                name: acc.name,
+                                                kind: 'account',
+                                                iconKey: acc.icon,
+                                                size: 22,
+                                              ),
+                                        icon: acc == null
+                                            ? Icons
+                                                  .account_balance_wallet_outlined
+                                            : null,
+                                        label: acc == null
+                                            ? '\u8d26\u6237'
+                                            : '${acc.name} \u00b7 ${acc.currency}',
+                                        onTap: () =>
+                                            _pickAccount(toAccount: false),
+                                      );
+                                    },
                                   ),
                                 ] else ...[
-                                  Expanded(
-                                    child: Builder(
-                                      builder: (context) {
-                                        final acc = _accountById(_accountId);
-                                        return _FormSelectTile(
-                                          label: '\u8f6c\u51fa',
-                                          value: acc?.name ?? '\u8bf7\u9009\u62e9',
-                                          leading: acc == null
-                                              ? null
-                                              : CentliIconChip(
-                                                  name: acc.name,
-                                                  kind: 'account',
-                                                  iconKey: acc.icon,
-                                                  size: 22,
-                                                ),
-                                          onTap: () =>
-                                              _pickAccount(toAccount: false),
-                                        );
-                                      },
-                                    ),
+                                  Builder(
+                                    builder: (context) {
+                                      final acc = _accountById(_accountId);
+                                      return _MetaChip(
+                                        leading: acc == null
+                                            ? null
+                                            : CentliIconChip(
+                                                name: acc.name,
+                                                kind: 'account',
+                                                iconKey: acc.icon,
+                                                size: 22,
+                                              ),
+                                        icon: Icons.south_west_rounded,
+                                        label: acc == null
+                                            ? '\u8f6c\u51fa'
+                                            : '\u8f6c\u51fa \u00b7 ${acc.name}',
+                                        onTap: () =>
+                                            _pickAccount(toAccount: false),
+                                      );
+                                    },
                                   ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Builder(
-                                      builder: (context) {
-                                        final acc = _accountById(_toAccountId);
-                                        return _FormSelectTile(
-                                          label: '\u8f6c\u5165',
-                                          value: acc?.name ?? '\u8bf7\u9009\u62e9',
-                                          leading: acc == null
-                                              ? null
-                                              : CentliIconChip(
-                                                  name: acc.name,
-                                                  kind: 'account',
-                                                  iconKey: acc.icon,
-                                                  size: 22,
-                                                ),
-                                          onTap: () =>
-                                              _pickAccount(toAccount: true),
-                                        );
-                                      },
-                                    ),
+                                  Builder(
+                                    builder: (context) {
+                                      final acc = _accountById(_toAccountId);
+                                      return _MetaChip(
+                                        leading: acc == null
+                                            ? null
+                                            : CentliIconChip(
+                                                name: acc.name,
+                                                kind: 'account',
+                                                iconKey: acc.icon,
+                                                size: 22,
+                                              ),
+                                        icon: Icons.north_east_rounded,
+                                        label: acc == null
+                                            ? '\u8f6c\u5165'
+                                            : '\u8f6c\u5165 \u00b7 ${acc.name}',
+                                        onTap: () =>
+                                            _pickAccount(toAccount: true),
+                                      );
+                                    },
                                   ),
                                 ],
                               ],
@@ -1495,9 +1412,11 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
                                   color: scheme.onSurfaceVariant,
                                 ),
                                 suffixIcon: IconButton(
-                                  tooltip: '标签',
+                                  tooltip: '\u6807\u7b7e',
                                   icon: Icon(
-                                    _tags.isEmpty ? Icons.sell_outlined : Icons.sell,
+                                    _tags.isEmpty
+                                        ? Icons.sell_outlined
+                                        : Icons.sell,
                                     size: 20,
                                   ),
                                   onPressed: _editSheetTags,
@@ -1521,23 +1440,6 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
                                   vertical: 10,
                                 ),
                               ),
-                            ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                            // L5: time (tags remain on note suffix; do not change tags input)
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: _FormSelectTile(
-                                    label: '\u65f6\u95f4',
-                                    value: _happenAtLabel,
-                                    onTap: _pickHappenAt,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                const Expanded(child: SizedBox.shrink()),
-                              ],
                             ),
                           ),
                         ],
@@ -1708,66 +1610,94 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
 }
 
 /// Two-column form select: label (labelMedium) + tappable value (bodyLarge) with ▾.
-class _FormSelectTile extends StatelessWidget {
-  const _FormSelectTile({
+
+/// One Finch-style chip row: left-aligned, horizontal drag when overflowing.
+class _ChipScrollRow extends StatelessWidget {
+  const _ChipScrollRow({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    if (children.isEmpty) return const SizedBox.shrink();
+    return SizedBox(
+      height: 40,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.only(right: 16),
+        child: Row(
+          children: [
+            for (var i = 0; i < children.length; i++) ...[
+              if (i > 0) const SizedBox(width: CentliSpacing.item),
+              children[i],
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MetaChip extends StatelessWidget {
+  const _MetaChip({
     required this.label,
-    required this.value,
     required this.onTap,
+    this.icon,
     this.leading,
   });
 
   final String label;
-  final String value;
   final VoidCallback onTap;
+  final IconData? icon;
   final Widget? leading;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: textTheme.labelMedium?.copyWith(
-            color: scheme.onSurfaceVariant,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(8),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Row(
-                children: [
-                  if (leading != null) ...[
-                    leading!,
-                    const SizedBox(width: 6),
-                  ],
-                  Expanded(
-                    child: Text(
-                      value,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: textTheme.bodyLarge?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  Icon(
-                    Icons.arrow_drop_down,
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ],
+    return Material(
+      color: scheme.surface,
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(10, 6, 12, 6),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: scheme.outlineVariant),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF6B7A99).withValues(alpha: 0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
               ),
-            ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (leading != null) ...[
+                leading!,
+                const SizedBox(width: 6),
+              ] else if (icon != null) ...[
+                Icon(icon, size: 18, color: scheme.onSurfaceVariant),
+                const SizedBox(width: 6),
+              ],
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 180),
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelLarge
+                      ?.copyWith(fontWeight: FontWeight.w600, fontSize: 13),
+                ),
+              ),
+            ],
           ),
         ),
-      ],
+      ),
     );
   }
 }
@@ -1867,17 +1797,19 @@ class _Keypad extends StatelessWidget {
   /// Long-press on check: save and keep sheet open (再记一笔).
   final VoidCallback? onLongSubmit;
 
-  static const _keys = [
-    ['1', '2', '3', '\u232b'],
-    ['4', '5', '6', '+'],
-    ['7', '8', '9', '-'],
-    ['.', '0', 'AC', '\u2713'],
+    static const _keys = [
+    ['1', '2', '3', '+', '×'],
+    ['4', '5', '6', '-', '÷'],
+    ['7', '8', '9', '⌫', 'AC'],
+    ['.', '0', '00', '✓'],
   ];
 
   Color _bg(BuildContext context, String k) {
     if (k == '\u2713') return CentliTheme.keypadConfirm(context);
     if (k == 'AC' || k == '\u232b') return CentliTheme.keypadAcBg(context);
-    if (k == '+' || k == '-') return CentliTheme.keypadOpBg(context);
+    if (k == '+' || k == '-' || k == '×' || k == '÷') {
+      return CentliTheme.keypadOpBg(context);
+    }
     return CentliTheme.keypadNumBg(context);
   }
 
@@ -1885,7 +1817,9 @@ class _Keypad extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     if (k == '\u2713') return Colors.white;
     if (k == 'AC' || k == '\u232b') return CentliTheme.keypadAcFg(context);
-    if (k == '+' || k == '-') return CentliTheme.softBlue;
+    if (k == '+' || k == '-' || k == '×' || k == '÷') {
+      return CentliTheme.softBlue;
+    }
     return scheme.onSurface;
   }
 
@@ -1901,6 +1835,7 @@ class _Keypad extends StatelessWidget {
               children: [
                 for (final k in row)
                   Expanded(
+                    flex: (row.length == 4 && k == '✓') ? 2 : 1,
                     child: Padding(
                       padding: const EdgeInsets.all(3),
                       child: SizedBox(
