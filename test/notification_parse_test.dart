@@ -324,4 +324,74 @@ group('manual capture parser (share/OCR/clipboard)', () {
     });
   });
 
+
+  group('T1-3 income and refund templates', () {
+    test('alipay 收款到账 is direction in', () {
+      final raw = RawNotification(
+        pkg: 'com.eg.android.AlipayGphone',
+        title: '',
+        text: '收款到账 ¥200',
+        whenMs: 1,
+      );
+      final r = parseNotification(raw);
+      expect(r.templateId, 'alipay_receive_zh');
+      expect(r.direction, 'in');
+      expect(r.ok, isTrue);
+      expect(r.amountMinor, 20000);
+    });
+
+    test('alipay 退款成功 is direction refund', () {
+      final raw = RawNotification(
+        pkg: 'com.eg.android.AlipayGphone',
+        title: '',
+        text: '退款成功 ¥28.50',
+        whenMs: 1,
+      );
+      final r = parseNotification(raw);
+      expect(r.templateId, 'alipay_refund_zh');
+      expect(r.direction, 'refund');
+      expect(r.ok, isTrue);
+      expect(r.amountMinor, 2850);
+    });
+
+    test('alipay pay success still out (regression)', () {
+      final raw = RawNotification(
+        pkg: 'com.eg.android.AlipayGphone',
+        title: '',
+        text: '向 星巴克 付款成功 ¥28.50',
+        whenMs: 1,
+      );
+      final r = parseNotification(raw);
+      expect(r.templateId, 'alipay_pay_success_zh');
+      expect(r.direction, 'out');
+      expect(r.ok, isTrue);
+      expect(r.amountMinor, 2850);
+    });
+
+    test('wechat receive 收款到账 is in', () {
+      final raw = RawNotification(
+        pkg: 'com.tencent.mm',
+        title: '微信收款',
+        text: '收款到账¥88.00',
+        whenMs: 1,
+      );
+      final r = parseNotification(raw);
+      expect(r.templateId, 'wechat_receive_zh');
+      expect(r.direction, 'in');
+      expect(r.ok, isTrue);
+    });
+
+    test('wechat peer-claimed red packet still not income', () {
+      final raw = RawNotification(
+        pkg: 'com.tencent.mm',
+        title: '微信',
+        text: '张三领取了你的红包 ¥5.00',
+        whenMs: 1,
+      );
+      final r = parseNotification(raw);
+      // Prefer miss over wrong direction.
+      expect(r.templateId, isNull);
+    });
+  });
+
 }

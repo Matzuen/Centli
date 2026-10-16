@@ -154,6 +154,10 @@ class NotiTemplate {
 const Map<String, String> kBuiltinTemplateNames = {
   'alipay_pay_success_zh': '支付宝交易/支付成功',
   'wechat_pay_success_zh': '微信支付成功',
+  'alipay_receive_zh': '支付宝收款到账',
+  'wechat_receive_zh': '微信收款到账',
+  'alipay_refund_zh': '支付宝退款',
+  'wechat_refund_zh': '微信退款',
 };
 
 class RawNotification {
@@ -214,30 +218,85 @@ const kAmountRegex =
 
 /// Built-in templates (also mirrored in assets/noti_templates.json).
 List<NotiTemplate> builtinNotiTemplates() => const [
+      // Income / refund first so they win over expense when keywords overlap.
+      NotiTemplate(
+        id: 'alipay_receive_zh',
+        name: '支付宝收款到账',
+        packages: ['com.eg.android.AlipayGphone'],
+        mustContainRegex: r'收款到账|收款成功|已收款|收到一笔|转入成功|余额.*转入',
+        excludeTextRegex: r'验证码|登录|服务通知|生活号|退款',
+        amountRegex: kAmountRegex,
+        merchantRegex: r'(?:来自|从)\s*(.+?)(?:\s|$)',
+        defaultAccountHint: 'alipay',
+        direction: 'in',
+      ),
+      NotiTemplate(
+        id: 'alipay_refund_zh',
+        name: '支付宝退款',
+        packages: ['com.eg.android.AlipayGphone'],
+        mustContainRegex: r'退款成功|已退款|退款到账|退回成功|退款金额',
+        excludeTextRegex: r'验证码|登录|服务通知|生活号',
+        amountRegex: kAmountRegex,
+        merchantRegex: r'(?:商户|来自)\s*(.+?)(?:\s|$)',
+        defaultAccountHint: 'alipay',
+        direction: 'refund',
+      ),
+      NotiTemplate(
+        id: 'wechat_receive_zh',
+        name: '微信收款到账',
+        packages: ['com.tencent.mm'],
+        // Prefer miss over wrong direction for 红包: only clear receive phrases.
+        mustContainRegex:
+            r'收款到账|收款成功|已收款|收到转账|零钱转入|微信收款|红包到账|你领取了.+红包|收到红包',
+        excludeTextRegex:
+            r'验证码|登录|朋友圈|发来一条|会话|拍了拍|互动消息|新的朋友|群聊|语音通话|视频通话|发来一个红包|领取了你的红包|退款',
+        amountRegex: kAmountRegex,
+        merchantRegex: r'(?:来自|从)\s*(.+?)(?:\s|$)',
+        defaultAccountHint: 'wechat',
+        direction: 'in',
+      ),
+      NotiTemplate(
+        id: 'wechat_refund_zh',
+        name: '微信退款',
+        packages: ['com.tencent.mm'],
+        mustContainRegex: r'退款成功|已退款|退款到账|退回|退款金额',
+        excludeTextRegex:
+            r'验证码|登录|朋友圈|发来一条|会话|拍了拍|互动消息|新的朋友|群聊|语音通话|视频通话',
+        amountRegex: kAmountRegex,
+        merchantRegex: r'(?:商户|来自)\s*(.+?)(?:\s|$)',
+        defaultAccountHint: 'wechat',
+        direction: 'refund',
+      ),
       NotiTemplate(
         id: 'alipay_pay_success_zh',
         name: '支付宝交易/支付成功',
         packages: ['com.eg.android.AlipayGphone'],
         // Prefer occasional false positives into 待确认 over missing pay notices.
         // Do NOT use bare 「支付」 — it matches 「支付宝」 itself.
+        // Income keywords removed from exclude (see receive/refund templates).
         mustContainRegex:
-            '支付成功|付款成功|交易成功|交易提醒|交易通知|消费成功|已支付|扣款成功|扣款提醒|已扣款|支出\\s*[¥￥]|向.+付款|付款|支付金额|支付\\s*[¥￥]|付款\\s*[¥￥]|商户消费|成功付款',
-        excludeTextRegex: '验证码|登录|收款到账提醒|服务通知|余额宝收益|生活号',
+            r'支付成功|付款成功|交易成功|交易提醒|交易通知|消费成功|已支付|扣款成功|扣款提醒|已扣款|支出\s*[¥￥]|向.+付款|付款|支付金额|支付\s*[¥￥]|付款\s*[¥￥]|商户消费|成功付款',
+        excludeTextRegex:
+            r'验证码|登录|服务通知|余额宝收益|生活号|收款到账|收款成功|已收款|退款成功|已退款',
         amountRegex: kAmountRegex,
         merchantRegex: r'(?:向|给|商户)\s*(.+?)(?:\s|$)',
         defaultAccountHint: 'alipay',
+        direction: 'out',
       ),
       NotiTemplate(
         id: 'wechat_pay_success_zh',
         name: '微信支付成功',
         packages: ['com.tencent.mm'],
         mustContainRegex:
-            '微信支付|支付成功|已支付|付款成功|商户消费|支付金额|付款金额|已付款|扣款成功',
-        excludeTextRegex: '验证码|登录|朋友圈|微信消息|发来一条|会话|拍了拍|互动消息|新的朋友|群聊|语音通话|视频通话|收到一条|发来一个红包|领取了你的红包',
+            r'微信支付|支付成功|已支付|付款成功|商户消费|支付金额|付款金额|已付款|扣款成功',
+        // Keep chat / peer-claimed 红包 excluded; income uses dedicated template.
+        excludeTextRegex:
+            r'验证码|登录|朋友圈|微信消息|发来一条|会话|拍了拍|互动消息|新的朋友|群聊|语音通话|视频通话|收到一条|发来一个红包|领取了你的红包|收款到账|退款成功|已退款',
         amountRegex: kAmountRegex,
         merchantRegex: r'(.+?)(?:-微信支付|付款)',
         merchantFromTitle: true,
         defaultAccountHint: 'wechat',
+        direction: 'out',
       ),
     ];
 

@@ -1,35 +1,102 @@
 {
-  "version": 5,
-  "updated_at": "2026-10-16",
+  "version": 6,
+  "updated_at": "2026-10-17",
   "templates": [
     {
+      "id": "alipay_receive_zh",
+      "name": "支付宝收款到账",
+      "packages": [
+        "com.eg.android.AlipayGphone"
+      ],
+      "defaultCurrency": "CNY",
+      "titleRegex": null,
+      "mustContainRegex": "收款到账|收款成功|已收款|收到一笔|转入成功|余额.*转入",
+      "excludeTextRegex": "验证码|登录|服务通知|生活号|退款",
+      "amountRegex": "(?:(?:USD|EUR|CNY|HKD|TWD|JPY)\\s*)?(?:¥|￥|\\$|€)?\\s*([0-9]+(?:,[0-9]{3})*(?:\\.[0-9]{1,2})?)",
+      "merchantRegex": "(?:来自|从)\\s*(.+?)(?:\\s|$)",
+      "merchantFromTitle": false,
+      "defaultAccountHint": "alipay",
+      "direction": "in"
+    },
+    {
+      "id": "alipay_refund_zh",
+      "name": "支付宝退款",
+      "packages": [
+        "com.eg.android.AlipayGphone"
+      ],
+      "defaultCurrency": "CNY",
+      "titleRegex": null,
+      "mustContainRegex": "退款成功|已退款|退款到账|退回成功|退款金额",
+      "excludeTextRegex": "验证码|登录|服务通知|生活号",
+      "amountRegex": "(?:(?:USD|EUR|CNY|HKD|TWD|JPY)\\s*)?(?:¥|￥|\\$|€)?\\s*([0-9]+(?:,[0-9]{3})*(?:\\.[0-9]{1,2})?)",
+      "merchantRegex": "(?:商户|来自)\\s*(.+?)(?:\\s|$)",
+      "merchantFromTitle": false,
+      "defaultAccountHint": "alipay",
+      "direction": "refund"
+    },
+    {
+      "id": "wechat_receive_zh",
+      "name": "微信收款到账",
+      "packages": [
+        "com.tencent.mm"
+      ],
+      "defaultCurrency": "CNY",
+      "titleRegex": null,
+      "mustContainRegex": "收款到账|收款成功|已收款|收到转账|零钱转入|微信收款|红包到账|你领取了.+红包|收到红包",
+      "excludeTextRegex": "验证码|登录|朋友圈|发来一条|会话|拍了拍|互动消息|新的朋友|群聊|语音通话|视频通话|发来一个红包|领取了你的红包|退款",
+      "amountRegex": "(?:(?:USD|EUR|CNY|HKD|TWD|JPY)\\s*)?(?:¥|￥|\\$|€)?\\s*([0-9]+(?:,[0-9]{3})*(?:\\.[0-9]{1,2})?)",
+      "merchantRegex": "(?:来自|从)\\s*(.+?)(?:\\s|$)",
+      "merchantFromTitle": false,
+      "defaultAccountHint": "wechat",
+      "direction": "in"
+    },
+    {
+      "id": "wechat_refund_zh",
+      "name": "微信退款",
+      "packages": [
+        "com.tencent.mm"
+      ],
+      "defaultCurrency": "CNY",
+      "titleRegex": null,
+      "mustContainRegex": "退款成功|已退款|退款到账|退回|退款金额",
+      "excludeTextRegex": "验证码|登录|朋友圈|发来一条|会话|拍了拍|互动消息|新的朋友|群聊|语音通话|视频通话",
+      "amountRegex": "(?:(?:USD|EUR|CNY|HKD|TWD|JPY)\\s*)?(?:¥|￥|\\$|€)?\\s*([0-9]+(?:,[0-9]{3})*(?:\\.[0-9]{1,2})?)",
+      "merchantRegex": "(?:商户|来自)\\s*(.+?)(?:\\s|$)",
+      "merchantFromTitle": false,
+      "defaultAccountHint": "wechat",
+      "direction": "refund"
+    },
+    {
       "id": "alipay_pay_success_zh",
+      "name": "支付宝交易/支付成功",
       "packages": [
         "com.eg.android.AlipayGphone"
       ],
       "defaultCurrency": "CNY",
       "titleRegex": null,
       "mustContainRegex": "支付成功|付款成功|交易成功|交易提醒|交易通知|消费成功|已支付|扣款成功|扣款提醒|已扣款|支出\\s*[¥￥]|向.+付款|付款|支付金额|支付\\s*[¥￥]|付款\\s*[¥￥]|商户消费|成功付款",
-      "excludeTextRegex": "验证码|登录|收款到账提醒|服务通知|余额宝收益|生活号",
+      "excludeTextRegex": "验证码|登录|服务通知|余额宝收益|生活号|收款到账|收款成功|已收款|退款成功|已退款",
       "amountRegex": "(?:(?:USD|EUR|CNY|HKD|TWD|JPY)\\s*)?(?:¥|￥|\\$|€)?\\s*([0-9]+(?:,[0-9]{3})*(?:\\.[0-9]{1,2})?)",
       "merchantRegex": "(?:向|给|商户)\\s*(.+?)(?:\\s|$)",
       "merchantFromTitle": false,
       "defaultAccountHint": "alipay",
-      "name": "支付宝交易/支付成功"
+      "direction": "out"
     },
     {
       "id": "wechat_pay_success_zh",
+      "name": "微信支付成功",
       "packages": [
         "com.tencent.mm"
       ],
       "defaultCurrency": "CNY",
+      "titleRegex": null,
       "mustContainRegex": "微信支付|支付成功|已支付|付款成功|商户消费|支付金额|付款金额|已付款|扣款成功",
-      "excludeTextRegex": "验证码|登录|朋友圈|微信消息|发来一条|会话|拍了拍|互动消息|新的朋友|群聊|语音通话|视频通话|收到一条|发来一个红包|领取了你的红包",
+      "excludeTextRegex": "验证码|登录|朋友圈|微信消息|发来一条|会话|拍了拍|互动消息|新的朋友|群聊|语音通话|视频通话|收到一条|发来一个红包|领取了你的红包|收款到账|退款成功|已退款",
       "amountRegex": "(?:(?:USD|EUR|CNY|HKD|TWD|JPY)\\s*)?(?:¥|￥|\\$|€)?\\s*([0-9]+(?:,[0-9]{3})*(?:\\.[0-9]{1,2})?)",
       "merchantRegex": "(.+?)(?:-微信支付|付款)",
       "merchantFromTitle": true,
       "defaultAccountHint": "wechat",
-      "name": "微信支付成功"
+      "direction": "out"
     }
   ]
 }
