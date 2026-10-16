@@ -803,7 +803,7 @@ class _NetChangeChartCard extends StatelessWidget {
     final income = incomeSeries.valueOrNull ?? const [];
     final expense = expenseSeries.valueOrNull ?? const [];
     final n = income.length > expense.length ? income.length : expense.length;
-    final endNetMajor = (netWorth.valueOrNull?.totalMinor ?? 0) / 100.0;
+    final endNetMajor = fromMinor(base, netWorth.valueOrNull?.totalMinor ?? 0);
 
     // Reconstruct daily net-worth path ending at current NW:
     // dayNet = income - expense; periodNet = sum(dayNet);
@@ -814,7 +814,7 @@ class _NetChangeChartCard extends StatelessWidget {
     for (var i = 0; i < n; i++) {
       final inV = i < income.length ? income[i].totalMinor : 0;
       final outV = i < expense.length ? expense[i].totalMinor : 0;
-      final dayNet = (inV - outV) / 100.0;
+      final dayNet = fromMinor(base, inV - outV);
       dayNets.add(dayNet);
       periodNet += dayNet;
       final day = i < income.length
@@ -879,7 +879,7 @@ class _CalendarCard extends StatelessWidget {
 
   String _compact(int minor) {
     if (hide) return '**';
-    final major = minor / 100.0;
+    final major = fromMinor(base, minor);
     if (major.abs() >= 10000) {
       return '${(major / 10000).toStringAsFixed(1)}\u4e07';
     }
@@ -1117,7 +1117,7 @@ class _DailyTrendCard extends StatelessWidget {
       final outV = i < expense.length ? expense[i].totalMinor : 0;
       final inV = i < income.length ? income[i].totalMinor : 0;
       // Daily net inflow (same polarity as overview chart day component).
-      spots.add(FlSpot(i.toDouble(), (inV - outV) / 100.0));
+      spots.add(FlSpot(i.toDouble(), fromMinor(base, inV - outV)));
       final day = i < income.length
           ? income[i].dayLocal
           : (i < expense.length
