@@ -142,4 +142,36 @@ void main() {
       expect(merged.map((t) => t.id).toList(), ['u1', 'o2']);
     });
   });
+
+  group('field-level merge user over official', () {
+    test('same id keeps user mustContain and fills null title from official', () {
+      final user = [
+        NotiTemplate(
+          id: 'shared',
+          packages: const ['com.example'],
+          mustContainRegex: '用户关键词',
+          amountRegex: r'(\d+)',
+          direction: 'in',
+        ),
+      ];
+      final official = [
+        NotiTemplate(
+          id: 'shared',
+          name: '官方名',
+          packages: const ['com.example'],
+          mustContainRegex: '官方关键词',
+          titleRegex: '标题',
+          amountRegex: r'(\d+)',
+          direction: 'out',
+        ),
+      ];
+      final merged = NotiTemplateStore.mergeForTesting(user, official, {});
+      expect(merged.length, 1);
+      expect(merged.first.mustContainRegex, '用户关键词');
+      expect(merged.first.titleRegex, '标题');
+      expect(merged.first.name, '官方名');
+      expect(merged.first.direction, 'in');
+    });
+  });
+
 }
