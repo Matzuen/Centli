@@ -2,6 +2,8 @@
 
 Local-first personal bookkeeping (**Chinese UI only**): **clear every bill**.
 
+> Canonical docs are in Chinese: see [`README.md`](README.md) and [`docs/RELEASE_NOTES.md`](docs/RELEASE_NOTES.md).
+
 - Flutter · Drift (SQLite) · Riverpod · go_router
 - Version: `1.1.0+3`
 - Currency display: `CNY · 人民币`
@@ -9,14 +11,17 @@ Local-first personal bookkeeping (**Chinese UI only**): **clear every bill**.
 
 ## Features
 
-- Manual transactions (expense / income / transfer); bookkeeping sheet with chips + Finch-style category picker
+- Home: summary + net-worth chart; calendar cells show daily in/out
+- Manual transactions (expense / income / transfer); chip row + category picker; amount keypad with `+ − × ÷`
+- Separate text / voice bookkeeping sheets; long-press center tab for shortcuts
+- Transaction tags (list / detail / search / import-export)
 - Multi-ledger, accounts, category tree; icons from assets or 1–2 hanzi fallback
 - Stats: income + expense; monthly budgets
 - Android pending auto-capture from WeChat/Alipay **payment** notifications only
 - Recognition rules: official read-only + user CRUD + try-parse + import/export
 - Smart fill: local rules + optional LLM
 - FX rates; hide amounts; app lock; theme light/dark/system
-- Local backup only: full **JSON** restore; **Excel** human export + best-effort import (no cloud)
+- Local backup only: full **JSON** restore (`schema_version: 4`); **Excel** human export + best-effort import (no cloud)
 - Android home widget (MVP); no iOS widget yet
 
 ## Run / release APK
@@ -41,3 +46,4 @@ Prefer JSON (`format: centli-export`). Excel import is best-effort (no fx/settin
 - `docs/Centli_pages_wireframes.md`
 - `docs/recognition_rules.md`
 - `docs/remaining_features_gap.md`
+- `docs/RELEASE_NOTES.md` (Chinese release notes for stores / GitHub Releases)
