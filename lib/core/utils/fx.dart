@@ -162,3 +162,72 @@ class BaseNetWorth {
 
   bool get hasUnconverted => unconvertedByCcy.isNotEmpty;
 }
+
+
+/// Asset / liability totals in base minor units (active accounts).
+///
+/// Same FX rules as [BaseNetWorth]: unconverted accounts are excluded from
+/// the sums and listed in [unconvertedByCcy] (original-currency minor).
+class BaseAssetLiability {
+  const BaseAssetLiability({
+    required this.assetMinor,
+    required this.liabilityMinor,
+    required this.unconvertedByCcy,
+  });
+
+  final int assetMinor;
+  final int liabilityMinor;
+
+  /// Original-currency balances that could not be converted.
+  final Map<String, int> unconvertedByCcy;
+
+  bool get hasUnconverted => unconvertedByCcy.isNotEmpty;
+}
+
+/// Convert each account balance to [baseCurrency] and split by sign.
+BaseAssetLiability assetLiabilityInBase({
+  required Iterable<({String currency, int balanceMinor})> accounts,
+  required FxBook book,
+  required String baseCurrency,
+  required String onDay,
+}) {
+  var asset = 0;
+  var liability = 0;
+  final leftover = <String, int>{};
+  for (final a in accounts) {
+    final asBase = book.convertMinor(
+      fromCcy: a.currency,
+      toCcy: baseCurrency,
+      amountMinor: a.balanceMinor,
+      onDay: onDay,
+    );
+    if (asBase == null) {
+      leftover[a.currency] = (leftover[a.currency] ?? 0) + a.balanceMinor;
+    } else if (asBase >= 0) {
+      asset += asBase;
+    } else {
+      liability += -asBase;
+    }
+  }
+  return BaseAssetLiability(
+    assetMinor: asset,
+    liabilityMinor: liability,
+    unconvertedByCcy: leftover,
+  );
+}
+
+/// Convert one balance; null when no rate (caller should skip or show raw).
+int? balanceInBase({
+  required String currency,
+  required int balanceMinor,
+  required FxBook book,
+  required String baseCurrency,
+  required String onDay,
+}) {
+  return book.convertMinor(
+    fromCcy: currency,
+    toCcy: baseCurrency,
+    amountMinor: balanceMinor,
+    onDay: onDay,
+  );
+}

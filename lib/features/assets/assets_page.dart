@@ -167,20 +167,38 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                           error: (e, _) => Text('$e'),
                           data: (nw) {
                             final net = nw.totalMinor;
+                            final book =
+                                ref.watch(fxBookProvider).valueOrNull;
+                            final day = FxBook.todayLocal();
+                            final split = book == null
+                                ? null
+                                : assetLiabilityInBase(
+                                    accounts: [
+                                      for (final a in accounts)
+                                        (
+                                          currency: a.currency,
+                                          balanceMinor: balances[a.id] ??
+                                              a.openingBalanceMinor,
+                                        ),
+                                    ],
+                                    book: book,
+                                    baseCurrency: base,
+                                    onDay: day,
+                                  );
+                            final assetSum = split?.assetMinor ?? 0;
+                            final liabilitySum = split?.liabilityMinor ?? 0;
                             final positives = <({Account a, int bal})>[];
-                            var assetSum = 0;
-                            var liabilitySum = 0;
                             for (final a in accounts) {
                               final bal =
                                   balances[a.id] ?? a.openingBalanceMinor;
                               if (bal >= 0) {
-                                assetSum += bal;
                                 positives.add((a: a, bal: bal));
-                              } else {
-                                liabilitySum += -bal;
                               }
                             }
-                            // Prefer converted net for headline when single-ccy.
+                            final unconverted = nw.unconvertedByCcy;
+                            final unconvertedHint = unconverted.isEmpty
+                                ? null
+                                : '未折算：${unconverted.entries.map((e) => '${e.key} ${formatMinor(e.key, e.value, hide: hide)}').join('、')}';
                             return Column(
                               children: [
                                 CentliSoftCard(
@@ -230,10 +248,12 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                                                       CentliTheme.incomeGreen,
                                                 ),
                                                 const SizedBox(width: 6),
-                                                Text(
-                                                  '总资产  ${formatMinor(base, assetSum > 0 ? assetSum : (net > 0 ? net : 0), hide: hide)}',
-                                                  style: const TextStyle(
-                                                    fontSize: 13,
+                                                Flexible(
+                                                  child: Text(
+                                                    '总资产  ${formatMinor(base, assetSum, hide: hide)}',
+                                                    style: const TextStyle(
+                                                      fontSize: 13,
+                                                    ),
                                                   ),
                                                 ),
                                               ],
@@ -248,10 +268,12 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                                                   color: CentliTheme.expenseRed,
                                                 ),
                                                 const SizedBox(width: 6),
-                                                Text(
-                                                  '总负债  ${formatMinor(base, liabilitySum, hide: hide)}',
-                                                  style: const TextStyle(
-                                                    fontSize: 13,
+                                                Flexible(
+                                                  child: Text(
+                                                    '总负债  ${formatMinor(base, liabilitySum, hide: hide)}',
+                                                    style: const TextStyle(
+                                                      fontSize: 13,
+                                                    ),
                                                   ),
                                                 ),
                                               ],
@@ -259,6 +281,18 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                                           ),
                                         ],
                                       ),
+                                      if (unconvertedHint != null) ...[
+                                        const SizedBox(
+                                          height: CentliSpacing.item,
+                                        ),
+                                        Text(
+                                          unconvertedHint,
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: scheme.onSurfaceVariant,
+                                          ),
+                                        ),
+                                      ],
                                     ],
                                   ),
                                 ),
@@ -428,6 +462,8 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                           accounts: accounts,
                           balances: balances,
                           hide: hide,
+                          base: base,
+                          book: ref.watch(fxBookProvider).valueOrNull,
                         ),
                       ],
                     ],
@@ -451,7 +487,10 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
     required List<Account> accounts,
     required Map<String, int> balances,
     required bool hide,
+    required String base,
+    required FxBook? book,
   }) {
+    final day = FxBook.todayLocal();
     final groups = <String, List<Account>>{
       '在线': [],
       '储蓄': [],
@@ -476,11 +515,30 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
     final out = <Widget>[];
     for (final entry in groups.entries) {
       if (entry.value.isEmpty) continue;
-      var sum = 0;
+      var sumBase = 0;
+      final groupUnconverted = <String, int>{};
       for (final a in entry.value) {
-        sum += balances[a.id] ?? a.openingBalanceMinor;
+        final bal = balances[a.id] ?? a.openingBalanceMinor;
+        final asBase = book == null
+            ? (a.currency == base ? bal : null)
+            : balanceInBase(
+                currency: a.currency,
+                balanceMinor: bal,
+                book: book,
+                baseCurrency: base,
+                onDay: day,
+              );
+        if (asBase == null) {
+          groupUnconverted[a.currency] =
+              (groupUnconverted[a.currency] ?? 0) + bal;
+        } else {
+          sumBase += asBase;
+        }
       }
-      final ccy = entry.value.first.currency;
+      final sumLabel = formatMinor(base, sumBase, hide: hide);
+      final unconvertedSuffix = groupUnconverted.isEmpty
+          ? ''
+          : ' · 未折算：${groupUnconverted.entries.map((e) => '${e.key} ${formatMinor(e.key, e.value, hide: hide)}').join('、')}';
       out.add(
         Padding(
           padding: const EdgeInsets.only(bottom: 12),
@@ -498,9 +556,12 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                             ?.copyWith(fontWeight: FontWeight.w800),
                       ),
                       const Spacer(),
-                      Text(
-                        formatMinor(ccy, sum, hide: hide),
-                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      Flexible(
+                        child: Text(
+                          '$sumLabel$unconvertedSuffix',
+                          textAlign: TextAlign.end,
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
                       ),
                     ],
                   ),
