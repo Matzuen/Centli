@@ -106,6 +106,8 @@ class _HomePageState extends ConsumerState<HomePage> {
   /// 0 = 概览, 1 = 日历
   int _mode = 0;
   DateTime? _calendarDay;
+  /// Local month for calendar grid; independent of [homeRangeProvider].
+  DateTime? _calendarMonth;
 
   @override
   Widget build(BuildContext context) {
@@ -151,6 +153,29 @@ class _HomePageState extends ConsumerState<HomePage> {
               );
               final expenseSeries = ref.watch(_dailyExpenseProvider(baseArgs));
               final incomeSeries = ref.watch(_dailyIncomeProvider(baseArgs));
+              final nowLocal = DateTime.now();
+              final calMonth = _calendarMonth ??
+                  DateTime(nowLocal.year, nowLocal.month);
+              final calRange =
+                  DateRangeWindow.forMonth(calMonth.year, calMonth.month);
+              final calArgs = (
+                ledgerId: ledgerId,
+                key: calRange.key,
+                startMs: calRange.startMs,
+                endMs: calRange.endMs,
+              );
+              final calBaseArgs = (
+                ledgerId: ledgerId,
+                key: calRange.key,
+                startMs: calRange.startMs,
+                endMs: calRange.endMs,
+                base: base,
+              );
+              final calExpenseSeries =
+                  ref.watch(_dailyExpenseProvider(calBaseArgs));
+              final calIncomeSeries =
+                  ref.watch(_dailyIncomeProvider(calBaseArgs));
+              final calRecent = ref.watch(_rangeTxProvider(calArgs));
 
               return Column(
                 children: [
@@ -199,7 +224,9 @@ class _HomePageState extends ConsumerState<HomePage> {
                             child: _ModeTab(
                               label: '概览',
                               selected: _mode == 0,
-                              onTap: () => setState(() => _mode = 0),
+                              onTap: () => setState(() {
+                                _mode = 0;
+                              }),
                             ),
                           ),
                           Expanded(
@@ -207,22 +234,13 @@ class _HomePageState extends ConsumerState<HomePage> {
                               label: '日历',
                               selected: _mode == 1,
                               onTap: () {
+                                final now = DateTime.now();
                                 setState(() {
                                   _mode = 1;
                                   _calendarDay = null;
+                                  _calendarMonth ??=
+                                      DateTime(now.year, now.month);
                                 });
-                                // Calendar is a month grid; lastDays (default home
-                                // window) starts in the previous month mid-month and
-                                // would show e.g. Sep while today is Oct.
-                                final r = ref.read(homeRangeProvider);
-                                if (r.kind != DateRangeKind.month) {
-                                  final now = DateTime.now();
-                                  ref.read(homeRangeProvider.notifier).state =
-                                      DateRangeWindow.forMonth(
-                                        now.year,
-                                        now.month,
-                                      );
-                                }
                               },
                             ),
                           ),
@@ -243,6 +261,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                         );
                       },
                       child: ListView(
+                        key: ValueKey(_mode),
                         padding: const EdgeInsets.fromLTRB(
                           CentliSpacing.pageH,
                           CentliSpacing.dense,
@@ -333,16 +352,17 @@ class _HomePageState extends ConsumerState<HomePage> {
                             ),
                           ] else ...[
                             _CalendarCard(
-                              range: range,
+                              month: calMonth,
                               hide: hide,
                               base: base,
                               selectedDay: _calendarDay,
-                              incomeSeries: incomeSeries,
-                              expenseSeries: expenseSeries,
-                              onMonthChanged: (next) {
-                                ref.read(homeRangeProvider.notifier).state =
-                                    next;
-                                setState(() => _calendarDay = null);
+                              incomeSeries: calIncomeSeries,
+                              expenseSeries: calExpenseSeries,
+                              onMonthChanged: (m) {
+                                setState(() {
+                                  _calendarMonth = m;
+                                  _calendarDay = null;
+                                });
                               },
                               onSelectDay: (d) =>
                                   setState(() => _calendarDay = d),
@@ -357,7 +377,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                             const SizedBox(height: CentliSpacing.section),
                             CentliSoftCard(
                               padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
-                              child: recent.when(
+                              child: calRecent.when(
                                 loading: () => const Padding(
                                   padding: EdgeInsets.all(24),
                                   child: Center(
@@ -664,7 +684,7 @@ class _NetChangeChartCard extends StatelessWidget {
 
 class _CalendarCard extends StatelessWidget {
   const _CalendarCard({
-    required this.range,
+    required this.month,
     required this.hide,
     required this.base,
     required this.selectedDay,
@@ -674,13 +694,13 @@ class _CalendarCard extends StatelessWidget {
     required this.onSelectDay,
   });
 
-  final DateRangeWindow range;
+  final DateTime month;
   final bool hide;
   final String base;
   final DateTime? selectedDay;
   final AsyncValue<List<({DateTime dayLocal, int totalMinor})>> incomeSeries;
   final AsyncValue<List<({DateTime dayLocal, int totalMinor})>> expenseSeries;
-  final ValueChanged<DateRangeWindow> onMonthChanged;
+  final ValueChanged<DateTime> onMonthChanged;
   final ValueChanged<DateTime> onSelectDay;
 
   static String _dayKey(DateTime d) =>
@@ -689,14 +709,7 @@ class _CalendarCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Prefer explicit month window; if still on lastDays/custom, show the
-    // month of the last included day (not startLocal — that is often prior month).
-    final DateTime monthStart;
-    if (range.kind == DateRangeKind.month) {
-      monthStart = DateTime(range.startLocal.year, range.startLocal.month, 1);
-    } else {
-      final last = range.endLocal.subtract(const Duration(days: 1));
-      monthStart = DateTime(last.year, last.month, 1);
-    }
+    final monthStart = DateTime(month.year, month.month, 1);
     final daysInMonth = DateTime(monthStart.year, monthStart.month + 1, 0).day;
     final firstWeekday = monthStart.weekday % 7; // Sun=0
     // Key by full local date so Oct 13 amounts never paint onto Sep 13.
@@ -728,7 +741,7 @@ class _CalendarCard extends StatelessWidget {
                 tooltip: '上一月',
                 onPressed: () {
                   final p = DateTime(monthStart.year, monthStart.month - 1, 1);
-                  onMonthChanged(DateRangeWindow.forMonth(p.year, p.month));
+                  onMonthChanged(p);
                 },
                 icon: const Icon(Icons.chevron_left),
               ),
@@ -747,9 +760,7 @@ class _CalendarCard extends StatelessWidget {
                     : () {
                         final n =
                             DateTime(monthStart.year, monthStart.month + 1, 1);
-                        onMonthChanged(
-                          DateRangeWindow.forMonth(n.year, n.month),
-                        );
+                        onMonthChanged(n);
                       },
                 icon: const Icon(Icons.chevron_right),
               ),
