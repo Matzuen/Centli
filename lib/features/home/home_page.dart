@@ -254,6 +254,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                             _LedgerSummaryCard(
                               base: base,
                               hide: hide,
+                              range: range,
                               netWorth: nw,
                               summary: summary,
                             ),
@@ -312,7 +313,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                                               ),
                                               const SizedBox(height: 4),
                                               Text(
-                                                '点右下角记账按钮记下第一笔',
+                                                '点底部「记账」记下第一笔',
                                                 style: Theme.of(context)
                                                     .textTheme
                                                     .bodySmall,
@@ -382,8 +383,10 @@ class _HomePageState extends ConsumerState<HomePage> {
                                   if (list.isEmpty) {
                                     return CentliEmptyState(
                                       icon: Icons.event_busy_outlined,
-                                      title: '当日暂无账单',
-                                      message: '换一天查看，或点右下角记下这一天的账单。',
+                                      title: day == null ? '本区间暂无账单' : '当日暂无账单',
+                                      message: day == null
+                                          ? '点底部「记账」记下第一笔'
+                                          : '换一天查看，或点底部「记账」记下这一天的账单。',
                                       padding: const EdgeInsets.all(
                                         CentliSpacing.cardPad,
                                       ),
@@ -448,12 +451,14 @@ class _LedgerSummaryCard extends StatelessWidget {
   const _LedgerSummaryCard({
     required this.base,
     required this.hide,
+    required this.range,
     required this.netWorth,
     required this.summary,
   });
 
   final String base;
   final bool hide;
+  final DateRangeWindow range;
   final AsyncValue<BaseNetWorth> netWorth;
   final AsyncValue<BaseRangeSummary> summary;
 
@@ -481,6 +486,13 @@ class _LedgerSummaryCard extends StatelessWidget {
                 ?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 10),
+          Text(
+            '全期净资产',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 4),
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
@@ -522,14 +534,14 @@ class _LedgerSummaryCard extends StatelessWidget {
             children: [
               Expanded(
                 child: _kv(
-                  '月收入',
+                  '${range.label}收入',
                   formatMinor(base, income, hide: hide),
                   valueColor: CentliTheme.incomeGreen,
                 ),
               ),
               Expanded(
                 child: _kv(
-                  '月支出',
+                  '${range.label}支出',
                   formatMinor(base, expense, hide: hide),
                   valueColor: CentliTheme.expenseRed,
                 ),
@@ -599,7 +611,7 @@ class _NetChangeChartCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '净资产变化',
+            '区间累计净流入',
             style: Theme.of(context).textTheme.titleMedium
                 ?.copyWith(fontWeight: FontWeight.w700),
           ),
