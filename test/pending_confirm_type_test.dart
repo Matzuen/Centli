@@ -78,4 +78,11 @@ void main() {
     final incomeTxn = live.singleWhere((t) => t.categoryId == incomeCat.id);
     expect(incomeTxn.type, 'in');
   });
+
+  test('pending_page _applySuggestions prefers category kind by direction', () {
+    final src = File('lib/features/pending/pending_page.dart').readAsStringSync();
+    expect(src.contains("preferredKind = _direction == 'in' ? 'in' : 'out'"), isTrue);
+    expect(src.contains('type: txnType'), isTrue, reason: 'B1-2 must remain');
+  });
+
 }

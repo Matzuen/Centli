@@ -460,11 +460,22 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
   void _applySuggestions() {
     final cats = widget.categories;
     final accounts = widget.accounts;
+    // T1-5: prefer category kind matching parse direction (refund → out).
+    // Confirm still derives txn type from category kind (B1-2).
+    final preferredKind = _direction == 'in' ? 'in' : 'out';
+    final preferred =
+        cats.where((x) => x.kind == preferredKind).toList(growable: false);
+    final pool = preferred.isNotEmpty ? preferred : cats;
+
     var catId = c.suggestedCategoryId;
     var catFb = false;
-    if (cats.isNotEmpty) {
-      if (catId == null || !cats.any((x) => x.id == catId)) {
-        catId = cats.first.id;
+    if (pool.isNotEmpty) {
+      final suggestedOk =
+          catId != null && cats.any((x) => x.id == catId);
+      final suggestedMatchesKind = suggestedOk &&
+          preferred.any((x) => x.id == catId);
+      if (!suggestedOk || (preferred.isNotEmpty && !suggestedMatchesKind)) {
+        catId = pool.first.id;
         catFb = catId != c.suggestedCategoryId;
       }
     } else {
