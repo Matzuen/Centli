@@ -28,15 +28,15 @@ void main() {
       final w = DateRangeWindow.lastDays(days: 30, nowLocal: now);
       expect(w.endLocal, DateTime(2026, 10, 14));
       expect(w.startLocal, DateTime(2026, 9, 14));
-      expect(w.isLatest, isTrue);
-      expect(w.label, '\u8fd1\u0033\u0030\u5929');
+      expect(w.isLatestAt(now), isTrue);
+      expect(w.labelAt(now), '近30天');
     });
 
     test('prev shifts window back', () {
       final now = DateTime(2026, 10, 13);
       final w = DateRangeWindow.lastDays(days: 30, nowLocal: now).prev();
       expect(w.endLocal, DateTime(2026, 9, 14));
-      expect(w.isLatest, isFalse);
+      expect(w.isLatestAt(now), isFalse);
     });
   });
 }

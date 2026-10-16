@@ -143,32 +143,39 @@ class DateRangeWindow {
     }
   }
 
-  bool get isLatest {
+  /// Whether this window is the "current" one relative to [nowLocal].
+  bool isLatestAt(DateTime nowLocal) {
     switch (kind) {
       case DateRangeKind.lastDays:
-        final latest = DateRangeWindow.lastDays(days: days ?? 30);
+        final latest = DateRangeWindow.lastDays(
+          days: days ?? 30,
+          nowLocal: nowLocal,
+        );
         return endLocal.year == latest.endLocal.year &&
             endLocal.month == latest.endLocal.month &&
             endLocal.day == latest.endLocal.day;
       case DateRangeKind.month:
-        final now = DateTime.now();
-        return startLocal.year == now.year && startLocal.month == now.month;
+        return startLocal.year == nowLocal.year &&
+            startLocal.month == nowLocal.month;
       case DateRangeKind.custom:
-        final now = DateTime.now();
-        final todayEnd = DateTime(now.year, now.month, now.day + 1);
+        final todayEnd =
+            DateTime(nowLocal.year, nowLocal.month, nowLocal.day + 1);
         return endLocal.year == todayEnd.year &&
             endLocal.month == todayEnd.month &&
             endLocal.day == todayEnd.day;
     }
   }
 
-  String get label {
+  bool get isLatest => isLatestAt(DateTime.now());
+
+  /// Label relative to [nowLocal] (same rules as [label]).
+  String labelAt(DateTime nowLocal) {
     String fmt(DateTime d) =>
         '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
     final lastDay = endLocal.subtract(const Duration(days: 1));
     switch (kind) {
       case DateRangeKind.lastDays:
-        if (isLatest) return '近${days ?? 30}天';
+        if (isLatestAt(nowLocal)) return '近${days ?? 30}天';
         return '${fmt(startLocal)} ~ ${fmt(lastDay)}';
       case DateRangeKind.month:
         return '${startLocal.year}年${startLocal.month}月';
@@ -181,4 +188,6 @@ class DateRangeWindow {
         return '${fmt(startLocal)} ~ ${fmt(lastDay)}';
     }
   }
+
+  String get label => labelAt(DateTime.now());
 }

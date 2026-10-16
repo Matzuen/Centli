@@ -637,8 +637,18 @@ String? mapCategoryHintToLocal(
   }
 
   // Synonym → canon → local
+  // Prefer exact canon; else input containing a synonym value (len>=2).
   for (final entry in kCategorySynonyms.entries) {
-    if (entry.key == cleaned || entry.value.contains(cleaned)) {
+    if (entry.key == cleaned) {
+      return _bestCategoryMatch(
+        entry.key,
+        names,
+        categories: categories,
+        preferKind: preferKind,
+      );
+    }
+    final hit = entry.value.any((v) => v.length >= 2 && cleaned.contains(v));
+    if (hit) {
       return _bestCategoryMatch(
         entry.key,
         names,
