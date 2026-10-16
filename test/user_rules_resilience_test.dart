@@ -44,6 +44,42 @@ void main() {
     });
   });
 
+
+  group('NotiTemplate.direction', () {
+    test('missing direction defaults to out', () {
+      final t = NotiTemplate.tryParse(_goodMap(id: 'd_missing'));
+      expect(t, isNotNull);
+      expect(t!.direction, 'out');
+    });
+
+    test('illegal direction falls back to out', () {
+      final m = _goodMap(id: 'd_bad')..['direction'] = 'transfer';
+      final t = NotiTemplate.tryParse(m);
+      expect(t, isNotNull);
+      expect(t!.direction, 'out');
+    });
+
+    test('in / out / refund round-trip via toJson', () {
+      for (final d in ['in', 'out', 'refund']) {
+        final m = _goodMap(id: 'd_$d')..['direction'] = d;
+        final t = NotiTemplate.tryParse(m);
+        expect(t, isNotNull);
+        expect(t!.direction, d);
+        final again = NotiTemplate.tryParse(t.toJson());
+        expect(again, isNotNull);
+        expect(again!.direction, d);
+      }
+    });
+
+    test('normalizeDirection helper', () {
+      expect(NotiTemplate.normalizeDirection(null), 'out');
+      expect(NotiTemplate.normalizeDirection(''), 'out');
+      expect(NotiTemplate.normalizeDirection('IN'), 'out');
+      expect(NotiTemplate.normalizeDirection('in'), 'in');
+      expect(NotiTemplate.normalizeDirection('refund'), 'refund');
+    });
+  });
+
   group('parseNotification resilience', () {
     test('bad rule does not drop notification or throw', () {
       final bad = NotiTemplate(

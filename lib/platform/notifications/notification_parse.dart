@@ -13,7 +13,18 @@ class NotiTemplate {
     this.merchantRegex,
     this.merchantFromTitle = false,
     this.defaultAccountHint,
+    this.direction = 'out',
   });
+
+  /// Allowed values: `in` | `out` | `refund`. Use [normalizeDirection].
+  static const Set<String> kDirections = {'in', 'out', 'refund'};
+
+  /// Illegal / missing → `'out'` (preserves pre-direction behavior).
+  static String normalizeDirection(String? raw) {
+    final v = raw?.trim();
+    if (v != null && kDirections.contains(v)) return v;
+    return 'out';
+  }
 
   final String id;
   /// Optional display name (user rules / UI). Falls back to [id].
@@ -27,6 +38,8 @@ class NotiTemplate {
   final String? merchantRegex;
   final bool merchantFromTitle;
   final String? defaultAccountHint;
+  /// Flow direction: `in` (income), `out` (expense), `refund`.
+  final String direction;
 
   String get displayName {
     final n = name?.trim();
@@ -47,6 +60,7 @@ class NotiTemplate {
       merchantRegex: j['merchantRegex'] as String?,
       merchantFromTitle: (j['merchantFromTitle'] as bool?) ?? false,
       defaultAccountHint: j['defaultAccountHint'] as String?,
+      direction: normalizeDirection(j['direction'] as String?),
     );
   }
 
@@ -92,6 +106,7 @@ class NotiTemplate {
         'merchantRegex': merchantRegex,
         'merchantFromTitle': merchantFromTitle,
         'defaultAccountHint': defaultAccountHint,
+        'direction': direction,
       };
 
   NotiTemplate copyWith({
@@ -106,6 +121,7 @@ class NotiTemplate {
     String? merchantRegex,
     bool? merchantFromTitle,
     String? defaultAccountHint,
+    String? direction,
     bool clearTitleRegex = false,
     bool clearMustContain = false,
     bool clearExclude = false,
@@ -129,6 +145,7 @@ class NotiTemplate {
       merchantFromTitle: merchantFromTitle ?? this.merchantFromTitle,
       defaultAccountHint:
           clearAccountHint ? null : (defaultAccountHint ?? this.defaultAccountHint),
+      direction: normalizeDirection(direction ?? this.direction),
     );
   }
 }
