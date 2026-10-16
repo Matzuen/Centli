@@ -1694,6 +1694,15 @@ class $TransactionsTable extends Transactions
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _tagsMeta = const VerificationMeta('tags');
+  @override
+  late final GeneratedColumn<String> tags = GeneratedColumn<String>(
+    'tags',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _happenAtMeta = const VerificationMeta(
     'happenAt',
   );
@@ -1826,6 +1835,7 @@ class $TransactionsTable extends Transactions
     categoryId,
     merchant,
     note,
+    tags,
     happenAt,
     includeInStat,
     includeInBudget,
@@ -1923,6 +1933,12 @@ class $TransactionsTable extends Transactions
       context.handle(
         _noteMeta,
         note.isAcceptableOrUnknown(data['note']!, _noteMeta),
+      );
+    }
+    if (data.containsKey('tags')) {
+      context.handle(
+        _tagsMeta,
+        tags.isAcceptableOrUnknown(data['tags']!, _tagsMeta),
       );
     }
     if (data.containsKey('happen_at')) {
@@ -2058,6 +2074,10 @@ class $TransactionsTable extends Transactions
         DriftSqlType.string,
         data['${effectivePrefix}note'],
       ),
+      tags: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}tags'],
+      ),
       happenAt: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}happen_at'],
@@ -2122,6 +2142,9 @@ class Transaction extends DataClass implements Insertable<Transaction> {
   final String? categoryId;
   final String? merchant;
   final String? note;
+
+  /// JSON array string, e.g. `["报销","旅行"]`. Null/empty = no tags.
+  final String? tags;
   final int happenAt;
   final int includeInStat;
   final int includeInBudget;
@@ -2144,6 +2167,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     this.categoryId,
     this.merchant,
     this.note,
+    this.tags,
     required this.happenAt,
     required this.includeInStat,
     required this.includeInBudget,
@@ -2176,6 +2200,9 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     }
     if (!nullToAbsent || note != null) {
       map['note'] = Variable<String>(note);
+    }
+    if (!nullToAbsent || tags != null) {
+      map['tags'] = Variable<String>(tags);
     }
     map['happen_at'] = Variable<int>(happenAt);
     map['include_in_stat'] = Variable<int>(includeInStat);
@@ -2219,6 +2246,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           ? const Value.absent()
           : Value(merchant),
       note: note == null && nullToAbsent ? const Value.absent() : Value(note),
+      tags: tags == null && nullToAbsent ? const Value.absent() : Value(tags),
       happenAt: Value(happenAt),
       includeInStat: Value(includeInStat),
       includeInBudget: Value(includeInBudget),
@@ -2259,6 +2287,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       categoryId: serializer.fromJson<String?>(json['categoryId']),
       merchant: serializer.fromJson<String?>(json['merchant']),
       note: serializer.fromJson<String?>(json['note']),
+      tags: serializer.fromJson<String?>(json['tags']),
       happenAt: serializer.fromJson<int>(json['happenAt']),
       includeInStat: serializer.fromJson<int>(json['includeInStat']),
       includeInBudget: serializer.fromJson<int>(json['includeInBudget']),
@@ -2286,6 +2315,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       'categoryId': serializer.toJson<String?>(categoryId),
       'merchant': serializer.toJson<String?>(merchant),
       'note': serializer.toJson<String?>(note),
+      'tags': serializer.toJson<String?>(tags),
       'happenAt': serializer.toJson<int>(happenAt),
       'includeInStat': serializer.toJson<int>(includeInStat),
       'includeInBudget': serializer.toJson<int>(includeInBudget),
@@ -2311,6 +2341,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     Value<String?> categoryId = const Value.absent(),
     Value<String?> merchant = const Value.absent(),
     Value<String?> note = const Value.absent(),
+    Value<String?> tags = const Value.absent(),
     int? happenAt,
     int? includeInStat,
     int? includeInBudget,
@@ -2333,6 +2364,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     categoryId: categoryId.present ? categoryId.value : this.categoryId,
     merchant: merchant.present ? merchant.value : this.merchant,
     note: note.present ? note.value : this.note,
+    tags: tags.present ? tags.value : this.tags,
     happenAt: happenAt ?? this.happenAt,
     includeInStat: includeInStat ?? this.includeInStat,
     includeInBudget: includeInBudget ?? this.includeInBudget,
@@ -2367,6 +2399,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           : this.categoryId,
       merchant: data.merchant.present ? data.merchant.value : this.merchant,
       note: data.note.present ? data.note.value : this.note,
+      tags: data.tags.present ? data.tags.value : this.tags,
       happenAt: data.happenAt.present ? data.happenAt.value : this.happenAt,
       includeInStat: data.includeInStat.present
           ? data.includeInStat.value
@@ -2402,6 +2435,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           ..write('categoryId: $categoryId, ')
           ..write('merchant: $merchant, ')
           ..write('note: $note, ')
+          ..write('tags: $tags, ')
           ..write('happenAt: $happenAt, ')
           ..write('includeInStat: $includeInStat, ')
           ..write('includeInBudget: $includeInBudget, ')
@@ -2429,6 +2463,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     categoryId,
     merchant,
     note,
+    tags,
     happenAt,
     includeInStat,
     includeInBudget,
@@ -2455,6 +2490,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           other.categoryId == this.categoryId &&
           other.merchant == this.merchant &&
           other.note == this.note &&
+          other.tags == this.tags &&
           other.happenAt == this.happenAt &&
           other.includeInStat == this.includeInStat &&
           other.includeInBudget == this.includeInBudget &&
@@ -2479,6 +2515,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
   final Value<String?> categoryId;
   final Value<String?> merchant;
   final Value<String?> note;
+  final Value<String?> tags;
   final Value<int> happenAt;
   final Value<int> includeInStat;
   final Value<int> includeInBudget;
@@ -2502,6 +2539,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     this.categoryId = const Value.absent(),
     this.merchant = const Value.absent(),
     this.note = const Value.absent(),
+    this.tags = const Value.absent(),
     this.happenAt = const Value.absent(),
     this.includeInStat = const Value.absent(),
     this.includeInBudget = const Value.absent(),
@@ -2526,6 +2564,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     this.categoryId = const Value.absent(),
     this.merchant = const Value.absent(),
     this.note = const Value.absent(),
+    this.tags = const Value.absent(),
     required int happenAt,
     this.includeInStat = const Value.absent(),
     this.includeInBudget = const Value.absent(),
@@ -2558,6 +2597,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     Expression<String>? categoryId,
     Expression<String>? merchant,
     Expression<String>? note,
+    Expression<String>? tags,
     Expression<int>? happenAt,
     Expression<int>? includeInStat,
     Expression<int>? includeInBudget,
@@ -2582,6 +2622,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       if (categoryId != null) 'category_id': categoryId,
       if (merchant != null) 'merchant': merchant,
       if (note != null) 'note': note,
+      if (tags != null) 'tags': tags,
       if (happenAt != null) 'happen_at': happenAt,
       if (includeInStat != null) 'include_in_stat': includeInStat,
       if (includeInBudget != null) 'include_in_budget': includeInBudget,
@@ -2608,6 +2649,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     Value<String?>? categoryId,
     Value<String?>? merchant,
     Value<String?>? note,
+    Value<String?>? tags,
     Value<int>? happenAt,
     Value<int>? includeInStat,
     Value<int>? includeInBudget,
@@ -2632,6 +2674,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       categoryId: categoryId ?? this.categoryId,
       merchant: merchant ?? this.merchant,
       note: note ?? this.note,
+      tags: tags ?? this.tags,
       happenAt: happenAt ?? this.happenAt,
       includeInStat: includeInStat ?? this.includeInStat,
       includeInBudget: includeInBudget ?? this.includeInBudget,
@@ -2679,6 +2722,9 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     }
     if (note.present) {
       map['note'] = Variable<String>(note.value);
+    }
+    if (tags.present) {
+      map['tags'] = Variable<String>(tags.value);
     }
     if (happenAt.present) {
       map['happen_at'] = Variable<int>(happenAt.value);
@@ -2732,6 +2778,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
           ..write('categoryId: $categoryId, ')
           ..write('merchant: $merchant, ')
           ..write('note: $note, ')
+          ..write('tags: $tags, ')
           ..write('happenAt: $happenAt, ')
           ..write('includeInStat: $includeInStat, ')
           ..write('includeInBudget: $includeInBudget, ')
@@ -6994,6 +7041,7 @@ typedef $$TransactionsTableCreateCompanionBuilder =
       Value<String?> categoryId,
       Value<String?> merchant,
       Value<String?> note,
+      Value<String?> tags,
       required int happenAt,
       Value<int> includeInStat,
       Value<int> includeInBudget,
@@ -7019,6 +7067,7 @@ typedef $$TransactionsTableUpdateCompanionBuilder =
       Value<String?> categoryId,
       Value<String?> merchant,
       Value<String?> note,
+      Value<String?> tags,
       Value<int> happenAt,
       Value<int> includeInStat,
       Value<int> includeInBudget,
@@ -7142,6 +7191,11 @@ class $$TransactionsTableFilterComposer
 
   ColumnFilters<String> get note => $composableBuilder(
     column: $table.note,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get tags => $composableBuilder(
+    column: $table.tags,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -7332,6 +7386,11 @@ class $$TransactionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get tags => $composableBuilder(
+    column: $table.tags,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get happenAt => $composableBuilder(
     column: $table.happenAt,
     builder: (column) => ColumnOrderings(column),
@@ -7508,6 +7567,9 @@ class $$TransactionsTableAnnotationComposer
 
   GeneratedColumn<String> get note =>
       $composableBuilder(column: $table.note, builder: (column) => column);
+
+  GeneratedColumn<String> get tags =>
+      $composableBuilder(column: $table.tags, builder: (column) => column);
 
   GeneratedColumn<int> get happenAt =>
       $composableBuilder(column: $table.happenAt, builder: (column) => column);
@@ -7686,6 +7748,7 @@ class $$TransactionsTableTableManager
                 Value<String?> categoryId = const Value.absent(),
                 Value<String?> merchant = const Value.absent(),
                 Value<String?> note = const Value.absent(),
+                Value<String?> tags = const Value.absent(),
                 Value<int> happenAt = const Value.absent(),
                 Value<int> includeInStat = const Value.absent(),
                 Value<int> includeInBudget = const Value.absent(),
@@ -7709,6 +7772,7 @@ class $$TransactionsTableTableManager
                 categoryId: categoryId,
                 merchant: merchant,
                 note: note,
+                tags: tags,
                 happenAt: happenAt,
                 includeInStat: includeInStat,
                 includeInBudget: includeInBudget,
@@ -7734,6 +7798,7 @@ class $$TransactionsTableTableManager
                 Value<String?> categoryId = const Value.absent(),
                 Value<String?> merchant = const Value.absent(),
                 Value<String?> note = const Value.absent(),
+                Value<String?> tags = const Value.absent(),
                 required int happenAt,
                 Value<int> includeInStat = const Value.absent(),
                 Value<int> includeInBudget = const Value.absent(),
@@ -7757,6 +7822,7 @@ class $$TransactionsTableTableManager
                 categoryId: categoryId,
                 merchant: merchant,
                 note: note,
+                tags: tags,
                 happenAt: happenAt,
                 includeInStat: includeInStat,
                 includeInBudget: includeInBudget,

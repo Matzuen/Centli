@@ -18,6 +18,7 @@ import 'tables/merchant_rules.dart';
 import 'tables/pending_captures.dart';
 import 'tables/budgets.dart';
 import 'tables/transactions.dart';
+import 'txn_tags.dart';
 
 part 'centli_database.g.dart';
 
@@ -40,7 +41,7 @@ class CentliDatabase extends _$CentliDatabase {
   CentliDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -56,11 +57,41 @@ class CentliDatabase extends _$CentliDatabase {
             await m.addColumn(accounts, accounts.icon);
             await backfillDefaultIcons();
           }
+          if (from < 4) {
+            await m.addColumn(transactions, transactions.tags);
+          }
+          await _ensureQueryIndexes();
         },
         beforeOpen: (details) async {
           await customStatement('PRAGMA foreign_keys = ON');
+          await _ensureQueryIndexes();
         },
       );
+
+
+  /// Hot-path indexes (idempotent). Called from onUpgrade + beforeOpen.
+  Future<void> _ensureQueryIndexes() async {
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_txn_ledger_happen '
+      'ON transactions(ledger_id, happen_at)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_txn_account_happen '
+      'ON transactions(account_id, happen_at)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_accounts_ledger_archived '
+      'ON accounts(ledger_id, archived)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_categories_ledger_kind_archived '
+      'ON categories(ledger_id, kind, archived)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_pending_status_created '
+      'ON pending_captures(status, created_at)',
+    );
+  }
 
   Future<void> seedDefaults() async {
     final existing = await (select(ledgers)..limit(1)).get();
@@ -515,7 +546,8 @@ class CentliDatabase extends _$CentliDatabase {
 
             if (pattern != null) {
               Expression<bool> textHit = t.merchant.lower().like(pattern) |
-                  t.note.lower().like(pattern);
+                  t.note.lower().like(pattern) |
+                  t.tags.lower().like(pattern);
               if (amountMinors.isEmpty) {
                 pred = pred & textHit;
               } else {
@@ -697,6 +729,7 @@ class CentliDatabase extends _$CentliDatabase {
     String? categoryId,
     String? merchant,
     String? note,
+    List<String>? tags,
     DateTime? happenAt,
     double? fxRate,
     int? toAmountMinor,
@@ -717,6 +750,7 @@ class CentliDatabase extends _$CentliDatabase {
         categoryId: Value(categoryId),
         merchant: Value(merchant),
         note: Value(note),
+        tags: Value(encodeTxnTags(tags)),
         happenAt: happen,
         fxRate: Value(fxRate),
         toAmountMinor: Value(toAmountMinor),
@@ -974,6 +1008,33 @@ class CentliDatabase extends _$CentliDatabase {
 
 
   /// Soft-delete (sets deleted_at). Home / range queries already filter null deletedAt.
+
+  /// Distinct tags across non-deleted txns in [ledgerId] (for chip suggestions).
+  Future<List<String>> listDistinctTags(String ledgerId) async {
+    final rows = await (select(transactions)
+          ..where((t) => t.ledgerId.equals(ledgerId) & t.deletedAt.isNull() & t.tags.isNotNull()))
+        .get();
+    final seen = <String>{};
+    for (final r in rows) {
+      for (final tag in decodeTxnTags(r.tags)) {
+        seen.add(tag);
+      }
+    }
+    final list = seen.toList()..sort();
+    return list;
+  }
+
+  /// Replace tags on an existing transaction (detail editor).
+  Future<void> updateTransactionTags(String id, List<String> tags) async {
+    final ts = nowMs();
+    await (update(transactions)..where((t) => t.id.equals(id))).write(
+      TransactionsCompanion(
+        tags: Value(encodeTxnTags(tags)),
+        updatedAt: Value(ts),
+      ),
+    );
+  }
+
   Future<void> softDeleteTransaction(String id) async {
     final ts = nowMs();
     await (update(transactions)..where((t) => t.id.equals(id))).write(
@@ -1051,6 +1112,7 @@ class CentliDatabase extends _$CentliDatabase {
     String? categoryId,
     String? merchant,
     String? note,
+    List<String>? tags,
     DateTime? happenAt,
     double? fxRate,
     int? toAmountMinor,
@@ -1067,6 +1129,7 @@ class CentliDatabase extends _$CentliDatabase {
         categoryId: Value(categoryId),
         merchant: Value(merchant),
         note: Value(note),
+        tags: Value(encodeTxnTags(tags)),
         happenAt: happen != null ? Value(happen) : const Value.absent(),
         fxRate: Value(fxRate),
         toAmountMinor: Value(toAmountMinor),
@@ -1406,6 +1469,7 @@ class CentliDatabase extends _$CentliDatabase {
     required String categoryId,
     String? merchant,
     String type = 'out',
+    List<String>? tags,
   }) async {
     final pending = await (select(pendingCaptures)
           ..where((t) => t.id.equals(pendingId)))
@@ -1431,6 +1495,7 @@ class CentliDatabase extends _$CentliDatabase {
           merchant: Value(merchant ?? pending.merchant),
           happenAt: pending.happenAt ?? ts,
           source: Value(source),
+          tags: Value(encodeTxnTags(tags)),
           pendingId: Value(pending.id),
           createdAt: ts,
           updatedAt: ts,

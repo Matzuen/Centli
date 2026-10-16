@@ -124,7 +124,7 @@ class ImportService {
       );
     }
     final schemaVersion = _asInt(map['schema_version'], 'schema_version');
-    if (schemaVersion < 1 || schemaVersion > 3) {
+    if (schemaVersion < 1 || schemaVersion > 4) {
       throw StateError('不支持的数据版本 schema_version=$schemaVersion');
     }
 
@@ -317,6 +317,14 @@ class ImportService {
     m.putIfAbsent('includeInStat', () => 1);
     m.putIfAbsent('includeInBudget', () => 1);
     m.putIfAbsent('source', () => 'manual');
+    // Old backups may omit tags; treat as empty.
+    if (!m.containsKey('tags') || m['tags'] == null) {
+      m['tags'] = null;
+    } else if (m['tags'] is List) {
+      m['tags'] = jsonEncode(m['tags']);
+    } else if (m['tags'] is! String) {
+      m['tags'] = null;
+    }
     final ts = DateTime.now().millisecondsSinceEpoch;
     m.putIfAbsent('createdAt', () => ts);
     m.putIfAbsent('updatedAt', () => ts);
@@ -480,9 +488,10 @@ class ImportService {
       final categoryId = _cellStr(row, 10);
       final merchant = _cellStr(row, 12);
       final note = _cellStr(row, 13);
-      final fxRaw = _cellStr(row, 16);
-      final toAmtRaw = _cellStr(row, 17);
-      final delRaw = _cellStr(row, 18);
+      final tags = _cellStr(row, 14);
+      final fxRaw = _cellStr(row, 17);
+      final toAmtRaw = _cellStr(row, 18);
+      final delRaw = _cellStr(row, 19);
       transactions.add({
         'id': id,
         'ledgerId': ledgerId,
@@ -495,8 +504,9 @@ class ImportService {
         'categoryId': categoryId.isEmpty ? null : categoryId,
         'merchant': merchant.isEmpty ? null : merchant,
         'note': note.isEmpty ? null : note,
-        'source': _cellStr(row, 14, fallback: 'manual'),
-        'includeInStat': _cellInt(row, 15, fallback: 1),
+        'tags': tags.isEmpty ? null : tags,
+        'source': _cellStr(row, 15, fallback: 'manual'),
+        'includeInStat': _cellInt(row, 16, fallback: 1),
         'includeInBudget': 1,
         'fxRate': fxRaw.isEmpty ? null : double.tryParse(fxRaw),
         'toAmountMinor': toAmtRaw.isEmpty ? null : int.tryParse(toAmtRaw),

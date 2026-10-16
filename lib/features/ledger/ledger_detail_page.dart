@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../../core/utils/money.dart';
 import '../../data/db/centli_database.dart';
+import '../../data/db/txn_tags.dart';
 import '../../data/db/database_provider.dart';
 import 'bookkeeping_sheet.dart' deferred as bookkeeping;
 import '../../app/theme.dart';
@@ -205,6 +206,30 @@ class _DetailBody extends ConsumerWidget {
                 ),
                 _sectionHeader(context, '\u5176\u5b83'),
                 ListTile(
+                  title: const Text('\u6807\u7b7e'),
+                  subtitle: decodeTxnTags(txn.tags).isEmpty
+                      ? const Text('\\u2014')
+                      : Wrap(
+                          spacing: 6,
+                          runSpacing: 4,
+                          children: [
+                            for (final t in decodeTxnTags(txn.tags))
+                              Chip(
+                                label: Text(t),
+                                visualDensity: VisualDensity.compact,
+                                materialTapTargetSize:
+                                    MaterialTapTargetSize.shrinkWrap,
+                              ),
+                          ],
+                        ),
+                  trailing: IconButton(
+                    tooltip: '\\u7f16\\u8f91\\u6807\\u7b7e',
+                    icon: const Icon(Icons.sell_outlined),
+                    onPressed: () => _editTags(context, ref),
+                  ),
+                ),
+                const Divider(height: 1),
+                ListTile(
                   title: const Text('\u5907\u6ce8'),
                   subtitle: Text(
                     (txn.note == null || txn.note!.isEmpty)
@@ -282,6 +307,92 @@ class _DetailBody extends ConsumerWidget {
     await bookkeeping.loadLibrary();
     if (!context.mounted) return;
     await bookkeeping.showBookkeepingSheet(context, existing: txn);
+  }
+
+
+  Future<void> _editTags(BuildContext context, WidgetRef ref) async {
+    final current = List<String>.from(decodeTxnTags(txn.tags));
+    final ctrl = TextEditingController();
+    final suggestions =
+        await ref.read(databaseProvider).listDistinctTags(txn.ledgerId);
+    if (!context.mounted) return;
+    final result = await showDialog<List<String>>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setLocal) {
+            void addTag(String raw) {
+              var t = raw.trim();
+              if (t.isEmpty) return;
+              if (t.length > 12) t = t.substring(0, 12);
+              if (current.contains(t) || current.length >= 5) return;
+              setLocal(() => current.add(t));
+              ctrl.clear();
+            }
+
+            return AlertDialog(
+              title: const Text('\u7f16\u8f91\u6807\u7b7e'),
+              content: SizedBox(
+                width: 360,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: [
+                        for (final t in current)
+                          InputChip(
+                            label: Text(t),
+                            onDeleted: () => setLocal(() => current.remove(t)),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: ctrl,
+                      decoration: const InputDecoration(
+                        labelText: '\u65b0\u6807\u7b7e',
+                        hintText: '\u56de\u8f66\u786e\u8ba4\uff0c\u6700\u591a 5 \u4e2a',
+                        border: OutlineInputBorder(),
+                      ),
+                      onSubmitted: addTag,
+                    ),
+                    if (suggestions.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 6,
+                        children: [
+                          for (final s in suggestions.take(12))
+                            ActionChip(
+                              label: Text(s),
+                              onPressed: () => addTag(s),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('\u53d6\u6d88'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(ctx, List<String>.from(current)),
+                  child: const Text('\u4fdd\u5b58'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    ctrl.dispose();
+    if (result == null || !context.mounted) return;
+    await ref.read(databaseProvider).updateTransactionTags(txn.id, result);
   }
 
   Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {

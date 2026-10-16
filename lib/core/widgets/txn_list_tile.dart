@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../data/db/centli_database.dart';
+import '../../data/db/txn_tags.dart';
 import '../../data/db/database_provider.dart';
 import '../constants/currencies.dart';
 import '../utils/fx.dart';
@@ -110,6 +111,10 @@ class TxnListTile extends ConsumerWidget {
                           );
                         },
                       ),
+                      if (decodeTxnTags(txn.tags).isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        _TxnTagChips(tags: decodeTxnTags(txn.tags)),
+                      ],
                     ],
                   ),
                 ),
@@ -232,4 +237,44 @@ class _CatMeta {
   const _CatMeta({required this.name, required this.icon});
   final String name;
   final String? icon;
+}
+
+
+class _TxnTagChips extends StatelessWidget {
+  const _TxnTagChips({required this.tags});
+  final List<String> tags;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final shown = tags.take(2).toList();
+    final extra = tags.length - shown.length;
+    return Wrap(
+      spacing: 4,
+      runSpacing: 2,
+      children: [
+        for (final t in shown)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+            decoration: BoxDecoration(
+              color: scheme.surfaceContainerHighest.withValues(alpha: 0.7),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              t,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+            ),
+          ),
+        if (extra > 0)
+          Text(
+            '+$extra',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+          ),
+      ],
+    );
+  }
 }

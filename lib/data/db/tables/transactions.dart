@@ -19,6 +19,8 @@ class Transactions extends Table {
       text().named('category_id').nullable().references(Categories, #id)();
   TextColumn get merchant => text().nullable()();
   TextColumn get note => text().nullable()();
+  /// JSON array string, e.g. `["报销","旅行"]`. Null/empty = no tags.
+  TextColumn get tags => text().nullable()();
   IntColumn get happenAt => integer().named('happen_at')();
   IntColumn get includeInStat =>
       integer().named('include_in_stat').withDefault(const Constant(1))();
