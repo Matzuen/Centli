@@ -511,6 +511,33 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
     return '未选账户';
   }
 
+  /// Re-parse capture text for direction (no DB column yet).
+  String get _direction {
+    final templates = NotiTemplateStore.peek();
+    final raw = RawNotification(
+      pkg: c.sourcePkg,
+      title: c.rawTitle ?? '',
+      text: c.rawText,
+      whenMs: c.happenAt ?? c.createdAt,
+    );
+    final parsed = parseNotification(
+      raw,
+      templates.isEmpty ? null : templates,
+    );
+    return NotiTemplate.normalizeDirection(parsed.direction);
+  }
+
+  String get _directionLabel {
+    switch (_direction) {
+      case 'in':
+        return '收入';
+      case 'refund':
+        return '退款';
+      default:
+        return '支出';
+    }
+  }
+
   String get _amountLabel {
     final ccy = c.currency ?? 'CNY';
     final raw = _amountCtrl.text.trim();
@@ -568,7 +595,7 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
               if (!_expanded) ...[
                 const SizedBox(height: 6),
                 Text(
-                  '$_amountLabel · $merchant · $_categoryName · $_accountName',
+                  '$_directionLabel · $_amountLabel · $merchant · $_categoryName · $_accountName',
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
