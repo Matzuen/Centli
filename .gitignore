@@ -46,3 +46,42 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# ---------------------------------------------------------------------------
+# 临时产物与派生资料（不进入版本库）
+# 说明：`_` 前缀目录是本仓库约定的「一次性工作区」，
+#       包含改码脚本、补丁载荷、审查副本、逆向证据等，均不参与构建。
+# ---------------------------------------------------------------------------
+
+# 逆向 / 对照分析的派生证据（体积大、可从原始 APK 重新生成）
+_re_finch/
+
+# 一次性改码脚本与临时工作区
+_*.py
+_install_*/
+_patch_*/
+_ux_review/
+_fix_dumps/
+_audit_fix_bak_*/
+_patch_tmp/
+
+# 临时快照 / 草稿片段
+_*.txt
+_*.tsv
+_*.csv
+_*.sh
+_*.json.orig-encoding
+*.orig-encoding
+
+# 本地备份副本（运行时数据备份由 App 自己管理，见 noti_template_store.dart）
+*.bak
+*.bak_*
+
+# bot 交接文档：不进库（每批都会变化，属于过程产物，不是项目源码）
+BOT_TASKS*.md
+
+# bot 交接文档的归档副本
+docs/grokbot/archive_*_tasks.md
+docs/grokbot/p0_tasks.md
+docs/grokbot/audit_input*/
+

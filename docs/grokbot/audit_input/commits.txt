@@ -1,5 +1,0 @@
-7665fdc R1-5: 清理未跟踪临时产物并同步 analyzer exclude
-9d3bdd5 R1-4: isLatestAt 可注入时间与分类同义词 contains 回退
-deb9b88 R1-3: 补 restore ledger 与用户规则韧性测试
-c9e818a R1-2: 暗色键盘配色与统一取色入口
-75baf4e R1-1: 跳过计数与识别规则页警告提示

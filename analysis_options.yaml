@@ -11,11 +11,12 @@ include: package:flutter_lints/flutter.yaml
 
 analyzer:
   exclude:
-    # Temp / tooling trees still present (tracked legacy); keep in sync with disk.
-    - _p_*.py
+    # 一次性工作区（脚本 / 补丁载荷 / 审查副本），不属于项目源码。
+    # 已由 .gitignore 覆盖；此处保留是为了让 analyzer 不去扫描磁盘上的遗留目录。
     - _install_*/**
     - _patch_*/**
     - _ux_review/**
+    - _re_finch/**
     - build/**
     - android/**
     - ios/**
