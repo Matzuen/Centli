@@ -21,7 +21,7 @@ Future<void> showBookkeepingSheet(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    backgroundColor: Colors.white,
+    backgroundColor: Theme.of(context).colorScheme.surface,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
     ),
@@ -1065,7 +1065,7 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -1471,17 +1471,17 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
                                   color: scheme.onSurfaceVariant,
                                 ),
                                 filled: true,
-                                fillColor: const Color(0xFFF7F8FA),
+                                fillColor: scheme.surfaceContainerHighest,
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(14),
-                                  borderSide: const BorderSide(
-                                    color: Color(0xFFE6E8EC),
+                                  borderSide: BorderSide(
+                                    color: scheme.outlineVariant,
                                   ),
                                 ),
                                 enabledBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(14),
-                                  borderSide: const BorderSide(
-                                    color: Color(0xFFE6E8EC),
+                                  borderSide: BorderSide(
+                                    color: scheme.outlineVariant,
                                   ),
                                 ),
                                 contentPadding: const EdgeInsets.symmetric(
@@ -1558,7 +1558,7 @@ class _MetaChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Material(
-      color: Colors.white,
+      color: scheme.surface,
       borderRadius: BorderRadius.circular(20),
       child: InkWell(
         onTap: onTap,
@@ -1567,7 +1567,7 @@ class _MetaChip extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(10, 6, 12, 6),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: const Color(0xFFE6E8EC)),
+            border: Border.all(color: scheme.outlineVariant),
             boxShadow: [
               BoxShadow(
                 color: const Color(0xFF6B7A99).withValues(alpha: 0.04),
@@ -1706,18 +1706,19 @@ class _Keypad extends StatelessWidget {
     ['.', '0', 'AC', '\u2713'],
   ];
 
-  Color _bg(String k) {
-    if (k == '\u2713') return CentliTheme.keypadConfirm;
-    if (k == 'AC' || k == '\u232b') return CentliTheme.keypadAcBg;
-    if (k == '+' || k == '-') return CentliTheme.keypadOpBg;
-    return CentliTheme.keypadNumBg;
+  Color _bg(BuildContext context, String k) {
+    if (k == '\u2713') return CentliTheme.keypadConfirm(context);
+    if (k == 'AC' || k == '\u232b') return CentliTheme.keypadAcBg(context);
+    if (k == '+' || k == '-') return CentliTheme.keypadOpBg(context);
+    return CentliTheme.keypadNumBg(context);
   }
 
-  Color _fg(String k) {
+  Color _fg(BuildContext context, String k) {
+    final scheme = Theme.of(context).colorScheme;
     if (k == '\u2713') return Colors.white;
-    if (k == 'AC' || k == '\u232b') return const Color(0xFFC62828);
+    if (k == 'AC' || k == '\u232b') return CentliTheme.keypadAcFg(context);
     if (k == '+' || k == '-') return CentliTheme.softBlue;
-    return const Color(0xFF333333);
+    return scheme.onSurface;
   }
 
   @override
@@ -1737,7 +1738,7 @@ class _Keypad extends StatelessWidget {
                       child: SizedBox(
                         height: 52,
                         child: Material(
-                          color: _bg(k),
+                          color: _bg(context, k),
                           borderRadius: BorderRadius.circular(14),
                           child: InkWell(
                             borderRadius: BorderRadius.circular(14),
@@ -1755,7 +1756,7 @@ class _Keypad extends StatelessWidget {
                                 style: TextStyle(
                                   fontSize: k == 'AC' ? 16 : 20,
                                   fontWeight: FontWeight.w700,
-                                  color: _fg(k),
+                                  color: _fg(context, k),
                                 ),
                               ),
                             ),

@@ -62,10 +62,42 @@ abstract final class CentliTheme {
   static const incomeGreen = Color(0xFF43A047);
   static const softBlue = Color(0xFF5B8DEF);
   static const coral = Color(0xFFFF8A80);
-  static const keypadNumBg = Color(0xFFF5F6F8);
-  static const keypadOpBg = Color(0xFFD6E4FF);
-  static const keypadAcBg = Color(0xFFFFE0DB);
-  static const keypadConfirm = Color(0xFF4C7DFF);
+  // Light keypad (unchanged values — light appearance must stay identical).
+  static const keypadNumBgLight = Color(0xFFF5F6F8);
+  static const keypadOpBgLight = Color(0xFFD6E4FF);
+  static const keypadAcBgLight = Color(0xFFFFE0DB);
+  static const keypadConfirmLight = Color(0xFF4C7DFF);
+
+  // Dark keypad — deep tones coordinated with dark ColorScheme surfaces.
+  static const keypadNumBgDark = Color(0xFF2A2F3A);
+  static const keypadOpBgDark = Color(0xFF2E3A52);
+  static const keypadAcBgDark = Color(0xFF432E2E);
+  static const keypadConfirmDark = Color(0xFF4C7DFF);
+
+  /// Brightness-aware keypad backgrounds (prefer these over Light/Dark consts).
+  static Color keypadNumBg(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark
+          ? keypadNumBgDark
+          : keypadNumBgLight;
+
+  static Color keypadOpBg(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark
+          ? keypadOpBgDark
+          : keypadOpBgLight;
+
+  static Color keypadAcBg(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark
+          ? keypadAcBgDark
+          : keypadAcBgLight;
+
+  static Color keypadConfirm(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark
+          ? keypadConfirmDark
+          : keypadConfirmLight;
+
+  /// AC / backspace foreground — scheme.error reads on both light pink & dark red-brown.
+  static Color keypadAcFg(BuildContext context) =>
+      Theme.of(context).colorScheme.error;
 
   static List<Color> scaffoldGradientColors({bool dark = false}) {
     if (dark) {
