@@ -16,7 +16,8 @@ void main() {
           '(controllers keep previous card data)',
     );
     expect(
-      src.contains('const _PendingCard({super.key, required this.capture'),
+      RegExp(r'_PendingCard\(\{[^}]*super\.key', multiLine: true, dotAll: true)
+          .hasMatch(src),
       isTrue,
       reason: '_PendingCard must accept super.key so ValueKey can be applied',
     );

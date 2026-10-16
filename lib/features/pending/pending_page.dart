@@ -41,6 +41,20 @@ class PendingPage extends ConsumerStatefulWidget {
 }
 
 class _PendingPageBodyState extends ConsumerState<PendingPage> {
+  Future<({List<Category> cats, List<Account> accounts})>? _listsFuture;
+
+  Future<({List<Category> cats, List<Account> accounts})> _loadLists(
+    String ledgerId,
+  ) {
+    return _listsFuture ??= () async {
+      final db = ref.read(databaseProvider);
+      final out = await db.loadCategories(ledgerId, 'out');
+      final inn = await db.loadCategories(ledgerId, 'in');
+      final accounts = await db.loadActiveAccounts(ledgerId);
+      return (cats: [...out, ...inn], accounts: accounts);
+    }();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -207,17 +221,37 @@ class _PendingPageBodyState extends ConsumerState<PendingPage> {
                             : null,
                       );
                     }
-                    return ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(CentliSpacing.pageH, CentliSpacing.section, CentliSpacing.pageH, CentliSpacing.pageBottom),
-                      itemCount: items.length,
-                      separatorBuilder: (context, index) =>
-                          const SizedBox(height: 8),
-                      itemBuilder: (context, i) {
-                        final capture = items[i];
-                        return _PendingCard(
-                          key: ValueKey(capture.id),
-                          capture: capture,
-                          ledgerId: ledger.id,
+                    return FutureBuilder<
+                        ({List<Category> cats, List<Account> accounts})>(
+                      future: _loadLists(ledger.id),
+                      builder: (context, snap) {
+                        if (!snap.hasData) {
+                          return const Center(
+                            child: CircularProgressIndicator(),
+                          );
+                        }
+                        final cats = snap.data!.cats;
+                        final accounts = snap.data!.accounts;
+                        return ListView.separated(
+                          padding: const EdgeInsets.fromLTRB(
+                            CentliSpacing.pageH,
+                            CentliSpacing.section,
+                            CentliSpacing.pageH,
+                            CentliSpacing.pageBottom,
+                          ),
+                          itemCount: items.length,
+                          separatorBuilder: (context, index) =>
+                              const SizedBox(height: 8),
+                          itemBuilder: (context, i) {
+                            final capture = items[i];
+                            return _PendingCard(
+                              key: ValueKey(capture.id),
+                              capture: capture,
+                              ledgerId: ledger.id,
+                              categories: cats,
+                              accounts: accounts,
+                            );
+                          },
                         );
                       },
                     );
@@ -369,9 +403,17 @@ class _PendingPageBodyState extends ConsumerState<PendingPage> {
 }
 
 class _PendingCard extends ConsumerStatefulWidget {
-  const _PendingCard({super.key, required this.capture, required this.ledgerId});
+  const _PendingCard({
+    super.key,
+    required this.capture,
+    required this.ledgerId,
+    required this.categories,
+    required this.accounts,
+  });
   final PendingCapture capture;
   final String ledgerId;
+  final List<Category> categories;
+  final List<Account> accounts;
 
   @override
   ConsumerState<_PendingCard> createState() => _PendingCardState();
@@ -383,14 +425,15 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
   late final TextEditingController _merchantCtrl;
   late final TextEditingController _amountCtrl;
   bool _busy = false;
+  bool _expanded = false;
+  bool _categoryFallback = false;
+  bool _accountFallback = false;
 
   PendingCapture get c => widget.capture;
 
   @override
   void initState() {
     super.initState();
-    _categoryId = c.suggestedCategoryId;
-    _accountId = c.suggestedAccountId;
     _merchantCtrl = TextEditingController(text: c.merchant ?? '');
     final ccy = c.currency ?? 'CNY';
     final amt = c.amountMinor;
@@ -401,6 +444,46 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
               (ccy == 'JPY') ? 0 : 2,
             ),
     );
+    _applySuggestions();
+  }
+
+  @override
+  void didUpdateWidget(covariant _PendingCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.categories != widget.categories ||
+        oldWidget.accounts != widget.accounts ||
+        oldWidget.capture.id != widget.capture.id) {
+      _applySuggestions();
+    }
+  }
+
+  void _applySuggestions() {
+    final cats = widget.categories;
+    final accounts = widget.accounts;
+    var catId = c.suggestedCategoryId;
+    var catFb = false;
+    if (cats.isNotEmpty) {
+      if (catId == null || !cats.any((x) => x.id == catId)) {
+        catId = cats.first.id;
+        catFb = catId != c.suggestedCategoryId;
+      }
+    } else {
+      catId = null;
+    }
+    var accId = c.suggestedAccountId;
+    var accFb = false;
+    if (accounts.isNotEmpty) {
+      if (accId == null || !accounts.any((x) => x.id == accId)) {
+        accId = accounts.first.id;
+        accFb = accId != c.suggestedAccountId;
+      }
+    } else {
+      accId = null;
+    }
+    _categoryId = catId;
+    _accountId = accId;
+    _categoryFallback = catFb;
+    _accountFallback = accFb;
   }
 
   @override
@@ -408,6 +491,36 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
     _merchantCtrl.dispose();
     _amountCtrl.dispose();
     super.dispose();
+  }
+
+  String get _categoryName {
+    final id = _categoryId;
+    if (id == null) return '未选分类';
+    for (final cat in widget.categories) {
+      if (cat.id == id) return cat.name;
+    }
+    return '未选分类';
+  }
+
+  String get _accountName {
+    final id = _accountId;
+    if (id == null) return '未选账户';
+    for (final a in widget.accounts) {
+      if (a.id == id) return a.name;
+    }
+    return '未选账户';
+  }
+
+  String get _amountLabel {
+    final ccy = c.currency ?? 'CNY';
+    final raw = _amountCtrl.text.trim();
+    if (raw.isEmpty) {
+      if (c.amountMinor == null) return '金额未知';
+      return formatMinor(ccy, c.amountMinor!);
+    }
+    final major = double.tryParse(raw.replaceAll(',', ''));
+    if (major == null) return raw;
+    return formatMinor(ccy, toMinor(ccy, major));
   }
 
   @override
@@ -420,6 +533,9 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
             DateTime.fromMillisecondsSinceEpoch(c.happenAt!),
           );
     final isPending = c.status == 'pending';
+    final merchant = _merchantCtrl.text.trim().isEmpty
+        ? ((c.merchant ?? '').isEmpty ? '无商户' : c.merchant!)
+        : _merchantCtrl.text.trim();
 
     return CentliSoftCard(
       child: Padding(
@@ -448,106 +564,180 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
                   ),
               ],
             ),
-            const SizedBox(height: 4),
             if (isPending) ...[
-              TextField(
-                controller: _amountCtrl,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                decoration: InputDecoration(
-                  labelText: '金额 ($ccy)',
-                  border: const OutlineInputBorder(),
-                  isDense: true,
+              if (!_expanded) ...[
+                const SizedBox(height: 6),
+                Text(
+                  '$_amountLabel · $merchant · $_categoryName · $_accountName',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _merchantCtrl,
-                decoration: const InputDecoration(
-                  labelText: '商户',
-                  border: OutlineInputBorder(),
-                  isDense: true,
-                ),
-              ),
-              const SizedBox(height: 8),
-              FutureBuilder<List<Category>>(
-                future: () async {
-                  final db = ref.read(databaseProvider);
-                  final out = await db.loadCategories(widget.ledgerId, 'out');
-                  final inn = await db.loadCategories(widget.ledgerId, 'in');
-                  return [...out, ...inn];
-                }(),
-                builder: (context, snap) {
-                  final cats = snap.data ?? const <Category>[];
-                  return DropdownButtonFormField<String>(
-                    initialValue: _categoryId != null &&
-                            cats.any((x) => x.id == _categoryId)
-                        ? _categoryId
-                        : null,
-                    items: [
-                      for (final cat in cats)
-                        DropdownMenuItem(value: cat.id, child: Text(cat.name)),
-                    ],
-                    onChanged: (v) => setState(() => _categoryId = v),
-                    decoration: const InputDecoration(
-                      labelText: '分类',
-                      border: OutlineInputBorder(),
-                      isDense: true,
+                if (_categoryFallback || _accountFallback)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      [
+                        if (_categoryFallback) '分类已回落第一项',
+                        if (_accountFallback) '账户已回落第一项',
+                      ].join(' · '),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: scheme.error,
+                          ),
                     ),
-                  );
-                },
-              ),
-              const SizedBox(height: 8),
-              FutureBuilder<List<Account>>(
-                future: ref
-                    .read(databaseProvider)
-                    .loadActiveAccounts(widget.ledgerId),
-                builder: (context, snap) {
-                  final accounts = snap.data ?? const <Account>[];
-                  return DropdownButtonFormField<String>(
-                    initialValue: _accountId != null &&
-                            accounts.any((x) => x.id == _accountId)
-                        ? _accountId
+                  ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    TextButton(
+                      onPressed: _busy ? null : _ignore,
+                      child: const Text('忽略'),
+                    ),
+                    const Spacer(),
+                    TextButton(
+                      onPressed: _busy
+                          ? null
+                          : () => setState(() => _expanded = true),
+                      child: const Text('调整'),
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton(
+                      onPressed: _busy ? null : _confirm,
+                      child: const Text('入账'),
+                    ),
+                  ],
+                ),
+              ] else ...[
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _amountCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: InputDecoration(
+                    labelText: '金额 ($ccy)',
+                    border: const OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _merchantCtrl,
+                  decoration: const InputDecoration(
+                    labelText: '商户',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  initialValue: _categoryId != null &&
+                          widget.categories.any((x) => x.id == _categoryId)
+                      ? _categoryId
+                      : null,
+                  items: [
+                    for (final cat in widget.categories)
+                      DropdownMenuItem(value: cat.id, child: Text(cat.name)),
+                  ],
+                  onChanged: (v) => setState(() {
+                    _categoryId = v;
+                    _categoryFallback = false;
+                  }),
+                  decoration: InputDecoration(
+                    labelText: '分类',
+                    border: const OutlineInputBorder(),
+                    isDense: true,
+                    enabledBorder: _categoryFallback
+                        ? OutlineInputBorder(
+                            borderSide: BorderSide(
+                              color: scheme.error,
+                              width: 1.2,
+                            ),
+                          )
                         : null,
-                    items: [
-                      for (final a in accounts)
-                        DropdownMenuItem(
-                          value: a.id,
-                          child: Text('${a.name} · ${a.currency}'),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  initialValue: _accountId != null &&
+                          widget.accounts.any((x) => x.id == _accountId)
+                      ? _accountId
+                      : null,
+                  items: [
+                    for (final a in widget.accounts)
+                      DropdownMenuItem(
+                        value: a.id,
+                        child: Text('${a.name} · ${a.currency}'),
+                      ),
+                  ],
+                  onChanged: (v) => setState(() {
+                    _accountId = v;
+                    _accountFallback = false;
+                  }),
+                  decoration: InputDecoration(
+                    labelText: '账户',
+                    border: const OutlineInputBorder(),
+                    isDense: true,
+                    enabledBorder: _accountFallback
+                        ? OutlineInputBorder(
+                            borderSide: BorderSide(
+                              color: scheme.error,
+                              width: 1.2,
+                            ),
+                          )
+                        : null,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Theme(
+                  data: Theme.of(context)
+                      .copyWith(dividerColor: Colors.transparent),
+                  child: ExpansionTile(
+                    tilePadding: EdgeInsets.zero,
+                    childrenPadding: EdgeInsets.zero,
+                    title: Text(
+                      '原文',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    children: [
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          c.rawText,
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: scheme.onSurfaceVariant,
+                                  ),
                         ),
+                      ),
                     ],
-                    onChanged: (v) => setState(() => _accountId = v),
-                    decoration: const InputDecoration(
-                      labelText: '账户',
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(height: 8),
-              Text(
-                c.rawText,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  TextButton(
-                    onPressed: _busy ? null : _ignore,
-                    child: const Text('忽略'),
                   ),
-                  const Spacer(),
-                  FilledButton(
-                    onPressed: _busy ? null : _confirm,
-                    child: const Text('入账'),
-                  ),
-                ],
-              ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    TextButton(
+                      onPressed: _busy ? null : _ignore,
+                      child: const Text('忽略'),
+                    ),
+                    TextButton(
+                      onPressed: _busy
+                          ? null
+                          : () => setState(() => _expanded = false),
+                      child: const Text('收起'),
+                    ),
+                    const Spacer(),
+                    FilledButton(
+                      onPressed: _busy ? null : _confirm,
+                      child: const Text('入账'),
+                    ),
+                  ],
+                ),
+              ],
             ] else ...[
               Text(
                 c.amountMinor == null
@@ -566,17 +756,6 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
                       color: scheme.onSurfaceVariant,
                     ),
               ),
-              if (c.status == 'ignored') ...[
-                const SizedBox(height: 12),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: FilledButton.tonalIcon(
-                    onPressed: _busy ? null : _unignore,
-                    icon: const Icon(Icons.undo),
-                    label: const Text('恢复待确认'),
-                  ),
-                ),
-              ],
             ],
           ],
         ),
@@ -584,21 +763,11 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
     );
   }
 
-  Future<void> _unignore() async {
+  Future<void> _ignore() async {
     setState(() => _busy = true);
     try {
-      await ref.read(databaseProvider).unignorePendingCapture(c.id);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('已恢复为待确认')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('恢复失败：$e')),
-        );
-      }
+      await ref.read(databaseProvider).ignorePendingCapture(c.id);
+      await NotificationCaptureStub.cancelPendingConfirm(c.id);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -649,16 +818,6 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
           SnackBar(content: Text('入账失败: $e')),
         );
       }
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  Future<void> _ignore() async {
-    setState(() => _busy = true);
-    try {
-      await ref.read(databaseProvider).ignorePendingCapture(c.id);
-      await NotificationCaptureStub.cancelPendingConfirm(c.id);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
