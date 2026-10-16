@@ -194,6 +194,7 @@ class ParseResult {
     required this.ok,
     this.templateId,
     this.accountHint,
+    this.direction = 'out',
   });
 
   final int? amountMinor;
@@ -203,6 +204,8 @@ class ParseResult {
   final bool ok;
   final String? templateId;
   final String? accountHint;
+  /// From matched [NotiTemplate.direction]; defaults to `'out'`.
+  final String direction;
 }
 
 /// Shared amount pattern: ¥/￥/$/€ + optional currency code, capture group 1 = number.
@@ -283,6 +286,7 @@ ParseResult parseNotification(
         ok: extracted != null,
         templateId: t.id,
         accountHint: t.defaultAccountHint,
+        direction: NotiTemplate.normalizeDirection(t.direction),
       );
     } catch (_) {
       // Bad regex / rule - skip and try next template (R1-3 resilience).
@@ -376,6 +380,7 @@ ParseExplainResult explainNotificationParse(
       ok: extracted != null,
       templateId: t.id,
       accountHint: t.defaultAccountHint,
+      direction: NotiTemplate.normalizeDirection(t.direction),
     );
     steps.add('命中「$label」(${t.id})');
     final reason = extracted == null
@@ -720,6 +725,7 @@ ParseResult parseManualCaptureText(
     ok: extracted != null,
     templateId: isTransfer ? 'manual_transfer_zh' : 'manual_pay_zh',
     accountHint: hint,
+    direction: 'out',
   );
 }
 

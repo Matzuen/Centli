@@ -276,4 +276,52 @@ group('manual capture parser (share/OCR/clipboard)', () {
   });
 });
 
+
+  group('ParseResult.direction', () {
+    test('expense pay success carries direction out', () {
+      final raw = RawNotification(
+        pkg: 'com.eg.android.AlipayGphone',
+        title: '',
+        text: '向 星巴克 付款成功 ¥28.50',
+        whenMs: 1,
+      );
+      final r = parseNotification(raw);
+      expect(r.templateId, isNotNull);
+      expect(r.direction, 'out');
+    });
+
+    test('unmatched returns direction out default', () {
+      final raw = RawNotification(
+        pkg: 'com.unknown.app',
+        title: 'hi',
+        text: 'hello',
+        whenMs: 1,
+      );
+      final r = parseNotification(raw);
+      expect(r.templateId, isNull);
+      expect(r.direction, 'out');
+    });
+
+    test('template direction in is forwarded', () {
+      final t = NotiTemplate(
+        id: 'income_test',
+        packages: const ['com.eg.android.AlipayGphone'],
+        mustContainRegex: '收款到账',
+        amountRegex: r'¥\s*([0-9]+(?:\.[0-9]{1,2})?)',
+        direction: 'in',
+      );
+      final raw = RawNotification(
+        pkg: 'com.eg.android.AlipayGphone',
+        title: '',
+        text: '收款到账 ¥200.00',
+        whenMs: 1,
+      );
+      final r = parseNotification(raw, [t]);
+      expect(r.templateId, 'income_test');
+      expect(r.direction, 'in');
+      expect(r.ok, isTrue);
+      expect(r.amountMinor, 20000);
+    });
+  });
+
 }
