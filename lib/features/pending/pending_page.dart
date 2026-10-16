@@ -667,6 +667,23 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
   String _pkgLabel(String pkg) {
     if (pkg.contains('Alipay') || pkg.contains('alipay')) return '支付宝';
     if (pkg.contains('tencent.mm')) return '微信';
-    return pkg;
+    if (pkg.startsWith('manual:')) {
+      final kind = pkg.substring('manual:'.length);
+      switch (kind) {
+        case 'share':
+          return '分享导入';
+        case 'share_image':
+          return '分享图片';
+        case 'clipboard':
+          return '剪贴板导入';
+        case 'ocr':
+          return '截图识别';
+        case 'url':
+          return '快捷指令';
+        default:
+          return '手动导入';
+      }
+    }
+    return '其它应用';
   }
 }
