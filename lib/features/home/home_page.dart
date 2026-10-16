@@ -7,6 +7,7 @@ import '../../app/theme.dart';
 import '../../core/utils/date_range.dart';
 import '../../core/widgets/date_range_control.dart';
 import '../../core/widgets/txn_grouped_list.dart';
+import '../../core/widgets/centli_trend_chart.dart';
 import '../../core/utils/money.dart';
 import '../../core/utils/fx.dart';
 import '../../data/db/centli_database.dart';
@@ -59,6 +60,16 @@ final _netWorthHomeProvider =
       return ref
           .read(databaseProvider)
           .netWorthInBase(args.ledgerId, args.base);
+    });
+
+final _homeAccountsProvider =
+    StreamProvider.family<List<Account>, String>((ref, ledgerId) {
+      return ref.watch(databaseProvider).watchActiveAccounts(ledgerId);
+    });
+
+final _homeBalancesProvider =
+    StreamProvider.family<Map<String, int>, String>((ref, ledgerId) {
+      return ref.watch(databaseProvider).watchAccountBalances(ledgerId);
     });
 
 final _dailyExpenseProvider =
@@ -151,6 +162,28 @@ class _HomePageState extends ConsumerState<HomePage> {
               final nw = ref.watch(
                 _netWorthHomeProvider((ledgerId: ledgerId, base: base)),
               );
+              final homeAccounts =
+                  ref.watch(_homeAccountsProvider(ledgerId)).valueOrNull ??
+                      const <Account>[];
+              final homeBalances =
+                  ref.watch(_homeBalancesProvider(ledgerId)).valueOrNull ??
+                      const <String, int>{};
+              final fxBook = ref.watch(fxBookProvider).valueOrNull;
+              final alSplit = fxBook == null
+                  ? null
+                  : assetLiabilityInBase(
+                      accounts: [
+                        for (final a in homeAccounts)
+                          (
+                            currency: a.currency,
+                            balanceMinor:
+                                homeBalances[a.id] ?? a.openingBalanceMinor,
+                          ),
+                      ],
+                      book: fxBook,
+                      baseCurrency: base,
+                      onDay: FxBook.todayLocal(),
+                    );
               final expenseSeries = ref.watch(_dailyExpenseProvider(baseArgs));
               final incomeSeries = ref.watch(_dailyIncomeProvider(baseArgs));
               final nowLocal = DateTime.now();
@@ -296,6 +329,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                               range: range,
                               netWorth: nw,
                               summary: summary,
+                              assetLiability: alSplit,
                             ),
                             const SizedBox(height: CentliSpacing.section),
                             _HomePendingSection(ledgerId: ledgerId, hide: hide),
@@ -305,6 +339,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                               hide: hide,
                               incomeSeries: incomeSeries,
                               expenseSeries: expenseSeries,
+                              netWorth: nw,
                             ),
                             const SizedBox(height: CentliSpacing.item),
                             CentliSoftCard(
@@ -376,6 +411,8 @@ class _HomePageState extends ConsumerState<HomePage> {
                               hide: hide,
                               base: base,
                               selectedDay: _calendarDay,
+                              incomeSeries: calIncomeSeries,
+                              expenseSeries: calExpenseSeries,
                               onMonthChanged: (m) {
                                 setState(() {
                                   _calendarMonth = m;
@@ -492,6 +529,7 @@ class _LedgerSummaryCard extends StatelessWidget {
     required this.range,
     required this.netWorth,
     required this.summary,
+    required this.assetLiability,
   });
 
   final String base;
@@ -499,6 +537,7 @@ class _LedgerSummaryCard extends StatelessWidget {
   final DateRangeWindow range;
   final AsyncValue<BaseNetWorth> netWorth;
   final AsyncValue<BaseRangeSummary> summary;
+  final BaseAssetLiability? assetLiability;
 
   @override
   Widget build(BuildContext context) {
@@ -509,13 +548,17 @@ class _LedgerSummaryCard extends StatelessWidget {
     final s = summary.valueOrNull;
     final income = s?.incomeMinor ?? 0;
     final expense = s?.expenseMinor ?? 0;
+    final delta = income - expense;
     final net = nw?.totalMinor ?? 0;
+    final asset = assetLiability?.assetMinor ?? (net > 0 ? net : 0);
+    final liability = assetLiability?.liabilityMinor ?? (net < 0 ? -net : 0);
+    final rangeLabel = range.label;
 
     if (failed) {
       return CentliSoftCard(
         padding: const EdgeInsets.all(CentliSpacing.cardPad),
         child: Text(
-          '加载失败，下拉重试',
+          '\u52a0\u8f7d\u5931\u8d25\uff0c\u4e0b\u62c9\u91cd\u8bd5',
           style: Theme.of(context).textTheme.bodySmall,
         ),
       );
@@ -524,7 +567,7 @@ class _LedgerSummaryCard extends StatelessWidget {
       return CentliSoftCard(
         padding: const EdgeInsets.all(CentliSpacing.cardPad),
         child: SizedBox(
-          height: 96,
+          height: 120,
           child: Center(
             child: CircularProgressIndicator(
               strokeWidth: 2,
@@ -535,51 +578,92 @@ class _LedgerSummaryCard extends StatelessWidget {
       );
     }
 
+    final deltaPositive = delta >= 0;
+    final deltaColor =
+        deltaPositive ? CentliTheme.incomeGreen : CentliTheme.expenseRed;
+
     return CentliSoftCard(
       padding: const EdgeInsets.all(CentliSpacing.cardPad),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '${range.label}支出',
+            '\u51c0\u8d44\u4ea7',
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
               color: scheme.onSurfaceVariant,
             ),
           ),
           const SizedBox(height: CentliSpacing.dense),
-          Text(
-            formatMinor(base, expense, hide: hide),
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              color: CentliTheme.expenseRed,
-              letterSpacing: -0.4,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: CentliSpacing.section),
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Expanded(
-                child: _kv(
-                  context,
-                  '${range.label}收入',
-                  formatMinor(base, income, hide: hide),
-                  valueColor: CentliTheme.incomeGreen,
+                child: Text(
+                  formatMinor(base, net, hide: hide),
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    letterSpacing: -0.4,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
+              if (s != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        deltaPositive
+                            ? Icons.arrow_upward_rounded
+                            : Icons.arrow_downward_rounded,
+                        size: 16,
+                        color: deltaColor,
+                      ),
+                      const SizedBox(width: 2),
+                      Text(
+                        '${deltaPositive ? '+' : '-'}${formatMinor(base, delta.abs(), hide: hide)}',
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: deltaColor,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: CentliSpacing.section),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
               Expanded(
-                child: _kv(
+                child: _finCol(
                   context,
-                  '全期净资产',
-                  formatMinor(base, net, hide: hide),
-                  muted: true,
+                  topLabel: '\u8d44\u4ea7',
+                  topValue: formatMinor(base, asset, hide: hide),
+                  topColor: CentliTheme.incomeGreen,
+                  botLabel: '$rangeLabel\u6536\u5165',
+                  botValue: formatMinor(base, income, hide: hide),
+                  botColor: CentliTheme.incomeGreen,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _finCol(
+                  context,
+                  topLabel: '\u8d1f\u503a',
+                  topValue: formatMinor(base, liability, hide: hide),
+                  topColor: CentliTheme.expenseRed,
+                  botLabel: '$rangeLabel\u652f\u51fa',
+                  botValue: formatMinor(base, expense, hide: hide),
+                  botColor: CentliTheme.expenseRed,
                 ),
               ),
             ],
           ),
           const SizedBox(height: CentliSpacing.item),
           Text(
-            '本位币 $base（按发生日汇率折算）',
+            '\u672c\u4f4d\u5e01 $base\uff08\u6309\u53d1\u751f\u65e5\u6c47\u7387\u6298\u7b97\uff1b\u533a\u95f4\u6da8\u8dcc=\u6536\u5165-\u652f\u51fa\uff09',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: scheme.onSurfaceVariant,
             ),
@@ -589,12 +673,14 @@ class _LedgerSummaryCard extends StatelessWidget {
     );
   }
 
-  Widget _kv(
-    BuildContext context,
-    String k,
-    String v, {
-    Color? valueColor,
-    bool muted = false,
+  Widget _finCol(
+    BuildContext context, {
+    required String topLabel,
+    required String topValue,
+    required Color topColor,
+    required String botLabel,
+    required String botValue,
+    required Color botColor,
   }) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
@@ -602,19 +688,32 @@ class _LedgerSummaryCard extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          k,
+          topLabel,
           style: theme.textTheme.bodySmall?.copyWith(
             color: scheme.onSurfaceVariant,
           ),
         ),
         const SizedBox(height: 2),
         Text(
-          v,
-          style: (muted ? theme.textTheme.bodyMedium : theme.textTheme.labelLarge)
-              ?.copyWith(
-            fontWeight: muted ? FontWeight.w600 : FontWeight.w700,
-            color: valueColor ??
-                (muted ? scheme.onSurfaceVariant : scheme.onSurface),
+          topValue,
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w700,
+            color: topColor,
+          ),
+        ),
+        const SizedBox(height: CentliSpacing.item),
+        Text(
+          botLabel,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: scheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          botValue,
+          style: theme.textTheme.labelLarge?.copyWith(
+            fontWeight: FontWeight.w700,
+            color: botColor,
           ),
         ),
       ],
@@ -628,43 +727,34 @@ class _NetChangeChartCard extends StatelessWidget {
     required this.hide,
     required this.incomeSeries,
     required this.expenseSeries,
+    required this.netWorth,
   });
 
   final String base;
   final bool hide;
   final AsyncValue<List<({DateTime dayLocal, int totalMinor})>> incomeSeries;
   final AsyncValue<List<({DateTime dayLocal, int totalMinor})>> expenseSeries;
-
-  String _fmtMajor(double major) {
-    if (hide) return '****';
-    return formatMinor(base, (major * 100).round(), hide: false);
-  }
-
-  String _axisLabel(double value) {
-    if (hide) return '****';
-    final abs = value.abs();
-    if (abs >= 1000) return '${(value / 1000).toStringAsFixed(1)}k';
-    if (abs >= 10) return value.toStringAsFixed(0);
-    return value.toStringAsFixed(1);
-  }
+  final AsyncValue<BaseNetWorth> netWorth;
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final income = incomeSeries.valueOrNull ?? const [];
     final expense = expenseSeries.valueOrNull ?? const [];
     final n = income.length > expense.length ? income.length : expense.length;
-    var running = 0.0;
-    var changeDays = 0;
-    final spots = <FlSpot>[];
+    final endNetMajor = (netWorth.valueOrNull?.totalMinor ?? 0) / 100.0;
+
+    // Reconstruct daily net-worth path ending at current NW:
+    // dayNet = income - expense; periodNet = sum(dayNet);
+    // startNW = endNW - periodNet; then accumulate forward.
+    var periodNet = 0.0;
+    final dayNets = <double>[];
     final dayLabels = <DateTime>[];
     for (var i = 0; i < n; i++) {
       final inV = i < income.length ? income[i].totalMinor : 0;
       final outV = i < expense.length ? expense[i].totalMinor : 0;
-      final dayNet = inV - outV;
-      if (dayNet != 0) changeDays++;
-      running += dayNet / 100.0;
-      spots.add(FlSpot(i.toDouble(), running));
+      final dayNet = (inV - outV) / 100.0;
+      dayNets.add(dayNet);
+      periodNet += dayNet;
       final day = i < income.length
           ? income[i].dayLocal
           : (i < expense.length
@@ -672,199 +762,20 @@ class _NetChangeChartCard extends StatelessWidget {
                 : DateTime.fromMillisecondsSinceEpoch(0));
       dayLabels.add(day);
     }
-
-    final muted = Theme.of(context).textTheme.bodySmall?.copyWith(
-      color: scheme.onSurfaceVariant,
-    );
-
-    Widget body;
-    String? caption;
-    if (spots.length < 2) {
-      body = Center(child: Text('暂无趋势数据', style: muted));
-    } else {
-      final ys = spots.map((s) => s.y);
-      final yMinRaw = ys.reduce((a, b) => a < b ? a : b);
-      final yMaxRaw = ys.reduce((a, b) => a > b ? a : b);
-      final end = spots.last.y;
-      caption =
-          '末值 ${_fmtMajor(end)} · 最大 ${_fmtMajor(yMaxRaw)} · 最小 ${_fmtMajor(yMinRaw)}';
-
-      if (changeDays < 2) {
-        body = Center(
-          child: Text(
-            '区间变动较少，累计 ${_fmtMajor(end)}',
-            style: muted,
-            textAlign: TextAlign.center,
-          ),
-        );
-      } else {
-        final span = (yMaxRaw - yMinRaw).abs();
-        final pad = span < 1 ? 1.0 : span * 0.18;
-        var minY = yMinRaw - pad;
-        var maxY = yMaxRaw + pad;
-        if (yMinRaw >= 0) minY = 0;
-        if (yMaxRaw <= 0) maxY = 0;
-        if ((maxY - minY).abs() < 1) {
-          minY -= 1;
-          maxY += 1;
-        }
-        final yInterval = (maxY - minY) / 2;
-        final useCurve = changeDays >= 4;
-        final labelEvery = n <= 7 ? 1 : (n <= 14 ? 2 : (n / 5).ceil());
-
-        body = LineChart(
-          LineChartData(
-            minX: 0,
-            maxX: (n - 1).clamp(0, 9999).toDouble(),
-            minY: minY,
-            maxY: maxY,
-            clipData: const FlClipData.all(),
-            gridData: FlGridData(
-              show: true,
-              drawVerticalLine: false,
-              horizontalInterval: yInterval,
-              getDrawingHorizontalLine: (v) => FlLine(
-                color: scheme.outlineVariant.withValues(alpha: 0.45),
-                strokeWidth: 1,
-              ),
-            ),
-            borderData: FlBorderData(show: false),
-            titlesData: FlTitlesData(
-              topTitles: const AxisTitles(
-                sideTitles: SideTitles(showTitles: false),
-              ),
-              rightTitles: const AxisTitles(
-                sideTitles: SideTitles(showTitles: false),
-              ),
-              leftTitles: AxisTitles(
-                sideTitles: SideTitles(
-                  showTitles: true,
-                  reservedSize: 40,
-                  interval: yInterval,
-                  getTitlesWidget: (value, meta) {
-                    if (value < minY - 0.01 || value > maxY + 0.01) {
-                      return const SizedBox.shrink();
-                    }
-                    // Prefer top / mid / bottom ticks only.
-                    final nearTop = (value - maxY).abs() <= yInterval * 0.15;
-                    final nearBot = (value - minY).abs() <= yInterval * 0.15;
-                    final nearMid =
-                        (value - (minY + maxY) / 2).abs() <= yInterval * 0.15;
-                    if (!nearTop && !nearBot && !nearMid) {
-                      return const SizedBox.shrink();
-                    }
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 4),
-                      child: Text(
-                        _axisLabel(value),
-                        style: Theme.of(context).textTheme.labelSmall,
-                        maxLines: 1,
-                      ),
-                    );
-                  },
-                ),
-              ),
-              bottomTitles: AxisTitles(
-                sideTitles: SideTitles(
-                  showTitles: true,
-                  reservedSize: 22,
-                  interval: 1,
-                  getTitlesWidget: (value, meta) {
-                    final i = value.round();
-                    if (i < 0 || i >= n) return const SizedBox.shrink();
-                    if (i % labelEvery != 0 && i != n - 1) {
-                      return const SizedBox.shrink();
-                    }
-                    final d = dayLabels[i];
-                    if (d.millisecondsSinceEpoch == 0) {
-                      return const SizedBox.shrink();
-                    }
-                    return Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text(
-                        '${d.month}/${d.day}',
-                        style: Theme.of(context).textTheme.labelSmall,
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ),
-            lineTouchData: LineTouchData(
-              handleBuiltInTouches: true,
-              touchTooltipData: LineTouchTooltipData(
-                getTooltipItems: (touched) {
-                  return touched.map((t) {
-                    final i = t.x.round().clamp(0, n - 1);
-                    final d = dayLabels[i];
-                    final dayLabel = d.millisecondsSinceEpoch == 0
-                        ? ''
-                        : '${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-                    final amt = _fmtMajor(t.y);
-                    return LineTooltipItem(
-                      dayLabel.isEmpty ? amt : '$dayLabel\n$amt',
-                      TextStyle(
-                        color: scheme.onInverseSurface,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 12,
-                      ),
-                    );
-                  }).toList();
-                },
-              ),
-            ),
-            lineBarsData: [
-              LineChartBarData(
-                spots: spots,
-                isCurved: useCurve,
-                curveSmoothness: 0.2,
-                color: CentliTheme.incomeGreen,
-                barWidth: 2.2,
-                isStrokeCapRound: true,
-                dotData: FlDotData(
-                  show: true,
-                  checkToShowDot: (spot, bar) {
-                    if (spot.x == spots.last.x) return true;
-                    final i = spot.x.round();
-                    if (i <= 0) return spot.y != 0;
-                    return (spot.y - spots[i - 1].y).abs() > 0.001;
-                  },
-                  getDotPainter: (spot, pct, bar, index) => FlDotCirclePainter(
-                    radius: spot.x == spots.last.x ? 3.5 : 2.5,
-                    color: CentliTheme.incomeGreen,
-                    strokeWidth: 0,
-                  ),
-                ),
-                belowBarData: BarAreaData(
-                  show: true,
-                  color: CentliTheme.incomeGreen.withValues(alpha: 0.12),
-                ),
-              ),
-            ],
-          ),
-        );
-      }
+    var running = endNetMajor - periodNet;
+    final spots = <FlSpot>[];
+    for (var i = 0; i < n; i++) {
+      running += dayNets[i];
+      spots.add(FlSpot(i.toDouble(), running));
     }
 
-    return CentliSoftCard(
-      padding: const EdgeInsets.all(CentliSpacing.cardPad),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '区间累计净流入',
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          if (caption != null) ...[
-            const SizedBox(height: 2),
-            Text(caption, style: muted),
-          ],
-          const SizedBox(height: CentliSpacing.item),
-          SizedBox(height: 120, child: body),
-        ],
-      ),
+    return CentliTrendChart(
+      title: '\u51c0\u8d44\u4ea7\u53d8\u5316',
+      spots: spots,
+      dayLabels: dayLabels,
+      base: base,
+      hide: hide,
+      sparseMessage: '\u533a\u95f4\u53d8\u52a8\u8f83\u5c11',
     );
   }
 }
@@ -875,6 +786,8 @@ class _CalendarCard extends StatelessWidget {
     required this.hide,
     required this.base,
     required this.selectedDay,
+    required this.incomeSeries,
+    required this.expenseSeries,
     required this.onMonthChanged,
     required this.onSelectDay,
   });
@@ -883,9 +796,59 @@ class _CalendarCard extends StatelessWidget {
   final bool hide;
   final String base;
   final DateTime? selectedDay;
+  final AsyncValue<List<({DateTime dayLocal, int totalMinor})>> incomeSeries;
+  final AsyncValue<List<({DateTime dayLocal, int totalMinor})>> expenseSeries;
   final ValueChanged<DateTime> onMonthChanged;
   final ValueChanged<DateTime> onSelectDay;
 
+  Map<int, int> _dayMap(
+    List<({DateTime dayLocal, int totalMinor})> series,
+    DateTime monthStart,
+  ) {
+    final m = <int, int>{};
+    for (final e in series) {
+      if (e.dayLocal.year == monthStart.year &&
+          e.dayLocal.month == monthStart.month) {
+        m[e.dayLocal.day] = e.totalMinor;
+      }
+    }
+    return m;
+  }
+
+  String _compact(int minor) {
+    if (hide) return '**';
+    final major = minor / 100.0;
+    if (major.abs() >= 10000) {
+      return '${(major / 10000).toStringAsFixed(1)}\u4e07';
+    }
+    if (major.abs() >= 1000) {
+      return '${(major / 1000).toStringAsFixed(1)}k';
+    }
+    if (major == major.roundToDouble()) {
+      return major.toStringAsFixed(0);
+    }
+    return major.toStringAsFixed(0);
+  }
+
+  Widget _amtLine(BuildContext context, int minor, Color color) {
+    if (minor == 0) return const SizedBox.shrink();
+    return MediaQuery.withClampedTextScaling(
+      maxScaleFactor: 1.1,
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(
+          _compact(minor),
+          maxLines: 1,
+          style: TextStyle(
+            fontSize: 9,
+            height: 1.05,
+            fontWeight: FontWeight.w600,
+            color: color,
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -896,7 +859,18 @@ class _CalendarCard extends StatelessWidget {
     final thisMonth = DateTime(today.year, today.month, 1);
     final isCurrentMonth =
         monthStart.year == thisMonth.year && monthStart.month == thisMonth.month;
-    final labels = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+    final labels = [
+      '\u5468\u65e5',
+      '\u5468\u4e00',
+      '\u5468\u4e8c',
+      '\u5468\u4e09',
+      '\u5468\u56db',
+      '\u5468\u4e94',
+      '\u5468\u516d',
+    ];
+    final incomeByDay = _dayMap(incomeSeries.valueOrNull ?? const [], monthStart);
+    final expenseByDay =
+        _dayMap(expenseSeries.valueOrNull ?? const [], monthStart);
 
     return CentliSoftCard(
       padding: const EdgeInsets.all(CentliSpacing.cardPad),
@@ -905,7 +879,7 @@ class _CalendarCard extends StatelessWidget {
           Row(
             children: [
               IconButton(
-                tooltip: '上一月',
+                tooltip: '\u4e0a\u4e00\u6708',
                 onPressed: () {
                   final p = DateTime(monthStart.year, monthStart.month - 1, 1);
                   onMonthChanged(p);
@@ -914,14 +888,14 @@ class _CalendarCard extends StatelessWidget {
               ),
               Expanded(
                 child: Text(
-                  '${monthStart.year}年${monthStart.month}月',
+                  '${monthStart.year}\u5e74${monthStart.month}\u6708',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.titleMedium
                       ?.copyWith(fontWeight: FontWeight.w700),
                 ),
               ),
               IconButton(
-                tooltip: '下一月',
+                tooltip: '\u4e0b\u4e00\u6708',
                 onPressed: isCurrentMonth
                     ? null
                     : () {
@@ -957,7 +931,7 @@ class _CalendarCard extends StatelessWidget {
               crossAxisCount: 7,
               mainAxisSpacing: 4,
               crossAxisSpacing: 2,
-              childAspectRatio: 0.72,
+              childAspectRatio: 0.62,
             ),
             itemBuilder: (context, index) {
               if (index < firstWeekday) return const SizedBox.shrink();
@@ -972,6 +946,8 @@ class _CalendarCard extends StatelessWidget {
                   today.year == date.year &&
                   today.month == date.month &&
                   today.day == date.day;
+              final inMinor = incomeByDay[day] ?? 0;
+              final outMinor = expenseByDay[day] ?? 0;
               return InkWell(
                 borderRadius: BorderRadius.circular(10),
                 onTap: () => onSelectDay(date),
@@ -984,7 +960,7 @@ class _CalendarCard extends StatelessWidget {
                               : null),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  padding: const EdgeInsets.only(top: 4),
+                  padding: const EdgeInsets.only(top: 2, left: 1, right: 1),
                   child: Column(
                     children: [
                       Text(
@@ -996,6 +972,9 @@ class _CalendarCard extends StatelessWidget {
                           fontSize: 13,
                         ),
                       ),
+                      const SizedBox(height: 1),
+                      _amtLine(context, inMinor, CentliTheme.incomeGreen),
+                      _amtLine(context, outMinor, CentliTheme.expenseRed),
                     ],
                   ),
                 ),
@@ -1006,7 +985,6 @@ class _CalendarCard extends StatelessWidget {
       ),
     );
   }
-
 }
 
 class _DailyTrendCard extends StatelessWidget {
@@ -1028,78 +1006,29 @@ class _DailyTrendCard extends StatelessWidget {
     final income = incomeSeries.valueOrNull ?? const [];
     final n = expense.length > income.length ? expense.length : income.length;
     final spots = <FlSpot>[];
+    final dayLabels = <DateTime>[];
     for (var i = 0; i < n; i++) {
       final outV = i < expense.length ? expense[i].totalMinor : 0;
       final inV = i < income.length ? income[i].totalMinor : 0;
-      spots.add(FlSpot(i.toDouble(), (inV + outV) / 100.0));
+      // Daily net inflow (same polarity as overview chart day component).
+      spots.add(FlSpot(i.toDouble(), (inV - outV) / 100.0));
+      final day = i < income.length
+          ? income[i].dayLocal
+          : (i < expense.length
+                ? expense[i].dayLocal
+                : DateTime.fromMillisecondsSinceEpoch(0));
+      dayLabels.add(day);
     }
 
-    return CentliSoftCard(
-      padding: const EdgeInsets.all(CentliSpacing.cardPad),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '每日趋势',
-            style: Theme.of(context).textTheme.titleMedium
-                ?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: CentliSpacing.item),
-          SizedBox(
-            height: 88,
-            child: _buildDailyTrendChart(context, spots),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDailyTrendChart(BuildContext context, List<FlSpot> spots) {
-    final scheme = Theme.of(context).colorScheme;
-    final muted = Theme.of(context).textTheme.bodySmall?.copyWith(
-      color: scheme.onSurfaceVariant,
-    );
-    if (spots.length < 2) {
-      return Center(child: Text('暂无趋势数据', style: muted));
-    }
-    final active = spots.where((s) => s.y > 0).length;
-    if (active < 2) {
-      return Center(child: Text('本月变动较少', style: muted));
-    }
-    final maxYRaw = spots.map((s) => s.y).reduce((a, b) => a > b ? a : b);
-    final maxY = maxYRaw <= 0 ? 1.0 : maxYRaw * 1.15;
-    return LineChart(
-      LineChartData(
-        minY: 0,
-        maxY: maxY,
-        clipData: const FlClipData.all(),
-        gridData: FlGridData(
-          show: true,
-          drawVerticalLine: false,
-          horizontalInterval: maxY / 2,
-          getDrawingHorizontalLine: (v) => FlLine(
-            color: scheme.outlineVariant.withValues(alpha: 0.45),
-            strokeWidth: 1,
-          ),
-        ),
-        borderData: FlBorderData(show: false),
-        titlesData: const FlTitlesData(show: false),
-        lineTouchData: const LineTouchData(enabled: false),
-        lineBarsData: [
-          LineChartBarData(
-            spots: spots,
-            isCurved: active >= 4,
-            curveSmoothness: 0.2,
-            color: CentliTheme.softBlue,
-            barWidth: 2.2,
-            dotData: const FlDotData(show: false),
-            belowBarData: BarAreaData(
-              show: true,
-              color: CentliTheme.softBlue.withValues(alpha: 0.14),
-            ),
-          ),
-        ],
-      ),
+    return CentliTrendChart(
+      title: '\u6bcf\u65e5\u8d8b\u52bf',
+      spots: spots,
+      dayLabels: dayLabels,
+      base: base,
+      hide: hide,
+      height: 120,
+      lineColor: CentliTheme.softBlue,
+      sparseMessage: '\u672c\u6708\u53d8\u52a8\u8f83\u5c11',
     );
   }
 }
