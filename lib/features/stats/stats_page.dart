@@ -24,6 +24,7 @@ final _statsBaseProvider =
       BaseRangeSummary,
       ({String ledgerId, String key, int startMs, int endMs, String base})
     >((ref, args) async {
+      await ref.watch(txnWriteSignalProvider(args.ledgerId).future);
       await ref.watch(fxBookProvider.future);
       return ref
           .watch(databaseProvider)
@@ -47,6 +48,7 @@ final _statsBreakdownBaseProvider =
         String kind,
       })
     >((ref, args) async {
+      await ref.watch(txnWriteSignalProvider(args.ledgerId).future);
       await ref.watch(fxBookProvider.future);
       return ref
           .watch(databaseProvider)
@@ -71,6 +73,7 @@ final _statsDailyBaseProvider =
         String kind,
       })
     >((ref, args) async {
+      await ref.watch(txnWriteSignalProvider(args.ledgerId).future);
       await ref.watch(fxBookProvider.future);
       return ref
           .watch(databaseProvider)
@@ -88,11 +91,18 @@ final _statsBudgetProvider =
       MonthBudgetProgress,
       ({String ledgerId, String yearMonth, String base})
     >((ref, args) async {
+      await ref.watch(txnWriteSignalProvider(args.ledgerId).future);
       await ref.watch(fxBookProvider.future);
       return ref
           .watch(databaseProvider)
           .monthBudgetProgress(args.ledgerId, args.yearMonth, args.base);
     });
+
+/// Test aliases (same instances as private providers above).
+final statsBaseProvider = _statsBaseProvider;
+final statsBreakdownBaseProvider = _statsBreakdownBaseProvider;
+final statsDailyBaseProvider = _statsDailyBaseProvider;
+final statsBudgetProvider = _statsBudgetProvider;
 
 class StatsPage extends ConsumerWidget {
   const StatsPage({super.key});
@@ -146,7 +156,26 @@ class StatsPage extends ConsumerWidget {
               ? scheme.primary
               : scheme.error;
 
-          return ListView(
+          return RefreshIndicator(
+            onRefresh: () async {
+              ref.invalidate(_statsBaseProvider(args));
+              ref.invalidate(_statsBreakdownBaseProvider(bdArgs));
+              ref.invalidate(_statsDailyBaseProvider(bdArgs));
+              final String ym;
+              if (range.kind == DateRangeKind.month) {
+                ym = budgetYearMonth(range.startLocal);
+              } else {
+                ym = budgetYearMonth();
+              }
+              ref.invalidate(
+                _statsBudgetProvider((
+                  ledgerId: ledgerId,
+                  yearMonth: ym,
+                  base: base,
+                )),
+              );
+            },
+            child: ListView(
             padding: const EdgeInsets.fromLTRB(
               CentliSpacing.pageH,
               CentliSpacing.pageTop,
@@ -424,6 +453,7 @@ class StatsPage extends ConsumerWidget {
                 },
               ),
             ],
+          ),
           );
         },
       ),

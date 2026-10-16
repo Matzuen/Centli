@@ -28,6 +28,8 @@ final _rangeBaseProvider =
       BaseRangeSummary,
       ({String ledgerId, String key, int startMs, int endMs, String base})
     >((ref, args) async {
+      // Signal only — list may be truncated; always re-query untruncated.
+      await ref.watch(txnWriteSignalProvider(args.ledgerId).future);
       await ref.watch(fxBookProvider.future);
       final db = ref.watch(databaseProvider);
       return db.rangeSummaryInBase(
@@ -56,6 +58,7 @@ final _netWorthHomeProvider =
       ref,
       args,
     ) async {
+      await ref.watch(txnWriteSignalProvider(args.ledgerId).future);
       await ref.watch(fxBookProvider.future);
       return ref
           .read(databaseProvider)
@@ -77,6 +80,7 @@ final _dailyExpenseProvider =
       List<({DateTime dayLocal, int totalMinor})>,
       ({String ledgerId, String key, int startMs, int endMs, String base})
     >((ref, args) async {
+      await ref.watch(txnWriteSignalProvider(args.ledgerId).future);
       await ref.watch(fxBookProvider.future);
       return ref
           .read(databaseProvider)
@@ -94,6 +98,7 @@ final _dailyIncomeProvider =
       List<({DateTime dayLocal, int totalMinor})>,
       ({String ledgerId, String key, int startMs, int endMs, String base})
     >((ref, args) async {
+      await ref.watch(txnWriteSignalProvider(args.ledgerId).future);
       await ref.watch(fxBookProvider.future);
       return ref
           .read(databaseProvider)
@@ -105,6 +110,14 @@ final _dailyIncomeProvider =
             baseCurrency: args.base,
           );
     });
+
+
+
+/// Test aliases (same instances as private providers above).
+final homeRangeBaseProvider = _rangeBaseProvider;
+final homeNetWorthProvider = _netWorthHomeProvider;
+final homeDailyExpenseProvider = _dailyExpenseProvider;
+final homeDailyIncomeProvider = _dailyIncomeProvider;
 
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
@@ -305,6 +318,8 @@ class _HomePageState extends ConsumerState<HomePage> {
                     child: RefreshIndicator(
                       onRefresh: () async {
                         ref.invalidate(_rangeBaseProvider(baseArgs));
+                        ref.invalidate(_dailyExpenseProvider(baseArgs));
+                        ref.invalidate(_dailyIncomeProvider(baseArgs));
                         ref.invalidate(currentLedgerProvider);
                         ref.invalidate(
                           _netWorthHomeProvider((
@@ -748,6 +763,31 @@ class _NetChangeChartCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loading = incomeSeries.isLoading ||
+        expenseSeries.isLoading ||
+        netWorth.isLoading;
+    final failed =
+        incomeSeries.hasError || expenseSeries.hasError || netWorth.hasError;
+    if (failed) {
+      return CentliSoftCard(
+        padding: const EdgeInsets.all(CentliSpacing.cardPad),
+        child: Text(
+          '加载失败，下拉重试',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      );
+    }
+    if (loading &&
+        incomeSeries.valueOrNull == null &&
+        expenseSeries.valueOrNull == null) {
+      return CentliSoftCard(
+        padding: const EdgeInsets.all(CentliSpacing.cardPad),
+        child: const SizedBox(
+          height: 160,
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      );
+    }
     final income = incomeSeries.valueOrNull ?? const [];
     final expense = expenseSeries.valueOrNull ?? const [];
     final n = income.length > expense.length ? income.length : expense.length;
@@ -862,6 +902,28 @@ class _CalendarCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loading = incomeSeries.isLoading || expenseSeries.isLoading;
+    final failed = incomeSeries.hasError || expenseSeries.hasError;
+    if (failed) {
+      return CentliSoftCard(
+        padding: const EdgeInsets.all(CentliSpacing.cardPad),
+        child: Text(
+          '加载失败，下拉重试',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      );
+    }
+    if (loading &&
+        incomeSeries.valueOrNull == null &&
+        expenseSeries.valueOrNull == null) {
+      return CentliSoftCard(
+        padding: const EdgeInsets.all(CentliSpacing.cardPad),
+        child: const SizedBox(
+          height: 220,
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      );
+    }
     final monthStart = DateTime(month.year, month.month, 1);
     final daysInMonth = DateTime(monthStart.year, monthStart.month + 1, 0).day;
     final firstWeekday = monthStart.weekday % 7; // Sun=0
@@ -1012,6 +1074,28 @@ class _DailyTrendCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loading = expenseSeries.isLoading || incomeSeries.isLoading;
+    final failed = expenseSeries.hasError || incomeSeries.hasError;
+    if (failed) {
+      return CentliSoftCard(
+        padding: const EdgeInsets.all(CentliSpacing.cardPad),
+        child: Text(
+          '加载失败，下拉重试',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      );
+    }
+    if (loading &&
+        expenseSeries.valueOrNull == null &&
+        incomeSeries.valueOrNull == null) {
+      return CentliSoftCard(
+        padding: const EdgeInsets.all(CentliSpacing.cardPad),
+        child: const SizedBox(
+          height: 120,
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      );
+    }
     final expense = expenseSeries.valueOrNull ?? const [];
     final income = incomeSeries.valueOrNull ?? const [];
     final n = expense.length > income.length ? expense.length : income.length;

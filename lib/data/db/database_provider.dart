@@ -63,3 +63,14 @@ final pendingCountProvider = StreamProvider.family<int, String>((ref, ledgerId) 
   return ref.watch(databaseProvider).watchPendingCount(ledgerId);
 });
 
+/// Emits a bump whenever any transaction row for [ledgerId] may have changed.
+/// Use as an invalidation signal only — never aggregate from the watched list;
+/// always re-query untruncated summaries (rangeSummaryInBase / netWorthInBase / …).
+final txnWriteSignalProvider = StreamProvider.family<int, String>((ref, ledgerId) {
+  var version = 0;
+  return ref
+      .watch(databaseProvider)
+      .watchRecentTransactions(ledgerId, limit: 1)
+      .map((_) => version++);
+});
+
