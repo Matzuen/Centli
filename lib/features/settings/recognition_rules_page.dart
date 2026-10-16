@@ -1,0 +1,581 @@
+import 'dart:convert';
+
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../core/utils/money.dart';
+import '../../platform/notifications/notification_parse.dart';
+import '../../platform/notifications/noti_template_store.dart';
+
+/// Settings → 自动记账 → 识别规则.
+class RecognitionRulesPage extends StatefulWidget {
+  const RecognitionRulesPage({super.key});
+
+  @override
+  State<RecognitionRulesPage> createState() => _RecognitionRulesPageState();
+}
+
+class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
+  bool _loading = true;
+  List<NotiTemplate> _official = const [];
+  List<NotiTemplate> _user = const [];
+  Set<String> _disabled = {};
+  int _version = kNotiTemplateFallbackVersion;
+  String _source = 'builtin';
+
+  String _tryAppChoice = 'alipay';
+  final _tryPkgCtrl = TextEditingController(
+    text: 'com.eg.android.AlipayGphone',
+  );
+  final _tryTitle = TextEditingController();
+  final _tryBody = TextEditingController(
+    text: '向 星巴克 付款成功 ¥28.50',
+  );
+  ParseExplainResult? _tryResult;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _reload();
+  }
+
+  @override
+  void dispose() {
+    _tryPkgCtrl.dispose();
+    _tryTitle.dispose();
+    _tryBody.dispose();
+    super.dispose();
+  }
+
+  Future<void> _reload() async {
+    setState(() => _loading = true);
+    await NotiTemplateStore.load(force: true);
+    if (!mounted) return;
+    setState(() {
+      _official = NotiTemplateStore.peekOfficial();
+      _user = NotiTemplateStore.peekUser();
+      _disabled = NotiTemplateStore.peekDisabledOfficialIds();
+      _version = NotiTemplateStore.version;
+      _source = NotiTemplateStore.source;
+      _loading = false;
+    });
+  }
+
+  String _pkgLabel(String pkg) {
+    if (pkg.contains('Alipay') || pkg.contains('alipay')) return '支付宝';
+    if (pkg.contains('tencent.mm')) return '微信';
+    return pkg;
+  }
+
+  Future<void> _toggleOfficial(NotiTemplate t, bool enabled) async {
+    setState(() => _busy = true);
+    try {
+      await NotiTemplateStore.setOfficialDisabled(t.id, !enabled);
+      await _reload();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _deleteUser(NotiTemplate t) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('删除规则'),
+        content: Text('确定删除「${t.displayName}」？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    setState(() => _busy = true);
+    try {
+      await NotiTemplateStore.deleteUserTemplate(t.id);
+      await _reload();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('已删除')),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  void _runTry() {
+    final pkg = _tryPkgCtrl.text.trim().isEmpty
+        ? 'com.eg.android.AlipayGphone'
+        : _tryPkgCtrl.text.trim();
+    final raw = RawNotification(
+      pkg: pkg,
+      title: _tryTitle.text,
+      text: _tryBody.text,
+      whenMs: DateTime.now().millisecondsSinceEpoch,
+    );
+    final explained = explainNotificationParse(raw, NotiTemplateStore.peek());
+    setState(() => _tryResult = explained);
+  }
+
+  Future<void> _exportUser() async {
+    setState(() => _busy = true);
+    try {
+      final json = await NotiTemplateStore.exportUserRulesJson();
+      await Clipboard.setData(ClipboardData(text: json));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('已复制我的规则 JSON 到剪贴板')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('导出失败: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _importUser() async {
+    try {
+      final files = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['json'],
+      );
+      if (files.isEmpty) return;
+      final f = files.first;
+      final bytes = await f.readAsBytes();
+      if (bytes.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('无法读取文件内容，请重试')),
+        );
+        return;
+      }
+      final fileText = utf8.decode(bytes);
+      if (!mounted) return;
+
+      final merge = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('导入我的规则'),
+          content: const Text('合并到现有规则，还是完全替换？'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('取消'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('替换'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('合并'),
+            ),
+          ],
+        ),
+      );
+      if (merge == null) return;
+
+      setState(() => _busy = true);
+      final n = await NotiTemplateStore.importUserRulesJson(
+        fileText,
+        merge: merge,
+      );
+      await _reload();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('已导入 $n 条规则')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('导入失败: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  void _showOfficialDetail(NotiTemplate t) {
+    final disabled = _disabled.contains(t.id);
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) {
+        return Padding(
+          padding: EdgeInsets.fromLTRB(
+            16,
+            0,
+            16,
+            16 + MediaQuery.paddingOf(ctx).bottom,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  t.displayName,
+                  style: Theme.of(ctx).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  disabled ? '已禁用 · 官方规则 · 只读' : '官方规则 · 只读',
+                  style: Theme.of(ctx).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 12),
+                _kv('ID', t.id),
+                _kv('包名', t.packages.map(_pkgLabel).join('、')),
+                _kv('必须包含', t.mustContainRegex ?? '—'),
+                _kv('排除', t.excludeTextRegex ?? '—'),
+                _kv('标题正则', t.titleRegex ?? '—'),
+                _kv('金额正则', t.amountRegex),
+                _kv('商户正则', t.merchantRegex ?? '—'),
+                _kv('商户取自标题', t.merchantFromTitle ? '是' : '否'),
+                _kv('账户提示', t.defaultAccountHint ?? '—'),
+                _kv('默认币种', t.defaultCurrency),
+                const SizedBox(height: 16),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('启用此官方规则'),
+                  subtitle: const Text('关闭后解析时跳过（不修改规则内容）'),
+                  value: !disabled,
+                  onChanged: _busy
+                      ? null
+                      : (v) async {
+                          Navigator.pop(ctx);
+                          await _toggleOfficial(t, v);
+                        },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _kv(String k, String v) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 96,
+            child: Text(
+              k,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
+          ),
+          Expanded(child: SelectableText(v)),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('识别规则'),
+        actions: [
+          PopupMenuButton<String>(
+            onSelected: (v) {
+              if (v == 'export') _exportUser();
+              if (v == 'import') _importUser();
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'export', child: Text('导出我的规则')),
+              PopupMenuItem(value: 'import', child: Text('导入我的规则')),
+            ],
+          ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        tooltip: '添加规则',
+        onPressed: _busy
+            ? null
+            : () async {
+                final changed = await context.push<bool>('/me/auto/rules/edit');
+                if (changed == true) await _reload();
+              },
+        child: const Icon(Icons.add),
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+              children: [
+                Text(
+                  '官方规则只读；可在「我的规则」中自定义。解析时优先匹配我的规则。',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                ),
+                const SizedBox(height: 16),
+                Text('官方规则', style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 4),
+                Text(
+                  'v$_version · $_source · ${_official.length} 条',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                ),
+                const SizedBox(height: 8),
+                if (_official.isEmpty)
+                  const Card(
+                    child: ListTile(title: Text('暂无官方规则')),
+                  )
+                else
+                  for (final t in _official) ...[
+                    Card(
+                      child: ListTile(
+                        leading: Icon(
+                          _disabled.contains(t.id)
+                              ? Icons.rule_folder_outlined
+                              : Icons.verified_outlined,
+                          color: _disabled.contains(t.id)
+                              ? scheme.outline
+                              : scheme.primary,
+                        ),
+                        title: Text(t.displayName),
+                        subtitle: Text(
+                          [
+                            t.packages.map(_pkgLabel).join('、'),
+                            if (_disabled.contains(t.id)) '已禁用',
+                          ].join(' · '),
+                        ),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => _showOfficialDetail(t),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '我的规则',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                    ),
+                    Text(
+                      '${_user.length} 条',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                if (_user.isEmpty)
+                  Card(
+                    child: ListTile(
+                      leading: Icon(Icons.playlist_add, color: scheme.primary),
+                      title: const Text('还没有自定义规则'),
+                      subtitle: const Text('点右下角「添加规则」创建'),
+                    ),
+                  )
+                else
+                  for (final t in _user) ...[
+                    Card(
+                      child: ListTile(
+                        leading: Icon(Icons.edit_note, color: scheme.primary),
+                        title: Text(t.displayName),
+                        subtitle: Text(
+                          t.packages.map(_pkgLabel).join('、'),
+                        ),
+                        trailing: PopupMenuButton<String>(
+                          onSelected: (v) async {
+                            if (v == 'edit') {
+                              final changed = await context.push<bool>(
+                                '/me/auto/rules/edit?id=${Uri.encodeComponent(t.id)}',
+                              );
+                              if (changed == true) await _reload();
+                            } else if (v == 'delete') {
+                              await _deleteUser(t);
+                            }
+                          },
+                          itemBuilder: (_) => const [
+                            PopupMenuItem(value: 'edit', child: Text('编辑')),
+                            PopupMenuItem(value: 'delete', child: Text('删除')),
+                          ],
+                        ),
+                        onTap: () async {
+                          final changed = await context.push<bool>(
+                            '/me/auto/rules/edit?id=${Uri.encodeComponent(t.id)}',
+                          );
+                          if (changed == true) await _reload();
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                const SizedBox(height: 16),
+                Text('试一试', style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 4),
+                Text(
+                  '粘贴一条通知样例，用当前合并规则试解析（不入库）。',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                ),
+                const SizedBox(height: 8),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        DropdownButtonFormField<String>(
+                          initialValue: _tryAppChoice,
+                          decoration: const InputDecoration(
+                            labelText: '来源应用',
+                            border: OutlineInputBorder(),
+                            isDense: true,
+                          ),
+                          items: const [
+                            DropdownMenuItem(
+                              value: 'alipay',
+                              child: Text('支付宝'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'wechat',
+                              child: Text('微信'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'other',
+                              child: Text('其它'),
+                            ),
+                          ],
+                          onChanged: (v) {
+                            if (v == null) return;
+                            setState(() {
+                              _tryAppChoice = v;
+                              if (v == 'alipay') {
+                                _tryPkgCtrl.text =
+                                    'com.eg.android.AlipayGphone';
+                              } else if (v == 'wechat') {
+                                _tryPkgCtrl.text = 'com.tencent.mm';
+                              }
+                            });
+                          },
+                        ),
+                        if (_tryAppChoice == 'other') ...[
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: _tryPkgCtrl,
+                            decoration: const InputDecoration(
+                              labelText: '包名',
+                              border: OutlineInputBorder(),
+                              isDense: true,
+                              hintText: '例如 com.xxx.pay',
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _tryTitle,
+                          decoration: const InputDecoration(
+                            labelText: '标题（可选）',
+                            border: OutlineInputBorder(),
+                            isDense: true,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _tryBody,
+                          minLines: 3,
+                          maxLines: 6,
+                          decoration: const InputDecoration(
+                            labelText: '通知正文',
+                            border: OutlineInputBorder(),
+                            alignLabelWithHint: true,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        FilledButton.tonalIcon(
+                          onPressed: _runTry,
+                          icon: const Icon(Icons.play_arrow),
+                          label: const Text('试解析'),
+                        ),
+                        if (_tryResult != null) ...[
+                          const SizedBox(height: 12),
+                          _TryResultCard(result: _tryResult!),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+}
+
+class _TryResultCard extends StatelessWidget {
+  const _TryResultCard({required this.result});
+
+  final ParseExplainResult result;
+
+  @override
+  Widget build(BuildContext context) {
+    final r = result.result;
+    final scheme = Theme.of(context).colorScheme;
+    final okColor = r.ok ? scheme.primary : scheme.error;
+    String amountText = '—';
+    if (r.amountMinor != null) {
+      amountText = formatMinor(r.currency ?? 'CNY', r.amountMinor!);
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            result.reason,
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  color: okColor,
+                ),
+          ),
+          const SizedBox(height: 8),
+          Text('金额：$amountText'),
+          Text('商户：${r.merchant ?? '—'}'),
+          Text('规则：${r.templateId ?? '—'}'),
+          Text('币种：${r.currency ?? '—'}'),
+          if (result.steps.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              '步骤',
+              style: Theme.of(context).textTheme.labelLarge,
+            ),
+            for (final s in result.steps) Text('· $s'),
+          ],
+        ],
+      ),
+    );
+  }
+}

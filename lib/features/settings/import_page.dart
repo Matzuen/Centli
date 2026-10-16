@@ -109,7 +109,10 @@ class _ImportPageState extends ConsumerState<ImportPage> {
     });
     try {
       final svc = ImportService(ref.read(databaseProvider));
-      final result = await svc.restore(b);
+      final result = await svc.restore(
+        b,
+        replaceFxRates: preview.sourceKind != 'excel',
+      );
       ref.invalidate(currentLedgerIdProvider);
       ref.invalidate(currentLedgerProvider);
       ref.invalidate(fxBookProvider);

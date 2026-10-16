@@ -113,4 +113,41 @@ group('payment filter drops chat / non-pay', () {
       expect(r.ok, isFalse);
     });
   });
+
+
+group('manual capture parser (share/OCR/clipboard)', () {
+  test('parses wechat transfer send-out', () {
+    final r = parseManualCaptureText('向张三转账成功 ¥20.00');
+    expect(r.templateId, isNotNull);
+    expect(r.ok, isTrue);
+    expect(r.amountMinor, 2000);
+    expect(r.merchant, contains('张三'));
+  });
+
+  test('parses red packet text', () {
+    final r = parseManualCaptureText('微信红包 ¥8.88');
+    expect(r.templateId, 'manual_transfer_zh');
+    expect(r.ok, isTrue);
+    expect(r.amountMinor, 888);
+  });
+
+  test('rejects chat-like text', () {
+    final r = parseManualCaptureText('张三发来一条消息：今晚吃饭吗');
+    expect(r.templateId, isNull);
+    expect(r.ok, isFalse);
+  });
+
+  test('accepts amount with money mark without keyword', () {
+    final r = parseManualCaptureText('星巴克 ¥28.50');
+    expect(r.templateId, isNotNull);
+    expect(r.ok, isTrue);
+  });
+
+  test('transfer with merchant line', () {
+    final r = parseManualCaptureText('转账成功\n向 李四 转账\n¥15.00');
+    expect(r.ok, isTrue);
+    expect(r.amountMinor, 1500);
+  });
+});
+
 }

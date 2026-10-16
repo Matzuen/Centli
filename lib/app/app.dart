@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:home_widget/home_widget.dart';
@@ -10,6 +11,7 @@ import '../data/db/database_provider.dart';
 import '../features/security/app_lock_controller.dart';
 import '../platform/home_widget/centli_home_widget_sync.dart';
 import '../platform/notifications/notification_ingest_bridge.dart';
+import '../platform/pending/pending_capture_intake.dart';
 import '../platform/notifications/noti_template_store.dart';
 import '../platform/notifications/notification_listener_stub.dart';
 import 'router.dart';
@@ -117,10 +119,28 @@ class _CentliAppState extends ConsumerState<CentliApp> {
     if (_bridgeStarted || !mounted) return;
     _bridgeStarted = true;
     final db = ref.read(databaseProvider);
-    await NotiTemplateStore.load();
+    // Templates are loaded lazily on first capture (ingestRaw / parse).
+    // Preload in background so cold start is not blocked on JSON/disk I/O.
+    unawaited(NotiTemplateStore.load());
+    // Bind native channels promptly, but do not await home-widget I/O here.
     await NotificationIngestBridge.start(db);
-    await _syncHomeWidget();
-    await _handleInitialWidgetLaunch();
+    await PendingCaptureIntake.start(
+      db,
+      navigate: (route) {
+        final router = _router;
+        if (router == null) return;
+        final lockOn = ref.read(appLockEnabledProvider).valueOrNull ?? false;
+        final unlocked = ref.read(appLockUnlockedProvider);
+        if (lockOn && !unlocked) {
+          router.go('/lock');
+          return;
+        }
+        router.go(route);
+      },
+    );
+    // Widget sync after first frame path — lower priority than first route.
+    unawaited(_syncHomeWidget());
+    unawaited(_handleInitialWidgetLaunch());
   }
 
   Future<void> _syncHomeWidget() async {
@@ -217,6 +237,16 @@ class _CentliAppState extends ConsumerState<CentliApp> {
     return MaterialApp.router(
       title: 'Centli',
       debugShowCheckedModeBanner: false,
+      locale: const Locale('zh', 'CN'),
+      supportedLocales: const [
+        Locale('zh', 'CN'),
+        Locale('en', 'US'),
+      ],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
       theme: CentliTheme.light(),
       darkTheme: CentliTheme.dark(),
       themeMode: themeMode,

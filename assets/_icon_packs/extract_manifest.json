@@ -1,0 +1,1446 @@
+{
+  "count": 160,
+  "missing": [],
+  "written": [
+    {
+      "key": "wallet",
+      "label": "钱包",
+      "group": "money",
+      "asset": "assets/icons/money/wallet.svg",
+      "source": "ph:wallet",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "account_balance_wallet",
+      "label": "钱夹",
+      "group": "money",
+      "asset": "assets/icons/money/account_balance_wallet.svg",
+      "source": "ph:wallet",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "cash",
+      "label": "现金",
+      "group": "money",
+      "asset": "assets/icons/money/cash.svg",
+      "source": "ph:money",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "payments",
+      "label": "付款",
+      "group": "money",
+      "asset": "assets/icons/money/payments.svg",
+      "source": "ph:hand-coins",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "monetization_on",
+      "label": "硬币",
+      "group": "money",
+      "asset": "assets/icons/money/monetization_on.svg",
+      "source": "ph:coins",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "savings",
+      "label": "储蓄",
+      "group": "money",
+      "asset": "assets/icons/money/savings.svg",
+      "source": "ph:piggy-bank",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "receipt_long",
+      "label": "账单",
+      "group": "money",
+      "asset": "assets/icons/money/receipt_long.svg",
+      "source": "ph:receipt",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "price_check",
+      "label": "核价",
+      "group": "money",
+      "asset": "assets/icons/money/price_check.svg",
+      "source": "ph:check-circle",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "account_balance",
+      "label": "银行",
+      "group": "money",
+      "asset": "assets/icons/money/account_balance.svg",
+      "source": "ph:bank",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "atm",
+      "label": "ATM",
+      "group": "money",
+      "asset": "assets/icons/money/atm.svg",
+      "source": "ri:bank-card-fill",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "trending_up",
+      "label": "上涨",
+      "group": "money",
+      "asset": "assets/icons/money/trending_up.svg",
+      "source": "ph:trend-up",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "show_chart",
+      "label": "走势",
+      "group": "money",
+      "asset": "assets/icons/money/show_chart.svg",
+      "source": "ph:chart-line-up",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "currency_bitcoin",
+      "label": "比特币",
+      "group": "money",
+      "asset": "assets/icons/money/currency_bitcoin.svg",
+      "source": "ph:currency-btc",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "currency_exchange",
+      "label": "换汇",
+      "group": "money",
+      "asset": "assets/icons/money/currency_exchange.svg",
+      "source": "ri:exchange-cny-fill",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "attach_money",
+      "label": "金额",
+      "group": "money",
+      "asset": "assets/icons/money/attach_money.svg",
+      "source": "ph:currency-dollar",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "south_west",
+      "label": "支出",
+      "group": "money",
+      "asset": "assets/icons/money/south_west.svg",
+      "source": "ri:refund-2-fill",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "qr_code_2",
+      "label": "收款码",
+      "group": "money",
+      "asset": "assets/icons/money/qr_code_2.svg",
+      "source": "ph:qr-code",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "transfer",
+      "label": "转账",
+      "group": "money",
+      "asset": "assets/icons/money/transfer.svg",
+      "source": "ph:arrows-left-right",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "swap_horiz",
+      "label": "互换",
+      "group": "money",
+      "asset": "assets/icons/money/swap_horiz.svg",
+      "source": "ph:swap",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "red_packet",
+      "label": "红包",
+      "group": "money",
+      "asset": "assets/icons/money/red_packet.svg",
+      "source": "ri:gift-fill",
+      "bg": "#FFECEC",
+      "fg": "#E53935"
+    },
+    {
+      "key": "card_giftcard",
+      "label": "礼品卡",
+      "group": "money",
+      "asset": "assets/icons/money/card_giftcard.svg",
+      "source": "ph:gift",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "yuebao",
+      "label": "余额宝",
+      "group": "money",
+      "asset": "assets/icons/money/yuebao.svg",
+      "source": "ri:funds-fill",
+      "bg": "#E8F4FF",
+      "fg": "#1677FF"
+    },
+    {
+      "key": "ecny",
+      "label": "数字人民币",
+      "group": "money",
+      "asset": "assets/icons/money/ecny.svg",
+      "source": "ri:money-cny-circle-fill",
+      "bg": "#E8F6EC",
+      "fg": "#C8102E"
+    },
+    {
+      "key": "redeem",
+      "label": "兑换",
+      "group": "money",
+      "asset": "assets/icons/money/redeem.svg",
+      "source": "ph:seal-percent",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "military_tech",
+      "label": "勋章",
+      "group": "money",
+      "asset": "assets/icons/money/military_tech.svg",
+      "source": "ph:medal",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "work",
+      "label": "工作",
+      "group": "money",
+      "asset": "assets/icons/money/work.svg",
+      "source": "ph:briefcase",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "alipay",
+      "label": "支付宝",
+      "group": "payment",
+      "asset": "assets/icons/payment/alipay.svg",
+      "source": "si:alipay",
+      "bg": "#E6F4FF",
+      "fg": "#1677FF"
+    },
+    {
+      "key": "wechat",
+      "label": "微信",
+      "group": "payment",
+      "asset": "assets/icons/payment/wechat.svg",
+      "source": "si:wechat",
+      "bg": "#E8F8EF",
+      "fg": "#07C160"
+    },
+    {
+      "key": "unionpay",
+      "label": "银联",
+      "group": "payment",
+      "asset": "assets/icons/payment/unionpay.svg",
+      "source": "ar:unionpay-app",
+      "bg": "#E8F0FE",
+      "fg": "#E21836"
+    },
+    {
+      "key": "visa",
+      "label": "Visa",
+      "group": "payment",
+      "asset": "assets/icons/payment/visa.svg",
+      "source": "si:visa",
+      "bg": "#E8EEF9",
+      "fg": "#1A1F71"
+    },
+    {
+      "key": "mastercard",
+      "label": "Mastercard",
+      "group": "payment",
+      "asset": "assets/icons/payment/mastercard.svg",
+      "source": "si:mastercard",
+      "bg": "#FFF0E8",
+      "fg": "#EB001B"
+    },
+    {
+      "key": "amex",
+      "label": "Amex",
+      "group": "payment",
+      "asset": "assets/icons/payment/amex.svg",
+      "source": "si:americanexpress",
+      "bg": "#E8F4FF",
+      "fg": "#2E77BC"
+    },
+    {
+      "key": "paypal",
+      "label": "PayPal",
+      "group": "payment",
+      "asset": "assets/icons/payment/paypal.svg",
+      "source": "si:paypal",
+      "bg": "#E8F1FF",
+      "fg": "#003087"
+    },
+    {
+      "key": "apple_pay",
+      "label": "Apple Pay",
+      "group": "payment",
+      "asset": "assets/icons/payment/apple_pay.svg",
+      "source": "si:applepay",
+      "bg": "#F2F2F2",
+      "fg": "#111111"
+    },
+    {
+      "key": "google_pay",
+      "label": "Google Pay",
+      "group": "payment",
+      "asset": "assets/icons/payment/google_pay.svg",
+      "source": "si:googlepay",
+      "bg": "#F1F3F4",
+      "fg": "#4285F4"
+    },
+    {
+      "key": "huabei",
+      "label": "花呗",
+      "group": "payment",
+      "asset": "assets/icons/payment/huabei.svg",
+      "source": "ri:bank-card-fill",
+      "bg": "#FFF0E8",
+      "fg": "#FF6A00"
+    },
+    {
+      "key": "bank_card",
+      "label": "银行卡",
+      "group": "payment",
+      "asset": "assets/icons/payment/bank_card.svg",
+      "source": "ph:credit-card",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "credit_card",
+      "label": "信用卡",
+      "group": "payment",
+      "asset": "assets/icons/payment/credit_card.svg",
+      "source": "ph:credit-card",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "jd_pay",
+      "label": "京东支付",
+      "group": "payment",
+      "asset": "assets/icons/payment/jd_pay.svg",
+      "source": "ar:jd-com",
+      "bg": "#FFECEC",
+      "fg": "#E1251B"
+    },
+    {
+      "key": "douyin_pay",
+      "label": "抖音支付",
+      "group": "payment",
+      "asset": "assets/icons/payment/douyin_pay.svg",
+      "source": "si:tiktok",
+      "bg": "#F5F5F5",
+      "fg": "#111111"
+    },
+    {
+      "key": "meituan",
+      "label": "美团",
+      "group": "payment",
+      "asset": "assets/icons/payment/meituan.svg",
+      "source": "si:meituan",
+      "bg": "#FFF4E5",
+      "fg": "#FFC300"
+    },
+    {
+      "key": "bank_abc",
+      "label": "农业银行",
+      "group": "bank",
+      "asset": "assets/icons/bank/bank_abc.svg",
+      "source": "ar:agricultural-bank-of-china",
+      "bg": "#E8F6EC",
+      "fg": "#019C97"
+    },
+    {
+      "key": "bank_bcm",
+      "label": "交通银行",
+      "group": "bank",
+      "asset": "assets/icons/bank/bank_bcm.svg",
+      "source": "ph:bank",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "bank_boc",
+      "label": "中国银行",
+      "group": "bank",
+      "asset": "assets/icons/bank/bank_boc.svg",
+      "source": "ar:boc",
+      "bg": "#FDECEC",
+      "fg": "#A71E32"
+    },
+    {
+      "key": "bank_ccb",
+      "label": "建设银行",
+      "group": "bank",
+      "asset": "assets/icons/bank/bank_ccb.svg",
+      "source": "ar:china-construction-bank",
+      "bg": "#E8F1FF",
+      "fg": "#0066B3"
+    },
+    {
+      "key": "bank_citic",
+      "label": "中信银行",
+      "group": "bank",
+      "asset": "assets/icons/bank/bank_citic.svg",
+      "source": "ph:bank",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "bank_cmb",
+      "label": "招商银行",
+      "group": "bank",
+      "asset": "assets/icons/bank/bank_cmb.svg",
+      "source": "ar:china-merchants-bank",
+      "bg": "#FDECEC",
+      "fg": "#E60012"
+    },
+    {
+      "key": "bank_cmbc",
+      "label": "民生银行",
+      "group": "bank",
+      "asset": "assets/icons/bank/bank_cmbc.svg",
+      "source": "ph:bank",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "bank_ceb",
+      "label": "光大银行",
+      "group": "bank",
+      "asset": "assets/icons/bank/bank_ceb.svg",
+      "source": "ph:bank",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "bank_cgb",
+      "label": "广发银行",
+      "group": "bank",
+      "asset": "assets/icons/bank/bank_cgb.svg",
+      "source": "ph:bank",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "bank_cib",
+      "label": "兴业银行",
+      "group": "bank",
+      "asset": "assets/icons/bank/bank_cib.svg",
+      "source": "ph:bank",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "bank_hxb",
+      "label": "华夏银行",
+      "group": "bank",
+      "asset": "assets/icons/bank/bank_hxb.svg",
+      "source": "ph:bank",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "bank_icbc",
+      "label": "工商银行",
+      "group": "bank",
+      "asset": "assets/icons/bank/bank_icbc.svg",
+      "source": "ar:icbc",
+      "bg": "#FDECEC",
+      "fg": "#C7000B"
+    },
+    {
+      "key": "bank_psbc",
+      "label": "邮储银行",
+      "group": "bank",
+      "asset": "assets/icons/bank/bank_psbc.svg",
+      "source": "ph:bank",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "bank_spdb",
+      "label": "浦发银行",
+      "group": "bank",
+      "asset": "assets/icons/bank/bank_spdb.svg",
+      "source": "ph:bank",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "bank_pab",
+      "label": "平安银行",
+      "group": "bank",
+      "asset": "assets/icons/bank/bank_pab.svg",
+      "source": "ph:bank",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "bank_bob",
+      "label": "北京银行",
+      "group": "bank",
+      "asset": "assets/icons/bank/bank_bob.svg",
+      "source": "ph:bank",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "bank_bosh",
+      "label": "上海银行",
+      "group": "bank",
+      "asset": "assets/icons/bank/bank_bosh.svg",
+      "source": "ph:bank",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "bank_mybank",
+      "label": "网商银行",
+      "group": "bank",
+      "asset": "assets/icons/bank/bank_mybank.svg",
+      "source": "ph:bank",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "brand_apple",
+      "label": "Apple",
+      "group": "brand",
+      "asset": "assets/icons/brand/brand_apple.svg",
+      "source": "si:apple",
+      "bg": "#F2F2F2",
+      "fg": "#111111"
+    },
+    {
+      "key": "brand_huawei",
+      "label": "华为",
+      "group": "brand",
+      "asset": "assets/icons/brand/brand_huawei.svg",
+      "source": "si:huawei",
+      "bg": "#FFECEC",
+      "fg": "#CF0A2C"
+    },
+    {
+      "key": "brand_xiaomi",
+      "label": "小米",
+      "group": "brand",
+      "asset": "assets/icons/brand/brand_xiaomi.svg",
+      "source": "si:xiaomi",
+      "bg": "#FFF0E8",
+      "fg": "#FF6900"
+    },
+    {
+      "key": "brand_jd",
+      "label": "京东",
+      "group": "brand",
+      "asset": "assets/icons/brand/brand_jd.svg",
+      "source": "ar:jd-com",
+      "bg": "#FFECEC",
+      "fg": "#E1251B"
+    },
+    {
+      "key": "brand_taobao",
+      "label": "淘宝",
+      "group": "brand",
+      "asset": "assets/icons/brand/brand_taobao.svg",
+      "source": "si:taobao",
+      "bg": "#FFF4E8",
+      "fg": "#FF5000"
+    },
+    {
+      "key": "brand_tmall",
+      "label": "天猫",
+      "group": "brand",
+      "asset": "assets/icons/brand/brand_tmall.svg",
+      "source": "ar:taobao",
+      "bg": "#FFECEC",
+      "fg": "#E60012"
+    },
+    {
+      "key": "brand_pdd",
+      "label": "拼多多",
+      "group": "brand",
+      "asset": "assets/icons/brand/brand_pdd.svg",
+      "source": "ar:pinduoduo",
+      "bg": "#FFECEC",
+      "fg": "#E02E24"
+    },
+    {
+      "key": "brand_eleme",
+      "label": "饿了么",
+      "group": "brand",
+      "asset": "assets/icons/brand/brand_eleme.svg",
+      "source": "ar:ele-me-merchant",
+      "bg": "#E8F7FF",
+      "fg": "#0097FF"
+    },
+    {
+      "key": "brand_didi",
+      "label": "滴滴",
+      "group": "brand",
+      "asset": "assets/icons/brand/brand_didi.svg",
+      "source": "ar:didi",
+      "bg": "#FFF4E5",
+      "fg": "#FF7D41"
+    },
+    {
+      "key": "brand_bilibili",
+      "label": "B站",
+      "group": "brand",
+      "asset": "assets/icons/brand/brand_bilibili.svg",
+      "source": "si:bilibili",
+      "bg": "#FFE8F0",
+      "fg": "#FB7299"
+    },
+    {
+      "key": "brand_tencent",
+      "label": "腾讯",
+      "group": "brand",
+      "asset": "assets/icons/brand/brand_tencent.svg",
+      "source": "si:qq",
+      "bg": "#E8F4FF",
+      "fg": "#12B7F5"
+    },
+    {
+      "key": "brand_netease",
+      "label": "网易",
+      "group": "brand",
+      "asset": "assets/icons/brand/brand_netease.svg",
+      "source": "si:neteasecloudmusic",
+      "bg": "#FFECEC",
+      "fg": "#C20C0C"
+    },
+    {
+      "key": "restaurant",
+      "label": "餐饮",
+      "group": "food",
+      "asset": "assets/icons/food/restaurant.svg",
+      "source": "ph:fork-knife",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "fastfood",
+      "label": "快餐",
+      "group": "food",
+      "asset": "assets/icons/food/fastfood.svg",
+      "source": "ph:hamburger",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "local_cafe",
+      "label": "咖啡",
+      "group": "food",
+      "asset": "assets/icons/food/local_cafe.svg",
+      "source": "ph:coffee",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "coffee",
+      "label": "咖啡豆",
+      "group": "food",
+      "asset": "assets/icons/food/coffee.svg",
+      "source": "ph:coffee",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "local_bar",
+      "label": "酒吧",
+      "group": "food",
+      "asset": "assets/icons/food/local_bar.svg",
+      "source": "ph:beer-bottle",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "local_pizza",
+      "label": "披萨",
+      "group": "food",
+      "asset": "assets/icons/food/local_pizza.svg",
+      "source": "ph:pizza",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "ramen_dining",
+      "label": "拉面",
+      "group": "food",
+      "asset": "assets/icons/food/ramen_dining.svg",
+      "source": "ph:bowl-food",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "lunch_dining",
+      "label": "午餐",
+      "group": "food",
+      "asset": "assets/icons/food/lunch_dining.svg",
+      "source": "ph:fork-knife",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "bakery_dining",
+      "label": "烘焙",
+      "group": "food",
+      "asset": "assets/icons/food/bakery_dining.svg",
+      "source": "ph:cake",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "cake",
+      "label": "蛋糕",
+      "group": "food",
+      "asset": "assets/icons/food/cake.svg",
+      "source": "ph:cake",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "icecream",
+      "label": "冰淇淋",
+      "group": "food",
+      "asset": "assets/icons/food/icecream.svg",
+      "source": "ph:ice-cream",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "set_meal",
+      "label": "套餐",
+      "group": "food",
+      "asset": "assets/icons/food/set_meal.svg",
+      "source": "ph:cooking-pot",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "local_dining",
+      "label": "用餐",
+      "group": "food",
+      "asset": "assets/icons/food/local_dining.svg",
+      "source": "ph:fork-knife",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "shopping_bag",
+      "label": "购物袋",
+      "group": "life",
+      "asset": "assets/icons/life/shopping_bag.svg",
+      "source": "ph:shopping-bag",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "shopping_cart",
+      "label": "购物车",
+      "group": "life",
+      "asset": "assets/icons/life/shopping_cart.svg",
+      "source": "ph:shopping-cart",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "local_mall",
+      "label": "商场",
+      "group": "life",
+      "asset": "assets/icons/life/local_mall.svg",
+      "source": "ph:storefront",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "local_offer",
+      "label": "优惠",
+      "group": "life",
+      "asset": "assets/icons/life/local_offer.svg",
+      "source": "ph:tag",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "checkroom",
+      "label": "衣物",
+      "group": "life",
+      "asset": "assets/icons/life/checkroom.svg",
+      "source": "ph:t-shirt",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "content_cut",
+      "label": "美发",
+      "group": "life",
+      "asset": "assets/icons/life/content_cut.svg",
+      "source": "ph:scissors",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "pets",
+      "label": "宠物",
+      "group": "life",
+      "asset": "assets/icons/life/pets.svg",
+      "source": "ph:paw-print",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "favorite",
+      "label": "喜爱",
+      "group": "life",
+      "asset": "assets/icons/life/favorite.svg",
+      "source": "ph:heart",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "sports_esports",
+      "label": "游戏",
+      "group": "life",
+      "asset": "assets/icons/life/sports_esports.svg",
+      "source": "ph:game-controller",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "movie",
+      "label": "电影",
+      "group": "life",
+      "asset": "assets/icons/life/movie.svg",
+      "source": "ph:film-strip",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "music_note",
+      "label": "音乐",
+      "group": "life",
+      "asset": "assets/icons/life/music_note.svg",
+      "source": "ph:music-notes",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "sports_soccer",
+      "label": "足球",
+      "group": "life",
+      "asset": "assets/icons/life/sports_soccer.svg",
+      "source": "ph:soccer-ball",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "fitness_center",
+      "label": "健身",
+      "group": "life",
+      "asset": "assets/icons/life/fitness_center.svg",
+      "source": "ph:barbell",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "spa",
+      "label": "养生",
+      "group": "life",
+      "asset": "assets/icons/life/spa.svg",
+      "source": "ph:flower-lotus",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "local_hospital",
+      "label": "医院",
+      "group": "life",
+      "asset": "assets/icons/life/local_hospital.svg",
+      "source": "ph:first-aid",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "medical_services",
+      "label": "医疗",
+      "group": "life",
+      "asset": "assets/icons/life/medical_services.svg",
+      "source": "ph:first-aid-kit",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "medication",
+      "label": "药品",
+      "group": "life",
+      "asset": "assets/icons/life/medication.svg",
+      "source": "ph:pill",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "healing",
+      "label": "护理",
+      "group": "life",
+      "asset": "assets/icons/life/healing.svg",
+      "source": "ph:heartbeat",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "vaccines",
+      "label": "疫苗",
+      "group": "life",
+      "asset": "assets/icons/life/vaccines.svg",
+      "source": "ph:syringe",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "child_care",
+      "label": "育儿",
+      "group": "life",
+      "asset": "assets/icons/life/child_care.svg",
+      "source": "ph:baby",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "school",
+      "label": "学校",
+      "group": "life",
+      "asset": "assets/icons/life/school.svg",
+      "source": "ph:graduation-cap",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "menu_book",
+      "label": "书籍",
+      "group": "life",
+      "asset": "assets/icons/life/menu_book.svg",
+      "source": "ph:book-open",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "volunteer_activism",
+      "label": "公益",
+      "group": "life",
+      "asset": "assets/icons/life/volunteer_activism.svg",
+      "source": "ph:hand-heart",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "casino",
+      "label": "娱乐",
+      "group": "life",
+      "asset": "assets/icons/life/casino.svg",
+      "source": "ph:dice-five",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "theater_comedy",
+      "label": "演出",
+      "group": "life",
+      "asset": "assets/icons/life/theater_comedy.svg",
+      "source": "ph:mask-happy",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "beach_access",
+      "label": "度假",
+      "group": "life",
+      "asset": "assets/icons/life/beach_access.svg",
+      "source": "ph:beach-ball",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "hiking",
+      "label": "徒步",
+      "group": "life",
+      "asset": "assets/icons/life/hiking.svg",
+      "source": "ph:mountains",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "local_laundry_service",
+      "label": "洗衣",
+      "group": "life",
+      "asset": "assets/icons/life/local_laundry_service.svg",
+      "source": "ph:washing-machine",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "directions_car",
+      "label": "汽车",
+      "group": "transport",
+      "asset": "assets/icons/transport/directions_car.svg",
+      "source": "ph:car",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "directions_bus",
+      "label": "公交",
+      "group": "transport",
+      "asset": "assets/icons/transport/directions_bus.svg",
+      "source": "ph:bus",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "directions_subway",
+      "label": "地铁",
+      "group": "transport",
+      "asset": "assets/icons/transport/directions_subway.svg",
+      "source": "ph:train",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "train",
+      "label": "火车",
+      "group": "transport",
+      "asset": "assets/icons/transport/train.svg",
+      "source": "ph:train",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "flight",
+      "label": "飞机",
+      "group": "transport",
+      "asset": "assets/icons/transport/flight.svg",
+      "source": "ph:airplane",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "flight_takeoff",
+      "label": "起飞",
+      "group": "transport",
+      "asset": "assets/icons/transport/flight_takeoff.svg",
+      "source": "ph:airplane-takeoff",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "local_taxi",
+      "label": "出租",
+      "group": "transport",
+      "asset": "assets/icons/transport/local_taxi.svg",
+      "source": "ph:taxi",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "directions_bike",
+      "label": "骑行",
+      "group": "transport",
+      "asset": "assets/icons/transport/directions_bike.svg",
+      "source": "ph:bicycle",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "two_wheeler",
+      "label": "摩托",
+      "group": "transport",
+      "asset": "assets/icons/transport/two_wheeler.svg",
+      "source": "ph:moped",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "electric_scooter",
+      "label": "滑板车",
+      "group": "transport",
+      "asset": "assets/icons/transport/electric_scooter.svg",
+      "source": "ph:scooter",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "local_gas_station",
+      "label": "加油",
+      "group": "transport",
+      "asset": "assets/icons/transport/local_gas_station.svg",
+      "source": "ph:gas-pump",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "bolt",
+      "label": "充电",
+      "group": "transport",
+      "asset": "assets/icons/transport/bolt.svg",
+      "source": "ph:lightning",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "home",
+      "label": "住房",
+      "group": "home",
+      "asset": "assets/icons/home/home.svg",
+      "source": "ph:house",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "apartment",
+      "label": "公寓",
+      "group": "home",
+      "asset": "assets/icons/home/apartment.svg",
+      "source": "ph:buildings",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "chair",
+      "label": "家具",
+      "group": "home",
+      "asset": "assets/icons/home/chair.svg",
+      "source": "ph:chair",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "kitchen",
+      "label": "厨房",
+      "group": "home",
+      "asset": "assets/icons/home/kitchen.svg",
+      "source": "ph:cooking-pot",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "yard",
+      "label": "庭院",
+      "group": "home",
+      "asset": "assets/icons/home/yard.svg",
+      "source": "ph:plant",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "water_drop",
+      "label": "水电",
+      "group": "home",
+      "asset": "assets/icons/home/water_drop.svg",
+      "source": "ph:drop",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "cleaning_services",
+      "label": "保洁",
+      "group": "home",
+      "asset": "assets/icons/home/cleaning_services.svg",
+      "source": "ph:broom",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "build",
+      "label": "维修",
+      "group": "home",
+      "asset": "assets/icons/home/build.svg",
+      "source": "ph:wrench",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "phone_iphone",
+      "label": "手机",
+      "group": "electronics",
+      "asset": "assets/icons/electronics/phone_iphone.svg",
+      "source": "ph:device-mobile",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "laptop_mac",
+      "label": "电脑",
+      "group": "electronics",
+      "asset": "assets/icons/electronics/laptop_mac.svg",
+      "source": "ph:laptop",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "headphones",
+      "label": "耳机",
+      "group": "electronics",
+      "asset": "assets/icons/electronics/headphones.svg",
+      "source": "ph:headphones",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "tv",
+      "label": "电视",
+      "group": "electronics",
+      "asset": "assets/icons/electronics/tv.svg",
+      "source": "ph:television",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "watch",
+      "label": "手表",
+      "group": "electronics",
+      "asset": "assets/icons/electronics/watch.svg",
+      "source": "ph:watch",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "camera_alt",
+      "label": "相机",
+      "group": "electronics",
+      "asset": "assets/icons/electronics/camera_alt.svg",
+      "source": "ph:camera",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "router",
+      "label": "路由",
+      "group": "electronics",
+      "asset": "assets/icons/electronics/router.svg",
+      "source": "ph:wifi-high",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "wifi",
+      "label": "WiFi",
+      "group": "electronics",
+      "asset": "assets/icons/electronics/wifi.svg",
+      "source": "ph:wifi-high",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "battery_charging_full",
+      "label": "电池",
+      "group": "electronics",
+      "asset": "assets/icons/electronics/battery_charging_full.svg",
+      "source": "ph:battery-charging",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "memory",
+      "label": "芯片",
+      "group": "electronics",
+      "asset": "assets/icons/electronics/memory.svg",
+      "source": "ph:cpu",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "gamepad",
+      "label": "手柄",
+      "group": "electronics",
+      "asset": "assets/icons/electronics/gamepad.svg",
+      "source": "ph:game-controller",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "work_outline",
+      "label": "办公",
+      "group": "office",
+      "asset": "assets/icons/office/work_outline.svg",
+      "source": "ph:briefcase",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "mail",
+      "label": "邮件",
+      "group": "office",
+      "asset": "assets/icons/office/mail.svg",
+      "source": "ph:envelope",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "print",
+      "label": "打印",
+      "group": "office",
+      "asset": "assets/icons/office/print.svg",
+      "source": "ph:printer",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "folder",
+      "label": "文件夹",
+      "group": "office",
+      "asset": "assets/icons/office/folder.svg",
+      "source": "ph:folder",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "edit_note",
+      "label": "笔记",
+      "group": "office",
+      "asset": "assets/icons/office/edit_note.svg",
+      "source": "ph:note-pencil",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "draw",
+      "label": "绘图",
+      "group": "office",
+      "asset": "assets/icons/office/draw.svg",
+      "source": "ph:paint-brush",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "translate",
+      "label": "翻译",
+      "group": "office",
+      "asset": "assets/icons/office/translate.svg",
+      "source": "ph:translate",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "science",
+      "label": "科研",
+      "group": "office",
+      "asset": "assets/icons/office/science.svg",
+      "source": "ph:flask",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "calendar_month",
+      "label": "日历",
+      "group": "office",
+      "asset": "assets/icons/office/calendar_month.svg",
+      "source": "ph:calendar-blank",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "handshake",
+      "label": "合作",
+      "group": "office",
+      "asset": "assets/icons/office/handshake.svg",
+      "source": "ph:handshake",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "workspace_premium",
+      "label": "认证",
+      "group": "office",
+      "asset": "assets/icons/office/workspace_premium.svg",
+      "source": "ph:seal-check",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "more_horiz",
+      "label": "其他",
+      "group": "other",
+      "asset": "assets/icons/other/more_horiz.svg",
+      "source": "ph:dots-three",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "category",
+      "label": "分类",
+      "group": "other",
+      "asset": "assets/icons/other/category.svg",
+      "source": "ph:squares-four",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "label",
+      "label": "标签",
+      "group": "other",
+      "asset": "assets/icons/other/label.svg",
+      "source": "ph:tag",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "star",
+      "label": "收藏",
+      "group": "other",
+      "asset": "assets/icons/other/star.svg",
+      "source": "ph:star",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "public",
+      "label": "公开",
+      "group": "other",
+      "asset": "assets/icons/other/public.svg",
+      "source": "ph:globe",
+      "bg": null,
+      "fg": null
+    },
+    {
+      "key": "album",
+      "label": "相册",
+      "group": "other",
+      "asset": "assets/icons/other/album.svg",
+      "source": "ph:images",
+      "bg": null,
+      "fg": null
+    }
+  ]
+}

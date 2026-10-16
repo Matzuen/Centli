@@ -19,7 +19,14 @@ abstract final class NotificationCaptureStub {
   /// Deep-link from local-push tap (`open_route`).
   static void Function(String route, String? pendingId)? onOpenRoute;
 
+  /// Share / deep-link payload (`pending_intake`).
+  static void Function(Map<String, dynamic> payload)? onPendingIntake;
+
   static bool get supported => !kIsWeb && Platform.isAndroid;
+
+  /// MethodChannel available for share / deeplink on Android + iOS.
+  static bool get channelSupported =>
+      !kIsWeb && (Platform.isAndroid || Platform.isIOS);
 
   static Future<bool> isPermissionGranted() async {
     if (!supported) return false;
@@ -81,6 +88,20 @@ abstract final class NotificationCaptureStub {
     }
   }
 
+
+  /// Sync package watch list to native SharedPreferences (Android).
+  /// Native unions this with its builtin WeChat/Alipay set.
+  static Future<void> setWatchedPackages(List<String> packages) async {
+    if (!supported) return;
+    try {
+      await _channel.invokeMethod<void>('setWatchedPackages', packages);
+    } on MissingPluginException {
+      // no-op
+    } on PlatformException {
+      // no-op
+    }
+  }
+
   static Future<bool> isAutoCaptureEnabled() async {
     if (!supported) return false;
     try {
@@ -93,48 +114,79 @@ abstract final class NotificationCaptureStub {
     }
   }
 
-  /// Listen for native to Dart `notification_capture` / `open_route` invokes and
-  /// optionally Dart to native permission / toggle / local-push calls.
+  /// Listen for native to Dart `notification_capture` / `open_route` /
+  /// `pending_intake` invokes.
   static Future<void> bind({
     required Future<void> Function(Map<String, dynamic> raw) onCapture,
   }) async {
     _onCapture = onCapture;
-    if (!supported) return;
+    await _ensureChannelHandler();
+  }
+
+  /// Register handler for native share / deep-link (`pending_intake`).
+  /// Binds on Android and iOS (not gated by [supported] notification listener).
+  static Future<void> bindPendingIntake(
+    void Function(Map<String, dynamic> payload) onIntake,
+  ) async {
+    onPendingIntake = onIntake;
+    await _ensureChannelHandler();
+  }
+
+  static Future<void> _ensureChannelHandler() async {
+    if (!channelSupported) return;
     if (_bound) return;
     _bound = true;
-    _channel.setMethodCallHandler((call) async {
-      if (call.method == 'notification_capture') {
-        final args = call.arguments;
-        if (args is Map) {
-          final raw = Map<String, dynamic>.from(args);
-          final handler = _onCapture;
-          if (handler != null) {
-            await handler(raw);
-          }
+    _channel.setMethodCallHandler(_onMethodCall);
+    // Ask native to flush queues only after Dart handler is bound (#10).
+    try {
+      await _channel.invokeMethod<void>('bridgeReady');
+    } on MissingPluginException {
+      // iOS / older builds may not implement yet.
+    } on PlatformException {
+      // ignore
+    }
+  }
+
+  static Future<dynamic> _onMethodCall(MethodCall call) async {
+    if (call.method == 'notification_capture') {
+      final args = call.arguments;
+      if (args is Map) {
+        final raw = Map<String, dynamic>.from(args);
+        final handler = _onCapture;
+        if (handler != null) {
+          await handler(raw);
         }
-        return null;
       }
-      if (call.method == 'open_route') {
-        final args = call.arguments;
-        if (args is Map) {
-          final map = Map<String, dynamic>.from(args);
-          final route = map['route'] as String?;
-          final pendingId = map['pendingId'] as String?;
-          if (route != null && route.isNotEmpty) {
-            onOpenRoute?.call(route, pendingId);
-          }
+      return null;
+    }
+    if (call.method == 'open_route') {
+      final args = call.arguments;
+      if (args is Map) {
+        final map = Map<String, dynamic>.from(args);
+        final route = map['route'] as String?;
+        final pendingId = map['pendingId'] as String?;
+        if (route != null && route.isNotEmpty) {
+          onOpenRoute?.call(route, pendingId);
         }
-        return null;
       }
-      throw MissingPluginException(
-        'No handler for method ${call.method} on $channelName',
-      );
-    });
+      return null;
+    }
+    if (call.method == 'pending_intake') {
+      final args = call.arguments;
+      if (args is Map) {
+        onPendingIntake?.call(Map<String, dynamic>.from(args));
+      }
+      return null;
+    }
+    throw MissingPluginException(
+      'No handler for method ${call.method} on $channelName',
+    );
   }
 
   static void unbind() {
     _onCapture = null;
-    if (_bound && supported) {
+    onPendingIntake = null;
+    if (_bound && channelSupported) {
       _channel.setMethodCallHandler(null);
       _bound = false;
     }

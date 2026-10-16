@@ -70,7 +70,17 @@ class _AppLockPageState extends ConsumerState<AppLockPage> {
     });
     if (v.length != kAppLockPinLength || _busy) return;
     setState(() => _busy = true);
-    final ok = await ref.read(appLockServiceProvider).verifyPin(v);
+    final svc = ref.read(appLockServiceProvider);
+      final locked = await svc.lockoutRemaining();
+      if (locked != null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Try again in ${locked.inSeconds + 1}s')),
+          );
+        }
+        return;
+      }
+      final ok = await svc.verifyPin(v);
     if (!mounted) return;
     if (ok) {
       _finishUnlock();

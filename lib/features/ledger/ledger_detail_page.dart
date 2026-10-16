@@ -6,7 +6,7 @@ import 'package:intl/intl.dart';
 import '../../core/utils/money.dart';
 import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
-import 'bookkeeping_sheet.dart';
+import 'bookkeeping_sheet.dart' deferred as bookkeeping;
 
 final _txnProvider =
     StreamProvider.family<Transaction?, String>((ref, id) {
@@ -83,7 +83,7 @@ class _DetailBody extends ConsumerWidget {
           IconButton(
             tooltip: '\u7f16\u8f91',
             icon: const Icon(Icons.edit_outlined),
-            onPressed: () => showBookkeepingSheet(context, existing: txn),
+            onPressed: () => _editTxn(context, txn),
           ),
         ],
       ),
@@ -261,6 +261,12 @@ class _DetailBody extends ConsumerWidget {
         );
       },
     );
+  }
+
+  Future<void> _editTxn(BuildContext context, Transaction txn) async {
+    await bookkeeping.loadLibrary();
+    if (!context.mounted) return;
+    await bookkeeping.showBookkeepingSheet(context, existing: txn);
   }
 
   Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {

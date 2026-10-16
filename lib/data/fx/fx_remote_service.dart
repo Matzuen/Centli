@@ -55,25 +55,25 @@ class FxRemoteService {
   }) async {
     final base = baseCurrency.toUpperCase();
     if (!supportedCurrencies.contains(base)) {
-      throw ArgumentError('Unsupported base currency: $base');
+      throw ArgumentError('不支持的本位币: $base');
     }
 
     final uri = Uri.parse('$_endpoint/$base');
     final res = await _client.get(uri).timeout(const Duration(seconds: 20));
     if (res.statusCode != 200) {
-      throw Exception('FX HTTP ${res.statusCode}');
+      throw Exception('汇率请求失败（HTTP ${res.statusCode}）');
     }
 
     final body = jsonDecode(res.body);
     if (body is! Map<String, dynamic>) {
-      throw const FormatException('FX response is not a JSON object');
+      throw const FormatException('汇率响应不是有效的 JSON');
     }
     if (body['result'] != 'success') {
-      throw FormatException('FX provider result=${body['result']}');
+      throw FormatException('汇率服务返回异常: ${body['result']}');
     }
     final ratesRaw = body['rates'];
     if (ratesRaw is! Map) {
-      throw const FormatException('FX rates map missing');
+      throw const FormatException('汇率数据缺失');
     }
     final rates = <String, double>{};
     ratesRaw.forEach((k, v) {
@@ -158,4 +158,5 @@ void scheduleFxAutoRefresh(CentliDatabase db, String? baseCurrency) {
       // Offline / provider down — keep manual cache; user can retry on FX page.
     }
   }());
+
 }

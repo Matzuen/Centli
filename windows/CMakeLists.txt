@@ -32,6 +32,26 @@ set(CMAKE_CXX_FLAGS_PROFILE "${CMAKE_CXX_FLAGS_RELEASE}")
 # Use Unicode for all projects.
 add_definitions(-DUNICODE -D_UNICODE)
 
+# VS 18 / MSVC 14.51+: plugins such as local_auth_windows still include
+# <experimental/coroutine>. Without this define, STL1011 is a hard error.
+add_compile_definitions(_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS)
+
+# flutter_secure_storage_windows requires <atlstr.h> (CA2W/CW2A). The real
+# headers come from VS optional component:
+#   "C++ ATL for latest v145 build tools (x86 & x64)"
+#   (Microsoft.VisualStudio.Component.VC.ATL)
+# If ATL is not installed, fall back to windows/atl_stub so builds still work.
+find_path(_CENTLI_ATL_INCLUDE NAMES atlstr.h
+  PATHS
+    "$ENV{VCToolsInstallDir}atlmfc/include"
+    "$ENV{VCINSTALLDIR}atlmfc/include"
+  NO_DEFAULT_PATH)
+if(NOT _CENTLI_ATL_INCLUDE)
+  message(STATUS "Centli: ATL not found; using windows/atl_stub for flutter_secure_storage_windows")
+  include_directories(BEFORE "${CMAKE_CURRENT_SOURCE_DIR}/atl_stub")
+endif()
+
+
 # Compilation settings that should be applied to most targets.
 #
 # Be cautious about adding new options here, as plugins use this function by

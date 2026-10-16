@@ -115,7 +115,7 @@ class ImportService {
     final map = Map<String, dynamic>.from(decoded);
 
     if (map['format'] != 'centli-export') {
-      throw StateError('不是 Centli 导出文件（format 应为 centli-export）');
+      throw StateError('不是 Centli 导出文件（格式标识应为 centli-export）');
     }
     final exportVersion = _asInt(map['export_version'], 'export_version');
     if (exportVersion != supportedExportVersion) {
@@ -124,17 +124,24 @@ class ImportService {
       );
     }
     final schemaVersion = _asInt(map['schema_version'], 'schema_version');
-    if (schemaVersion < 1 || schemaVersion > 2) {
-      throw StateError('不支持的 schema_version=$schemaVersion');
+    if (schemaVersion < 1 || schemaVersion > 3) {
+      throw StateError('不支持的数据版本 schema_version=$schemaVersion');
     }
 
     final ledgerRaw = map['ledger'];
     if (ledgerRaw is! Map) {
-      throw StateError('缺少 ledger 对象');
+      throw StateError('缺少账本信息');
     }
     final ledger = _normalizeLedger(Map<String, dynamic>.from(ledgerRaw));
     if ('${ledger['id']}'.isEmpty) {
-      throw StateError('ledger.id 不能为空');
+      throw StateError('账本 ID 不能为空');
+    }
+
+    // Missing required arrays must fail before wipe (null != empty).
+    for (final key in ['accounts', 'categories', 'transactions']) {
+      if (!map.containsKey(key)) {
+        throw StateError('missing required field: $key');
+      }
     }
 
     final accounts = _asMapList(map['accounts'], 'accounts')
@@ -146,16 +153,16 @@ class ImportService {
     final transactions = _asMapList(map['transactions'], 'transactions')
         .map(_normalizeTransaction)
         .toList();
-    final rules = _asMapList(map['merchant_rules'], 'merchant_rules')
+    final rules = _asMapList(map['merchant_rules'] ?? const <dynamic>[], 'merchant_rules')
         .map(_normalizeMerchantRule)
         .toList();
-    final pending = _asMapList(map['pending_captures'], 'pending_captures')
+    final pending = _asMapList(map['pending_captures'] ?? const <dynamic>[], 'pending_captures')
         .map(_normalizePending)
         .toList();
-    final fx = _asMapList(map['fx_rates'], 'fx_rates')
+    final fx = _asMapList(map['fx_rates'] ?? const <dynamic>[], 'fx_rates')
         .map(_normalizeFx)
         .toList();
-    final budgetRows = _asMapList(map['budgets'], 'budgets')
+    final budgetRows = _asMapList(map['budgets'] ?? const <dynamic>[], 'budgets')
         .map(_normalizeBudget)
         .toList();
 
@@ -229,7 +236,10 @@ class ImportService {
 
   /// Full restore: wipe local ledger-scoped data (+ FX), insert backup.
   /// Does not touch flutter_secure_storage PIN; skips app_lock* settings.
-  Future<ImportResult> restore(ImportBundle bundle) async {
+  Future<ImportResult> restore(
+    ImportBundle bundle, {
+    bool replaceFxRates = true,
+  }) async {
     final stats = await db.restoreFromImportBundle(
       ledgerMap: bundle.ledger,
       accountMaps: bundle.accounts,
@@ -241,6 +251,7 @@ class ImportService {
       budgetMaps: bundle.budgets,
       settingsMap: bundle.settings,
       settingsSkipKeys: _settingsSkipKeys,
+      replaceFxRates: replaceFxRates,
     );
     return ImportResult(
       ledgerId: stats.ledgerId,
@@ -267,7 +278,9 @@ class ImportService {
   }
 
   static List<Map<String, dynamic>> _asMapList(Object? v, String field) {
-    if (v == null) return [];
+    if (v == null) {
+      throw StateError('$field cannot be null');
+    }
     if (v is! List) {
       throw StateError('$field 必须是数组');
     }
@@ -398,7 +411,7 @@ class ImportService {
 
     final format = summaryMap['format'] ?? '';
     if (format.isNotEmpty && format != 'centli-export') {
-      throw StateError('不是 Centli 导出文件（summary.format=$format）');
+      throw StateError('不是 Centli 导出文件（摘要格式=$format）');
     }
     if (format.isEmpty) {
       warnings.add('summary 未找到 format=centli-export，仍按 Centli 表结构尽力解析。');
@@ -408,7 +421,7 @@ class ImportService {
     final ledgerName = summaryMap['ledger_name'] ?? '导入账本';
     final baseCurrency = summaryMap['base_currency'] ?? 'CNY';
     if (ledgerId.isEmpty) {
-      throw StateError('summary 缺少 ledger_id，无法还原');
+      throw StateError('摘要缺少账本 ID，无法还原');
     }
 
     final ts = DateTime.now().millisecondsSinceEpoch;

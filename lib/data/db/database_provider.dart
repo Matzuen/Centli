@@ -58,3 +58,8 @@ final themeModeProvider = StreamProvider<ThemeMode>((ref) {
     }
   });
 });
+
+final pendingCountProvider = StreamProvider.family<int, String>((ref, ledgerId) {
+  return ref.watch(databaseProvider).watchPendingCount(ledgerId);
+});
+

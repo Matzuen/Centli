@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
 import '../../data/fx/fx_remote_service.dart';
 import '../security/app_lock_controller.dart';
@@ -24,19 +27,20 @@ class _SplashPageState extends ConsumerState<SplashPage> {
   Future<void> _boot() async {
     final started = DateTime.now();
     final db = ref.read(databaseProvider);
-    // Touch DB so onCreate + seedDefaults run before first home paint.
-    final done = await db.getSetting('onboarding_done');
-    final lockOn = (await db.getSetting('app_lock')) == 'true';
-    // P3: once-per-day remote FX (non-blocking; failures ignored).
-    final ledgerId = await db.currentLedgerId();
-    var base = 'CNY';
-    if (ledgerId != null) {
-      final ledger = await db.getLedger(ledgerId);
-      if (ledger != null) base = ledger.baseCurrency;
-    }
-    scheduleFxAutoRefresh(db, base);
+    // Parallel settings reads; first touch also opens Drift (LazyDatabase).
+    final results = await Future.wait<String?>([
+      db.getSetting('onboarding_done'),
+      db.getSetting('app_lock'),
+    ]);
+    final done = results[0];
+    final lockOn = results[1] == 'true';
+
+    // FX + ledger lookup are not needed to choose the first route — defer.
+    unawaited(_scheduleFxDeferred(db));
+
     final elapsed = DateTime.now().difference(started);
-    const minShow = Duration(milliseconds: 900);
+    // Keep a short brand beat without padding slow boots further.
+    const minShow = Duration(milliseconds: 400);
     if (elapsed < minShow) {
       await Future<void>.delayed(minShow - elapsed);
     }
@@ -51,6 +55,20 @@ class _SplashPageState extends ConsumerState<SplashPage> {
       }
     } else {
       context.go('/onboarding');
+    }
+  }
+
+  Future<void> _scheduleFxDeferred(CentliDatabase db) async {
+    try {
+      final ledgerId = await db.currentLedgerId();
+      var base = 'CNY';
+      if (ledgerId != null) {
+        final ledger = await db.getLedger(ledgerId);
+        if (ledger != null) base = ledger.baseCurrency;
+      }
+      scheduleFxAutoRefresh(db, base);
+    } catch (_) {
+      scheduleFxAutoRefresh(db, 'CNY');
     }
   }
 
@@ -87,7 +105,7 @@ class _SplashPageState extends ConsumerState<SplashPage> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Centli · 厘清每一笔账单',
+                'Centli · 厘清每一笔账',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: scheme.onSurfaceVariant,
                     ),

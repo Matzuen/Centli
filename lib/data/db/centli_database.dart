@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../../core/utils/id_gen.dart';
+import '../../core/icons/centli_icon_defaults.dart';
 import '../../core/utils/fx.dart';
 import 'tables/accounts.dart';
 import 'tables/app_settings.dart';
@@ -39,7 +40,7 @@ class CentliDatabase extends _$CentliDatabase {
   CentliDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -51,6 +52,13 @@ class CentliDatabase extends _$CentliDatabase {
           if (from < 2) {
             await m.createTable(budgets);
           }
+          if (from < 3) {
+            await m.addColumn(accounts, accounts.icon);
+            await backfillDefaultIcons();
+          }
+        },
+        beforeOpen: (details) async {
+          await customStatement('PRAGMA foreign_keys = ON');
         },
       );
 
@@ -83,6 +91,7 @@ class CentliDatabase extends _$CentliDatabase {
           name: a.$1,
           currency: 'CNY',
           type: a.$2,
+          icon: Value(defaultIconKeyForAccount(name: a.$1, type: a.$2)),
           sortOrder: Value(a.$3),
           createdAt: ts,
           updatedAt: ts,
@@ -106,6 +115,7 @@ class CentliDatabase extends _$CentliDatabase {
           id: newId(),
           ledgerId: ledgerId,
           name: outCats[i],
+          icon: Value(defaultIconKeyForCategoryName(outCats[i])),
           kind: 'out',
           sortOrder: Value(i),
           createdAt: ts,
@@ -120,6 +130,7 @@ class CentliDatabase extends _$CentliDatabase {
           id: newId(),
           ledgerId: ledgerId,
           name: inCats[i],
+          icon: Value(defaultIconKeyForCategoryName(inCats[i])),
           kind: 'in',
           sortOrder: Value(i),
           createdAt: ts,
@@ -163,6 +174,28 @@ class CentliDatabase extends _$CentliDatabase {
         value: 'false',
       ),
     );
+  }
+
+  /// Fill icon keys for built-in categories/accounts that still have null icon.
+  Future<void> backfillDefaultIcons() async {
+    final cats = await select(categories).get();
+    for (final c in cats) {
+      if ((c.icon ?? '').trim().isNotEmpty) continue;
+      final key = defaultIconKeyForCategoryName(c.name);
+      if (key == null) continue;
+      await (update(categories)..where((t) => t.id.equals(c.id))).write(
+        CategoriesCompanion(icon: Value(key)),
+      );
+    }
+    final accts = await select(accounts).get();
+    for (final a in accts) {
+      if ((a.icon ?? '').trim().isNotEmpty) continue;
+      final key = defaultIconKeyForAccount(name: a.name, type: a.type);
+      if (key == null) continue;
+      await (update(accounts)..where((t) => t.id.equals(a.id))).write(
+        AccountsCompanion(icon: Value(key)),
+      );
+    }
   }
 
   Future<String?> currentLedgerId() async {
@@ -296,7 +329,7 @@ class CentliDatabase extends _$CentliDatabase {
   }) async {
     final trimmed = name.trim();
     if (trimmed.isEmpty) {
-      throw ArgumentError('ledger name required');
+      throw ArgumentError('请填写账本名称');
     }
     final ts = nowMs();
     final ledgerId = newId();
@@ -322,6 +355,7 @@ class CentliDatabase extends _$CentliDatabase {
           name: a.$1,
           currency: baseCurrency,
           type: a.$2,
+          icon: Value(defaultIconKeyForAccount(name: a.$1, type: a.$2)),
           sortOrder: Value(a.$3),
           createdAt: ts,
           updatedAt: ts,
@@ -345,6 +379,7 @@ class CentliDatabase extends _$CentliDatabase {
           id: newId(),
           ledgerId: ledgerId,
           name: outCats[i],
+          icon: Value(defaultIconKeyForCategoryName(outCats[i])),
           kind: 'out',
           sortOrder: Value(i),
           createdAt: ts,
@@ -359,6 +394,7 @@ class CentliDatabase extends _$CentliDatabase {
           id: newId(),
           ledgerId: ledgerId,
           name: inCats[i],
+          icon: Value(defaultIconKeyForCategoryName(inCats[i])),
           kind: 'in',
           sortOrder: Value(i),
           createdAt: ts,
@@ -659,6 +695,7 @@ class CentliDatabase extends _$CentliDatabase {
     required String accountId,
     String? toAccountId,
     String? categoryId,
+    String? merchant,
     String? note,
     DateTime? happenAt,
     double? fxRate,
@@ -678,6 +715,7 @@ class CentliDatabase extends _$CentliDatabase {
         accountId: accountId,
         toAccountId: Value(toAccountId),
         categoryId: Value(categoryId),
+        merchant: Value(merchant),
         note: Value(note),
         happenAt: happen,
         fxRate: Value(fxRate),
@@ -696,12 +734,16 @@ class CentliDatabase extends _$CentliDatabase {
     required String currency,
     required String type,
     int openingBalanceMinor = 0,
+    String? icon,
   }) async {
     final ts = nowMs();
     final existing = await loadActiveAccounts(ledgerId);
     final order = existing.isEmpty
         ? 0
         : existing.map((a) => a.sortOrder).reduce((a, b) => a > b ? a : b) + 1;
+    final iconKey = (icon ?? '').trim().isNotEmpty
+        ? icon!.trim()
+        : defaultIconKeyForAccount(name: name, type: type);
     await into(accounts).insert(
       AccountsCompanion.insert(
         id: newId(),
@@ -709,6 +751,7 @@ class CentliDatabase extends _$CentliDatabase {
         name: name,
         currency: currency,
         type: type,
+        icon: Value(iconKey),
         openingBalanceMinor: Value(openingBalanceMinor),
         sortOrder: Value(order),
         createdAt: ts,
@@ -723,6 +766,7 @@ class CentliDatabase extends _$CentliDatabase {
     required String currency,
     required String type,
     required int openingBalanceMinor,
+    String? icon,
   }) async {
     final ts = nowMs();
     await (update(accounts)..where((t) => t.id.equals(id))).write(
@@ -731,6 +775,7 @@ class CentliDatabase extends _$CentliDatabase {
         currency: Value(currency),
         type: Value(type),
         openingBalanceMinor: Value(openingBalanceMinor),
+        icon: Value(icon),
         updatedAt: Value(ts),
       ),
     );
@@ -772,6 +817,7 @@ class CentliDatabase extends _$CentliDatabase {
     required String name,
     required String kind,
     String? parentId,
+    String? icon,
   }) async {
     final ts = nowMs();
     final siblings = await (select(categories)
@@ -788,6 +834,9 @@ class CentliDatabase extends _$CentliDatabase {
     final order = siblings.isEmpty
         ? 0
         : siblings.map((c) => c.sortOrder).reduce((a, b) => a > b ? a : b) + 1;
+    final iconKey = (icon ?? '').trim().isNotEmpty
+        ? icon!.trim()
+        : defaultIconKeyForCategoryName(name);
     await into(categories).insert(
       CategoriesCompanion.insert(
         id: newId(),
@@ -795,6 +844,7 @@ class CentliDatabase extends _$CentliDatabase {
         name: name,
         parentId: Value(parentId),
         kind: kind,
+        icon: Value(iconKey),
         sortOrder: Value(order),
         createdAt: ts,
       ),
@@ -804,9 +854,23 @@ class CentliDatabase extends _$CentliDatabase {
   Future<void> renameCategory({
     required String id,
     required String name,
+    String? icon,
+    bool updateIcon = false,
   }) async {
     await (update(categories)..where((t) => t.id.equals(id))).write(
-      CategoriesCompanion(name: Value(name)),
+      CategoriesCompanion(
+        name: Value(name),
+        icon: updateIcon ? Value(icon) : const Value.absent(),
+      ),
+    );
+  }
+
+  Future<void> updateCategoryIcon({
+    required String id,
+    String? icon,
+  }) async {
+    await (update(categories)..where((t) => t.id.equals(id))).write(
+      CategoriesCompanion(icon: Value(icon)),
     );
   }
 
@@ -985,6 +1049,7 @@ class CentliDatabase extends _$CentliDatabase {
     required String accountId,
     String? toAccountId,
     String? categoryId,
+    String? merchant,
     String? note,
     DateTime? happenAt,
     double? fxRate,
@@ -1000,6 +1065,7 @@ class CentliDatabase extends _$CentliDatabase {
         accountId: Value(accountId),
         toAccountId: Value(toAccountId),
         categoryId: Value(categoryId),
+        merchant: Value(merchant),
         note: Value(note),
         happenAt: happen != null ? Value(happen) : const Value.absent(),
         fxRate: Value(fxRate),
@@ -1333,7 +1399,7 @@ class CentliDatabase extends _$CentliDatabase {
           ..where((t) => t.id.equals(pendingId)))
         .getSingle();
     if (pending.status != 'pending') {
-      throw StateError('capture not pending');
+      throw StateError('该记录不是待确认状态');
     }
 
     final ts = nowMs();
@@ -1562,10 +1628,10 @@ class CentliDatabase extends _$CentliDatabase {
     String? source,
   }) async {
     if (rate <= 0) {
-      throw ArgumentError('FX rate must be > 0');
+      throw ArgumentError('汇率必须大于 0');
     }
     if (fromCcy == toCcy) {
-      throw ArgumentError('fromCcy and toCcy must differ');
+      throw ArgumentError('转出与转入币种不能相同');
     }
     final ts = nowMs();
     await into(fxRates).insertOnConflictUpdate(
@@ -1945,7 +2011,7 @@ class CentliDatabase extends _$CentliDatabase {
   ) async {
     final parts = yearMonth.split('-');
     if (parts.length != 2) {
-      throw ArgumentError('yearMonth must be yyyy-MM');
+      throw ArgumentError('月份格式须为 yyyy-MM');
     }
     final y = int.parse(parts[0]);
     final m = int.parse(parts[1]);
@@ -2030,7 +2096,8 @@ class CentliDatabase extends _$CentliDatabase {
 
   // --- P3 import / restore ---
 
-  /// Wipe all ledger-scoped rows (+ FX + budgets), insert backup maps, merge settings.
+  /// Replace one ledger's rows (+ optional FX + budgets), insert backup maps, merge settings.
+  /// Other ledgers are left intact. [replaceFxRates] false keeps existing FX (Excel path).
   /// [settingsSkipKeys] are left unchanged (e.g. app_lock*). Always sets current_ledger_id.
   Future<RestoreImportStats> restoreFromImportBundle({
     required Map<String, dynamic> ledgerMap,
@@ -2043,6 +2110,7 @@ class CentliDatabase extends _$CentliDatabase {
     required List<Map<String, dynamic>> budgetMaps,
     required Map<String, String> settingsMap,
     required Set<String> settingsSkipKeys,
+    bool replaceFxRates = true,
   }) async {
     final ledgerRow = Ledger.fromJson(ledgerMap);
     final accountRows = [for (final m in accountMaps) Account.fromJson(m)];
@@ -2059,15 +2127,20 @@ class CentliDatabase extends _$CentliDatabase {
 
     var settingsWritten = 0;
 
+    final lid = ledgerRow.id;
+
     await transaction(() async {
-      await delete(transactions).go();
-      await delete(pendingCaptures).go();
-      await delete(merchantRules).go();
-      await delete(budgets).go();
-      await delete(categories).go();
-      await delete(accounts).go();
-      await delete(ledgers).go();
-      await delete(fxRates).go();
+      // Scoped wipe: only the ledger being restored (export is single-ledger).
+      await (delete(transactions)..where((t) => t.ledgerId.equals(lid))).go();
+      await (delete(pendingCaptures)..where((t) => t.ledgerId.equals(lid))).go();
+      await (delete(merchantRules)..where((t) => t.ledgerId.equals(lid))).go();
+      await (delete(budgets)..where((t) => t.ledgerId.equals(lid))).go();
+      await (delete(categories)..where((t) => t.ledgerId.equals(lid))).go();
+      await (delete(accounts)..where((t) => t.ledgerId.equals(lid))).go();
+      await (delete(ledgers)..where((t) => t.id.equals(lid))).go();
+      if (replaceFxRates) {
+        await delete(fxRates).go();
+      }
 
       await into(ledgers).insert(ledgerRow.toCompanion(true));
       for (final a in accountRows) {
@@ -2088,8 +2161,10 @@ class CentliDatabase extends _$CentliDatabase {
       for (final p in pendingRows) {
         await into(pendingCaptures).insert(p.toCompanion(true));
       }
-      for (final f in fxRows) {
-        await into(fxRates).insert(f.toCompanion(true));
+      if (replaceFxRates) {
+        for (final f in fxRows) {
+          await into(fxRates).insert(f.toCompanion(true));
+        }
       }
 
       for (final e in settingsMap.entries) {
@@ -2110,7 +2185,7 @@ class CentliDatabase extends _$CentliDatabase {
       transactions: txnRows.length,
       merchantRules: ruleRows.length,
       pendingCaptures: pendingRows.length,
-      fxRates: fxRows.length,
+      fxRates: replaceFxRates ? fxRows.length : 0,
       budgets: budgetRows.length,
       settingsWritten: settingsWritten,
     );

@@ -182,24 +182,41 @@ object NativeCaptureIngest {
         return must.matcher(body).find()
     }
 
-    private val AMOUNT: Pattern = Pattern.compile(
-        "(?:(?:USD|EUR|CNY|HKD|TWD|JPY)\\s*)?(?:[¥￥€]|\\$)?\\s*([0-9]+(?:,[0-9]{3})*(?:\\.[0-9]{1,2})?)",
+        private val AMOUNT: Pattern = Pattern.compile(
+        "(?:(?:USD|EUR|CNY|HKD|TWD|JPY)\\s*|(?:[¥￥]|\\$|€))\\s*([0-9]+(?:,[0-9]{3})*(?:\\.[0-9]{1,2})?)",
     )
+
+    private fun currencyDecimals(ccy: String): Int = when (ccy) {
+        "JPY" -> 0
+        else -> 2
+    }
+
+    private fun toMinor(ccy: String, major: Double): Int {
+        val factor = Math.pow(10.0, currencyDecimals(ccy).toDouble())
+        return Math.round(major * factor).toInt()
+    }
 
     private fun parseAmount(title: String, text: String): Parsed {
         val body = "$title\n$text"
         val m = AMOUNT.matcher(body)
-        if (!m.find()) {
-            return Parsed(null, "CNY", guessMerchant(title, text))
+        while (m.find()) {
+            val end = m.end()
+            if (end < body.length) {
+                val ch = body[end]
+                if (ch == '月' || ch == '日' || ch == '号' ||
+                    ch == '时' || ch == '分' || ch == '秒'
+                ) {
+                    continue
+                }
+            }
+            val raw = (m.group(1) ?: "").replace(",", "")
+            val major = raw.toDoubleOrNull()
+            if (major == null) continue
+            val currency = detectCurrency(body, m.start(), m.end(), m.group(0) ?: "")
+            val minor = toMinor(currency, major)
+            return Parsed(minor, currency, guessMerchant(title, text))
         }
-        val raw = (m.group(1) ?: "").replace(",", "")
-        val major = raw.toDoubleOrNull()
-        if (major == null) {
-            return Parsed(null, "CNY", guessMerchant(title, text))
-        }
-        val currency = detectCurrency(body, m.start(), m.end(), m.group(0) ?: "")
-        val minor = Math.round(major * 100.0).toInt()
-        return Parsed(minor, currency, guessMerchant(title, text))
+        return Parsed(null, "CNY", guessMerchant(title, text))
     }
 
     private fun detectCurrency(body: String, start: Int, end: Int, matched: String): String {
@@ -224,25 +241,28 @@ object NativeCaptureIngest {
 
     private fun guessMerchant(title: String, text: String): String? {
         val t = title.trim()
-        if (t.isNotEmpty() && !t.contains("\u652f\u4ed8\u6210\u529f") && !t.contains("\u4ed8\u6b3e\u6210\u529f")) {
-            val cut = t.replace(Regex("-?\u5fae\u4fe1\u652f\u4ed8$"), "").trim()
+        if (t.isNotEmpty() && !t.contains("支付成功") && !t.contains("付款成功")) {
+            val cut = t.replace(Regex("-?微信支付$"), "").trim()
             if (cut.isNotEmpty()) return cut
+            // Align Dart merchantFromTitle: title "微信支付" stays as merchant.
+            return t
         }
         val body = "$title\n$text"
-        val m = Regex("(?:\u5411|\u7ed9|\u5546\u6237)\\s*(.+?)(?:\\s|$)").find(body)
+        val m = Regex("(?:向|给|商户)\\s*(.+?)(?:\\s|$)").find(body)
         return m?.groupValues?.getOrNull(1)?.trim()?.ifEmpty { null }
     }
 
     private fun formatYuan(currency: String, minor: Int): String {
-        val major = minor / 100.0
+        val decimals = currencyDecimals(currency)
+        val major = minor / Math.pow(10.0, decimals.toDouble())
         val symbol = when (currency) {
             "USD" -> "$"
-            "EUR" -> "\u20ac"
-            "JPY" -> "\u00a5"
-            else -> "\u00a5"
+            "EUR" -> "€"
+            "JPY" -> "¥"
+            else -> "¥"
         }
-        return if (currency == "JPY") {
-            "$symbol$minor"
+        return if (decimals == 0) {
+            "$symbol${major.toInt()}"
         } else {
             "$symbol${"%.2f".format(major)}"
         }

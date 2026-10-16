@@ -1,4 +1,7 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
@@ -8,6 +11,7 @@ import '../../data/db/database_provider.dart';
 import '../../platform/notifications/notification_parse.dart';
 import '../../platform/notifications/notification_listener_stub.dart';
 import '../../platform/notifications/noti_template_store.dart';
+import '../../platform/pending/pending_capture_intake.dart';
 
 final _pendingFilterProvider = StateProvider<String>((ref) => 'pending');
 
@@ -24,10 +28,6 @@ final _pendingListProvider =
     return db.watchPendingCaptures(args.ledgerId, status: args.status);
   },
 );
-
-final pendingCountProvider = StreamProvider.family<int, String>((ref, ledgerId) {
-  return ref.watch(databaseProvider).watchPendingCount(ledgerId);
-});
 
 class PendingPage extends ConsumerStatefulWidget {
   const PendingPage({super.key, this.initialFilter});
@@ -75,7 +75,23 @@ class _PendingPageBodyState extends ConsumerState<PendingPage> {
               icon: const Icon(Icons.delete_sweep_outlined),
               onPressed: () => _clearIgnored(context),
             ),
+                    IconButton(
+            tooltip: '从截图识别',
+            icon: const Icon(Icons.document_scanner_outlined),
+            onPressed: () => _fromScreenshot(context),
+          ),
           IconButton(
+            tooltip: '从剪贴板导入',
+            icon: const Icon(Icons.content_paste_go_outlined),
+            onPressed: () => _fromClipboard(context),
+          ),
+          IconButton(
+            tooltip: '发出去没通知？',
+            icon: const Icon(Icons.help_outline),
+            onPressed: () => context.push('/me/auto/manual-help'),
+          ),
+          if (kDebugMode)
+            IconButton(
             tooltip: '添加示例通知',
             icon: const Icon(Icons.science_outlined),
             onPressed: () async {
@@ -160,7 +176,7 @@ class _PendingPageBodyState extends ConsumerState<PendingPage> {
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                '开启通知监听后，支付通知会汇集到这里。\n也可点右上角加入示例数据调试。',
+                                '开启通知捕获后，支付通知会集中在这里。\n发出去的红包/转账没通知时：可分享账单、从截图识别或从剪贴板导入。',
                                 style: Theme.of(context)
                                     .textTheme
                                     .bodyMedium
@@ -191,6 +207,55 @@ class _PendingPageBodyState extends ConsumerState<PendingPage> {
           );
         },
       ),
+    );
+  }
+
+
+  Future<void> _fromClipboard(BuildContext context) async {
+    final db = ref.read(databaseProvider);
+    final result = await PendingCaptureIntake.ingestClipboard(db);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(result.snackbarText())),
+    );
+  }
+
+  Future<void> _fromScreenshot(BuildContext context) async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('从相册选择'),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('拍照'),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source == null || !context.mounted) return;
+    final picker = ImagePicker();
+    final file = await picker.pickImage(source: source, imageQuality: 92);
+    if (file == null || !context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('正在识别截图…')),
+    );
+    final db = ref.read(databaseProvider);
+    final result = await PendingCaptureIntake.ingestImagePath(
+      db,
+      file.path,
+      sourceKind: 'ocr',
+    );
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(result.snackbarText())),
     );
   }
 
@@ -385,9 +450,12 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
               ),
               const SizedBox(height: 8),
               FutureBuilder<List<Category>>(
-                future: ref
-                    .read(databaseProvider)
-                    .loadCategories(widget.ledgerId, 'out'),
+                future: () async {
+                  final db = ref.read(databaseProvider);
+                  final out = await db.loadCategories(widget.ledgerId, 'out');
+                  final inn = await db.loadCategories(widget.ledgerId, 'in');
+                  return [...out, ...inn];
+                }(),
                 builder: (context, snap) {
                   final cats = snap.data ?? const <Category>[];
                   return DropdownButtonFormField<String>(

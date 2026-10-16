@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/widgets/txn_list_tile.dart';
+import '../../core/widgets/txn_grouped_list.dart';
 import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
 
@@ -73,12 +73,10 @@ class CategoryDrillPage extends ConsumerWidget {
               ),
             );
           }
-          return ListView.separated(
-            itemCount: items.length,
-            separatorBuilder: (_, _) => const Divider(height: 1),
-            itemBuilder: (context, i) {
-              return TxnListTile(txn: items[i], hide: hide);
-            },
+          return TxnGroupedList(
+            txns: items,
+            hide: hide,
+            padding: const EdgeInsets.only(bottom: 24),
           );
         },
       ),

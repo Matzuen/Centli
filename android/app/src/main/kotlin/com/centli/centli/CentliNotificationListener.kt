@@ -43,7 +43,7 @@ class CentliNotificationListener : NotificationListenerService() {
         if (!isAutoCaptureEnabled(this)) return
 
         val pkg = sbn.packageName ?: return
-        if (pkg !in WATCHED_PACKAGES) return
+        if (!isWatchedPackage(this, pkg)) return
 
         val extras = sbn.notification?.extras ?: return
         val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: ""
@@ -94,20 +94,51 @@ class CentliNotificationListener : NotificationListenerService() {
         var connected: Boolean = false
             private set
 
-        /** Packages mirrored from assets/noti_templates.json */
+        /** Builtin packages mirrored from assets/noti_templates.json */
         val WATCHED_PACKAGES = setOf(
             "com.eg.android.AlipayGphone",
             "com.tencent.mm",
         )
 
+        private const val KEY_WATCHED = "watched_packages"
+
         fun prefs(context: Context): SharedPreferences =
             context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
         fun isAutoCaptureEnabled(context: Context): Boolean =
-            prefs(context).getBoolean(KEY_AUTO, true)
+            prefs(context).getBoolean(KEY_AUTO, false)
 
         fun setAutoCaptureEnabled(context: Context, enabled: Boolean) {
             prefs(context).edit().putBoolean(KEY_AUTO, enabled).apply()
+        }
+
+        /** Union of builtin + Flutter-synced extra packages (JSON string array). */
+        fun watchedPackages(context: Context): Set<String> {
+            val extras = try {
+                val raw = prefs(context).getString(KEY_WATCHED, null) ?: return WATCHED_PACKAGES
+                val arr = JSONArray(raw)
+                buildSet {
+                    addAll(WATCHED_PACKAGES)
+                    for (i in 0 until arr.length()) {
+                        val p = arr.optString(i)
+                        if (p.isNotBlank()) add(p)
+                    }
+                }
+            } catch (_: Exception) {
+                WATCHED_PACKAGES
+            }
+            return extras
+        }
+
+        fun isWatchedPackage(context: Context, pkg: String): Boolean =
+            pkg in watchedPackages(context)
+
+        fun setWatchedPackages(context: Context, packages: List<String>) {
+            val arr = JSONArray()
+            for (p in packages) {
+                if (p.isNotBlank()) arr.put(p)
+            }
+            prefs(context).edit().putString(KEY_WATCHED, arr.toString()).apply()
         }
 
         fun enqueue(context: Context, payload: Map<String, Any?>) {
@@ -125,10 +156,9 @@ class CentliNotificationListener : NotificationListenerService() {
             p.edit().putString(KEY_QUEUE, arr.toString()).apply()
         }
 
-        fun drainQueue(context: Context): List<Map<String, Any?>> {
+        fun peekQueue(context: Context): List<Map<String, Any?>> {
             val p = prefs(context)
             val raw = p.getString(KEY_QUEUE, "[]") ?: "[]"
-            p.edit().remove(KEY_QUEUE).apply()
             return try {
                 val arr = JSONArray(raw)
                 buildList {
@@ -146,6 +176,17 @@ class CentliNotificationListener : NotificationListenerService() {
             } catch (_: Exception) {
                 emptyList()
             }
+        }
+
+        fun clearQueue(context: Context) {
+            prefs(context).edit().remove(KEY_QUEUE).apply()
+        }
+
+        /** Peek then clear. Prefer [peekQueue]+[clearQueue] after successful deliver. */
+        fun drainQueue(context: Context): List<Map<String, Any?>> {
+            val items = peekQueue(context)
+            if (items.isNotEmpty()) clearQueue(context)
+            return items
         }
 
         fun ensureRebind(context: Context) {

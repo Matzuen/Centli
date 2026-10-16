@@ -148,6 +148,7 @@ Future<DateRangeWindow?> _pickMonth(
     initialDate: initial.isAfter(now) ? now : initial,
     firstDate: DateTime(2020, 1, 1),
     lastDate: now,
+    locale: const Locale('zh', 'CN'),
     helpText: '选择月份（点该月任意一天）',
     initialDatePickerMode: DatePickerMode.year,
   );
@@ -171,6 +172,7 @@ Future<DateRangeWindow?> _pickCustom(
     firstDate: DateTime(2020, 1, 1),
     lastDate: now,
     initialDateRange: initial,
+    locale: const Locale('zh', 'CN'),
     helpText: '选择自定义区间',
     saveText: '确定',
   );

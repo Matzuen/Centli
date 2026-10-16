@@ -7,6 +7,8 @@ class Accounts extends Table {
   TextColumn get name => text()();
   TextColumn get currency => text()();
   TextColumn get type => text()();
+  /// Catalog key (`wallet`) or hanzi (`hanzi:现`) — same convention as categories.icon.
+  TextColumn get icon => text().nullable()();
   IntColumn get openingBalanceMinor =>
       integer().named('opening_balance_minor').withDefault(const Constant(0))();
   IntColumn get sortOrder =>

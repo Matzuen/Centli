@@ -14,7 +14,8 @@
       "amountRegex": "(?:(?:USD|EUR|CNY|HKD|TWD|JPY)\\s*)?(?:¥|￥|\\$|€)?\\s*([0-9]+(?:,[0-9]{3})*(?:\\.[0-9]{1,2})?)",
       "merchantRegex": "(?:向|给|商户)\\s*(.+?)(?:\\s|$)",
       "merchantFromTitle": false,
-      "defaultAccountHint": "alipay"
+      "defaultAccountHint": "alipay",
+      "name": "支付宝支付成功"
     },
     {
       "id": "wechat_pay_success_zh",
@@ -27,7 +28,8 @@
       "amountRegex": "(?:(?:USD|EUR|CNY|HKD|TWD|JPY)\\s*)?(?:¥|￥|\\$|€)?\\s*([0-9]+(?:,[0-9]{3})*(?:\\.[0-9]{1,2})?)",
       "merchantRegex": "(.+?)(?:-微信支付|付款)",
       "merchantFromTitle": true,
-      "defaultAccountHint": "wechat"
+      "defaultAccountHint": "wechat",
+      "name": "微信支付成功"
     }
   ]
 }

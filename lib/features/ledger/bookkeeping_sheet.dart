@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../app/theme.dart';
 import '../../core/constants/currencies.dart';
 import '../../core/utils/money.dart';
+import '../../core/widgets/centli_icon.dart';
 import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
 import 'ai_text_fill.dart';
 import 'llm_text_fill.dart';
 import 'local_speech.dart';
+import 'category_picker_sheet.dart';
 
 Future<void> showBookkeepingSheet(
   BuildContext context, {
@@ -19,6 +21,10 @@ Future<void> showBookkeepingSheet(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
+    backgroundColor: Colors.white,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+    ),
     builder: (context) => BookkeepingSheet(existing: existing),
   );
 }
@@ -42,10 +48,10 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
   String? _accountId;
   String? _toAccountId;
   String? _categoryId;
+  String? _merchant;
   final _noteCtrl = TextEditingController();
   final _aiTextCtrl = TextEditingController();
   bool _aiExpanded = false;
-  int _fieldEpoch = 0;
   final _speech = LocalSpeechService();
   var _speechListening = false;
   var _speechBusy = false;
@@ -82,11 +88,24 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
       setState(() => _loading = false);
       return;
     }
-    final accounts = await db.loadActiveAccounts(ledgerId);
+    var accounts = await db.loadActiveAccounts(ledgerId);
+    final existing = widget.existing;
+    if (existing != null) {
+      final need = <String>{
+        existing.accountId,
+        if (existing.toAccountId != null) existing.toAccountId!,
+      };
+      final have = {for (final a in accounts) a.id};
+      for (final id in need) {
+        if (!have.contains(id)) {
+          final a = await db.getAccount(id);
+          if (a != null) accounts = [...accounts, a];
+        }
+      }
+    }
     final cats =
         await db.loadCategories(ledgerId, _type == 'in' ? 'in' : 'out');
     if (!mounted) return;
-    final existing = widget.existing;
     setState(() {
       _ledgerId = ledgerId;
       _accounts = accounts;
@@ -102,6 +121,7 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
         _accountId = existing.accountId;
         _toAccountId = existing.toAccountId;
         _categoryId = existing.categoryId;
+        _merchant = existing.merchant;
         _noteCtrl.text = existing.note ?? '';
         _happenAt = DateTime.fromMillisecondsSinceEpoch(
           existing.happenAt,
@@ -133,14 +153,18 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
     }
   }
 
-  Future<void> _reloadCategories() async {
+  Future<void> _reloadCategories({bool resetSelection = false}) async {
     if (_ledgerId == null || _type == 'transfer') return;
     final db = ref.read(databaseProvider);
     final cats =
         await db.loadCategories(_ledgerId!, _type == 'in' ? 'in' : 'out');
     setState(() {
       _categories = cats;
-      _categoryId = cats.isNotEmpty ? cats.first.id : null;
+      if (resetSelection ||
+          _categoryId == null ||
+          !cats.any((c) => c.id == _categoryId)) {
+        _categoryId = cats.isNotEmpty ? cats.first.id : null;
+      }
     });
   }
 
@@ -172,7 +196,9 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
 
   void _onKey(String key) {
     setState(() {
-      if (key == '+' || key == '-') {
+      if (key == 'AC') {
+        _amountText = '0';
+      } else if (key == '+' || key == '-') {
         _amountText = _applyOperator(_amountText, key);
       } else {
         _amountText = _applyKey(_amountText, key, _maxDecimals);
@@ -382,20 +408,23 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
       },
     );
 
-    if (ok != true) return;
-    setState(() {
-      _useToAmount = useTo;
-      if (useTo) {
-        _toAmountText = toCtrl.text.trim().isEmpty ? '0' : toCtrl.text.trim();
-        _fxRateText = null;
-      } else {
-        _fxRateText = rateCtrl.text.trim();
-        _toAmountText = '0';
-      }
-    });
-    toCtrl.dispose();
-    rateCtrl.dispose();
-    await _save(skipCrossPrompt: true, keepOpen: keepOpen);
+    try {
+      if (ok != true) return;
+      setState(() {
+        _useToAmount = useTo;
+        if (useTo) {
+          _toAmountText = toCtrl.text.trim().isEmpty ? '0' : toCtrl.text.trim();
+          _fxRateText = null;
+        } else {
+          _fxRateText = rateCtrl.text.trim();
+          _toAmountText = '0';
+        }
+      });
+      await _save(skipCrossPrompt: true, keepOpen: keepOpen);
+    } finally {
+      toCtrl.dispose();
+      rateCtrl.dispose();
+    }
   }
 
   Future<void> _save({bool skipCrossPrompt = false, bool keepOpen = false}) async {
@@ -480,6 +509,8 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
 
       final note =
           _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim();
+      final merchant =
+          (_merchant ?? '').trim().isEmpty ? null : _merchant!.trim();
       final toAcc = _type == 'transfer' ? _toAccountId : null;
       final cat = _type == 'transfer' ? null : _categoryId;
       if (widget.existing != null) {
@@ -491,6 +522,7 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
           accountId: _accountId!,
           toAccountId: toAcc,
           categoryId: cat,
+          merchant: merchant,
           note: note,
           happenAt: _happenAt,
           fxRate: fxRate,
@@ -505,6 +537,7 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
           accountId: _accountId!,
           toAccountId: toAcc,
           categoryId: cat,
+          merchant: merchant,
           note: note,
           happenAt: _happenAt,
           fxRate: fxRate,
@@ -519,6 +552,7 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
           _toAmountText = '0';
           _fxRateText = null;
           _noteCtrl.clear();
+          _merchant = null;
           _happenAt = DateTime.now();
         });
         ScaffoldMessenger.of(context).showSnackBar(
@@ -549,6 +583,7 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
       initialDate: _happenAt,
       firstDate: DateTime(2020, 1, 1),
       lastDate: DateTime.now().add(const Duration(days: 365)),
+      locale: const Locale('zh', 'CN'),
       helpText: '选择日期',
     );
     if (date == null || !mounted) return;
@@ -556,6 +591,13 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
       context: context,
       initialTime: TimeOfDay.fromDateTime(_happenAt),
       helpText: '选择时间',
+      builder: (context, child) {
+        return Localizations.override(
+          context: context,
+          locale: const Locale('zh', 'CN'),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
     );
     if (time == null || !mounted) return;
     setState(() {
@@ -936,18 +978,10 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
         amountText = s;
       }
 
-      // Note = leftover remark only. Merchant is separate (shown in hits / rules).
-      // If leftover empty but merchant present, put merchant into note for visibility
-      // in the single note field (manual insert has no dedicated merchant UI).
+      // Note = leftover remark only. Merchant is stored on its own column.
       final leftover = parsed.note?.trim();
-      final String noteText;
-      if (leftover != null && leftover.isNotEmpty) {
-        noteText = leftover;
-      } else if (parsed.merchant != null && parsed.merchant!.trim().isNotEmpty) {
-        noteText = parsed.merchant!.trim();
-      } else {
-        noteText = '';
-      }
+      final noteText = (leftover != null && leftover.isNotEmpty) ? leftover : '';
+      final merchantText = parsed.merchant?.trim();
 
       if (!mounted) return;
       setState(() {
@@ -958,17 +992,19 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
         } else if (categoryResolved) {
           _categoryId = categoryId;
         } else {
-          // Unset rather than wrong guess (e.g. always first = 餐饮).
+          // Unset rather than wrong guess.
           _categoryId = null;
         }
         _accountId = accountId;
         _toAccountId = toAccountId;
         _amountText = amountText;
+        _merchant = (merchantText != null && merchantText.isNotEmpty)
+            ? merchantText
+            : null;
         _noteCtrl.text = noteText;
         if (parsed.happenAt != null) {
           _happenAt = parsed.happenAt!;
         }
-        _fieldEpoch++;
         _aiExpanded = false;
       });
 
@@ -980,6 +1016,57 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
     } finally {
       if (mounted) setState(() => _aiFilling = false);
     }
+  }
+
+  Category? _categoryById(String? id) {
+    if (id == null || _categories.isEmpty) return null;
+    for (final c in _categories) {
+      if (c.id == id) return c;
+    }
+    return null;
+  }
+
+  Future<void> _pickCategory() async {
+    final id = await showCategoryPickerSheet(
+      context,
+      categories: _categories,
+      selectedId: _categoryId,
+    );
+    if (!mounted) return;
+    if (id != null) {
+      setState(() => _categoryId = id);
+      return;
+    }
+    // Dismiss or 管理: refresh tree, keep selection when still valid.
+    await _reloadCategories();
+  }
+
+  Future<void> _pickAccount({required bool toAccount}) async {
+    final current = toAccount ? _toAccountId : _accountId;
+    final id = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return _AccountPickerSheet(
+          accounts: _accounts,
+          selectedId: current,
+          title: toAccount ? '\u9009\u62e9\u8f6c\u5165\u8d26\u6237' : '\u9009\u62e9\u8d26\u6237',
+        );
+      },
+    );
+    if (id == null || !mounted) return;
+    setState(() {
+      if (toAccount) {
+        _toAccountId = id;
+      } else {
+        _accountId = id;
+      }
+    });
   }
 
   @override
@@ -1019,7 +1106,7 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
                           selected: {_type},
                           onSelectionChanged: (s) {
                             setState(() => _type = s.first);
-                            _reloadCategories();
+                            _reloadCategories(resetSelection: true);
                           },
                         ),
                       ),
@@ -1160,215 +1247,191 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
                 ),
 
                 Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Column(
-                    children: [
-                      if (_amountHasOperator)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 4),
-                          child: Text(
-                            _amountText,
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleMedium
-                                ?.copyWith(
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurfaceVariant,
-                                ),
+                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        if (_amountHasOperator)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 2),
+                            child: Text(
+                              _amountText,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleSmall
+                                  ?.copyWith(
+                                    color: scheme.onSurfaceVariant,
+                                  ),
+                            ),
                           ),
-                        ),
-                      Text(
-                        formatMinor(
-                          _currency,
-                          toMinor(
+                        Text(
+                          formatMinor(
                             _currency,
-                            _evalAmount(_amountText) ?? 0,
+                            toMinor(
+                              _currency,
+                              _evalAmount(_amountText) ?? 0,
+                            ),
                           ),
+                          style: Theme.of(context)
+                              .textTheme
+                              .displaySmall
+                              ?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: -0.5,
+                                height: 1.05,
+                              ),
                         ),
-                        style:
-                            Theme.of(context).textTheme.displaySmall?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                ),
+                        const SizedBox(height: 2),
+                        Text(
+                          currencyLabel(_currency),
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodySmall
+                              ?.copyWith(
+                                color: scheme.onSurfaceVariant,
+                                fontWeight: FontWeight.w500,
+                              ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _MetaChip(
+                        icon: Icons.schedule_rounded,
+                        label: _happenAtLabel,
+                        onTap: _pickHappenAt,
                       ),
+                      if (_type != 'transfer') ...[
+                        Builder(
+                          builder: (context) {
+                            final cat = _categoryById(_categoryId);
+                            return _MetaChip(
+                              leading: cat == null
+                                  ? null
+                                  : CentliIconChip(
+                                      name: cat.name,
+                                      kind: cat.kind,
+                                      iconKey: cat.icon,
+                                      size: 22,
+                                    ),
+                              icon: cat == null
+                                  ? Icons.category_outlined
+                                  : null,
+                              label: cat?.name ?? '\u5206\u7c7b',
+                              onTap: _pickCategory,
+                            );
+                          },
+                        ),
+                        Builder(
+                          builder: (context) {
+                            final acc = _accountById(_accountId);
+                            return _MetaChip(
+                              leading: acc == null
+                                  ? null
+                                  : CentliIconChip(
+                                      name: acc.name,
+                                      kind: 'account',
+                                      iconKey: acc.icon,
+                                      size: 22,
+                                    ),
+                              icon: acc == null
+                                  ? Icons.account_balance_wallet_outlined
+                                  : null,
+                              label: acc == null
+                                  ? '\u8d26\u6237'
+                                  : '${acc.name} \u00b7 ${currencyLabel(acc.currency)}',
+                              onTap: () => _pickAccount(toAccount: false),
+                            );
+                          },
+                        ),
+                      ] else ...[
+                        Builder(
+                          builder: (context) {
+                            final acc = _accountById(_accountId);
+                            return _MetaChip(
+                              leading: acc == null
+                                  ? null
+                                  : CentliIconChip(
+                                      name: acc.name,
+                                      kind: 'account',
+                                      iconKey: acc.icon,
+                                      size: 22,
+                                    ),
+                              icon: Icons.south_west_rounded,
+                              label: acc == null
+                                  ? '\u8f6c\u51fa'
+                                  : '\u8f6c\u51fa \u00b7 ${acc.name}',
+                              onTap: () => _pickAccount(toAccount: false),
+                            );
+                          },
+                        ),
+                        Builder(
+                          builder: (context) {
+                            final acc = _accountById(_toAccountId);
+                            return _MetaChip(
+                              leading: acc == null
+                                  ? null
+                                  : CentliIconChip(
+                                      name: acc.name,
+                                      kind: 'account',
+                                      iconKey: acc.icon,
+                                      size: 22,
+                                    ),
+                              icon: Icons.north_east_rounded,
+                              label: acc == null
+                                  ? '\u8f6c\u5165'
+                                  : '\u8f6c\u5165 \u00b7 ${acc.name}',
+                              onTap: () => _pickAccount(toAccount: true),
+                            );
+                          },
+                        ),
+                      ],
                     ],
                   ),
                 ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: TextField(
-                    controller: _noteCtrl,
-                    decoration: const InputDecoration(
-                      hintText: '\u5907\u6ce8',
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                    ),
-                  ),
-                ),
-                if (_type != 'transfer') ...[
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    height: 40,
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      children: [
-                        for (final c in _categories)
-                          Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: ChoiceChip(
-                              label: Text(c.name),
-                              selected: _categoryId == c.id,
-                              onSelected: (_) =>
-                                  setState(() => _categoryId = c.id),
-                            ),
-                          ),
-                        Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: ActionChip(
-                            label: const Text('\u66f4\u591a'),
-                            avatar: const Icon(Icons.tune, size: 18),
-                            onPressed: () async {
-                              await context.push('/me/categories');
-                              if (mounted) await _reloadCategories();
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-                if (_type == 'transfer') ...[
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                    child: Row(
-                      children: [
-                        SizedBox(
-                          width: 56,
-                          child: Text('\u8f6c\u51fa',
-                              style: Theme.of(context).textTheme.labelLarge),
-                        ),
-                        Expanded(
-                          child: DropdownButtonFormField<String>(
-                            key: ValueKey('dd-$_fieldEpoch-${_accountId}_${_toAccountId}_$_type'),
-                            initialValue: _accountId,
-                            items: [
-                              for (final a in _accounts)
-                                DropdownMenuItem(
-                                  value: a.id,
-                                  child: Text('${a.name} (${a.currency})'),
-                                ),
-                            ],
-                            onChanged: (v) => setState(() => _accountId = v),
-                            decoration: const InputDecoration(
-                              isDense: true,
-                              border: OutlineInputBorder(),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                if (_type == 'transfer' && _isCrossCurrency)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                    child: Row(
-                      children: [
-                        SizedBox(
-                          width: 56,
-                          child: Text('\u8f6c\u5165',
-                              style: Theme.of(context).textTheme.labelLarge),
-                        ),
-                        Expanded(
-                          child: DropdownButtonFormField<String>(
-                            key: ValueKey('dd-$_fieldEpoch-${_accountId}_${_toAccountId}_$_type'),
-                            initialValue: _toAccountId,
-                            items: [
-                              for (final a in _accounts)
-                                DropdownMenuItem(
-                                  value: a.id,
-                                  child: Text('${a.name} (${a.currency})'),
-                                ),
-                            ],
-                            onChanged: (v) => setState(() => _toAccountId = v),
-                            decoration: const InputDecoration(
-                              isDense: true,
-                              border: OutlineInputBorder(),
-                            ),
+                    child: Text(
+                      '\u8de8\u5e01\uff1a\u4fdd\u5b58\u65f6\u4f1a\u8be2\u95ee\u5bf9\u65b9\u91d1\u989d/\u6c47\u7387',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (_isCrossCurrency)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                      child: Text(
-                        '\u8de8\u5e01\uff1a\u4fdd\u5b58\u65f6\u5c06\u8be2\u95ee\u5bf9\u65b9\u91d1\u989d\u6216\u6c47\u7387',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: scheme.onSurfaceVariant,
-                            ),
-                      ),
-                    ),
-                ] else
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                    child: Row(
-                      children: [
-                        const Text('\u8d26\u6237'),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: DropdownButtonFormField<String>(
-                            key: ValueKey('dd-$_fieldEpoch-${_accountId}_${_toAccountId}_$_type'),
-                            initialValue: _accountId,
-                            items: [
-                              for (final a in _accounts)
-                                DropdownMenuItem(
-                                  value: a.id,
-                                  child: Text('${a.name} (${a.currency})'),
-                                ),
-                            ],
-                            onChanged: (v) => setState(() => _accountId = v),
-                            decoration: const InputDecoration(
-                              isDense: true,
-                              border: OutlineInputBorder(),
-                            ),
-                          ),
-                        ),
-                      ],
                     ),
                   ),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(8),
-                    onTap: _pickHappenAt,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.schedule,
-                            size: 20,
-                            color: scheme.onSurfaceVariant,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            '日期',
-                            style: Theme.of(context).textTheme.labelLarge,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              _happenAtLabel,
-                              textAlign: TextAlign.end,
-                              style: Theme.of(context).textTheme.bodyLarge,
-                            ),
-                          ),
-                          Icon(
-                            Icons.chevron_right,
-                            color: scheme.onSurfaceVariant,
-                          ),
-                        ],
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                  child: TextField(
+                    controller: _noteCtrl,
+                    decoration: InputDecoration(
+                      hintText: '\u5907\u6ce8',
+                      isDense: true,
+                      prefixIcon: Icon(
+                        Icons.edit_outlined,
+                        size: 20,
+                        color: scheme.onSurfaceVariant,
+                      ),
+                      filled: true,
+                      fillColor: const Color(0xFFF7F8FA),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: const BorderSide(color: Color(0xFFE6E8EC)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: const BorderSide(color: Color(0xFFE6E8EC)),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 12,
                       ),
                     ),
                   ),
@@ -1383,6 +1446,156 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
                 ),
               ],
             ),
+    );
+  }
+}
+
+
+class _MetaChip extends StatelessWidget {
+  const _MetaChip({
+    required this.label,
+    required this.onTap,
+    this.icon,
+    this.leading,
+  });
+
+  final String label;
+  final VoidCallback onTap;
+  final IconData? icon;
+  final Widget? leading;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(10, 8, 12, 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFFE6E8EC)),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF6B7A99).withValues(alpha: 0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (leading != null) ...[
+                leading!,
+                const SizedBox(width: 6),
+              ] else if (icon != null) ...[
+                Icon(icon, size: 18, color: scheme.onSurfaceVariant),
+                const SizedBox(width: 6),
+              ],
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 180),
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AccountPickerSheet extends StatelessWidget {
+  const _AccountPickerSheet({
+    required this.accounts,
+    required this.title,
+    this.selectedId,
+  });
+
+  final List<Account> accounts;
+  final String title;
+  final String? selectedId;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final height = MediaQuery.sizeOf(context).height * 0.55;
+    return SizedBox(
+      height: height,
+      child: Column(
+        children: [
+          const SizedBox(height: 8),
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: scheme.outlineVariant,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
+            child: Row(
+              children: [
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+                const Spacer(),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          Expanded(
+            child: ListView.separated(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              itemCount: accounts.length,
+              separatorBuilder: (_, _) => const Divider(height: 1, indent: 72),
+              itemBuilder: (context, i) {
+                final a = accounts[i];
+                final selected = a.id == selectedId;
+                return ListTile(
+                  leading: CentliIconChip(
+                    name: a.name,
+                    kind: 'account',
+                    iconKey: a.icon,
+                    size: 40,
+                  ),
+                  title: Text(
+                    a.name,
+                    style: TextStyle(
+                      fontWeight:
+                          selected ? FontWeight.w700 : FontWeight.w500,
+                    ),
+                  ),
+                  subtitle: Text(currencyLabel(a.currency)),
+                  trailing: selected
+                      ? Icon(Icons.check_circle, color: CentliTheme.softBlue)
+                      : null,
+                  onTap: () => Navigator.pop(context, a.id),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1403,14 +1616,27 @@ class _Keypad extends StatelessWidget {
     ['1', '2', '3', '\u232b'],
     ['4', '5', '6', '+'],
     ['7', '8', '9', '-'],
-    ['.', '0', '00', '\u2713'],
+    ['.', '0', 'AC', '\u2713'],
   ];
+
+  Color _bg(String k) {
+    if (k == '\u2713') return CentliTheme.keypadConfirm;
+    if (k == 'AC' || k == '\u232b') return CentliTheme.keypadAcBg;
+    if (k == '+' || k == '-') return CentliTheme.keypadOpBg;
+    return CentliTheme.keypadNumBg;
+  }
+
+  Color _fg(String k) {
+    if (k == '\u2713') return Colors.white;
+    if (k == 'AC' || k == '\u232b') return const Color(0xFFC62828);
+    if (k == '+' || k == '-') return CentliTheme.softBlue;
+    return const Color(0xFF333333);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+      padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
       child: Column(
         children: [
           for (final row in _keys)
@@ -1421,28 +1647,30 @@ class _Keypad extends StatelessWidget {
                     child: Padding(
                       padding: const EdgeInsets.all(4),
                       child: SizedBox(
-                        height: 52,
-                        child: FilledButton.tonal(
-                          style: FilledButton.styleFrom(
-                            backgroundColor: k == '\u2713'
-                                ? scheme.primary
-                                : scheme.surfaceContainerHighest,
-                            foregroundColor: k == '\u2713'
-                                ? scheme.onPrimary
-                                : scheme.onSurface,
-                          ),
-                          onPressed: () {
-                            if (k == '\u2713') {
-                              onSubmit?.call();
-                            } else {
-                              onKey(k);
-                            }
-                          },
-                          onLongPress: k == '\u2713' ? onLongSubmit : null,
-                          child: Text(
-                            k,
-                            style: const TextStyle(
-                                fontSize: 20, fontWeight: FontWeight.w600),
+                        height: 54,
+                        child: Material(
+                          color: _bg(k),
+                          borderRadius: BorderRadius.circular(14),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(14),
+                            onTap: () {
+                              if (k == '\u2713') {
+                                onSubmit?.call();
+                              } else {
+                                onKey(k);
+                              }
+                            },
+                            onLongPress: k == '\u2713' ? onLongSubmit : null,
+                            child: Center(
+                              child: Text(
+                                k == '\u2713' ? '\u2713' : k,
+                                style: TextStyle(
+                                  fontSize: k == 'AC' ? 16 : 20,
+                                  fontWeight: FontWeight.w700,
+                                  color: _fg(k),
+                                ),
+                              ),
+                            ),
                           ),
                         ),
                       ),

@@ -3,6 +3,7 @@ import '../../core/utils/money.dart';
 class NotiTemplate {
   const NotiTemplate({
     required this.id,
+    this.name,
     required this.packages,
     this.defaultCurrency = 'CNY',
     this.titleRegex,
@@ -15,6 +16,8 @@ class NotiTemplate {
   });
 
   final String id;
+  /// Optional display name (user rules / UI). Falls back to [id].
+  final String? name;
   final List<String> packages;
   final String defaultCurrency;
   final String? titleRegex;
@@ -25,9 +28,16 @@ class NotiTemplate {
   final bool merchantFromTitle;
   final String? defaultAccountHint;
 
+  String get displayName {
+    final n = name?.trim();
+    if (n != null && n.isNotEmpty) return n;
+    return kBuiltinTemplateNames[id] ?? id;
+  }
+
   factory NotiTemplate.fromJson(Map<String, dynamic> j) {
     return NotiTemplate(
       id: j['id'] as String,
+      name: j['name'] as String?,
       packages: (j['packages'] as List).cast<String>(),
       defaultCurrency: (j['defaultCurrency'] as String?) ?? 'CNY',
       titleRegex: j['titleRegex'] as String?,
@@ -42,6 +52,7 @@ class NotiTemplate {
 
   Map<String, dynamic> toJson() => {
         'id': id,
+        if (name != null) 'name': name,
         'packages': packages,
         'defaultCurrency': defaultCurrency,
         'titleRegex': titleRegex,
@@ -52,7 +63,51 @@ class NotiTemplate {
         'merchantFromTitle': merchantFromTitle,
         'defaultAccountHint': defaultAccountHint,
       };
+
+  NotiTemplate copyWith({
+    String? id,
+    String? name,
+    List<String>? packages,
+    String? defaultCurrency,
+    String? titleRegex,
+    String? mustContainRegex,
+    String? excludeTextRegex,
+    String? amountRegex,
+    String? merchantRegex,
+    bool? merchantFromTitle,
+    String? defaultAccountHint,
+    bool clearTitleRegex = false,
+    bool clearMustContain = false,
+    bool clearExclude = false,
+    bool clearMerchantRegex = false,
+    bool clearAccountHint = false,
+    bool clearName = false,
+  }) {
+    return NotiTemplate(
+      id: id ?? this.id,
+      name: clearName ? null : (name ?? this.name),
+      packages: packages ?? this.packages,
+      defaultCurrency: defaultCurrency ?? this.defaultCurrency,
+      titleRegex: clearTitleRegex ? null : (titleRegex ?? this.titleRegex),
+      mustContainRegex:
+          clearMustContain ? null : (mustContainRegex ?? this.mustContainRegex),
+      excludeTextRegex:
+          clearExclude ? null : (excludeTextRegex ?? this.excludeTextRegex),
+      amountRegex: amountRegex ?? this.amountRegex,
+      merchantRegex:
+          clearMerchantRegex ? null : (merchantRegex ?? this.merchantRegex),
+      merchantFromTitle: merchantFromTitle ?? this.merchantFromTitle,
+      defaultAccountHint:
+          clearAccountHint ? null : (defaultAccountHint ?? this.defaultAccountHint),
+    );
+  }
 }
+
+/// Friendly names for builtin / official template ids.
+const Map<String, String> kBuiltinTemplateNames = {
+  'alipay_pay_success_zh': '支付宝支付成功',
+  'wechat_pay_success_zh': '微信支付成功',
+};
 
 class RawNotification {
   const RawNotification({
@@ -105,12 +160,13 @@ class ParseResult {
 
 /// Shared amount pattern: ¥/￥/$/€ + optional currency code, capture group 1 = number.
 const kAmountRegex =
-    r'(?:(?:USD|EUR|CNY|HKD|TWD|JPY)\s*)?(?:¥|￥|\$|€)?\s*([0-9]+(?:,[0-9]{3})*(?:\.[0-9]{1,2})?)';
+    r'(?:(?:USD|EUR|CNY|HKD|TWD|JPY)\s*|(?:\u00a5|\uffe5|\$|\u20ac))\s*([0-9]+(?:,[0-9]{3})*(?:\.[0-9]{1,2})?)';
 
 /// Built-in templates (also mirrored in assets/noti_templates.json).
 List<NotiTemplate> builtinNotiTemplates() => const [
       NotiTemplate(
         id: 'alipay_pay_success_zh',
+        name: '支付宝支付成功',
         packages: ['com.eg.android.AlipayGphone'],
         mustContainRegex: '支付成功|付款成功',
         excludeTextRegex: '验证码|登录|收款到账提醒|服务通知|余额宝收益',
@@ -120,6 +176,7 @@ List<NotiTemplate> builtinNotiTemplates() => const [
       ),
       NotiTemplate(
         id: 'wechat_pay_success_zh',
+        name: '微信支付成功',
         packages: ['com.tencent.mm'],
         mustContainRegex: '微信支付|支付成功|已支付',
         excludeTextRegex: '验证码|登录|朋友圈|微信消息|发来一条|会话|拍了拍|互动消息|新的朋友|群聊|语音通话|视频通话|收到一条|发来一个红包|领取了你的红包',
@@ -180,6 +237,105 @@ ParseResult parseNotification(
   return ParseResult(ok: false, happenAt: when, currency: 'CNY');
 }
 
+
+
+/// Diagnostic result for the 「试一试」 UI.
+class ParseExplainResult {
+  const ParseExplainResult({
+    required this.result,
+    required this.reason,
+    required this.steps,
+  });
+
+  final ParseResult result;
+  /// Short Chinese summary: matched / ignored reason.
+  final String reason;
+  final List<String> steps;
+}
+
+/// Walk templates like [parseNotification], recording skip reasons.
+ParseExplainResult explainNotificationParse(
+  RawNotification raw, [
+  List<NotiTemplate>? templates,
+]) {
+  final list = templates ?? builtinNotiTemplates();
+  final when = DateTime.fromMillisecondsSinceEpoch(raw.whenMs, isUtc: false);
+  final steps = <String>[];
+
+  if (raw.title.trim().isEmpty && raw.text.trim().isEmpty) {
+    return ParseExplainResult(
+      result: ParseResult(ok: false, happenAt: when, currency: 'CNY'),
+      reason: '标题与正文均为空',
+      steps: const ['输入为空'],
+    );
+  }
+
+  final matchedPkgs = list.where((t) => t.packages.contains(raw.pkg)).toList();
+  if (matchedPkgs.isEmpty) {
+    steps.add('无模板监听包名 ${raw.pkg}');
+    return ParseExplainResult(
+      result: ParseResult(ok: false, happenAt: when, currency: 'CNY'),
+      reason: '没有匹配该包名的规则',
+      steps: steps,
+    );
+  }
+
+  for (final t in matchedPkgs) {
+    final label = t.displayName;
+    if (t.titleRegex != null &&
+        !RegExp(t.titleRegex!).hasMatch(raw.title)) {
+      steps.add('「$label」标题未匹配 titleRegex');
+      continue;
+    }
+    final body = raw.fullText;
+    if (t.excludeTextRegex != null &&
+        RegExp(t.excludeTextRegex!).hasMatch(body)) {
+      steps.add('「$label」命中排除词 excludeTextRegex');
+      continue;
+    }
+    if (t.mustContainRegex != null &&
+        !RegExp(t.mustContainRegex!).hasMatch(body)) {
+      steps.add('「$label」未含必须关键词 mustContainRegex');
+      continue;
+    }
+
+    final extracted = _extractAmount(body, t.amountRegex, t.defaultCurrency);
+    String? merchant;
+    if (t.merchantFromTitle && raw.title.trim().isNotEmpty) {
+      merchant = raw.title.trim();
+      if (t.merchantRegex != null) {
+        final m = RegExp(t.merchantRegex!).firstMatch(raw.title);
+        if (m != null) merchant = (m.group(1) ?? merchant).trim();
+      }
+    } else if (t.merchantRegex != null) {
+      final m = RegExp(t.merchantRegex!).firstMatch(body);
+      if (m != null) merchant = (m.group(1) ?? '').trim();
+    }
+
+    final result = ParseResult(
+      amountMinor: extracted?.minor,
+      currency: extracted?.currency ?? t.defaultCurrency,
+      merchant: merchant?.isEmpty == true ? null : merchant,
+      happenAt: when,
+      ok: extracted != null,
+      templateId: t.id,
+      accountHint: t.defaultAccountHint,
+    );
+    steps.add('命中「$label」(${t.id})');
+    final reason = extracted == null
+        ? '已匹配规则，但未解析出金额'
+        : '解析成功';
+    return ParseExplainResult(result: result, reason: reason, steps: steps);
+  }
+
+  steps.add('所有候选规则均未通过');
+  return ParseExplainResult(
+    result: ParseResult(ok: false, happenAt: when, currency: 'CNY'),
+    reason: '未匹配任何规则（见步骤）',
+    steps: steps,
+  );
+}
+
 class _ExtractedAmount {
   const _ExtractedAmount({required this.minor, required this.currency});
   final int minor;
@@ -233,13 +389,21 @@ _ExtractedAmount? _extractAmount(
   String amountRegex,
   String defaultCcy,
 ) {
-  final m = RegExp(amountRegex).firstMatch(body);
-  if (m == null) return null;
-  final raw = (m.group(1) ?? '').replaceAll(',', '');
-  final major = double.tryParse(raw);
-  if (major == null) return null;
-  final ccy = detectCurrencyNearMatch(body, m, defaultCcy);
-  return _ExtractedAmount(minor: toMinor(ccy, major), currency: ccy);
+  final re = RegExp(amountRegex);
+  for (final m in re.allMatches(body)) {
+    // Skip date fragments like 10月 / 15日 even if somehow matched.
+    final end = m.end;
+    final after = end < body.length ? body.substring(end, end + 1) : '';
+    if (after.isNotEmpty && RegExp(r'[月日号时分秒]').hasMatch(after)) {
+      continue;
+    }
+    final raw = (m.group(1) ?? '').replaceAll(',', '');
+    final major = double.tryParse(raw);
+    if (major == null) continue;
+    final ccy = detectCurrencyNearMatch(body, m, defaultCcy);
+    return _ExtractedAmount(minor: toMinor(ccy, major), currency: ccy);
+  }
+  return null;
 }
 
 String dedupeKey(RawNotification raw, ParseResult r) {
@@ -370,4 +534,145 @@ Future<int> seedSamplePendingCaptures({
     if (id != null) added++;
   }
   return added;
+}
+
+
+// ---------------------------------------------------------------------------
+// Manual intake (share / OCR / clipboard / URL scheme)
+// Slightly looser than NotificationListener: user explicitly chose the content.
+// Still requires an amount OR clear payment/transfer keywords.
+// ---------------------------------------------------------------------------
+
+/// Keywords that indicate a payment / transfer / red-packet bill (send-out OK).
+const kManualPayKeywords =
+    r'转账成功|已转账|转账|红包|微信红包|付款给|支付成功|付款成功|已支付|微信支付|支付宝|向.+转账|收款方|交易成功|支出';
+
+/// Chat / OTP noise to reject even on manual paths.
+const kManualExcludeKeywords =
+    r'验证码|登录验证|朋友圈|发来一条|拍了拍|互动消息|新的朋友|语音通话|视频通话|收到一条|发来一个红包|领取了你的红包|会话消息';
+
+/// Guess source package from bill text (微信 / 支付宝).
+String guessPkgFromText(String text) {
+  final t = text;
+  if (t.contains('支付宝') || t.contains('Alipay') || t.contains('alipay')) {
+    return 'com.eg.android.AlipayGphone';
+  }
+  if (t.contains('微信') ||
+      t.contains('WeChat') ||
+      t.contains('微信支付') ||
+      t.contains('微信红包')) {
+    return 'com.tencent.mm';
+  }
+  return 'manual';
+}
+
+String? guessAccountHintFromText(String text) {
+  final pkg = guessPkgFromText(text);
+  if (pkg.contains('Alipay')) return 'alipay';
+  if (pkg.contains('tencent.mm')) return 'wechat';
+  return null;
+}
+
+String? _extractMerchantLoose(String body) {
+  final patterns = <String>[
+    r'向\s*(.+?)转账',
+    r'付款给\s*(.+?)(?:\s|$|¥|￥|\d)',
+    r'给\s*(.+?)\s*(?:转账|发红包|红包)',
+    r'(?:商户|收款方|对方|收款人)[:：\s]*(.+?)(?:\s|$|¥|￥)',
+    r'转账给\s*(.+?)(?:\s|$|¥|￥|\d)',
+  ];
+  for (final p in patterns) {
+    final m = RegExp(p).firstMatch(body);
+    if (m != null) {
+      final name = (m.group(1) ?? '').trim();
+      if (name.isNotEmpty && name.length < 40) return name;
+    }
+  }
+  return null;
+}
+
+/// Parse user-chosen bill text (share / OCR / clipboard / deep link).
+///
+/// Returns [ParseResult] with [ParseResult.templateId] set to a synthetic id
+/// like `manual_transfer_zh` when accepted, or null when rejected.
+ParseResult parseManualCaptureText(
+  String text, {
+  String? title,
+  String? pkgHint,
+  DateTime? happenAt,
+}) {
+  final body = [
+    if (title != null && title.trim().isNotEmpty) title.trim(),
+    text.trim(),
+  ].where((s) => s.isNotEmpty).join('\n');
+  final when = happenAt ?? DateTime.now();
+
+  if (body.trim().isEmpty) {
+    return ParseResult(ok: false, happenAt: when, currency: 'CNY');
+  }
+
+  if (RegExp(kManualExcludeKeywords).hasMatch(body)) {
+    return ParseResult(ok: false, happenAt: when, currency: 'CNY');
+  }
+
+  final hasKeyword = RegExp(kManualPayKeywords).hasMatch(body);
+  final extracted = _extractAmount(body, kAmountRegex, 'CNY');
+  final hasAmount = extracted != null;
+
+  if (!hasAmount && !hasKeyword) {
+    return ParseResult(ok: false, happenAt: when, currency: 'CNY');
+  }
+  if (!hasKeyword && hasAmount) {
+    final hasMoneyMark =
+        RegExp(r'¥|￥|\$|€|USD|CNY|金额|元').hasMatch(body);
+    if (!hasMoneyMark) {
+      return ParseResult(ok: false, happenAt: when, currency: 'CNY');
+    }
+  }
+
+  final pkg = (pkgHint != null && pkgHint.isNotEmpty)
+      ? pkgHint
+      : guessPkgFromText(body);
+  if (pkg != 'manual') {
+    final raw = RawNotification(
+      pkg: pkg,
+      title: title ?? '',
+      text: text,
+      whenMs: when.millisecondsSinceEpoch,
+    );
+    final strict = parseNotification(raw);
+    if (strict.templateId != null) {
+      return strict;
+    }
+  }
+
+  final merchant = _extractMerchantLoose(body);
+  final hint = guessAccountHintFromText(body);
+  final isTransfer = RegExp(r'转账|红包').hasMatch(body);
+
+  return ParseResult(
+    amountMinor: extracted?.minor,
+    currency: extracted?.currency ?? 'CNY',
+    merchant: merchant,
+    happenAt: when,
+    ok: extracted != null,
+    templateId: isTransfer ? 'manual_transfer_zh' : 'manual_pay_zh',
+    accountHint: hint,
+  );
+}
+
+/// Build a dedupe key for manual intake (share / OCR / clipboard / URL).
+String manualDedupeKey({
+  required String sourceKind,
+  required String body,
+  required ParseResult parsed,
+  int? whenMs,
+}) {
+  final ms = whenMs ?? DateTime.now().millisecondsSinceEpoch;
+  final bucket = ms ~/ 120000;
+  final tip = body.trim();
+  final tipKey = tip.isEmpty ? 'empty' : tip.hashCode.toRadixString(16);
+  final amt = parsed.amountMinor?.toString() ?? 'na';
+  final merchant = (parsed.merchant ?? '').trim().toLowerCase();
+  return 'manual|$sourceKind|$merchant|$amt|$tipKey|$bucket';
 }

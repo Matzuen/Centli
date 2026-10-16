@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/utils/date_range.dart';
 import '../../core/widgets/date_range_control.dart';
-import '../../core/widgets/txn_list_tile.dart';
+import '../../core/widgets/txn_grouped_list.dart';
 import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
 
@@ -393,13 +393,10 @@ class _SearchPageState extends ConsumerState<SearchPage> {
         ),
       );
     }
-    return ListView.separated(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      itemCount: rows.length,
-      separatorBuilder: (context, index) => const Divider(height: 1),
-      itemBuilder: (context, i) {
-        return TxnListTile(txn: rows[i], hide: hide);
-      },
+    return TxnGroupedList(
+      txns: rows,
+      hide: hide,
+      padding: const EdgeInsets.only(bottom: 24),
     );
   }
 }

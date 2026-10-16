@@ -11,6 +11,9 @@ import '../features/ledger/ledger_detail_page.dart';
 import '../features/ledger/search_page.dart';
 import '../features/security/app_lock_page.dart';
 import '../features/settings/auto_capture_page.dart';
+import '../features/settings/manual_capture_help_page.dart';
+import '../features/settings/recognition_rules_page.dart';
+import '../features/settings/recognition_rule_edit_page.dart';
 import '../features/settings/smart_fill_settings_page.dart';
 import '../features/settings/permission_explain_page.dart';
 import '../features/settings/categories_page.dart';
@@ -144,6 +147,30 @@ GoRouter createRouter({
                     path: 'auto',
                     parentNavigatorKey: rootNavigatorKey,
                     builder: (context, state) => const AutoCapturePage(),
+                    routes: [
+                      GoRoute(
+                        path: 'manual-help',
+                        parentNavigatorKey: rootNavigatorKey,
+                        builder: (context, state) =>
+                            const ManualCaptureHelpPage(),
+                      ),
+                      GoRoute(
+                        path: 'rules',
+                        parentNavigatorKey: rootNavigatorKey,
+                        builder: (context, state) =>
+                            const RecognitionRulesPage(),
+                        routes: [
+                          GoRoute(
+                            path: 'edit',
+                            parentNavigatorKey: rootNavigatorKey,
+                            builder: (context, state) {
+                              final id = state.uri.queryParameters['id'];
+                              return RecognitionRuleEditPage(ruleId: id);
+                            },
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                   GoRoute(
                     path: 'smart-fill',

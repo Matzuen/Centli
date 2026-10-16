@@ -16,6 +16,8 @@ analyzer:
     - ios/**
     - web/**
     - windows/**
+    - _patch_*/**
+    - _install_*/**
 
 linter:
   # The lint rules applied to this project can be customized in the

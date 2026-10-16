@@ -19,6 +19,9 @@ class MainActivity : FlutterFragmentActivity() {
 
     private val mainHandler = Handler(Looper.getMainLooper())
 
+    @Volatile
+    private var dartBridgeReady = false
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         val channel = MethodChannel(
@@ -59,6 +62,13 @@ class MainActivity : FlutterFragmentActivity() {
                     if (enabled && isNotificationAccessGranted()) {
                         CentliNotificationListener.ensureRebind(this)
                     }
+                    result.success(null)
+                }
+                "setWatchedPackages" -> {
+                    @Suppress("UNCHECKED_CAST")
+                    val args = call.arguments as? List<*> ?: emptyList<Any?>()
+                    val packages = args.mapNotNull { it as? String }.filter { it.isNotBlank() }
+                    CentliNotificationListener.setWatchedPackages(this, packages)
                     result.success(null)
                 }
                 "isAutoCaptureEnabled" -> {
@@ -104,14 +114,20 @@ class MainActivity : FlutterFragmentActivity() {
                         result.error("open_failed", e.message, null)
                     }
                 }
+                "bridgeReady" -> {
+                    dartBridgeReady = true
+                    flushQueuedCaptures()
+                    flushQueuedPendingIntake()
+                    result.success(null)
+                }
                 else -> result.notImplemented()
             }
         }
 
-        // Flush any captures queued while Flutter was not running.
+        // Do not flush capture queues here — Dart calls bridgeReady after handler bind (#10).
         mainHandler.post {
-            flushQueuedCaptures()
             deliverOpenRoute(intent)
+            deliverPendingIntake(intent)
             if (isNotificationAccessGranted() && !CentliNotificationListener.connected) {
                 CentliNotificationListener.ensureRebind(this)
             }
@@ -129,6 +145,7 @@ class MainActivity : FlutterFragmentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         deliverOpenRoute(intent)
+        deliverPendingIntake(intent)
     }
 
     override fun onDestroy() {
@@ -168,10 +185,17 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
     private fun flushQueuedCaptures() {
-        val queued = CentliNotificationListener.drainQueue(this)
+        if (!dartBridgeReady) return
+        val queued = CentliNotificationListener.peekQueue(this)
+        if (queued.isEmpty()) return
         val ch = methodChannel ?: return
-        for (payload in queued) {
-            ch.invokeMethod("notification_capture", payload)
+        try {
+            for (payload in queued) {
+                ch.invokeMethod("notification_capture", payload)
+            }
+            CentliNotificationListener.clearQueue(this)
+        } catch (e: Exception) {
+            Log.w("CentliMain", "flushQueuedCaptures failed; keeping queue", e)
         }
     }
 
@@ -196,6 +220,44 @@ class MainActivity : FlutterFragmentActivity() {
         }
     }
 
+
+
+    private fun deliverPendingIntake(intent: Intent?) {
+        val payload = PendingIntakeIntents.fromIntent(this, intent) ?: return
+        intent?.action = Intent.ACTION_MAIN
+        intent?.data = null
+        intent?.removeExtra(Intent.EXTRA_TEXT)
+        intent?.removeExtra(Intent.EXTRA_STREAM)
+        intent?.removeExtra(Intent.EXTRA_SUBJECT)
+        val ch = methodChannel
+        if (ch == null) {
+            PendingIntakeIntents.enqueue(this, payload)
+            return
+        }
+        mainHandler.post {
+            try {
+                ch.invokeMethod("pending_intake", payload.toMap())
+            } catch (_: Exception) {
+                PendingIntakeIntents.enqueue(this, payload)
+            }
+        }
+    }
+
+    private fun flushQueuedPendingIntake() {
+        if (!dartBridgeReady) return
+        val payload = PendingIntakeIntents.drain(this) ?: return
+        val ch = methodChannel ?: run {
+            PendingIntakeIntents.enqueue(this, payload)
+            return
+        }
+        mainHandler.post {
+            try {
+                ch.invokeMethod("pending_intake", payload.toMap())
+            } catch (_: Exception) {
+                PendingIntakeIntents.enqueue(this, payload)
+            }
+        }
+    }
 
     private fun isBatteryOptimizationIgnored(): Boolean {
         val pm = getSystemService(POWER_SERVICE) as PowerManager

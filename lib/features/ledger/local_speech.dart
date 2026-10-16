@@ -186,8 +186,8 @@ class LocalSpeechService {
       throw StateError(
         friendlyError ??
             (_lastError == null
-                ? 'speech_unavailable'
-                : 'speech_unavailable: $_lastError'),
+                ? '当前设备语音识别不可用'
+                : '当前设备语音识别不可用: $_lastError'),
       );
     }
     // Ensure previous session is fully stopped before starting again.
@@ -222,7 +222,7 @@ class LocalSpeechService {
       _setStatus('error');
       throw StateError(
         friendlyError ??
-            'speech_listen_failed: $_lastError。'
+            '语音识别启动失败: $_lastError。'
                 '请检查麦克风权限，或在系统设置中下载中文语音识别包 / 保持网络可用。',
       );
     }

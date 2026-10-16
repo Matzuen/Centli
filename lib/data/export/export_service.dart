@@ -44,7 +44,7 @@ class ExportService {
   final CentliDatabase db;
 
   static const exportVersion = 1;
-  static const appVersion = '1.0.0+1';
+  static const appVersion = '1.0.1+2';
 
   Future<Map<String, dynamic>> buildBundle({
     required String ledgerId,
@@ -52,7 +52,7 @@ class ExportService {
   }) async {
     final ledger = await db.getLedger(ledgerId);
     if (ledger == null) {
-      throw StateError('ledger not found: $ledgerId');
+      throw StateError('找不到账本: $ledgerId');
     }
 
     final accounts = await db.loadAllAccounts(ledgerId);
@@ -72,7 +72,7 @@ class ExportService {
     return <String, dynamic>{
       'format': 'centli-export',
       'export_version': exportVersion,
-      'schema_version': 2,
+      'schema_version': 3,
       'exported_at': DateTime.now().toUtc().toIso8601String(),
       'app_version': appVersion,
       'ledger': ledger.toJson(),
@@ -93,7 +93,7 @@ class ExportService {
     Rect? shareOrigin,
   }) async {
     if (!options.wantJson && !options.wantExcel) {
-      throw ArgumentError('select at least one format');
+      throw ArgumentError('请至少选择一种导出格式');
     }
 
     final bundle = await buildBundle(ledgerId: ledgerId, options: options);
@@ -141,7 +141,7 @@ class ExportService {
               name: p.basename(f.path),
             ),
         ],
-        subject: 'Centli export',
+        subject: 'Centli 导出',
         text: 'Centli \u5bfc\u51fa',
         sharePositionOrigin: shareOrigin,
       ),
@@ -484,7 +484,7 @@ class ExportService {
 
     final saved = excel.save();
     if (saved == null) {
-      throw StateError('excel.save returned null');
+      throw StateError('Excel 文件生成失败');
     }
     return List<int>.from(saved);
   }

@@ -71,11 +71,8 @@ class _PermissionExplainPageState extends ConsumerState<PermissionExplainPage>
     });
 
     if (granted) {
-      // Keep preference in sync once the user has granted access.
-      final db = ref.read(databaseProvider);
-      await db.setSetting('auto_capture_enabled', 'true');
-      await NotificationCaptureStub.setAutoCaptureEnabled(true);
-      // Binding often stays dead until an explicit rebind after toggle.
+      // Do NOT force auto_capture_enabled=true — permission != user opt-in (#12).
+      // Only rebind so an already-enabled preference can take effect.
       await NotificationCaptureStub.ensureListenerRebind();
     }
   }

@@ -6,6 +6,10 @@ import 'package:intl/intl.dart';
 import '../../core/constants/currencies.dart';
 import '../../core/utils/date_range.dart';
 import '../../core/utils/money.dart';
+import '../../core/widgets/category_visuals.dart';
+import '../../core/widgets/centli_icon.dart';
+import '../../core/widgets/txn_grouped_list.dart';
+import '../../core/widgets/txn_list_tile.dart';
 import '../../core/widgets/date_range_control.dart';
 import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
@@ -98,7 +102,23 @@ class _AccountDetailBody extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(account.name),
+        title: Row(
+          children: [
+            CentliIconChip(
+              name: account.name,
+              iconKey: account.icon,
+              size: 32,
+              roundedSquare: true,
+            ),
+            const SizedBox(width: 10),
+            Flexible(
+              child: Text(
+                account.name,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
         actions: [
           if (account.archived != 0)
             FilledButton.tonalIcon(
@@ -239,21 +259,38 @@ class _AccountDetailBody extends ConsumerWidget {
                   ),
                 );
               }
-              return Card(
-                clipBehavior: Clip.antiAlias,
-                child: Column(
-                  children: [
-                    for (var i = 0; i < txns.length; i++) ...[
-                      if (i > 0) const Divider(height: 1),
-                      _AccountTxnTile(
-                        txn: txns[i],
-                        accountId: account.id,
-                        accountCurrency: account.currency,
-                        hide: hide,
+              final groups = groupTransactionsByDate(txns);
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (var gi = 0; gi < groups.length; gi++) ...[
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(4, gi == 0 ? 8 : 20, 4, 8),
+                      child: Text(
+                        groups[gi].label,
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: scheme.onSurfaceVariant,
+                            ),
                       ),
-                    ],
+                    ),
+                    Material(
+                      color: scheme.surface,
+                      child: Column(
+                        children: [
+                          for (var i = 0; i < groups[gi].items.length; i++)
+                            _AccountTxnTile(
+                              txn: groups[gi].items[i],
+                              accountId: account.id,
+                              accountCurrency: account.currency,
+                              hide: hide,
+                              showSeparator: i > 0,
+                            ),
+                        ],
+                      ),
+                    ),
                   ],
-                ),
+                ],
               );
             },
           ),
@@ -288,68 +325,195 @@ final _balancesForLedgerProvider =
   return ref.watch(databaseProvider).watchAccountBalances(ledgerId);
 });
 
-class _AccountTxnTile extends StatelessWidget {
+class _AccountTxnTile extends ConsumerWidget {
   const _AccountTxnTile({
     required this.txn,
     required this.accountId,
     required this.accountCurrency,
     required this.hide,
+    this.showSeparator = false,
   });
 
   final Transaction txn;
   final String accountId;
   final String accountCurrency;
   final bool hide;
+  final bool showSeparator;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final scheme = Theme.of(context).colorScheme;
+    final muted = scheme.onSurfaceVariant;
     final signed = _signedMinor();
     final isNeg = signed < 0;
     final isZero = signed == 0;
-    final prefix = isZero ? '' : (isNeg ? '-' : '+');
-    final color = isZero
+    final amountColor = isZero
         ? scheme.onSurface
-        : (isNeg ? scheme.error : scheme.primary);
+        : (isNeg ? kTxnExpenseRed : kTxnIncomeGreen);
     final time =
         DateTime.fromMillisecondsSinceEpoch(txn.happenAt, isUtc: true).toLocal();
-    final timeLabel = DateFormat('MM-dd HH:mm').format(time);
-    final title = txn.note?.isNotEmpty == true
-        ? txn.note!
-        : (txn.merchant ?? _typeLabel(txn.type));
+    final timeLabel = DateFormat('HH:mm').format(time);
+    final db = ref.read(databaseProvider);
 
-    return ListTile(
-      leading: CircleAvatar(
-        backgroundColor: scheme.primaryContainer,
-        child: Icon(
-          txn.type == 'transfer'
-              ? Icons.swap_horiz
-              : (isNeg ? Icons.arrow_upward : Icons.arrow_downward),
-          size: 18,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (showSeparator)
+          const Divider(
+            height: 1,
+            thickness: 0.5,
+            indent: 72,
+            endIndent: 16,
+            color: Color(0xFFEEEEEE),
+          ),
+        InkWell(
+          onTap: () => context.push('/ledger/${txn.id}'),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+            child: Row(
+              children: [
+                FutureBuilder<({String name, String? icon})>(
+                  future: _categoryMeta(db),
+                  builder: (context, snap) {
+                    final name = snap.data?.name ?? '';
+                    return CategoryCircleIcon(
+                      name: name,
+                      kind: txn.type == 'transfer'
+                          ? 'transfer'
+                          : (isNeg ? 'out' : 'in'),
+                      iconKey: snap.data?.icon,
+                    );
+                  },
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      FutureBuilder<String>(
+                        future: _title(db),
+                        builder: (context, snap) => Text(
+                          snap.data ?? '\u2026',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleMedium
+                              ?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                height: 1.2,
+                              ),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      FutureBuilder<String>(
+                        future: _subtitle(db),
+                        builder: (context, snap) {
+                          final t = snap.data ?? '';
+                          if (t.isEmpty) return const SizedBox.shrink();
+                          return Text(
+                            t,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(color: muted, height: 1.2),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      _amountLabel(signed.abs()),
+                      style: TextStyle(
+                        color: amountColor,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                        height: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      timeLabel,
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(color: muted, height: 1.2),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
         ),
-      ),
-      title: Text(title),
-      subtitle: Text('$timeLabel · ${_typeLabel(txn.type)}'),
-      trailing: Text(
-        '$prefix${formatMinor(_displayCurrency(), signed.abs(), hide: hide)}',
-        style: TextStyle(color: color, fontWeight: FontWeight.w600),
-      ),
-      onTap: () => context.push('/ledger/${txn.id}'),
+      ],
     );
+  }
+
+  String _amountLabel(int minorAbs) {
+    if (hide) return '****';
+    final ccy = _displayCurrency();
+    final symbol = currencySymbols[ccy] ?? ccy;
+    final decimals = currencyDecimals[ccy] ?? 2;
+    final major = fromMinor(ccy, minorAbs);
+    final numStr = decimals == 0
+        ? '${major.round()}'
+        : major.toStringAsFixed(decimals);
+    return '$symbol $numStr';
+  }
+
+  Future<String> _categoryName(CentliDatabase db) async {
+    if (txn.type == 'transfer') return '\u8f6c\u8d26';
+    if (txn.categoryId != null && txn.categoryId!.isNotEmpty) {
+      final cat = await db.getCategory(txn.categoryId!);
+      final n = (cat?.name ?? '').trim();
+      if (n.isNotEmpty) return n;
+    }
+    return '\u672a\u5206\u7c7b';
+  }
+
+  Future<({String name, String? icon})> _categoryMeta(CentliDatabase db) async {
+    if (txn.type == 'transfer') {
+      return (name: '转账', icon: 'swap_horiz');
+    }
+    if (txn.categoryId == null || txn.categoryId!.isEmpty) {
+      return (name: '未分类', icon: null);
+    }
+    final cat = await db.getCategory(txn.categoryId!);
+    final n = (cat?.name ?? '').trim();
+    return (
+      name: n.isNotEmpty ? n : '未分类',
+      icon: cat?.icon,
+    );
+  }
+
+
+  Future<String> _title(CentliDatabase db) => _categoryName(db);
+
+  Future<String> _subtitle(CentliDatabase db) async {
+    final note = (txn.note ?? '').trim();
+    final merchant = (txn.merchant ?? '').trim();
+    final right = note.isNotEmpty ? note : merchant;
+    final typeLabel = _typeLabel(txn.type);
+    if (right.isEmpty) return typeLabel;
+    return '$typeLabel \u00b7 $right';
   }
 
   /// Effect on this account's balance in account currency units.
   int _signedMinor() {
     if (txn.type == 'in') return txn.amountMinor;
     if (txn.type == 'out') return -txn.amountMinor;
-    // transfer
     if (txn.accountId == accountId) return -txn.amountMinor;
-    // incoming leg
     return txn.toAmountMinor ?? txn.amountMinor;
   }
 
   String _displayCurrency() {
-    // Incoming cross-currency transfer credits are in this account's currency.
     if (txn.type == 'transfer' &&
         txn.accountId != accountId &&
         txn.toAmountMinor != null) {

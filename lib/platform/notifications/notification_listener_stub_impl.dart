@@ -4,11 +4,14 @@ import 'notification_parse.dart';
 /// import so MethodChannel is never touched.
 abstract final class NotificationCaptureStub {
   static const bool supported = false;
+  static const bool channelSupported = false;
   static const String channelName = 'centli/notification_capture';
   static const int templateVersion = 3;
 
   /// Optional deep-link handler (local-push tap). Stub never invokes it.
   static void Function(String route, String? pendingId)? onOpenRoute;
+
+  static void Function(Map<String, dynamic> payload)? onPendingIntake;
 
   static Future<bool> isPermissionGranted() async => false;
 
@@ -22,6 +25,8 @@ abstract final class NotificationCaptureStub {
 
   static Future<void> setAutoCaptureEnabled(bool enabled) async {}
 
+  static Future<void> setWatchedPackages(List<String> packages) async {}
+
   static Future<bool> isAutoCaptureEnabled() async => false;
 
   /// Register a handler for native `notification_capture` events.
@@ -29,6 +34,12 @@ abstract final class NotificationCaptureStub {
   static Future<void> bind({
     required Future<void> Function(Map<String, dynamic> raw) onCapture,
   }) async {}
+
+  static Future<void> bindPendingIntake(
+    void Function(Map<String, dynamic> payload) onIntake,
+  ) async {
+    onPendingIntake = onIntake;
+  }
 
   static void unbind() {}
 

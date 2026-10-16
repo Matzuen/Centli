@@ -98,15 +98,15 @@ class _ExportPageState extends ConsumerState<ExportPage> {
             subtitle: Text('JSON = \u5907\u4efd/\u53ef\u8bfb\u53d6\uff1bExcel = \u8868\u683c\u67e5\u770b'),
           ),
           SwitchListTile(
-            title: const Text('JSON'),
-            subtitle: const Text('centli-export \u5b8c\u6574\u6570\u636e\u5305'),
+            title: const Text('JSON 备份'),
+            subtitle: const Text('\u5b8c\u6574\u6570\u636e\u5305\uff08centli-export \u683c\u5f0f\uff09'),
             value: _wantJson,
             onChanged: _busy ? null : (v) => setState(() => _wantJson = v),
           ),
           SwitchListTile(
-            title: const Text('Excel (.xlsx)'),
+            title: const Text('Excel 表格（.xlsx）'),
             subtitle: const Text(
-              'summary / accounts / categories / transactions / pending / merchant_rules / budgets',
+              '\u542b\u6458\u8981\u3001\u8d26\u6237\u3001\u5206\u7c7b\u3001\u6d41\u6c34\u3001\u5f85\u786e\u8ba4\u3001\u5546\u6237\u89c4\u5219\u3001\u9884\u7b97\u7b49\u5de5\u4f5c\u8868',
             ),
             value: _wantExcel,
             onChanged: _busy ? null : (v) => setState(() => _wantExcel = v),
@@ -121,7 +121,7 @@ class _ExportPageState extends ConsumerState<ExportPage> {
           ),
           SwitchListTile(
             title: const Text('\u5305\u542b\u5df2\u5220\u9664\u6d41\u6c34'),
-            subtitle: const Text('\u9ed8\u8ba4\u4e0d\u5bfc\u51fa soft-delete \u8bb0\u5f55'),
+            subtitle: const Text('\u9ed8\u8ba4\u4e0d\u5bfc\u51fa\u8f6f\u5220\u9664\u8bb0\u5f55'),
             value: _includeDeleted,
             onChanged:
                 _busy ? null : (v) => setState(() => _includeDeleted = v),

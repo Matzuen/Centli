@@ -148,7 +148,7 @@ class LedgersPage extends ConsumerWidget {
                     initialValue: base,
                     items: [
                       for (final c in supportedCurrencies)
-                        DropdownMenuItem(value: c, child: Text(c)),
+                        DropdownMenuItem(value: c, child: Text(currencyLabel(c))),
                     ],
                     onChanged: (v) {
                       if (v != null) setLocal(() => base = v);

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/widgets/centli_icon.dart';
+import '../../core/widgets/icon_picker_sheet.dart';
 import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
 
@@ -275,9 +277,7 @@ class _CategoryKindList extends ConsumerWidget {
                   Card(
                     margin: const EdgeInsets.only(bottom: 8),
                     child: ListTile(
-                      leading: CircleAvatar(
-                        child: Text(_initial(child.name)),
-                      ),
+                      leading: CentliIconChip(name: child.name, kind: child.kind, iconKey: child.icon, size: 40),
                       title: Text(child.name),
                       subtitle: const Text('二级'),
                       trailing: PopupMenuButton<String>(
@@ -342,9 +342,7 @@ class _CategoryKindList extends ConsumerWidget {
                     Card(
                       margin: const EdgeInsets.only(bottom: 8),
                       child: ListTile(
-                        leading: CircleAvatar(
-                          child: Text(_initial(child.name)),
-                        ),
+                        leading: CentliIconChip(name: child.name, kind: child.kind, iconKey: child.icon, size: 40),
                         title: Text(child.name),
                         subtitle: const Text('二级'),
                         trailing: PopupMenuButton<String>(
@@ -371,8 +369,6 @@ class _CategoryKindList extends ConsumerWidget {
     );
   }
 
-  String _initial(String name) =>
-      name.isEmpty ? '?' : String.fromCharCodes(name.runes.take(1));
 }
 
 class _CategoryTreeNode extends StatelessWidget {
@@ -407,8 +403,6 @@ class _CategoryTreeNode extends StatelessWidget {
   final ValueChanged<Category>? onArchiveChild;
   final ValueChanged<Category>? onUnarchiveChild;
 
-  String _initial(String name) =>
-      name.isEmpty ? '?' : String.fromCharCodes(name.runes.take(1));
 
   PopupMenuButton<String> _menu({
     VoidCallback? onRename,
@@ -492,10 +486,7 @@ class _CategoryTreeNode extends StatelessWidget {
                       child: Icon(Icons.drag_handle),
                     ),
                   ),
-                  CircleAvatar(
-                    radius: 16,
-                    child: Text(_initial(children[i].name)),
-                  ),
+                  CentliIconChip(name: children[i].name, kind: children[i].kind, iconKey: children[i].icon, size: 32),
                 ],
               ),
               title: Text(children[i].name),
@@ -524,10 +515,7 @@ class _CategoryTreeNode extends StatelessWidget {
           for (final child in children)
             ListTile(
               contentPadding: const EdgeInsets.only(left: 40, right: 4),
-              leading: CircleAvatar(
-                radius: 16,
-                child: Text(_initial(child.name)),
-              ),
+              leading: CentliIconChip(name: child.name, kind: child.kind, iconKey: child.icon, size: 32),
               title: Text(child.name),
               subtitle: Text(showArchived ? '已归档 · 二级' : '二级'),
               trailing: _menu(
@@ -565,11 +553,11 @@ class _CategoryTreeNode extends StatelessWidget {
                   index: dragIndex,
                   child: const Icon(Icons.drag_handle),
                 )
-              : CircleAvatar(child: Text(_initial(category.name))),
+              : CentliIconChip(name: category.name, kind: category.kind, iconKey: category.icon, size: 40),
           title: Row(
             children: [
               if (reorderable) ...[
-                CircleAvatar(child: Text(_initial(category.name))),
+                CentliIconChip(name: category.name, kind: category.kind, iconKey: category.icon, size: 40),
                 const SizedBox(width: 12),
               ],
               Expanded(child: Text(category.name)),
@@ -597,16 +585,17 @@ Future<void> promptCreateCategory(
   required String kind,
   String? parentId,
 }) async {
-  final name = await _promptName(
+  final result = await _promptCategoryEditor(
     context,
     title: parentId == null ? '新建分类' : '新建子分类',
   );
-  if (name == null) return;
+  if (result == null) return;
   await ref.read(databaseProvider).createCategory(
         ledgerId: ledgerId,
-        name: name,
+        name: result.name,
         kind: kind,
         parentId: parentId,
+        icon: result.iconKey,
       );
 }
 
@@ -615,13 +604,21 @@ Future<void> promptRenameCategory(
   WidgetRef ref,
   Category cat,
 ) async {
-  final name = await _promptName(
+  final result = await _promptCategoryEditor(
     context,
-    title: '重命名',
-    initial: cat.name,
+    title: '编辑分类',
+    initialName: cat.name,
+    initialIconKey: cat.icon,
   );
-  if (name == null || name == cat.name) return;
-  await ref.read(databaseProvider).renameCategory(id: cat.id, name: name);
+  if (result == null) return;
+  if (result.name != cat.name || result.iconKey != cat.icon) {
+    await ref.read(databaseProvider).renameCategory(
+          id: cat.id,
+          name: result.name,
+          icon: result.iconKey,
+          updateIcon: true,
+        );
+  }
 }
 
 Future<void> promptArchiveCategory(
@@ -695,40 +692,104 @@ Future<void> promptUnarchiveCategory(
   }
 }
 
-Future<String?> _promptName(
+class _CategoryEditorResult {
+  const _CategoryEditorResult({required this.name, this.iconKey});
+  final String name;
+  final String? iconKey;
+}
+
+Future<_CategoryEditorResult?> _promptCategoryEditor(
   BuildContext context, {
   required String title,
-  String initial = '',
+  String initialName = '',
+  String? initialIconKey,
 }) async {
-  final ctrl = TextEditingController(text: initial);
-  final result = await showDialog<String>(
+  final ctrl = TextEditingController(text: initialName);
+  String? iconKey = initialIconKey;
+
+  final result = await showDialog<_CategoryEditorResult>(
     context: context,
     builder: (ctx) {
-      return AlertDialog(
-        title: Text(title),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          decoration: const InputDecoration(
-            labelText: '名称',
-            border: OutlineInputBorder(),
-          ),
-          onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-            child: const Text('保存'),
-          ),
-        ],
+      return StatefulBuilder(
+        builder: (ctx, setLocal) {
+          return AlertDialog(
+            title: Text(title),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  InkWell(
+                    borderRadius: BorderRadius.circular(40),
+                    onTap: () async {
+                      final picked = await showCentliIconPicker(
+                        ctx,
+                        currentIconKey: iconKey,
+                        entityName: ctrl.text.trim(),
+                      );
+                      if (picked != null) {
+                        setLocal(() => iconKey = picked.iconKey);
+                      }
+                    },
+                    child: Column(
+                      children: [
+                        CentliIconChip(
+                          name: ctrl.text.trim().isEmpty ? '分类' : ctrl.text.trim(),
+                          iconKey: iconKey,
+                          size: 56,
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          '点按选择图标',
+                          style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                                color: Theme.of(ctx).colorScheme.primary,
+                              ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: ctrl,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      labelText: '名称',
+                      border: OutlineInputBorder(),
+                    ),
+                    onChanged: (_) => setLocal(() {}),
+                    onSubmitted: (v) {
+                      final name = v.trim();
+                      if (name.isEmpty) return;
+                      Navigator.pop(
+                        ctx,
+                        _CategoryEditorResult(name: name, iconKey: iconKey),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  final name = ctrl.text.trim();
+                  if (name.isEmpty) return;
+                  Navigator.pop(
+                    ctx,
+                    _CategoryEditorResult(name: name, iconKey: iconKey),
+                  );
+                },
+                child: const Text('保存'),
+              ),
+            ],
+          );
+        },
       );
     },
   );
   ctrl.dispose();
-  if (result == null || result.isEmpty) return null;
   return result;
 }

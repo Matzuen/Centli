@@ -299,7 +299,7 @@ Future<void> _showEditor(
                           initialValue: from,
                           items: [
                             for (final c in supportedCurrencies)
-                              DropdownMenuItem(value: c, child: Text(c)),
+                              DropdownMenuItem(value: c, child: Text(currencyLabel(c))),
                           ],
                           onChanged: (v) {
                             if (v != null) setLocal(() => from = v);
@@ -319,7 +319,7 @@ Future<void> _showEditor(
                           initialValue: to,
                           items: [
                             for (final c in supportedCurrencies)
-                              DropdownMenuItem(value: c, child: Text(c)),
+                              DropdownMenuItem(value: c, child: Text(currencyLabel(c))),
                           ],
                           onChanged: (v) {
                             if (v != null) setLocal(() => to = v);

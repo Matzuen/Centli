@@ -72,5 +72,20 @@
 	<string>用于本地语音填单：将说话内容识别为文字后预填记账字段，音频不上传 Centli 服务器。</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>用于本地语音填单：在设备上把语音转成文字并走现有智能填单规则，不经 Centli 云端。</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.centli.centli</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>centli</string>
+			</array>
+		</dict>
+	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>用于拍摄账单截图并在设备本地识别文字以加入待确认。</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>用于选取账单截图并在设备本地识别文字以加入待确认。</string>
 </dict>
 </plist>

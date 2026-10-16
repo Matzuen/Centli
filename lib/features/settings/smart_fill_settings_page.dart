@@ -88,7 +88,7 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('清除 API Key？'),
+        title: const Text('清除接口密钥？'),
         content: const Text('清除后将无法调用大模型，智能填单会回退到本地解析。'),
         actions: [
           TextButton(
@@ -117,7 +117,7 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
       _keyCtrl.clear();
     });
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('已清除 API Key')),
+      const SnackBar(content: Text('已清除接口密钥')),
     );
   }
 
@@ -148,7 +148,7 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
                   contentPadding: EdgeInsets.zero,
                   title: const Text('用大模型增强文字填单'),
                   subtitle: const Text(
-                    '开启后，记账页「智能填单」会优先调用你配置的 OpenAI 兼容接口；失败时自动回退本地解析，不阻塞保存。',
+                    '开启后，记账页「智能填单」会优先调用你配置的大模型兼容接口；失败时自动回退本地解析，不阻塞保存。',
                   ),
                   value: _enabled,
                   onChanged: (v) => setState(() => _enabled = v),
@@ -165,9 +165,9 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
                   controller: _baseCtrl,
                   enabled: !_saving,
                   decoration: const InputDecoration(
-                    labelText: 'API Base URL',
+                    labelText: '接口基础地址',
                     hintText: kDefaultLlmBaseUrl,
-                    helperText: '需包含 /v1；将请求 {base}/chat/completions',
+                    helperText: '需包含 /v1；实际请求为「基础地址/chat/completions」',
                     border: OutlineInputBorder(),
                   ),
                   keyboardType: TextInputType.url,
@@ -190,9 +190,9 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
                   enabled: !_saving,
                   obscureText: _obscureKey,
                   decoration: InputDecoration(
-                    labelText: _hasKey ? 'API Key（已保存，留空则不修改）' : 'API Key',
-                    hintText: _hasKey ? '••••••••' : 'sk-...',
-                    helperText: '仅保存在本机安全存储（flutter_secure_storage）',
+                    labelText: _hasKey ? '接口密钥（已保存，留空则不修改）' : '接口密钥',
+                    hintText: _hasKey ? '••••••••' : '粘贴密钥',
+                    helperText: '仅保存在本机安全存储，不会上传到厘记服务器',
                     border: const OutlineInputBorder(),
                     suffixIcon: IconButton(
                       tooltip: _obscureKey ? '显示' : '隐藏',
@@ -215,7 +215,7 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
                     child: TextButton.icon(
                       onPressed: _saving ? null : _clearKey,
                       icon: const Icon(Icons.delete_outline),
-                      label: const Text('清除已保存的 API Key'),
+                      label: const Text('清除已保存的接口密钥'),
                     ),
                   ),
                 ],
@@ -233,8 +233,8 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
                         const SizedBox(height: 8),
                         const Text(
                           '1. 在记账页展开「智能填单」，输入话术后点「填入」。\n'
-                          '2. 未开启或未配置 Key 时，仅用本地关键词/分类匹配。\n'
-                          '3. 兼容任意 OpenAI Chat Completions 接口（含代理）。\n'
+                          '2. 未开启或未配置密钥时，仅用本地关键词/分类匹配。\n'
+                          '3. 兼容常见大模型对话补全接口（含代理）。\n'
                           '4. 分类不确定时不会强行猜错类；备注只保留结构化抽取后的剩余文字。',
                         ),
                       ],

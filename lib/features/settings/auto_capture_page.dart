@@ -373,6 +373,18 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
                 const SizedBox(height: 8),
                 Card(
                   child: ListTile(
+                    leading: const Icon(Icons.rule_outlined),
+                    title: const Text('识别规则'),
+                    subtitle: Text(
+                      '官方 v$_templateVersion · 自定义解析模板',
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => context.push('/me/auto/rules'),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Card(
+                  child: ListTile(
                     leading: Icon(
                       _granted
                           ? Icons.verified_user_outlined
@@ -522,7 +534,50 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
                   ),
                 ),
                 const SizedBox(height: 8),
+                                Text(
+                  '发出去没通知？',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '微信/支付宝发出去的红包、转账常无系统通知。可用分享账单、截图 OCR、剪贴板/快捷指令 URL 加入同一待确认队列',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                ),
+                const SizedBox(height: 8),
                 Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.share_outlined),
+                    title: const Text('分享账单到 Centli'),
+                    subtitle: const Text('在微信/支付宝「账单」详情页分享文字或图片到本 App'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => context.push('/me/auto/manual-help'),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.document_scanner_outlined),
+                    title: const Text('从截图识别'),
+                    subtitle: const Text('相册/相机选图，设备本地 OCR 后入待确认'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => context.push('/home/pending'),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.link_outlined),
+                    title: const Text('剪贴板 / 快捷指令'),
+                    subtitle: const Text('centli://pending?text=... 或待确认页「从剪贴板导入」'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => context.push('/me/auto/manual-help'),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const SizedBox(height: 8),
+Card(
                   child: ListTile(
                     leading: const Icon(Icons.pending_actions_outlined),
                     title: const Text('待确认队列'),

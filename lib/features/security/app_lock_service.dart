@@ -19,6 +19,10 @@ class AppLockService {
 
   static const _keySalt = 'centli_pin_salt';
   static const _keyHash = 'centli_pin_hash';
+  static const _keyFailCount = 'centli_pin_fail_count';
+  static const _keyLockUntil = 'centli_pin_lock_until_ms';
+  static const _maxFails = 5;
+  static const _lockoutMs = 60 * 1000; // 1 minute
 
   final FlutterSecureStorage _storage;
   final LocalAuthentication _localAuth;
@@ -36,17 +40,47 @@ class AppLockService {
     await _storage.write(key: _keyHash, value: hash);
   }
 
+  Future<Duration?> lockoutRemaining() async {
+    final untilRaw = await _storage.read(key: _keyLockUntil);
+    final until = int.tryParse(untilRaw ?? '');
+    if (until == null) return null;
+    final left = until - DateTime.now().millisecondsSinceEpoch;
+    if (left <= 0) {
+      await _storage.delete(key: _keyLockUntil);
+      return null;
+    }
+    return Duration(milliseconds: left);
+  }
+
   Future<bool> verifyPin(String pin) async {
     if (!_looksLikePin(pin)) return false;
+    final remaining = await lockoutRemaining();
+    if (remaining != null) return false;
     final salt = await _storage.read(key: _keySalt);
     final expected = await _storage.read(key: _keyHash);
     if (salt == null || expected == null) return false;
-    return _hashPin(pin, salt) == expected;
+    final ok = _hashPin(pin, salt) == expected;
+    if (ok) {
+      await _storage.delete(key: _keyFailCount);
+      await _storage.delete(key: _keyLockUntil);
+      return true;
+    }
+    final prev = int.tryParse(await _storage.read(key: _keyFailCount) ?? '0') ?? 0;
+    final next = prev + 1;
+    await _storage.write(key: _keyFailCount, value: '$next');
+    if (next >= _maxFails) {
+      final until = DateTime.now().millisecondsSinceEpoch + _lockoutMs;
+      await _storage.write(key: _keyLockUntil, value: '$until');
+      await _storage.write(key: _keyFailCount, value: '0');
+    }
+    return false;
   }
 
   Future<void> clearPin() async {
     await _storage.delete(key: _keySalt);
     await _storage.delete(key: _keyHash);
+    await _storage.delete(key: _keyFailCount);
+    await _storage.delete(key: _keyLockUntil);
   }
 
   /// Device supports some form of local auth (biometrics / device credentials).
@@ -85,7 +119,7 @@ class AppLockService {
 
   static void _assertPinFormat(String pin) {
     if (!_looksLikePin(pin)) {
-      throw ArgumentError('PIN must be $kAppLockPinLength digits');
+      throw ArgumentError('PIN 须为 $kAppLockPinLength 位数字');
     }
   }
 

@@ -3,23 +3,25 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../data/db/database_provider.dart';
-import '../features/ledger/bookkeeping_sheet.dart';
-import '../features/pending/pending_page.dart';
+import '../features/ledger/bookkeeping_sheet.dart' deferred as bookkeeping;
+import 'theme.dart';
 
-/// 5-tab shell with Home pending-count badge (P1).
+/// Flat 5-tab shell: 首页 / 统计 / 记账(+) / 资产 / 我的 (Centli screenshot).
 class AppShell extends ConsumerWidget {
   const AppShell({super.key, required this.navigationShell});
 
   final StatefulNavigationShell navigationShell;
 
   static const _tabs = [
-    (icon: Icons.home_outlined, selected: Icons.home, label: '首页'),
-    (icon: Icons.bar_chart_outlined, selected: Icons.bar_chart, label: '统计'),
+    (icon: Icons.home_outlined, selected: Icons.home_rounded, label: '首页'),
+    (icon: Icons.bar_chart_outlined, selected: Icons.bar_chart_rounded, label: '统计'),
     (icon: Icons.add_circle_outline, selected: Icons.add_circle, label: '记账'),
-    (icon: Icons.account_balance_wallet_outlined,
-        selected: Icons.account_balance_wallet,
-        label: '资产'),
-    (icon: Icons.person_outline, selected: Icons.person, label: '我的'),
+    (
+      icon: Icons.account_balance_wallet_outlined,
+      selected: Icons.account_balance_wallet_rounded,
+      label: '资产',
+    ),
+    (icon: Icons.person_outline, selected: Icons.person_rounded, label: '我的'),
   ];
 
   @override
@@ -29,14 +31,24 @@ class AppShell extends ConsumerWidget {
     final pendingCount = ledgerId == null
         ? 0
         : (ref.watch(pendingCountProvider(ledgerId)).valueOrNull ?? 0);
+    final dark = Theme.of(context).brightness == Brightness.dark;
+
+    // Branch 2 is the placeholder for 记账; keep prior tab highlighted while sheet is open.
+    final selectedIndex = navigationShell.currentIndex == 2
+        ? 0
+        : navigationShell.currentIndex;
 
     return Scaffold(
-      body: navigationShell,
+      backgroundColor: Colors.transparent,
+      body: DecoratedBox(
+        decoration: CentliTheme.scaffoldGradient(dark: dark),
+        child: navigationShell,
+      ),
       bottomNavigationBar: NavigationBar(
-        selectedIndex: navigationShell.currentIndex,
+        selectedIndex: selectedIndex,
         onDestinationSelected: (index) {
           if (index == 2) {
-            showBookkeepingSheet(context);
+            _openBookkeeping(context);
             return;
           }
           navigationShell.goBranch(
@@ -64,6 +76,13 @@ class AppShell extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  /// Load speech / LLM bookkeeping code only when the user opens 记账.
+  static Future<void> _openBookkeeping(BuildContext context) async {
+    await bookkeeping.loadLibrary();
+    if (!context.mounted) return;
+    await bookkeeping.showBookkeepingSheet(context);
   }
 }
 
