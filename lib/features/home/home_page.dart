@@ -356,8 +356,6 @@ class _HomePageState extends ConsumerState<HomePage> {
                               hide: hide,
                               base: base,
                               selectedDay: _calendarDay,
-                              incomeSeries: calIncomeSeries,
-                              expenseSeries: calExpenseSeries,
                               onMonthChanged: (m) {
                                 setState(() {
                                   _calendarMonth = m;
@@ -371,8 +369,8 @@ class _HomePageState extends ConsumerState<HomePage> {
                             _DailyTrendCard(
                               base: base,
                               hide: hide,
-                              expenseSeries: expenseSeries,
-                              incomeSeries: incomeSeries,
+                              expenseSeries: calExpenseSeries,
+                              incomeSeries: calIncomeSeries,
                             ),
                             const SizedBox(height: CentliSpacing.section),
                             CentliSoftCard(
@@ -501,70 +499,55 @@ class _LedgerSummaryCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '我的账本',
-            style: Theme.of(context).textTheme.titleMedium
-                ?.copyWith(fontWeight: FontWeight.w700),
+            '${range.label}支出',
+            style: Theme.of(context).textTheme.labelMedium,
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: CentliSpacing.dense),
           Text(
-            '全期净资产',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: scheme.onSurfaceVariant,
+            formatMinor(base, expense, hide: hide),
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+              color: CentliTheme.expenseRed,
+              letterSpacing: -0.4,
             ),
-          ),
-          const SizedBox(height: 4),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Expanded(
-                child: Text(
-                  formatMinor(base, net, hide: hide),
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.4,
-                  ),
-                ),
-              ),
-              if (delta != 0)
-                Text(
-                  '${delta > 0 ? '▲' : '▼'} ${formatMinor(base, delta.abs(), hide: hide)}',
-                  style: TextStyle(
-                    color: delta > 0
-                        ? CentliTheme.incomeGreen
-                        : CentliTheme.expenseRed,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: _kv('资产', formatMinor(base, assetTotal, hide: hide)),
-              ),
-              Expanded(
-                child: _kv('负债', formatMinor(base, liability, hide: hide)),
-              ),
-            ],
           ),
           const SizedBox(height: CentliSpacing.item),
           Row(
             children: [
               Expanded(
-                child: _kv(
+                child: _kv(context, 
                   '${range.label}收入',
                   formatMinor(base, income, hide: hide),
                   valueColor: CentliTheme.incomeGreen,
                 ),
               ),
               Expanded(
-                child: _kv(
-                  '${range.label}支出',
-                  formatMinor(base, expense, hide: hide),
-                  valueColor: CentliTheme.expenseRed,
+                child: _kv(context, 
+                  '全期净资产',
+                  formatMinor(base, net, hide: hide),
                 ),
+              ),
+            ],
+          ),
+          if (delta != 0) ...[
+            const SizedBox(height: CentliSpacing.dense),
+            Text(
+              '区间净流入 ${delta > 0 ? '▲' : '▼'} ${formatMinor(base, delta.abs(), hide: hide)}',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: delta > 0
+                    ? CentliTheme.incomeGreen
+                    : CentliTheme.expenseRed,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+          const SizedBox(height: CentliSpacing.item),
+          Row(
+            children: [
+              Expanded(
+                child: _kv(context, '资产', formatMinor(base, assetTotal, hide: hide)),
+              ),
+              Expanded(
+                child: _kv(context, '负债', formatMinor(base, liability, hide: hide)),
               ),
             ],
           ),
@@ -579,17 +562,17 @@ class _LedgerSummaryCard extends StatelessWidget {
     );
   }
 
-  Widget _kv(String k, String v, {Color? valueColor}) {
+  Widget _kv(BuildContext context, String k, String v, {Color? valueColor}) {
+    final theme = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(k, style: const TextStyle(fontSize: 12, color: Color(0xFF8A8F98))),
+        Text(k, style: theme.textTheme.bodySmall),
         const SizedBox(height: 2),
         Text(
           v,
-          style: TextStyle(
+          style: theme.textTheme.labelMedium?.copyWith(
             fontWeight: FontWeight.w700,
-            fontSize: 14,
             color: valueColor,
           ),
         ),
@@ -688,8 +671,6 @@ class _CalendarCard extends StatelessWidget {
     required this.hide,
     required this.base,
     required this.selectedDay,
-    required this.incomeSeries,
-    required this.expenseSeries,
     required this.onMonthChanged,
     required this.onSelectDay,
   });
@@ -698,33 +679,15 @@ class _CalendarCard extends StatelessWidget {
   final bool hide;
   final String base;
   final DateTime? selectedDay;
-  final AsyncValue<List<({DateTime dayLocal, int totalMinor})>> incomeSeries;
-  final AsyncValue<List<({DateTime dayLocal, int totalMinor})>> expenseSeries;
   final ValueChanged<DateTime> onMonthChanged;
   final ValueChanged<DateTime> onSelectDay;
 
-  static String _dayKey(DateTime d) =>
-      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
   @override
   Widget build(BuildContext context) {
-    // Prefer explicit month window; if still on lastDays/custom, show the
     final monthStart = DateTime(month.year, month.month, 1);
     final daysInMonth = DateTime(monthStart.year, monthStart.month + 1, 0).day;
     final firstWeekday = monthStart.weekday % 7; // Sun=0
-    // Key by full local date so Oct 13 amounts never paint onto Sep 13.
-    final income = {
-      for (final e
-          in incomeSeries.valueOrNull ??
-              const <({DateTime dayLocal, int totalMinor})>[])
-        _dayKey(e.dayLocal): e.totalMinor,
-    };
-    final expense = {
-      for (final e
-          in expenseSeries.valueOrNull ??
-              const <({DateTime dayLocal, int totalMinor})>[])
-        _dayKey(e.dayLocal): e.totalMinor,
-    };
     final today = DateTime.now();
     final thisMonth = DateTime(today.year, today.month, 1);
     final isCurrentMonth =
@@ -805,8 +768,6 @@ class _CalendarCard extends StatelessWidget {
                   today.year == date.year &&
                   today.month == date.month &&
                   today.day == date.day;
-              final inAmt = income[_dayKey(date)] ?? 0;
-              final outAmt = expense[_dayKey(date)] ?? 0;
               return InkWell(
                 borderRadius: BorderRadius.circular(10),
                 onTap: () => onSelectDay(date),
@@ -831,24 +792,6 @@ class _CalendarCard extends StatelessWidget {
                           fontSize: 13,
                         ),
                       ),
-                      if (!hide && outAmt > 0)
-                        Text(
-                          _short(outAmt),
-                          style: const TextStyle(
-                            fontSize: 9,
-                            color: CentliTheme.expenseRed,
-                            height: 1.1,
-                          ),
-                        ),
-                      if (!hide && inAmt > 0)
-                        Text(
-                          _short(inAmt),
-                          style: const TextStyle(
-                            fontSize: 9,
-                            color: CentliTheme.incomeGreen,
-                            height: 1.1,
-                          ),
-                        ),
                     ],
                   ),
                 ),
@@ -860,12 +803,6 @@ class _CalendarCard extends StatelessWidget {
     );
   }
 
-  String _short(int minor) {
-    final v = minor / 100.0;
-    if (v >= 1000) return v.toStringAsFixed(0);
-    if (v == v.roundToDouble()) return v.toStringAsFixed(0);
-    return v.toStringAsFixed(1);
-  }
 }
 
 class _DailyTrendCard extends StatelessWidget {
