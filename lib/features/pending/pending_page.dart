@@ -213,8 +213,10 @@ class _PendingPageBodyState extends ConsumerState<PendingPage> {
                       separatorBuilder: (context, index) =>
                           const SizedBox(height: 8),
                       itemBuilder: (context, i) {
+                        final capture = items[i];
                         return _PendingCard(
-                          capture: items[i],
+                          key: ValueKey(capture.id),
+                          capture: capture,
                           ledgerId: ledger.id,
                         );
                       },
@@ -367,7 +369,7 @@ class _PendingPageBodyState extends ConsumerState<PendingPage> {
 }
 
 class _PendingCard extends ConsumerStatefulWidget {
-  const _PendingCard({required this.capture, required this.ledgerId});
+  const _PendingCard({super.key, required this.capture, required this.ledgerId});
   final PendingCapture capture;
   final String ledgerId;
 
