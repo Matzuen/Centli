@@ -11,14 +11,16 @@ include: package:flutter_lints/flutter.yaml
 
 analyzer:
   exclude:
+    # Temp / tooling trees still present (tracked legacy); keep in sync with disk.
+    - _p_*.py
+    - _install_*/**
+    - _patch_*/**
+    - _ux_review/**
     - build/**
     - android/**
     - ios/**
     - web/**
     - windows/**
-    - _patch_*/**
-    - _install_*/**
-    - _ux_review/**
 
 linter:
   # The lint rules applied to this project can be customized in the
