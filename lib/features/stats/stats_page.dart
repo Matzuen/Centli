@@ -181,7 +181,7 @@ class StatsPage extends ConsumerWidget {
                           Expanded(
                             child: CentliSoftCard(
                               child: Padding(
-                                padding: const EdgeInsets.all(16),
+                                padding: const EdgeInsets.all(CentliSpacing.cardPad),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
@@ -215,7 +215,7 @@ class StatsPage extends ConsumerWidget {
                           Expanded(
                             child: CentliSoftCard(
                               child: Padding(
-                                padding: const EdgeInsets.all(16),
+                                padding: const EdgeInsets.all(CentliSpacing.cardPad),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
@@ -262,14 +262,14 @@ class StatsPage extends ConsumerWidget {
                   );
                 },
               ),
-              const SizedBox(height: CentliSpacing.sectionLoose),
+              const SizedBox(height: CentliSpacing.section),
               _StatsBudgetSection(
                 ledgerId: ledgerId,
                 baseCurrency: base,
                 range: range,
                 hide: hide,
               ),
-              const SizedBox(height: CentliSpacing.sectionLoose),
+              const SizedBox(height: CentliSpacing.section),
 
               Text(trendTitle, style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: CentliSpacing.item),
@@ -289,7 +289,7 @@ class StatsPage extends ConsumerWidget {
                   }
                   return CentliSoftCard(
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 16, 16, 12),
+                      padding: const EdgeInsets.all(CentliSpacing.cardPad),
                       child: SizedBox(
                         height: 200,
                         child: _DailyTrendChart(
@@ -303,7 +303,7 @@ class StatsPage extends ConsumerWidget {
                   );
                 },
               ),
-              const SizedBox(height: CentliSpacing.sectionLoose),
+              const SizedBox(height: CentliSpacing.section),
               SegmentedButton<String>(
                 segments: const [
                   ButtonSegment<String>(
@@ -322,7 +322,7 @@ class StatsPage extends ConsumerWidget {
                       next.first;
                 },
               ),
-              const SizedBox(height: CentliSpacing.sectionLoose),
+              const SizedBox(height: CentliSpacing.section),
               Text(
                 breakdownTitle,
                 style: Theme.of(context).textTheme.titleMedium,
@@ -346,7 +346,7 @@ class StatsPage extends ConsumerWidget {
                     children: [
                       CentliSoftCard(
                         child: Padding(
-                          padding: const EdgeInsets.fromLTRB(8, 16, 8, 8),
+                          padding: const EdgeInsets.all(CentliSpacing.cardPad),
                           child: SizedBox(
                             height: 200,
                             child: _CategoryDonutChart(
@@ -525,7 +525,7 @@ class _StatsBudgetSection extends ConsumerWidget {
           child: InkWell(
             onTap: () => context.push('/me/budget'),
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(CentliSpacing.cardPad),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [

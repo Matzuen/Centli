@@ -288,7 +288,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                             _HomePendingSection(ledgerId: ledgerId, hide: hide),
                             const SizedBox(height: CentliSpacing.item),
                             CentliSoftCard(
-                              padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
+                              padding: const EdgeInsets.all(CentliSpacing.cardPad),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
@@ -376,7 +376,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                             ),
                             const SizedBox(height: CentliSpacing.section),
                             CentliSoftCard(
-                              padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+                              padding: const EdgeInsets.all(CentliSpacing.cardPad),
                               child: calRecent.when(
                                 loading: () => const Padding(
                                   padding: EdgeInsets.all(24),
@@ -496,7 +496,7 @@ class _LedgerSummaryCard extends StatelessWidget {
     final liability = net < 0 ? -net : 0;
 
     return CentliSoftCard(
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+      padding: const EdgeInsets.all(CentliSpacing.cardPad),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -626,7 +626,7 @@ class _NetChangeChartCard extends StatelessWidget {
     }
 
     return CentliSoftCard(
-      padding: const EdgeInsets.fromLTRB(16, 14, 12, 12),
+      padding: const EdgeInsets.all(CentliSpacing.cardPad),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -732,7 +732,7 @@ class _CalendarCard extends StatelessWidget {
     final labels = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
 
     return CentliSoftCard(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+      padding: const EdgeInsets.all(CentliSpacing.cardPad),
       child: Column(
         children: [
           Row(
@@ -894,7 +894,7 @@ class _DailyTrendCard extends StatelessWidget {
     }
 
     return CentliSoftCard(
-      padding: const EdgeInsets.fromLTRB(16, 14, 12, 12),
+      padding: const EdgeInsets.all(CentliSpacing.cardPad),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
