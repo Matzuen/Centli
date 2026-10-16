@@ -7,6 +7,7 @@ import '../../core/utils/money.dart';
 import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
 import 'bookkeeping_sheet.dart' deferred as bookkeeping;
+import '../../app/theme.dart';
 
 final _txnProvider =
     StreamProvider.family<Transaction?, String>((ref, id) {
@@ -120,7 +121,7 @@ class _DetailBody extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 24),
-          Card(
+          CentliSoftCard(
             child: Column(
               children: [
                 _row(

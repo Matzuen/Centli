@@ -10,6 +10,7 @@ import '../../core/widgets/date_range_control.dart';
 import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
 import 'category_drill_page.dart';
+import '../../app/theme.dart';
 
 final statsRangeProvider = StateProvider<DateRangeWindow>((ref) {
   return DateRangeWindow.lastDays(days: 30);
@@ -18,69 +19,80 @@ final statsRangeProvider = StateProvider<DateRangeWindow>((ref) {
 /// Breakdown kind on stats: transaction/category kind `out` or `in`.
 final statsBreakdownKindProvider = StateProvider<String>((ref) => 'out');
 
-final _statsBaseProvider = FutureProvider.family<
-    BaseRangeSummary,
-    ({String ledgerId, String key, int startMs, int endMs, String base})>((ref, args) async {
-  await ref.watch(fxBookProvider.future);
-  return ref.watch(databaseProvider).rangeSummaryInBase(
-        args.ledgerId,
-        args.startMs,
-        args.endMs,
-        args.base,
-      );
-});
+final _statsBaseProvider =
+    FutureProvider.family<
+      BaseRangeSummary,
+      ({String ledgerId, String key, int startMs, int endMs, String base})
+    >((ref, args) async {
+      await ref.watch(fxBookProvider.future);
+      return ref
+          .watch(databaseProvider)
+          .rangeSummaryInBase(
+            args.ledgerId,
+            args.startMs,
+            args.endMs,
+            args.base,
+          );
+    });
 
-final _statsBreakdownBaseProvider = FutureProvider.family<
-    List<({String categoryId, String name, int totalMinor})>,
-    ({
-      String ledgerId,
-      String key,
-      int startMs,
-      int endMs,
-      String base,
-      String kind,
-    })>((ref, args) async {
-  await ref.watch(fxBookProvider.future);
-  return ref.watch(databaseProvider).categoryBreakdownInBase(
-        args.ledgerId,
-        args.startMs,
-        args.endMs,
-        kind: args.kind,
-        baseCurrency: args.base,
-      );
-});
+final _statsBreakdownBaseProvider =
+    FutureProvider.family<
+      List<({String categoryId, String name, int totalMinor})>,
+      ({
+        String ledgerId,
+        String key,
+        int startMs,
+        int endMs,
+        String base,
+        String kind,
+      })
+    >((ref, args) async {
+      await ref.watch(fxBookProvider.future);
+      return ref
+          .watch(databaseProvider)
+          .categoryBreakdownInBase(
+            args.ledgerId,
+            args.startMs,
+            args.endMs,
+            kind: args.kind,
+            baseCurrency: args.base,
+          );
+    });
 
-final _statsDailyBaseProvider = FutureProvider.family<
-    List<({DateTime dayLocal, int totalMinor})>,
-    ({
-      String ledgerId,
-      String key,
-      int startMs,
-      int endMs,
-      String base,
-      String kind,
-    })>((ref, args) async {
-  await ref.watch(fxBookProvider.future);
-  return ref.watch(databaseProvider).dailySeriesInBase(
-        args.ledgerId,
-        args.startMs,
-        args.endMs,
-        kind: args.kind,
-        baseCurrency: args.base,
-      );
-});
+final _statsDailyBaseProvider =
+    FutureProvider.family<
+      List<({DateTime dayLocal, int totalMinor})>,
+      ({
+        String ledgerId,
+        String key,
+        int startMs,
+        int endMs,
+        String base,
+        String kind,
+      })
+    >((ref, args) async {
+      await ref.watch(fxBookProvider.future);
+      return ref
+          .watch(databaseProvider)
+          .dailySeriesInBase(
+            args.ledgerId,
+            args.startMs,
+            args.endMs,
+            kind: args.kind,
+            baseCurrency: args.base,
+          );
+    });
 
-
-final _statsBudgetProvider = FutureProvider.family<
-    MonthBudgetProgress,
-    ({String ledgerId, String yearMonth, String base})>((ref, args) async {
-  await ref.watch(fxBookProvider.future);
-  return ref.watch(databaseProvider).monthBudgetProgress(
-        args.ledgerId,
-        args.yearMonth,
-        args.base,
-      );
-});
+final _statsBudgetProvider =
+    FutureProvider.family<
+      MonthBudgetProgress,
+      ({String ledgerId, String yearMonth, String base})
+    >((ref, args) async {
+      await ref.watch(fxBookProvider.future);
+      return ref
+          .watch(databaseProvider)
+          .monthBudgetProgress(args.ledgerId, args.yearMonth, args.base);
+    });
 
 class StatsPage extends ConsumerWidget {
   const StatsPage({super.key});
@@ -100,7 +112,9 @@ class StatsPage extends ConsumerWidget {
         error: (e, _) => Center(child: Text('$e')),
         data: (ledger) {
           if (ledger == null) {
-            return const Center(child: Text('\u5c1a\u672a\u521d\u59cb\u5316\u8d26\u672c'));
+            return const Center(
+              child: Text('\u5c1a\u672a\u521d\u59cb\u5316\u8d26\u672c'),
+            );
           }
           final ledgerId = ledger.id;
           final base = ledger.baseCurrency;
@@ -128,11 +142,17 @@ class StatsPage extends ConsumerWidget {
           final trendTitle = breakdownKind == 'in'
               ? '\u6bcf\u65e5\u6536\u5165'
               : '\u6bcf\u65e5\u652f\u51fa';
-          final lineColor =
-              breakdownKind == 'in' ? scheme.primary : scheme.error;
+          final lineColor = breakdownKind == 'in'
+              ? scheme.primary
+              : scheme.error;
 
           return ListView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+            padding: const EdgeInsets.fromLTRB(
+              CentliSpacing.pageH,
+              CentliSpacing.pageTop,
+              CentliSpacing.pageH,
+              24,
+            ),
             children: [
               DateRangeControl(
                 range: range,
@@ -140,14 +160,13 @@ class StatsPage extends ConsumerWidget {
                   ref.read(statsRangeProvider.notifier).state = next;
                 },
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: CentliSpacing.dense),
               Text(
                 '\u672c\u4f4d\u5e01 $base\uff08\u6309\u53d1\u751f\u65e5\u6c47\u7387\u6298\u7b97\uff09',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
+                style: Theme.of(context).textTheme.bodySmall
+                    ?.copyWith(color: scheme.onSurfaceVariant),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: CentliSpacing.item),
               summary.when(
                 loading: () => const LinearProgressIndicator(),
                 error: (e, _) => Text('$e'),
@@ -160,20 +179,25 @@ class StatsPage extends ConsumerWidget {
                       Row(
                         children: [
                           Expanded(
-                            child: Card(
+                            child: CentliSoftCard(
                               child: Padding(
                                 padding: const EdgeInsets.all(16),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text('\u652f\u51fa\u5408\u8ba1',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .labelLarge),
-                                    const SizedBox(height: 8),
                                     Text(
-                                      formatMinor(base, s.expenseMinor,
-                                          hide: hide),
+                                      '\u652f\u51fa\u5408\u8ba1',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .labelLarge,
+                                    ),
+                                    const SizedBox(height: CentliSpacing.item),
+                                    Text(
+                                      formatMinor(
+                                        base,
+                                        s.expenseMinor,
+                                        hide: hide,
+                                      ),
                                       style: Theme.of(context)
                                           .textTheme
                                           .titleLarge
@@ -189,20 +213,25 @@ class StatsPage extends ConsumerWidget {
                           ),
                           const SizedBox(width: 12),
                           Expanded(
-                            child: Card(
+                            child: CentliSoftCard(
                               child: Padding(
                                 padding: const EdgeInsets.all(16),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text('\u6536\u5165\u5408\u8ba1',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .labelLarge),
-                                    const SizedBox(height: 8),
                                     Text(
-                                      formatMinor(base, s.incomeMinor,
-                                          hide: hide),
+                                      '\u6536\u5165\u5408\u8ba1',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .labelLarge,
+                                    ),
+                                    const SizedBox(height: CentliSpacing.item),
+                                    Text(
+                                      formatMinor(
+                                        base,
+                                        s.incomeMinor,
+                                        hide: hide,
+                                      ),
                                       style: Theme.of(context)
                                           .textTheme
                                           .titleLarge
@@ -219,24 +248,21 @@ class StatsPage extends ConsumerWidget {
                         ],
                       ),
                       if (others.isNotEmpty) ...[
-                        const SizedBox(height: 8),
+                        const SizedBox(height: CentliSpacing.item),
                         Text(
                           '\u672a\u6298\u7b97\uff1a${others.map((e) {
                             final t = e.value;
                             return '${e.key} \u652f ${formatMinor(e.key, t.expense, hide: hide)} / \u6536 ${formatMinor(e.key, t.income, hide: hide)}';
                           }).join(' \u00b7 ')}',
-                          style:
-                              Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: scheme.onSurfaceVariant,
-                                  ),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: scheme.onSurfaceVariant),
                         ),
                       ],
                     ],
                   );
                 },
               ),
-              const SizedBox(height: 16),
-              const SizedBox(height: 16),
+              const SizedBox(height: CentliSpacing.sectionLoose),
               _StatsBudgetSection(
                 ledgerId: ledgerId,
                 baseCurrency: base,
@@ -262,9 +288,9 @@ class StatsPage extends ConsumerWidget {
                       next.first;
                 },
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: CentliSpacing.sectionLoose),
               Text(trendTitle, style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 8),
+              const SizedBox(height: CentliSpacing.item),
               daily.when(
                 loading: () => const SizedBox(
                   height: 180,
@@ -279,7 +305,7 @@ class StatsPage extends ConsumerWidget {
                       scheme: scheme,
                     );
                   }
-                  return Card(
+                  return CentliSoftCard(
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(12, 16, 16, 12),
                       child: SizedBox(
@@ -295,10 +321,12 @@ class StatsPage extends ConsumerWidget {
                   );
                 },
               ),
-              const SizedBox(height: 16),
-              Text(breakdownTitle,
-                  style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 8),
+              const SizedBox(height: CentliSpacing.sectionLoose),
+              Text(
+                breakdownTitle,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: CentliSpacing.item),
               breakdown.when(
                 loading: () => const Padding(
                   padding: EdgeInsets.all(24),
@@ -312,11 +340,10 @@ class StatsPage extends ConsumerWidget {
                       scheme: scheme,
                     );
                   }
-                  final total =
-                      items.fold<int>(0, (a, b) => a + b.totalMinor);
+                  final total = items.fold<int>(0, (a, b) => a + b.totalMinor);
                   return Column(
                     children: [
-                      Card(
+                      CentliSoftCard(
                         child: Padding(
                           padding: const EdgeInsets.fromLTRB(8, 16, 8, 8),
                           child: SizedBox(
@@ -338,8 +365,8 @@ class StatsPage extends ConsumerWidget {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      Card(
+                      const SizedBox(height: CentliSpacing.item),
+                      CentliSoftCard(
                         clipBehavior: Clip.antiAlias,
                         child: Column(
                           children: [
@@ -349,7 +376,9 @@ class StatsPage extends ConsumerWidget {
                                 leading: CircleAvatar(
                                   radius: 8,
                                   backgroundColor: _categoryColors(
-                                      scheme, items.length)[i],
+                                    scheme,
+                                    items.length,
+                                  )[i],
                                 ),
                                 title: Text(items[i].name),
                                 subtitle: Text(
@@ -361,10 +390,14 @@ class StatsPage extends ConsumerWidget {
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Text(
-                                      formatMinor(base, items[i].totalMinor,
-                                          hide: hide),
+                                      formatMinor(
+                                        base,
+                                        items[i].totalMinor,
+                                        hide: hide,
+                                      ),
                                       style: const TextStyle(
-                                          fontWeight: FontWeight.w600),
+                                        fontWeight: FontWeight.w600,
+                                      ),
                                     ),
                                     const SizedBox(width: 4),
                                     Icon(
@@ -443,9 +476,11 @@ class _StatsBudgetSection extends ConsumerWidget {
       ym = budgetYearMonth();
     }
     final async = ref.watch(
-      _statsBudgetProvider(
-        (ledgerId: ledgerId, yearMonth: ym, base: baseCurrency),
-      ),
+      _statsBudgetProvider((
+        ledgerId: ledgerId,
+        yearMonth: ym,
+        base: baseCurrency,
+      )),
     );
     final parts = ym.split('-');
     final label = '${parts[0]}\u5e74${int.parse(parts[1])}\u6708';
@@ -456,10 +491,12 @@ class _StatsBudgetSection extends ConsumerWidget {
       data: (p) {
         final hasTotal = p.totalLimitMinor != null && p.totalLimitMinor! > 0;
         if (!p.hasAnyBudget) {
-          return Card(
+          return CentliSoftCard(
             child: ListTile(
-              leading: Icon(Icons.account_balance_wallet_outlined,
-                  color: scheme.primary),
+              leading: Icon(
+                Icons.account_balance_wallet_outlined,
+                color: scheme.primary,
+              ),
               title: Text('$label \u9884\u7b97'),
               subtitle: const Text(
                 '\u672a\u8bbe\u7f6e \u00b7 \u53bb\u300c\u6211\u7684 \u203a \u9884\u7b97\u300d\u914d\u7f6e\u6708\u5ea6/\u5206\u7c7b\u989d\u5ea6',
@@ -477,12 +514,12 @@ class _StatsBudgetSection extends ConsumerWidget {
         final barColor = !hasTotal
             ? scheme.outlineVariant
             : over
-                ? scheme.error
-                : ratio >= 0.8
-                    ? scheme.tertiary
-                    : scheme.primary;
+            ? scheme.error
+            : ratio >= 0.8
+            ? scheme.tertiary
+            : scheme.primary;
 
-        return Card(
+        return CentliSoftCard(
           clipBehavior: Clip.antiAlias,
           child: InkWell(
             onTap: () => context.push('/me/budget'),
@@ -496,33 +533,33 @@ class _StatsBudgetSection extends ConsumerWidget {
                       Expanded(
                         child: Text(
                           '$label \u9884\u7b97',
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleSmall
+                          style: Theme.of(context).textTheme.titleSmall
                               ?.copyWith(fontWeight: FontWeight.w600),
                         ),
                       ),
                       Text(
                         '\u7ba1\u7406',
-                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                              color: scheme.primary,
-                            ),
+                        style: Theme.of(context).textTheme.labelLarge
+                            ?.copyWith(color: scheme.primary),
                       ),
-                      Icon(Icons.chevron_right,
-                          size: 18, color: scheme.primary),
+                      Icon(
+                        Icons.chevron_right,
+                        size: 18,
+                        color: scheme.primary,
+                      ),
                     ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: CentliSpacing.item),
                   if (hasTotal) ...[
                     Text(
                       '${formatMinor(baseCurrency, spent, hide: hide)}'
                       ' / ${formatMinor(baseCurrency, limit, hide: hide)}',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                            color: over ? scheme.error : null,
-                          ),
+                        fontWeight: FontWeight.w600,
+                        color: over ? scheme.error : null,
+                      ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: CentliSpacing.item),
                     ClipRRect(
                       borderRadius: BorderRadius.circular(4),
                       child: LinearProgressIndicator(
@@ -537,11 +574,10 @@ class _StatsBudgetSection extends ConsumerWidget {
                       over
                           ? '\u8d85\u652f ${formatMinor(baseCurrency, spent - limit, hide: hide)}'
                           : '\u5269\u4f59 ${formatMinor(baseCurrency, limit - spent, hide: hide)}'
-                              ' \u00b7 ${(spent * 100 / limit).toStringAsFixed(0)}%',
+                                ' \u00b7 ${(spent * 100 / limit).toStringAsFixed(0)}%',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color:
-                                over ? scheme.error : scheme.onSurfaceVariant,
-                          ),
+                        color: over ? scheme.error : scheme.onSurfaceVariant,
+                      ),
                     ),
                   ] else
                     Text(
@@ -550,7 +586,7 @@ class _StatsBudgetSection extends ConsumerWidget {
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   if (p.categories.isNotEmpty) ...[
-                    const SizedBox(height: 12),
+                    const SizedBox(height: CentliSpacing.section),
                     for (final c in p.categories.take(3))
                       Padding(
                         padding: const EdgeInsets.only(bottom: 6),
@@ -583,9 +619,7 @@ class _StatsBudgetSection extends ConsumerWidget {
                               hide
                                   ? '****'
                                   : '${(c.ratio * 100).clamp(0, 999).toStringAsFixed(0)}%',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .labelSmall
+                              style: Theme.of(context).textTheme.labelSmall
                                   ?.copyWith(
                                     color: c.over
                                         ? scheme.error
@@ -598,9 +632,8 @@ class _StatsBudgetSection extends ConsumerWidget {
                     if (p.categories.length > 3)
                       Text(
                         '\u53e6\u6709 ${p.categories.length - 3} \u4e2a\u5206\u7c7b\u9884\u7b97\u2026',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: scheme.onSurfaceVariant,
-                            ),
+                        style: Theme.of(context).textTheme.bodySmall
+                            ?.copyWith(color: scheme.onSurfaceVariant),
                       ),
                   ],
                 ],
@@ -621,7 +654,7 @@ class _EmptyChartCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    return CentliSoftCard(
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Center(
@@ -674,8 +707,10 @@ class _DailyTrendChart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final maxMinor =
-        series.fold<int>(0, (a, b) => a > b.totalMinor ? a : b.totalMinor);
+    final maxMinor = series.fold<int>(
+      0,
+      (a, b) => a > b.totalMinor ? a : b.totalMinor,
+    );
     final maxY = maxMinor <= 0 ? 1.0 : maxMinor.toDouble() * 1.15;
     final spots = <FlSpot>[
       for (var i = 0; i < series.length; i++)
@@ -702,10 +737,12 @@ class _DailyTrendChart extends StatelessWidget {
         ),
         borderData: FlBorderData(show: false),
         titlesData: FlTitlesData(
-          topTitles:
-              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          rightTitles:
-              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          topTitles: const AxisTitles(
+            sideTitles: SideTitles(showTitles: false),
+          ),
+          rightTitles: const AxisTitles(
+            sideTitles: SideTitles(showTitles: false),
+          ),
           leftTitles: AxisTitles(
             sideTitles: SideTitles(
               showTitles: true,
@@ -716,15 +753,19 @@ class _DailyTrendChart extends StatelessWidget {
                   return const SizedBox.shrink();
                 }
                 if (hide) {
-                  return Text('****',
-                      style: Theme.of(context).textTheme.labelSmall);
+                  return Text(
+                    '****',
+                    style: Theme.of(context).textTheme.labelSmall,
+                  );
                 }
                 final major = fromMinor(baseCurrency, value.round());
                 final label = major >= 1000
                     ? '${(major / 1000).toStringAsFixed(1)}k'
                     : major.toStringAsFixed(major >= 10 ? 0 : 1);
-                return Text(label,
-                    style: Theme.of(context).textTheme.labelSmall);
+                return Text(
+                  label,
+                  style: Theme.of(context).textTheme.labelSmall,
+                );
               },
             ),
           ),
@@ -760,8 +801,11 @@ class _DailyTrendChart extends StatelessWidget {
                 final d = series[i].dayLocal;
                 final dayLabel =
                     '${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-                final amt = formatMinor(baseCurrency, series[i].totalMinor,
-                    hide: hide);
+                final amt = formatMinor(
+                  baseCurrency,
+                  series[i].totalMinor,
+                  hide: hide,
+                );
                 return LineTooltipItem(
                   '$dayLabel\n$amt',
                   TextStyle(

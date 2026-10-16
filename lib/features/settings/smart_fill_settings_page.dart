@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/db/database_provider.dart';
 import '../ledger/llm_text_fill.dart';
+import '../../app/theme.dart';
 
 /// 智能填单 / 大模型增强配置（OpenAI 兼容接口）。
 class SmartFillSettingsPage extends ConsumerStatefulWidget {
@@ -123,7 +124,7 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return CentliGradientScaffold(
       appBar: AppBar(
         title: const Text('智能填单'),
         actions: [
@@ -142,25 +143,30 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+              padding: CentliSpacing.pagePadding,
               children: [
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('用大模型增强文字填单'),
-                  subtitle: const Text(
-                    '开启后，记账页「智能填单」会优先调用你配置的大模型兼容接口；失败时自动回退本地解析，不阻塞保存。',
+                CentliSoftCard(
+                  child: SwitchListTile(
+                    title: const Text('用大模型增强文字填单'),
+                    subtitle: const Text(
+                      '开启后，记账页「智能填单」会优先调用你配置的大模型兼容接口；失败时自动回退本地解析，不阻塞保存。',
+                    ),
+                    value: _enabled,
+                    onChanged: (v) => setState(() => _enabled = v),
                   ),
-                  value: _enabled,
-                  onChanged: (v) => setState(() => _enabled = v),
                 ),
-                const Divider(height: 24),
+                const SizedBox(height: CentliSpacing.section),
                 Text(
                   '本地解析始终可用；大模型为可选增强。',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: CentliSpacing.item),
+                CentliSoftCard(
+                  padding: const EdgeInsets.all(CentliSpacing.cardPad),
+                  child: Column(
+                    children: [
                 TextField(
                   controller: _baseCtrl,
                   enabled: !_saving,
@@ -209,7 +215,7 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
                   enableSuggestions: false,
                 ),
                 if (_hasKey) ...[
-                  const SizedBox(height: 8),
+                  const SizedBox(height: CentliSpacing.item),
                   Align(
                     alignment: Alignment.centerLeft,
                     child: TextButton.icon(
@@ -219,8 +225,11 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
                     ),
                   ),
                 ],
-                const SizedBox(height: 24),
-                Card(
+                    ],
+                  ),
+                ),
+                const SizedBox(height: CentliSpacing.section),
+                CentliSoftCard(
                   child: Padding(
                     padding: const EdgeInsets.all(12),
                     child: Column(

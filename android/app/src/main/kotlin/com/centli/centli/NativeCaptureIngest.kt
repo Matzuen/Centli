@@ -153,10 +153,10 @@ object NativeCaptureIngest {
     )
 
     /** Alipay mustContain — mirrors assets/noti_templates.json */
-    private val MUST_ALIPAY: Pattern = Pattern.compile("支付成功|付款成功")
+    private val MUST_ALIPAY: Pattern = Pattern.compile("支付成功|付款成功|交易成功|交易提醒|交易通知|消费成功|已支付|扣款成功|扣款提醒|已扣款|支出\s*[¥￥]|向.+付款|付款|支付金额|支付\s*[¥￥]|付款\s*[¥￥]|商户消费|成功付款")
 
     /** WeChat mustContain — mirrors assets/noti_templates.json */
-    private val MUST_WECHAT: Pattern = Pattern.compile("微信支付|支付成功|已支付")
+    private val MUST_WECHAT: Pattern = Pattern.compile("微信支付|支付成功|已支付|付款成功|商户消费|支付金额|付款金额|已付款|扣款成功")
 
     /**
      * Chat / non-payment excludes (strengthened vs Dart templates).
@@ -164,7 +164,7 @@ object NativeCaptureIngest {
      */
     private val EXCLUDE_COMMON: Pattern = Pattern.compile(
         "验证码|登录|朋友圈|微信消息|发来一条|会话|拍了拍|互动消息|新的朋友|群聊|" +
-            "语音通话|视频通话|收到一条|发来一个红包|领取了你的红包|收款到账提醒|服务通知|余额宝收益",
+            "语音通话|视频通话|收到一条|发来一个红包|领取了你的红包|收款到账提醒|服务通知|余额宝收益|生活号",
     )
 
     /**
@@ -241,7 +241,12 @@ object NativeCaptureIngest {
 
     private fun guessMerchant(title: String, text: String): String? {
         val t = title.trim()
-        if (t.isNotEmpty() && !t.contains("支付成功") && !t.contains("付款成功")) {
+        // Generic Alipay/WeChat pay titles are not merchants.
+        val genericTitle = t.contains("支付成功") || t.contains("付款成功") ||
+            t.contains("交易提醒") || t.contains("交易通知") || t.contains("交易成功") ||
+            t.contains("消费成功") || t.contains("扣款成功") || t.contains("扣款提醒") ||
+            t == "支付宝" || t == "微信支付"
+        if (t.isNotEmpty() && !genericTitle) {
             val cut = t.replace(Regex("-?微信支付$"), "").trim()
             if (cut.isNotEmpty()) return cut
             // Align Dart merchantFromTitle: title "微信支付" stays as merchant.

@@ -19,6 +19,9 @@ class DateRangeControl extends StatelessWidget {
       children: [
         IconButton(
           tooltip: '上一段',
+          visualDensity: VisualDensity.compact,
+          constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+          padding: EdgeInsets.zero,
           onPressed: () => onChanged(range.prev()),
           icon: const Icon(Icons.chevron_left),
         ),
@@ -33,7 +36,7 @@ class DateRangeControl extends StatelessWidget {
               if (next != null) onChanged(next);
             },
             child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+              padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -41,12 +44,17 @@ class DateRangeControl extends StatelessWidget {
                     child: Text(
                       range.label,
                       textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.titleMedium,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
                     ),
                   ),
-                  const SizedBox(width: 4),
+                  const SizedBox(width: 2),
                   Icon(
                     Icons.arrow_drop_down,
+                    size: 20,
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ],
@@ -56,6 +64,9 @@ class DateRangeControl extends StatelessWidget {
         ),
         IconButton(
           tooltip: '下一段',
+          visualDensity: VisualDensity.compact,
+          constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+          padding: EdgeInsets.zero,
           onPressed: range.isLatest ? null : () => onChanged(range.next()),
           icon: const Icon(Icons.chevron_right),
         ),

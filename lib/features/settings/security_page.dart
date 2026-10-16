@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/theme.dart';
 import '../../data/db/database_provider.dart';
 import '../security/app_lock_controller.dart';
 import '../security/pin_pad.dart';
@@ -105,49 +106,60 @@ class _SecurityPageState extends ConsumerState<SecurityPage> {
     final bioOn = bioAsync.valueOrNull ?? false;
     final hideOn = hideAsync.valueOrNull ?? false;
 
-    return Scaffold(
+    return CentliGradientScaffold(
       appBar: AppBar(title: const Text('安全')),
       body: ListView(
+        padding: CentliSpacing.pagePadding,
         children: [
-          SwitchListTile(
-            secondary: const Icon(Icons.lock_outline),
-            title: const Text('应用锁'),
-            subtitle: const Text('冷启动与回到前台时需解锁'),
-            value: lockOn,
-            onChanged: lockAsync.isLoading ? null : _onLockChanged,
-          ),
-          ListTile(
-            leading: const Icon(Icons.pin_outlined),
-            title: const Text('修改 PIN'),
-            subtitle: const Text('6 位数字'),
-            enabled: lockOn,
-            trailing: const Icon(Icons.chevron_right),
-            onTap: lockOn ? _changePin : null,
-          ),
-          SwitchListTile(
-            secondary: const Icon(Icons.fingerprint),
-            title: const Text('生物识别'),
-            subtitle: Text(
-              _bioHw == null
-                  ? '检测中…'
-                  : (_bioHw!
-                      ? '解锁时优先使用指纹 / Face ID'
-                      : '当前设备不可用，将仅使用 PIN'),
+          CentliSoftCard(
+            child: Column(
+              children: [
+                SwitchListTile(
+                  secondary: const Icon(Icons.lock_outline),
+                  title: const Text('应用锁'),
+                  subtitle: const Text('冷启动与回到前台时需解锁'),
+                  value: lockOn,
+                  onChanged: lockAsync.isLoading ? null : _onLockChanged,
+                ),
+                const Divider(height: 1, indent: 56),
+                ListTile(
+                  leading: const Icon(Icons.pin_outlined),
+                  title: const Text('修改 PIN'),
+                  subtitle: const Text('6 位数字'),
+                  enabled: lockOn,
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: lockOn ? _changePin : null,
+                ),
+                const Divider(height: 1, indent: 56),
+                SwitchListTile(
+                  secondary: const Icon(Icons.fingerprint),
+                  title: const Text('生物识别'),
+                  subtitle: Text(
+                    _bioHw == null
+                        ? '检测中…'
+                        : (_bioHw!
+                            ? '解锁时优先使用指纹 / Face ID'
+                            : '当前设备不可用，将仅使用 PIN'),
+                  ),
+                  value: bioOn && lockOn && (_bioHw ?? false),
+                  onChanged: (!lockOn || _bioHw != true)
+                      ? null
+                      : _onBiometricChanged,
+                ),
+              ],
             ),
-            value: bioOn && lockOn && (_bioHw ?? false),
-            onChanged: (!lockOn || _bioHw != true)
-                ? null
-                : _onBiometricChanged,
           ),
-          const Divider(),
-          SwitchListTile(
-            secondary: const Icon(Icons.visibility_off_outlined),
-            title: const Text('隐藏金额默认'),
-            subtitle: const Text('与首页眼睛按钮同步'),
-            value: hideOn,
-            onChanged: hideAsync.isLoading
-                ? null
-                : (_) => ref.read(databaseProvider).toggleHideAmount(),
+          const SizedBox(height: CentliSpacing.section),
+          CentliSoftCard(
+            child: SwitchListTile(
+              secondary: const Icon(Icons.visibility_off_outlined),
+              title: const Text('隐藏金额默认'),
+              subtitle: const Text('与首页眼睛按钮同步'),
+              value: hideOn,
+              onChanged: hideAsync.isLoading
+                  ? null
+                  : (_) => ref.read(databaseProvider).toggleHideAmount(),
+            ),
           ),
         ],
       ),

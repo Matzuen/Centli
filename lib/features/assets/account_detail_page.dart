@@ -14,6 +14,7 @@ import '../../core/widgets/date_range_control.dart';
 import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
 import 'assets_page.dart';
+import '../../app/theme.dart';
 
 final _accountProvider =
     StreamProvider.family<Account?, String>((ref, id) {
@@ -163,7 +164,7 @@ class _AccountDetailBody extends ConsumerWidget {
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
           if (account.archived != 0)
-            Card(
+            CentliSoftCard(
               color: scheme.secondaryContainer,
               child: ListTile(
                 leading: Icon(
@@ -181,7 +182,7 @@ class _AccountDetailBody extends ConsumerWidget {
               ),
             ),
           if (account.archived != 0) const SizedBox(height: 8),
-          Card(
+          CentliSoftCard(
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -242,7 +243,7 @@ class _AccountDetailBody extends ConsumerWidget {
             error: (e, _) => Text('$e'),
             data: (txns) {
               if (txns.isEmpty) {
-                return Card(
+                return CentliSoftCard(
                   child: Padding(
                     padding: const EdgeInsets.all(24),
                     child: Column(

@@ -5,6 +5,7 @@ import '../../core/constants/currencies.dart';
 import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
 import 'me_page.dart';
+import '../../app/theme.dart';
 
 final _allLedgersProvider = StreamProvider<List<Ledger>>((ref) {
   return ref.watch(databaseProvider).watchAllLedgers(includeArchived: true);
@@ -20,66 +21,84 @@ class LedgersPage extends ConsumerWidget {
     final currentAsync = ref.watch(currentLedgerProvider);
     final currentId = currentAsync.valueOrNull?.id;
 
-    return Scaffold(
+    return CentliGradientScaffold(
       appBar: AppBar(
         title: const Text('账本管理'),
-        actions: [
-          IconButton(
-            tooltip: '新建账本',
-            icon: const Icon(Icons.add),
-            onPressed: () => _create(context, ref),
-          ),
-        ],
       ),
       body: listAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('$e')),
         data: (ledgers) {
           if (ledgers.isEmpty) {
-            return const Center(child: Text('暂无账本'));
+            return CentliEmptyState(
+              icon: Icons.menu_book_outlined,
+              title: '暂无账本',
+              message: '创建第一个账本开始记账。点右下角 + 即可。',
+              action: FilledButton.tonalIcon(
+                onPressed: () => _create(context, ref),
+                icon: const Icon(Icons.add),
+                label: const Text('新建账本'),
+              ),
+            );
           }
           final active = ledgers.where((l) => l.archived == 0).toList();
           final archived = ledgers.where((l) => l.archived != 0).toList();
           return ListView(
+            padding: CentliSpacing.pagePadding,
             children: [
-              const Padding(
-                padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: Text(
-                  '可创建多个账本并切换当前账本。归档后不再出现在首页，可随时恢复。',
-                  style: TextStyle(height: 1.4),
-                ),
+              Text(
+                '可创建多个账本并切换当前账本。归档后不再出现在首页，可随时恢复。',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      height: 1.4,
+                    ),
               ),
-              const Divider(),
-              for (final l in active)
-                _LedgerTile(
-                  ledger: l,
-                  isCurrent: l.id == currentId,
-                  onSwitch: () => _switchTo(context, ref, l),
-                  onEdit: () => showLedgerEditor(context, ref, ledger: l),
-                  onArchive: () => _archive(context, ref, l, archive: true),
-                ),
-              if (archived.isNotEmpty) ...[
-                const Divider(),
-                const ListTile(title: Text('已归档')),
-                for (final l in archived)
-                  _LedgerTile(
+              const SizedBox(height: CentliSpacing.section),
+              for (final l in active) ...[
+                CentliSoftCard(
+                  margin: const EdgeInsets.only(bottom: CentliSpacing.item),
+                  child: _LedgerTile(
                     ledger: l,
-                    isCurrent: false,
-                    archived: true,
-                    onSwitch: null,
+                    isCurrent: l.id == currentId,
+                    onSwitch: () => _switchTo(context, ref, l),
                     onEdit: () => showLedgerEditor(context, ref, ledger: l),
-                    onArchive: () => _archive(context, ref, l, archive: false),
+                    onArchive: () => _archive(context, ref, l, archive: true),
                   ),
+                ),
               ],
-              const SizedBox(height: 24),
+              if (archived.isNotEmpty) ...[
+                const SizedBox(height: CentliSpacing.section),
+                Text(
+                  '已归档',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        color: Theme.of(context).colorScheme.primary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+                const SizedBox(height: CentliSpacing.item),
+                for (final l in archived) ...[
+                  CentliSoftCard(
+                    margin: const EdgeInsets.only(bottom: CentliSpacing.item),
+                    child: _LedgerTile(
+                      ledger: l,
+                      isCurrent: false,
+                      archived: true,
+                      onSwitch: null,
+                      onEdit: () => showLedgerEditor(context, ref, ledger: l),
+                      onArchive: () => _archive(context, ref, l, archive: false),
+                    ),
+                  ),
+                ],
+              ],
+              const SizedBox(height: 72),
             ],
           );
         },
       ),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: FloatingActionButton(
+        tooltip: '新建账本',
         onPressed: () => _create(context, ref),
-        icon: const Icon(Icons.add),
-        label: const Text('新建账本'),
+        child: const Icon(Icons.add),
       ),
     );
   }

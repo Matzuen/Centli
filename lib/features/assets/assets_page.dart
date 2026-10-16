@@ -12,27 +12,38 @@ import '../../core/utils/fx.dart';
 import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
 
-final _accountsProvider =
-    StreamProvider.family<List<Account>, String>((ref, ledgerId) {
+final _accountsProvider = StreamProvider.family<List<Account>, String>((
+  ref,
+  ledgerId,
+) {
   return ref.watch(databaseProvider).watchActiveAccounts(ledgerId);
 });
 
-final _archivedAccountsProvider =
-    StreamProvider.family<List<Account>, String>((ref, ledgerId) {
+final _archivedAccountsProvider = StreamProvider.family<List<Account>, String>((
+  ref,
+  ledgerId,
+) {
   return ref.watch(databaseProvider).watchArchivedAccounts(ledgerId);
 });
 
-final _balancesProvider =
-    StreamProvider.family<Map<String, int>, String>((ref, ledgerId) {
+final _balancesProvider = StreamProvider.family<Map<String, int>, String>((
+  ref,
+  ledgerId,
+) {
   return ref.watch(databaseProvider).watchAccountBalances(ledgerId);
 });
 
-final _netWorthBaseProvider = FutureProvider.family<
-    BaseNetWorth, ({String ledgerId, String base})>((ref, args) async {
-  await ref.watch(_balancesProvider(args.ledgerId).future);
-  await ref.watch(fxBookProvider.future);
-  return ref.read(databaseProvider).netWorthInBase(args.ledgerId, args.base);
-});
+final _netWorthBaseProvider =
+    FutureProvider.family<BaseNetWorth, ({String ledgerId, String base})>((
+      ref,
+      args,
+    ) async {
+      await ref.watch(_balancesProvider(args.ledgerId).future);
+      await ref.watch(fxBookProvider.future);
+      return ref
+          .read(databaseProvider)
+          .netWorthInBase(args.ledgerId, args.base);
+    });
 
 class AssetsPage extends ConsumerStatefulWidget {
   const AssetsPage({super.key});
@@ -82,8 +93,7 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                   : ref.watch(_accountsProvider(ledgerId));
               final balancesAsync = ref.watch(_balancesProvider(ledgerId));
               return accountsAsync.when(
-                loading: () =>
-                    const Center(child: CircularProgressIndicator()),
+                loading: () => const Center(child: CircularProgressIndicator()),
                 error: (e, _) => Center(child: Text('$e')),
                 data: (accounts) {
                   final balances = balancesAsync.valueOrNull ?? {};
@@ -93,15 +103,13 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                       : ref.watch(_netWorthBaseProvider(nwArgs));
 
                   return ListView(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
+                    padding: CentliSpacing.pagePaddingNav,
                     children: [
                       Row(
                         children: [
                           Text(
                             '资产',
-                            style: Theme.of(context)
-                                .textTheme
-                                .headlineSmall
+                            style: Theme.of(context).textTheme.headlineSmall
                                 ?.copyWith(fontWeight: FontWeight.w800),
                           ),
                           const Spacer(),
@@ -119,12 +127,13 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                             ),
                         ],
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: CentliSpacing.item),
                       Container(
                         padding: const EdgeInsets.all(4),
                         decoration: BoxDecoration(
-                          color: scheme.surfaceContainerHighest
-                              .withValues(alpha: 0.55),
+                          color: scheme.surfaceContainerHighest.withValues(
+                            alpha: 0.55,
+                          ),
                           borderRadius: BorderRadius.circular(22),
                         ),
                         child: Row(
@@ -148,7 +157,7 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                           ],
                         ),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: CentliSpacing.section),
                       if (!_showArchived && netWorthAsync != null)
                         netWorthAsync.when(
                           loading: () => const CentliSoftCard(
@@ -176,7 +185,11 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                               children: [
                                 CentliSoftCard(
                                   padding: const EdgeInsets.fromLTRB(
-                                      18, 16, 18, 16),
+                                    18,
+                                    16,
+                                    18,
+                                    16,
+                                  ),
                                   child: Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
@@ -190,7 +203,9 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                                               fontWeight: FontWeight.w700,
                                             ),
                                       ),
-                                      const SizedBox(height: 8),
+                                      const SizedBox(
+                                        height: CentliSpacing.item,
+                                      ),
                                       Text(
                                         formatMinor(base, net, hide: hide),
                                         style: Theme.of(context)
@@ -200,21 +215,26 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                                               fontWeight: FontWeight.w800,
                                             ),
                                       ),
-                                      const SizedBox(height: 12),
+                                      const SizedBox(
+                                        height: CentliSpacing.section,
+                                      ),
                                       Row(
                                         children: [
                                           Expanded(
                                             child: Row(
                                               children: [
-                                                const Icon(Icons.circle,
-                                                    size: 8,
-                                                    color: CentliTheme
-                                                        .incomeGreen),
+                                                const Icon(
+                                                  Icons.circle,
+                                                  size: 8,
+                                                  color:
+                                                      CentliTheme.incomeGreen,
+                                                ),
                                                 const SizedBox(width: 6),
                                                 Text(
                                                   '总资产  ${formatMinor(base, assetSum > 0 ? assetSum : (net > 0 ? net : 0), hide: hide)}',
                                                   style: const TextStyle(
-                                                      fontSize: 13),
+                                                    fontSize: 13,
+                                                  ),
                                                 ),
                                               ],
                                             ),
@@ -222,15 +242,17 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                                           Expanded(
                                             child: Row(
                                               children: [
-                                                const Icon(Icons.circle,
-                                                    size: 8,
-                                                    color: CentliTheme
-                                                        .expenseRed),
+                                                const Icon(
+                                                  Icons.circle,
+                                                  size: 8,
+                                                  color: CentliTheme.expenseRed,
+                                                ),
                                                 const SizedBox(width: 6),
                                                 Text(
                                                   '总负债  ${formatMinor(base, liabilitySum, hide: hide)}',
                                                   style: const TextStyle(
-                                                      fontSize: 13),
+                                                    fontSize: 13,
+                                                  ),
                                                 ),
                                               ],
                                             ),
@@ -240,11 +262,15 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                                     ],
                                   ),
                                 ),
-                                const SizedBox(height: 12),
+                                const SizedBox(height: CentliSpacing.section),
                                 if (positives.isNotEmpty)
                                   CentliSoftCard(
                                     padding: const EdgeInsets.fromLTRB(
-                                        16, 14, 16, 14),
+                                      16,
+                                      14,
+                                      16,
+                                      14,
+                                    ),
                                     child: Column(
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
@@ -258,7 +284,9 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                                                 fontWeight: FontWeight.w700,
                                               ),
                                         ),
-                                        const SizedBox(height: 12),
+                                        const SizedBox(
+                                          height: CentliSpacing.section,
+                                        ),
                                         SizedBox(
                                           height: 150,
                                           child: Row(
@@ -269,17 +297,18 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                                                     sectionsSpace: 2,
                                                     centerSpaceRadius: 34,
                                                     sections: [
-                                                      for (var i = 0;
-                                                          i < positives.length;
-                                                          i++)
+                                                      for (
+                                                        var i = 0;
+                                                        i < positives.length;
+                                                        i++
+                                                      )
                                                         PieChartSectionData(
                                                           value: positives[i]
                                                               .bal
                                                               .toDouble()
-                                                              .clamp(
-                                                                  1, 1e18),
-                                                          color: _donutColors[
-                                                              i %
+                                                              .clamp(1, 1e18),
+                                                          color:
+                                                              _donutColors[i %
                                                                   _donutColors
                                                                       .length],
                                                           radius: 28,
@@ -293,34 +322,36 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                                               Expanded(
                                                 child: ListView(
                                                   children: [
-                                                    for (var i = 0;
-                                                        i < positives.length &&
-                                                            i < 6;
-                                                        i++)
+                                                    for (
+                                                      var i = 0;
+                                                      i < positives.length &&
+                                                          i < 6;
+                                                      i++
+                                                    )
                                                       Padding(
                                                         padding:
-                                                            const EdgeInsets
-                                                                .only(
-                                                                bottom: 6),
+                                                            const EdgeInsets.only(
+                                                              bottom: 6,
+                                                            ),
                                                         child: Row(
                                                           children: [
                                                             Container(
                                                               width: 10,
                                                               height: 10,
-                                                              decoration:
-                                                                  BoxDecoration(
-                                                                color: _donutColors[
-                                                                    i %
+                                                              decoration: BoxDecoration(
+                                                                color:
+                                                                    _donutColors[i %
                                                                         _donutColors
                                                                             .length],
                                                                 borderRadius:
-                                                                    BorderRadius
-                                                                        .circular(
-                                                                            2),
+                                                                    BorderRadius.circular(
+                                                                      2,
+                                                                    ),
                                                               ),
                                                             ),
                                                             const SizedBox(
-                                                                width: 6),
+                                                              width: 6,
+                                                            ),
                                                             Expanded(
                                                               child: Text(
                                                                 positives[i]
@@ -332,8 +363,9 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                                                                         .ellipsis,
                                                                 style:
                                                                     const TextStyle(
-                                                                        fontSize:
-                                                                            12),
+                                                                      fontSize:
+                                                                          12,
+                                                                    ),
                                                               ),
                                                             ),
                                                             Text(
@@ -344,8 +376,7 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                                                                     ? 1
                                                                     : assetSum,
                                                               ),
-                                                              style:
-                                                                  const TextStyle(
+                                                              style: const TextStyle(
                                                                 fontSize: 12,
                                                                 fontWeight:
                                                                     FontWeight
@@ -373,31 +404,25 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                           padding: const EdgeInsets.only(bottom: 12, top: 4),
                           child: Text(
                             '已归档账户不计入总资产，可点进详情取消归档。',
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodySmall
+                            style: Theme.of(context).textTheme.bodySmall
                                 ?.copyWith(color: scheme.onSurfaceVariant),
                           ),
                         ),
                       if (accounts.isEmpty)
                         CentliSoftCard(
-                          padding: const EdgeInsets.all(28),
-                          child: Column(
-                            children: [
-                              Icon(
-                                _showArchived
-                                    ? Icons.inventory_2_outlined
-                                    : Icons.account_balance_wallet_outlined,
-                                size: 48,
-                                color: scheme.outline,
-                              ),
-                              const SizedBox(height: 10),
-                              Text(_showArchived ? '暂无已归档账户' : '暂无账户'),
-                            ],
+                          child: CentliEmptyState(
+                            icon: _showArchived
+                                ? Icons.inventory_2_outlined
+                                : Icons.account_balance_wallet_outlined,
+                            title: _showArchived ? '暂无已归档账户' : '暂无账户',
+                            message: _showArchived
+                                ? '归档账户不计入总资产，可在详情中恢复。'
+                                : '添加现金、银行卡或信用账户后，这里会汇总净资产。',
+                            padding: const EdgeInsets.all(CentliSpacing.cardPad),
                           ),
                         )
                       else ...[
-                        const SizedBox(height: 12),
+                        const SizedBox(height: CentliSpacing.section),
                         ..._groupedCards(
                           context,
                           accounts: accounts,
@@ -469,9 +494,7 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                     children: [
                       Text(
                         entry.key,
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleSmall
+                        style: Theme.of(context).textTheme.titleSmall
                             ?.copyWith(fontWeight: FontWeight.w800),
                       ),
                       const Spacer(),
@@ -510,8 +533,8 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                                 fontWeight: FontWeight.w600,
                                 color: _showArchived
                                     ? Theme.of(context)
-                                        .colorScheme
-                                        .onSurfaceVariant
+                                          .colorScheme
+                                          .onSurfaceVariant
                                     : null,
                               ),
                             ),
@@ -589,8 +612,10 @@ Future<void> showAccountEditor(
   final openingCtrl = TextEditingController(
     text: existing == null
         ? '0'
-        : fromMinor(existing.currency, existing.openingBalanceMinor)
-            .toStringAsFixed(currencyDecimals[existing.currency] ?? 2),
+        : fromMinor(
+            existing.currency,
+            existing.openingBalanceMinor,
+          ).toStringAsFixed(currencyDecimals[existing.currency] ?? 2),
   );
   var currency = existing?.currency ?? 'CNY';
   var type = existing?.type ?? 'cash';
@@ -634,8 +659,8 @@ Future<void> showAccountEditor(
                         Text(
                           '点按选择图标',
                           style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                                color: Theme.of(ctx).colorScheme.primary,
-                              ),
+                            color: Theme.of(ctx).colorScheme.primary,
+                          ),
                         ),
                       ],
                     ),
@@ -649,12 +674,15 @@ Future<void> showAccountEditor(
                     ),
                     onChanged: (_) => setLocal(() {}),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: CentliSpacing.section),
                   DropdownButtonFormField<String>(
                     initialValue: currency,
                     items: [
                       for (final c in supportedCurrencies)
-                        DropdownMenuItem(value: c, child: Text(currencyLabel(c))),
+                        DropdownMenuItem(
+                          value: c,
+                          child: Text(currencyLabel(c)),
+                        ),
                     ],
                     onChanged: existing == null
                         ? (v) {
@@ -667,14 +695,13 @@ Future<void> showAccountEditor(
                       helperText: '已有账户币种不建议修改',
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: CentliSpacing.section),
                   DropdownButtonFormField<String>(
                     initialValue: type,
                     items: const [
                       DropdownMenuItem(value: 'cash', child: Text('现金')),
                       DropdownMenuItem(value: 'bank', child: Text('银行')),
-                      DropdownMenuItem(
-                          value: 'ewallet', child: Text('电子钱包')),
+                      DropdownMenuItem(value: 'ewallet', child: Text('电子钱包')),
                       DropdownMenuItem(value: 'other', child: Text('其他')),
                     ],
                     onChanged: (v) {
@@ -685,11 +712,12 @@ Future<void> showAccountEditor(
                       border: OutlineInputBorder(),
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: CentliSpacing.section),
                   TextField(
                     controller: openingCtrl,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
                     decoration: InputDecoration(
                       labelText: '期初余额',
                       border: const OutlineInputBorder(),
@@ -730,9 +758,8 @@ Future<void> showAccountEditor(
 
   if (name.isEmpty) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请输入账户名称')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('请输入账户名称')));
     }
     return;
   }

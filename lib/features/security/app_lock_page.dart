@@ -75,7 +75,7 @@ class _AppLockPageState extends ConsumerState<AppLockPage> {
       if (locked != null) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Try again in ${locked.inSeconds + 1}s')),
+            SnackBar(content: Text('请 ${locked.inSeconds + 1} 秒后再试')),
           );
         }
         return;

@@ -5,6 +5,7 @@ import '../../core/widgets/centli_icon.dart';
 import '../../core/widgets/icon_picker_sheet.dart';
 import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
+import '../../app/theme.dart';
 
 final _categoriesProvider =
     StreamProvider.family<List<Category>, (String, String)>((ref, key) {
@@ -172,34 +173,14 @@ class _CategoryKindList extends ConsumerWidget {
             .toList();
 
         if (roots.isEmpty && orphans.isEmpty) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    showArchived
-                        ? Icons.inventory_2_outlined
-                        : Icons.category_outlined,
-                    size: 56,
-                    color: Theme.of(context).colorScheme.outline,
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    showArchived ? '暂无已归档分类' : '暂无分类',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    showArchived ? '归档的分类会出现在这里' : '点右下角 + 添加',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                  ),
-                ],
-              ),
-            ),
+          return CentliEmptyState(
+            icon: showArchived
+                ? Icons.inventory_2_outlined
+                : Icons.category_outlined,
+            title: showArchived ? '暂无已归档分类' : '暂无分类',
+            message: showArchived
+                ? '归档的分类会出现在这里，可随时恢复使用。'
+                : '点右下角 + 添加支出/收入分类；可建父子层级并拖拽排序。',
           );
         }
 
@@ -216,7 +197,12 @@ class _CategoryKindList extends ConsumerWidget {
           persistOrder(next);
         }
 
-        const listPadding = EdgeInsets.fromLTRB(16, 12, 16, 88);
+        const listPadding = EdgeInsets.fromLTRB(
+          CentliSpacing.pageH,
+          CentliSpacing.section,
+          CentliSpacing.pageH,
+          88,
+        );
 
         Widget rootTile(Category root, int index, {required bool reorderable}) {
           return _CategoryTreeNode(
@@ -274,7 +260,7 @@ class _CategoryKindList extends ConsumerWidget {
                   ),
                 ),
                 for (final child in orphans)
-                  Card(
+                  CentliSoftCard(
                     margin: const EdgeInsets.only(bottom: 8),
                     child: ListTile(
                       leading: CentliIconChip(name: child.name, kind: child.kind, iconKey: child.icon, size: 40),
@@ -339,7 +325,7 @@ class _CategoryKindList extends ConsumerWidget {
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 88),
                 children: [
                   for (final child in orphans)
-                    Card(
+                    CentliSoftCard(
                       margin: const EdgeInsets.only(bottom: 8),
                       child: ListTile(
                         leading: CentliIconChip(name: child.name, kind: child.kind, iconKey: child.icon, size: 40),
@@ -541,7 +527,7 @@ class _CategoryTreeNode extends StatelessWidget {
       );
     }
 
-    return Card(
+    return CentliSoftCard(
       margin: const EdgeInsets.only(bottom: 8),
       clipBehavior: Clip.antiAlias,
       child: Theme(

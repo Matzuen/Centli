@@ -8,6 +8,7 @@ import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
 import '../../platform/home_widget/centli_home_widget_sync.dart';
 import '../../platform/notifications/notification_listener_stub.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 class MePage extends ConsumerWidget {
   const MePage({super.key});
@@ -25,18 +26,17 @@ class MePage extends ConsumerWidget {
         child: SafeArea(
           bottom: false,
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
+            padding: CentliSpacing.pagePaddingNav,
             children: [
               Text(
                 '设置',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
+                style: Theme.of(context).textTheme.headlineSmall
+                    ?.copyWith(fontWeight: FontWeight.w800),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: CentliSpacing.section),
               CentliSoftCard(
                 onTap: () => context.push('/me/ledgers'),
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+                padding: const EdgeInsets.all(CentliSpacing.cardPad),
                 child: Row(
                   children: [
                     Container(
@@ -84,7 +84,7 @@ class MePage extends ConsumerWidget {
                   ],
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: CentliSpacing.section),
               CentliSoftCard(
                 child: Column(
                   children: [
@@ -128,7 +128,7 @@ class MePage extends ConsumerWidget {
                   ],
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: CentliSpacing.section),
               CentliSoftCard(
                 child: Column(
                   children: [
@@ -203,7 +203,7 @@ class MePage extends ConsumerWidget {
                   ],
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: CentliSpacing.section),
               CentliSoftCard(
                 child: Column(
                   children: [
@@ -241,17 +241,29 @@ class MePage extends ConsumerWidget {
                   ],
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: CentliSpacing.section),
               CentliSoftCard(
                 child: Column(
                   children: [
-                    _tile(
-                      context,
-                      icon: Icons.info_outline,
-                      title: '关于 Centli',
-                      subtitle: '厘记 · 版本 1.0.1+2\n隐私政策 · 开源许可',
-                      threeLine: true,
-                      onTap: () => context.push('/me/about'),
+                    FutureBuilder<String>(
+                      future: PackageInfo.fromPlatform().then((info) {
+                        final name = info.version.trim();
+                        final build = info.buildNumber.trim();
+                        if (name.isEmpty) return '1.1.0+3';
+                        if (build.isEmpty) return name;
+                        return '$name+$build';
+                      }).catchError((_) => '1.1.0+3'),
+                      builder: (context, snap) {
+                        final v = snap.data ?? '…';
+                        return _tile(
+                          context,
+                          icon: Icons.info_outline,
+                          title: '关于 Centli',
+                          subtitle: '厘记 · 版本 $v\n隐私政策 · 开源许可',
+                          threeLine: true,
+                          onTap: () => context.push('/me/about'),
+                        );
+                      },
                     ),
                     const Divider(height: 1),
                     _tile(
@@ -318,8 +330,7 @@ Future<void> _pickTheme(BuildContext context, WidgetRef ref) async {
         children: [
           ListTile(
             title: const Text('跟随系统'),
-            trailing:
-                cur == ThemeMode.system ? const Icon(Icons.check) : null,
+            trailing: cur == ThemeMode.system ? const Icon(Icons.check) : null,
             onTap: () => Navigator.pop(ctx, ThemeMode.system),
           ),
           ListTile(
@@ -374,7 +385,7 @@ Future<void> showLedgerEditor(
                       border: OutlineInputBorder(),
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: CentliSpacing.section),
                   DropdownButtonFormField<String>(
                     initialValue: base,
                     items: [
@@ -421,16 +432,13 @@ Future<void> showLedgerEditor(
   nameCtrl.dispose();
   if (name.isEmpty) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请输入账本名称')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('请输入账本名称')));
     }
     return;
   }
 
-  await ref.read(databaseProvider).updateLedger(
-        id: ledger.id,
-        name: name,
-        baseCurrency: base,
-      );
+  await ref
+      .read(databaseProvider)
+      .updateLedger(id: ledger.id, name: name, baseCurrency: base);
 }

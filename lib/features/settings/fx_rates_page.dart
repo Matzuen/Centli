@@ -6,6 +6,7 @@ import '../../core/utils/fx.dart';
 import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
 import '../../data/fx/fx_remote_service.dart';
+import '../../app/theme.dart';
 
 final _fxRatesProvider = StreamProvider<List<FxRate>>((ref) {
   return ref.watch(databaseProvider).watchFxRates();
@@ -118,7 +119,7 @@ class _FxRatesPageState extends ConsumerState<FxRatesPage> {
     final base = ledger?.baseCurrency ?? 'CNY';
     final autoAsync = ref.watch(_fxAutoEnabledProvider);
 
-    return Scaffold(
+    return CentliGradientScaffold(
       appBar: AppBar(
         title: const Text('汇率'),
         actions: [
@@ -147,7 +148,7 @@ class _FxRatesPageState extends ConsumerState<FxRatesPage> {
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+        padding: CentliSpacing.pagePadding,
         children: [
           Text(
             '用于首页/统计/资产净额折算为本位币（现为 $base）。'
@@ -184,7 +185,7 @@ class _FxRatesPageState extends ConsumerState<FxRatesPage> {
             error: (e, _) => Text('$e'),
             data: (rows) {
               if (rows.isEmpty) {
-                return Card(
+                return CentliSoftCard(
                   child: Padding(
                     padding: const EdgeInsets.all(24),
                     child: Column(
@@ -205,8 +206,7 @@ class _FxRatesPageState extends ConsumerState<FxRatesPage> {
                   ),
                 );
               }
-              return Card(
-                clipBehavior: Clip.antiAlias,
+              return CentliSoftCard(
                 child: Column(
                   children: [
                     for (var i = 0; i < rows.length; i++) ...[
@@ -220,6 +220,7 @@ class _FxRatesPageState extends ConsumerState<FxRatesPage> {
                           '${rows[i].source == null || rows[i].source!.isEmpty ? '' : ' · ${rows[i].source}'}',
                         ),
                         trailing: IconButton(
+                          tooltip: '删除汇率',
                           icon: const Icon(Icons.delete_outline),
                           onPressed: () async {
                             await ref.read(databaseProvider).deleteFxRate(

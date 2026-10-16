@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../data/db/database_provider.dart';
 import '../../platform/notifications/notification_listener_stub.dart';
+import '../../app/theme.dart';
 
 /// Shown after (or while) returning from system notification-listener settings.
 /// Wireframe §9: 权限说明页 — 系统设置返回后说明 [P1].
@@ -150,7 +151,7 @@ class _PermissionExplainPageState extends ConsumerState<PermissionExplainPage>
                       ),
                 ),
                 const SizedBox(height: 24),
-                Card(
+                CentliSoftCard(
                   child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(
@@ -172,7 +173,7 @@ class _PermissionExplainPageState extends ConsumerState<PermissionExplainPage>
                 ),
                 if (_awaitingReturn) ...[
                   const SizedBox(height: 16),
-                  Card(
+                  CentliSoftCard(
                     color: scheme.secondaryContainer,
                     child: ListTile(
                       leading: Icon(

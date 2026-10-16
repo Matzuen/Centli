@@ -174,15 +174,15 @@ await db.transaction(() async {
 
 ```json
 {
-  "version": 1,
-  "updated_at": "2026-10-13",
+  "version": 4,
+  "updated_at": "2026-10-16",
   "templates": [
     {
       "id": "alipay_pay_success_zh",
       "packages": ["com.eg.android.AlipayGphone"],
       "defaultCurrency": "CNY",
       "titleRegex": null,
-      "mustContainRegex": "支付成功|付款成功",
+      "mustContainRegex": "支付成功|付款成功|交易成功|交易提醒|交易通知",
       "excludeTextRegex": "验证码|登录|收款到账提醒",
       "amountRegex": "(?:¥|￥)\\s*([0-9]+(?:,[0-9]{3})*(?:\\.[0-9]{1,2})?)",
       "merchantRegex": "(?:给|向|付款给)\\s*(.+?)(?:\\s|$)",
@@ -203,6 +203,13 @@ await db.transaction(() async {
   ]
 }
 ```
+
+
+### 支付宝通知标题说明（v4）
+
+真机上支付宝支付后的系统通知标题常见为 **交易提醒** / **交易通知**（不一定带「支付成功」字样）。
+官方模板 `mustContainRegex` 已包含：`支付成功|付款成功|交易成功|交易提醒|交易通知`。
+仍排除：验证码、登录、收款到账提醒、服务通知、余额宝收益等非支出记账噪声。
 
 ### 字段说明
 

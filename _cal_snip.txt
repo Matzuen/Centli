@@ -1,0 +1,47 @@
+final monthStart = DateTime(
+      range.startLocal.year,
+      range.startLocal.month,
+      1,
+    );
+    final daysInMonth = DateTime(monthStart.year, monthStart.month + 1, 0).day;
+    final firstWeekday = monthStart.weekday % 7; // Sun=0
+    final income = {
+      for (final e
+          in incomeSeries.valueOrNull ??
+              const <({DateTime dayLocal, int totalMinor})>[])
+        e.dayLocal.day: e.totalMinor,
+    };
+    final expense = {
+      for (final e
+          in expenseSeries.valueOrNull ??
+              const <({DateTime dayLocal, int totalMinor})>[])
+        e.dayLocal.day: e.totalMinor,
+    };
+    final today = DateTime.now();
+    final labels = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+
+    return CentliSoftCard(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              IconButton(
+                tooltip: '上一月',
+                onPressed: () => onMonthChanged(range.prev()),
+                icon: const Icon(Icons.chevron_left),
+              ),
+              Expanded(
+                child: Text(
+                  '${monthStart.year}年${monthStart.month}月',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w700),
+                ),
+              ),
+              IconButton(
+                tooltip: '下一月',
+                onPressed: range.isLatest
+                    ? null
+                    : () => onMonthChanged(range.next()),
+             

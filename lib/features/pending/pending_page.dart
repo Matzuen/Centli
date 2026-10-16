@@ -12,6 +12,7 @@ import '../../platform/notifications/notification_parse.dart';
 import '../../platform/notifications/notification_listener_stub.dart';
 import '../../platform/notifications/noti_template_store.dart';
 import '../../platform/pending/pending_capture_intake.dart';
+import '../../app/theme.dart';
 
 final _pendingFilterProvider = StateProvider<String>((ref) => 'pending');
 
@@ -57,7 +58,6 @@ class _PendingPageBodyState extends ConsumerState<PendingPage> {
   Widget build(BuildContext context) {
     final ledgerAsync = ref.watch(currentLedgerProvider);
     final filter = ref.watch(_pendingFilterProvider);
-    final scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(
@@ -69,13 +69,13 @@ class _PendingPageBodyState extends ConsumerState<PendingPage> {
               icon: const Icon(Icons.playlist_remove_outlined),
               onPressed: () => _ignoreAll(context),
             ),
-                    if (filter == 'ignored')
+          if (filter == 'ignored')
             IconButton(
               tooltip: '清空已忽略',
               icon: const Icon(Icons.delete_sweep_outlined),
               onPressed: () => _clearIgnored(context),
             ),
-                    IconButton(
+          IconButton(
             tooltip: '从截图识别',
             icon: const Icon(Icons.document_scanner_outlined),
             onPressed: () => _fromScreenshot(context),
@@ -130,7 +130,7 @@ class _PendingPageBodyState extends ConsumerState<PendingPage> {
           return Column(
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                padding: const EdgeInsets.fromLTRB(CentliSpacing.pageH, CentliSpacing.item, CentliSpacing.pageH, 0),
                 child: SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: SegmentedButton<String>(
@@ -157,39 +157,58 @@ class _PendingPageBodyState extends ConsumerState<PendingPage> {
                   error: (e, _) => Center(child: Text('$e')),
                   data: (items) {
                     if (items.isEmpty) {
-                      return Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.pending_actions_outlined,
-                                  size: 56, color: scheme.outline),
-                              const SizedBox(height: 12),
-                              Text(
-                                filter == 'pending'
-                                    ? '暂无待确认账单'
-                                    : filter == 'parse_failed'
-                                        ? '暂无解析失败项'
-                                        : '暂无记录',
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                '开启通知捕获后，支付通知会集中在这里。\n发出去的红包/转账没通知时：可分享账单、从截图识别或从剪贴板导入。',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodyMedium
-                                    ?.copyWith(color: scheme.onSurfaceVariant),
-                                textAlign: TextAlign.center,
-                              ),
-                            ],
-                          ),
-                        ),
+                      final title = filter == 'pending'
+                          ? '暂无待确认账单'
+                          : filter == 'parse_failed'
+                              ? '暂无解析失败项'
+                              : filter == 'ignored'
+                                  ? '暂无已忽略记录'
+                                  : '暂无记录';
+                      final msg = filter == 'pending'
+                          ? '开启自动记账后，支付成功通知会集中在此确认入账。'
+                              '发出去的红包/转账往往没有通知，可用截图识别或剪贴板导入。'
+                          : filter == 'parse_failed'
+                              ? '解析失败的通知会出现在这里，可对照「识别规则 · 试一试」调整模板。'
+                              : filter == 'ignored'
+                                  ? '忽略的待确认会出现在这里；可清空以释放空间。'
+                                  : '切换上方筛选查看不同状态的捕获记录。';
+                      return CentliEmptyState(
+                        icon: Icons.pending_actions_outlined,
+                        title: title,
+                        message: msg,
+                        action: filter == 'pending' || filter == 'parse_failed'
+                            ? Wrap(
+                                alignment: WrapAlignment.center,
+                                spacing: CentliSpacing.item,
+                                runSpacing: CentliSpacing.item,
+                                children: [
+                                  FilledButton.tonalIcon(
+                                    onPressed: () =>
+                                        context.push('/me/auto'),
+                                    icon: const Icon(Icons.auto_awesome_outlined),
+                                    label: const Text('自动记账'),
+                                  ),
+                                  OutlinedButton.icon(
+                                    onPressed: () => _fromScreenshot(context),
+                                    icon: const Icon(
+                                      Icons.document_scanner_outlined,
+                                    ),
+                                    label: const Text('截图识别'),
+                                  ),
+                                  OutlinedButton.icon(
+                                    onPressed: () => _fromClipboard(context),
+                                    icon: const Icon(
+                                      Icons.content_paste_go_outlined,
+                                    ),
+                                    label: const Text('剪贴板'),
+                                  ),
+                                ],
+                              )
+                            : null,
                       );
                     }
                     return ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                      padding: const EdgeInsets.fromLTRB(CentliSpacing.pageH, CentliSpacing.section, CentliSpacing.pageH, CentliSpacing.pageBottom),
                       itemCount: items.length,
                       separatorBuilder: (context, index) =>
                           const SizedBox(height: 8),
@@ -400,9 +419,9 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
           );
     final isPending = c.status == 'pending';
 
-    return Card(
+    return CentliSoftCard(
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(CentliSpacing.cardPad - 4),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

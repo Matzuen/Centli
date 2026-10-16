@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../data/db/database_provider.dart';
 import '../../platform/notifications/notification_listener_stub.dart';
+import '../../app/theme.dart';
 
 /// First-launch guide (skippable). Writes `onboarding_done=true` on finish.
 class OnboardingPage extends ConsumerStatefulWidget {
@@ -199,7 +200,7 @@ class _CalcSketch extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Card(
+    return CentliSoftCard(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -347,7 +348,7 @@ class _PendingSketch extends StatelessWidget {
     bool highlight = false,
   }) {
     final scheme = Theme.of(context).colorScheme;
-    return Card(
+    return CentliSoftCard(
       color: highlight ? scheme.primaryContainer : null,
       child: ListTile(
         leading: Icon(
@@ -381,7 +382,7 @@ class _PermissionSketch extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final granted = NotificationCaptureStub.supported;
-    return Card(
+    return CentliSoftCard(
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(

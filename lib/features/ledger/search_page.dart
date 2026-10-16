@@ -8,6 +8,7 @@ import '../../core/widgets/date_range_control.dart';
 import '../../core/widgets/txn_grouped_list.dart';
 import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
+import '../../app/theme.dart';
 
 /// Bill search: keyword + filters (type / category / account / date range).
 class SearchPage extends ConsumerStatefulWidget {
@@ -348,36 +349,14 @@ class _SearchPageState extends ConsumerState<SearchPage> {
       return Center(child: Text('\u641c\u7d22\u5931\u8d25: $_error'));
     }
     if (_query.isEmpty && !_hasFilters) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.search, size: 48, color: scheme.outline),
-              const SizedBox(height: 12),
-              Text(
-                '\u641c\u7d22\u8d26\u5355',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '\u6309\u5907\u6ce8\u3001\u5546\u6237\u6216\u91d1\u989d\u5173\u952e\u8bcd\u67e5\u8be2\uff1b'
-                '\u4e5f\u53ef\u7528\u7c7b\u578b / \u5206\u7c7b / \u8d26\u6237 / \u65e5\u671f\u7b5b\u9009',
-                textAlign: TextAlign.center,
-                style: Theme.of(context)
-                    .textTheme
-                    .bodyMedium
-                    ?.copyWith(color: scheme.onSurfaceVariant),
-              ),
-              const SizedBox(height: 16),
-              OutlinedButton.icon(
-                onPressed: _openFilterSheet,
-                icon: const Icon(Icons.tune),
-                label: const Text('\u6253\u5f00\u7b5b\u9009'),
-              ),
-            ],
-          ),
+      return CentliEmptyState(
+        icon: Icons.search,
+        title: '搜索账单',
+        message: '按备注、商户或金额关键词查询；也可用类型 / 分类 / 账户 / 日期筛选。',
+        action: OutlinedButton.icon(
+          onPressed: _openFilterSheet,
+          icon: const Icon(Icons.tune),
+          label: const Text('打开筛选'),
         ),
       );
     }
@@ -386,11 +365,16 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     }
     final rows = _results ?? const <Transaction>[];
     if (rows.isEmpty) {
-      return Center(
-        child: Text(
-          '\u65e0\u5339\u914d\u8d26\u5355',
-          style: TextStyle(color: scheme.onSurfaceVariant),
-        ),
+      return CentliEmptyState(
+        icon: Icons.search_off_outlined,
+        title: '无匹配账单',
+        message: '试试换个关键词，或放宽类型 / 分类 / 账户 / 日期筛选。',
+        action: _hasFilters
+            ? OutlinedButton(
+                onPressed: _clearFilters,
+                child: const Text('清除筛选'),
+              )
+            : null,
       );
     }
     return TxnGroupedList(

@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/db/database_provider.dart';
 import '../../data/export/import_service.dart';
+import '../../app/theme.dart';
 
 class ImportPage extends ConsumerStatefulWidget {
   const ImportPage({super.key});
@@ -143,125 +144,131 @@ class _ImportPageState extends ConsumerState<ImportPage> {
   @override
   Widget build(BuildContext context) {
     final preview = _preview;
-    return Scaffold(
+    final scheme = Theme.of(context).colorScheme;
+    return CentliGradientScaffold(
       appBar: AppBar(title: const Text('\u5bfc\u5165 / \u8fd8\u539f')),
       body: ListView(
+        padding: CentliSpacing.pagePadding,
         children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Text(
-              '\u4ece\u672c\u673a\u9009\u62e9 Centli \u5bfc\u51fa\u6587\u4ef6\uff1aJSON\uff08\u5b8c\u6574\uff09\u6216 Excel .xlsx\uff08\u5c3d\u529b\u800c\u4e3a\uff09\u3002'
-              '\u9884\u89c8\u540e\u53ef\u4e00\u952e\u8fd8\u539f\u3002Excel \u4e0d\u542b\u6c47\u7387/\u8bbe\u7f6e\uff0c\u5efa\u8bae\u4f18\u5148\u4f7f\u7528 JSON\u3002',
-              style: TextStyle(height: 1.4),
+          Text(
+            '\u4ece\u672c\u673a\u9009\u62e9 Centli \u5bfc\u51fa\u6587\u4ef6\uff1aJSON\uff08\u5b8c\u6574\uff09\u6216 Excel .xlsx\uff08\u5c3d\u529b\u800c\u4e3a\uff09\u3002'
+            '\u9884\u89c8\u540e\u53ef\u4e00\u952e\u8fd8\u539f\u3002Excel \u4e0d\u542b\u6c47\u7387/\u8bbe\u7f6e\uff0c\u5efa\u8bae\u4f18\u5148\u4f7f\u7528 JSON\u3002',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                  height: 1.4,
+                ),
+          ),
+          const SizedBox(height: CentliSpacing.section),
+          FilledButton.tonalIcon(
+            onPressed: _busy ? null : _pick,
+            icon: _busy && preview == null
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.folder_open),
+            label: Text(
+              _busy && preview == null
+                  ? '\u8bfb\u53d6\u4e2d\u2026'
+                  : '\u9009\u62e9 JSON / Excel \u6587\u4ef6',
             ),
           ),
-          const Divider(),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: FilledButton.tonalIcon(
-              onPressed: _busy ? null : _pick,
-              icon: _busy && preview == null
+          if (_error != null) ...[
+            const SizedBox(height: CentliSpacing.item),
+            Text(
+              _error!,
+              style: TextStyle(color: scheme.error),
+            ),
+          ],
+          if (preview != null) ...[
+            const SizedBox(height: CentliSpacing.section),
+            CentliSoftCard(
+              child: Column(
+                children: [
+                  ListTile(
+                    title: const Text('\u6587\u4ef6'),
+                    subtitle: Text(
+                      '${preview.sourceLabel}\n'
+                      '\u6765\u6e90: ${preview.sourceKind == 'excel' ? 'Excel (\u5c3d\u529b\u800c\u4e3a)' : 'JSON'}',
+                    ),
+                    isThreeLine: true,
+                  ),
+                  if (preview.warnings.isNotEmpty) ...[
+                    const Divider(height: 1, indent: 16),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                      child: Text(
+                        preview.warnings.map((w) => '\u2022 $w').join('\n'),
+                        style: TextStyle(
+                          height: 1.4,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ],
+                  const Divider(height: 1, indent: 16),
+                  ListTile(
+                    title: const Text('\u8d26\u672c'),
+                    subtitle: Text(
+                      '${preview.bundle.ledgerName} \u00b7 ${preview.bundle.baseCurrency}\n'
+                      '\u8d26\u672c ID\uff1a${preview.bundle.ledgerId}',
+                    ),
+                    isThreeLine: true,
+                  ),
+                  const Divider(height: 1, indent: 16),
+                  ListTile(
+                    title: const Text('\u5907\u4efd\u4fe1\u606f'),
+                    subtitle: Text(
+                      '\u5bfc\u51fa\u683c\u5f0f v${preview.bundle.exportVersion} \u00b7 '
+                      '\u5e93\u7248\u672c ${preview.bundle.schemaVersion}\n'
+                      '\u5bfc\u51fa\u65f6\u95f4\uff1a${preview.bundle.exportedAt ?? '\u2014'}\n'
+                      '\u6765\u6e90\u5e94\u7528\uff1a${preview.bundle.appVersion ?? '\u2014'}',
+                    ),
+                    isThreeLine: true,
+                  ),
+                  const Divider(height: 1, indent: 16),
+                  ListTile(
+                    title: const Text('\u5185\u5bb9\u7edf\u8ba1'),
+                    subtitle: Text(
+                      '\u8d26\u6237 ${preview.bundle.accounts.length} \u00b7 '
+                      '\u5206\u7c7b ${preview.bundle.categories.length} \u00b7 '
+                      '\u6d41\u6c34 ${preview.bundle.transactions.length}\n'
+                      '\u5f85\u786e\u8ba4 ${preview.bundle.pendingCaptures.length} \u00b7 '
+                      '\u89c4\u5219 ${preview.bundle.merchantRules.length} \u00b7 '
+                      '\u6c47\u7387 ${preview.bundle.fxRates.length} \u00b7 '
+                      '\u9884\u7b97 ${preview.bundle.budgets.length} \u00b7 '
+                      '\u8bbe\u7f6e\u952e ${preview.bundle.settings.length}',
+                    ),
+                    isThreeLine: true,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: CentliSpacing.section),
+            Text(
+              '\u8fd8\u539f\u4f1a\u5220\u9664\u672c\u673a\u73b0\u6709\u8d26\u672c\u6570\u636e\u540e\u5199\u5165\u5907\u4efd\u3002\u5e94\u7528\u9501 PIN \u4fdd\u7559\u5728\u672c\u673a\u5b89\u5168\u5b58\u50a8\u4e2d\u3002',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.4),
+            ),
+            const SizedBox(height: CentliSpacing.section),
+            FilledButton.icon(
+              onPressed: _busy ? null : _restore,
+              icon: _busy
                   ? const SizedBox(
                       width: 18,
                       height: 18,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Icon(Icons.folder_open),
+                  : const Icon(Icons.restore),
               label: Text(
-                _busy && preview == null
-                    ? '\u8bfb\u53d6\u4e2d\u2026'
-                    : '\u9009\u62e9 JSON / Excel \u6587\u4ef6',
-              ),
-            ),
-          ),
-          if (_error != null)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-              child: Text(
-                _error!,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-            ),
-          if (preview != null) ...[
-            const Divider(),
-            ListTile(
-              title: const Text('\u6587\u4ef6'),
-              subtitle: Text(
-                '${preview.sourceLabel}\n'
-                '\u6765\u6e90: ${preview.sourceKind == 'excel' ? 'Excel (\u5c3d\u529b\u800c\u4e3a)' : 'JSON'}',
-              ),
-              isThreeLine: true,
-            ),
-            if (preview.warnings.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                child: Text(
-                  preview.warnings.map((w) => '\u2022 $w').join('\n'),
-                  style: TextStyle(
-                    height: 1.4,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-            ListTile(
-              title: const Text('\u8d26\u672c'),
-              subtitle: Text(
-                '${preview.bundle.ledgerName} \u00b7 ${preview.bundle.baseCurrency}\n'
-                'id: ${preview.bundle.ledgerId}',
-              ),
-              isThreeLine: true,
-            ),
-            ListTile(
-              title: const Text('\u5143\u6570\u636e'),
-              subtitle: Text(
-                'export_version ${preview.bundle.exportVersion} \u00b7 '
-                'schema ${preview.bundle.schemaVersion}\n'
-                'exported_at: ${preview.bundle.exportedAt ?? '\u2014'}\n'
-                'app: ${preview.bundle.appVersion ?? '\u2014'}',
-              ),
-              isThreeLine: true,
-            ),
-            ListTile(
-              title: const Text('\u5185\u5bb9\u7edf\u8ba1'),
-              subtitle: Text(
-                '\u8d26\u6237 ${preview.bundle.accounts.length} \u00b7 '
-                '\u5206\u7c7b ${preview.bundle.categories.length} \u00b7 '
-                '\u6d41\u6c34 ${preview.bundle.transactions.length}\n'
-                '\u5f85\u786e\u8ba4 ${preview.bundle.pendingCaptures.length} \u00b7 '
-                '\u89c4\u5219 ${preview.bundle.merchantRules.length} \u00b7 '
-                '\u6c47\u7387 ${preview.bundle.fxRates.length} \u00b7 '
-                '\u9884\u7b97 ${preview.bundle.budgets.length} \u00b7 '
-                '\u8bbe\u7f6e\u952e ${preview.bundle.settings.length}',
-              ),
-              isThreeLine: true,
-            ),
-            const Padding(
-              padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
-              child: Text(
-                '\u8fd8\u539f\u4f1a\u5220\u9664\u672c\u673a\u73b0\u6709\u8d26\u672c\u6570\u636e\u540e\u5199\u5165\u5907\u4efd\u3002\u5e94\u7528\u9501 PIN \u4fdd\u7559\u5728\u672c\u673a\u5b89\u5168\u5b58\u50a8\u4e2d\u3002',
-                style: TextStyle(height: 1.4),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: FilledButton.icon(
-                onPressed: _busy ? null : _restore,
-                icon: _busy
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.restore),
-                label: Text(
-                  _busy ? '\u8fd8\u539f\u4e2d\u2026' : '\u6e05\u7a7a\u5e76\u8fd8\u539f',
-                ),
+                _busy ? '\u8fd8\u539f\u4e2d\u2026' : '\u6e05\u7a7a\u5e76\u8fd8\u539f',
               ),
             ),
           ],
-          const SizedBox(height: 32),
+          const SizedBox(height: CentliSpacing.sectionLoose),
         ],
       ),
     );
   }
+
 }

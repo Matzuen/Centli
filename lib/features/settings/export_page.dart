@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/db/database_provider.dart';
 import '../../data/export/export_service.dart';
+import '../../app/theme.dart';
 
 class ExportPage extends ConsumerStatefulWidget {
   const ExportPage({super.key});
@@ -80,55 +81,67 @@ class _ExportPageState extends ConsumerState<ExportPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('\u5bfc\u51fa')),
+    return CentliGradientScaffold(
+      appBar: AppBar(title: const Text('导出')),
       body: ListView(
+        padding: CentliSpacing.pagePadding,
         children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Text(
-              '\u5bfc\u51fa\u5f53\u524d\u8d26\u672c\u6570\u636e\u4e3a\u6587\u4ef6\uff0c\u5e76\u6253\u5f00\u7cfb\u7edf\u5206\u4eab\u3002'
-              '\u8fd8\u539f\u8bf7\u5230\u300c\u6211\u7684 \u2192 \u5bfc\u5165\u300d\u3002\u672c\u9875\u4ec5\u5bfc\u51fa\u5e76\u5206\u4eab\u3002',
-              style: TextStyle(height: 1.4),
+          Text(
+            '导出当前账本为文件并打开系统分享。还原请到「我的 → 导入」。本页仅导出并分享，不会清空本机数据。',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  height: 1.4,
+                ),
+          ),
+          const SizedBox(height: CentliSpacing.section),
+          CentliSoftCard(
+            child: Column(
+              children: [
+                const ListTile(
+                  title: Text('格式'),
+                  subtitle: Text('JSON = 完整备份（可还原）；Excel = 表格查看'),
+                ),
+                SwitchListTile(
+                  title: const Text('JSON 备份'),
+                  subtitle: const Text('完整数据包（centli-export 格式）'),
+                  value: _wantJson,
+                  onChanged: _busy ? null : (v) => setState(() => _wantJson = v),
+                ),
+                SwitchListTile(
+                  title: const Text('Excel 表格（.xlsx）'),
+                  subtitle: const Text(
+                    '含摘要、账户、分类、流水、待确认、商户规则、预算等工作表',
+                  ),
+                  value: _wantExcel,
+                  onChanged: _busy ? null : (v) => setState(() => _wantExcel = v),
+                ),
+              ],
             ),
           ),
-          const Divider(),
-          const ListTile(
-            title: Text('\u683c\u5f0f'),
-            subtitle: Text('JSON = \u5907\u4efd/\u53ef\u8bfb\u53d6\uff1bExcel = \u8868\u683c\u67e5\u770b'),
-          ),
-          SwitchListTile(
-            title: const Text('JSON 备份'),
-            subtitle: const Text('\u5b8c\u6574\u6570\u636e\u5305\uff08centli-export \u683c\u5f0f\uff09'),
-            value: _wantJson,
-            onChanged: _busy ? null : (v) => setState(() => _wantJson = v),
-          ),
-          SwitchListTile(
-            title: const Text('Excel 表格（.xlsx）'),
-            subtitle: const Text(
-              '\u542b\u6458\u8981\u3001\u8d26\u6237\u3001\u5206\u7c7b\u3001\u6d41\u6c34\u3001\u5f85\u786e\u8ba4\u3001\u5546\u6237\u89c4\u5219\u3001\u9884\u7b97\u7b49\u5de5\u4f5c\u8868',
+          const SizedBox(height: CentliSpacing.section),
+          CentliSoftCard(
+            child: Column(
+              children: [
+                const ListTile(title: Text('选项')),
+                SwitchListTile(
+                  title: const Text('包含待确认/忽略通知'),
+                  value: _includePending,
+                  onChanged:
+                      _busy ? null : (v) => setState(() => _includePending = v),
+                ),
+                SwitchListTile(
+                  title: const Text('包含已删除流水'),
+                  subtitle: const Text('默认不导出软删除记录'),
+                  value: _includeDeleted,
+                  onChanged:
+                      _busy ? null : (v) => setState(() => _includeDeleted = v),
+                ),
+              ],
             ),
-            value: _wantExcel,
-            onChanged: _busy ? null : (v) => setState(() => _wantExcel = v),
           ),
-          const Divider(),
-          const ListTile(title: Text('\u9009\u9879')),
-          SwitchListTile(
-            title: const Text('\u5305\u542b\u5f85\u786e\u8ba4/\u5ffd\u7565\u901a\u77e5'),
-            value: _includePending,
-            onChanged:
-                _busy ? null : (v) => setState(() => _includePending = v),
-          ),
-          SwitchListTile(
-            title: const Text('\u5305\u542b\u5df2\u5220\u9664\u6d41\u6c34'),
-            subtitle: const Text('\u9ed8\u8ba4\u4e0d\u5bfc\u51fa\u8f6f\u5220\u9664\u8bb0\u5f55'),
-            value: _includeDeleted,
-            onChanged:
-                _busy ? null : (v) => setState(() => _includeDeleted = v),
-          ),
-          const SizedBox(height: 24),
+          const SizedBox(height: CentliSpacing.sectionLoose),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            padding: EdgeInsets.zero,
             child: FilledButton.icon(
               onPressed: _busy ? null : _run,
               icon: _busy
@@ -141,7 +154,7 @@ class _ExportPageState extends ConsumerState<ExportPage> {
               label: Text(_busy ? '\u5bfc\u51fa\u4e2d\u2026' : '\u5bfc\u51fa\u5e76\u5206\u4eab'),
             ),
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: CentliSpacing.section),
         ],
       ),
     );

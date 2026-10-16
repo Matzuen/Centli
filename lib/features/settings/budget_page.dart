@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/utils/money.dart';
 import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
+import '../../app/theme.dart';
 
 final budgetMonthProvider = StateProvider<String>((ref) {
   return budgetYearMonth();
@@ -45,7 +46,7 @@ class BudgetPage extends ConsumerWidget {
     final hide = ref.watch(hideAmountProvider).valueOrNull ?? false;
     final scheme = Theme.of(context).colorScheme;
 
-    return Scaffold(
+    return CentliGradientScaffold(
       appBar: AppBar(
         title: const Text('\u9884\u7b97'),
         actions: [
@@ -81,7 +82,7 @@ class BudgetPage extends ConsumerWidget {
           );
 
           return ListView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+            padding: CentliSpacing.pagePadding,
             children: [
               _MonthSwitcher(
                 yearMonth: ym,
@@ -141,7 +142,7 @@ class BudgetPage extends ConsumerWidget {
                       ),
                       const SizedBox(height: 8),
                       if (p.categories.isEmpty)
-                        Card(
+                        CentliSoftCard(
                           child: Padding(
                             padding: const EdgeInsets.all(24),
                             child: Column(
@@ -221,7 +222,7 @@ class _MonthSwitcher extends StatelessWidget {
     final label = '${parts[0]}\u5e74${int.parse(parts[1])}\u6708';
     return Row(
       children: [
-        IconButton(onPressed: onPrev, icon: const Icon(Icons.chevron_left)),
+        IconButton(tooltip: '上一月', onPressed: onPrev, icon: const Icon(Icons.chevron_left)),
         Expanded(
           child: Text(
             label,
@@ -231,7 +232,7 @@ class _MonthSwitcher extends StatelessWidget {
                 ),
           ),
         ),
-        IconButton(onPressed: onNext, icon: const Icon(Icons.chevron_right)),
+        IconButton(tooltip: '下一月', onPressed: onNext, icon: const Icon(Icons.chevron_right)),
       ],
     );
   }
@@ -277,7 +278,7 @@ class _BudgetProgressCard extends StatelessWidget {
                 : scheme.primary;
     final remain = hasLimit ? limit - spentMinor : null;
 
-    return Card(
+    return CentliSoftCard(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,

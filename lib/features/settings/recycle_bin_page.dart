@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../core/utils/money.dart';
 import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
+import '../../app/theme.dart';
 
 final _deletedTxProvider =
     StreamProvider.family<List<Transaction>, String>((ref, ledgerId) {
@@ -18,8 +19,6 @@ class RecycleBinPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final ledgerAsync = ref.watch(currentLedgerProvider);
-    final scheme = Theme.of(context).colorScheme;
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('回收站'),
@@ -44,33 +43,14 @@ class RecycleBinPage extends ConsumerWidget {
             error: (e, _) => Center(child: Text('$e')),
             data: (items) {
               if (items.isEmpty) {
-                return Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.delete_outline, size: 56, color: scheme.outline),
-                        const SizedBox(height: 12),
-                        Text(
-                          '回收站为空',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          '删除流水后可在此恢复。永久清空不可撤销。',
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: scheme.onSurfaceVariant,
-                              ),
-                        ),
-                      ],
-                    ),
-                  ),
+                return CentliEmptyState(
+                  icon: Icons.delete_outline,
+                  title: '回收站为空',
+                  message: '删除流水后可在此恢复。永久清空不可撤销。',
                 );
               }
               return ListView.separated(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                padding: const EdgeInsets.fromLTRB(CentliSpacing.pageH, CentliSpacing.section, CentliSpacing.pageH, CentliSpacing.pageBottom),
                 itemCount: items.length,
                 separatorBuilder: (context, index) => const SizedBox(height: 8),
                 itemBuilder: (context, i) {
@@ -90,7 +70,7 @@ class RecycleBinPage extends ConsumerWidget {
                   final title = (t.merchant ?? '').isNotEmpty
                       ? t.merchant!
                       : (t.note ?? t.type);
-                  return Card(
+                  return CentliSoftCard(
                     child: ListTile(
                       title: Text(title),
                       subtitle: Text(

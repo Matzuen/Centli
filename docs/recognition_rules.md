@@ -24,3 +24,10 @@
 ## 试一试
 
 页面内粘贴样例通知 → `explainNotificationParse` 显示金额/商户/忽略原因与步骤。
+
+## 支付宝（v4）
+
+- 包名：`com.eg.android.AlipayGphone`（原生 `WATCHED_PACKAGES` 与 `setWatchedPackages` 并集均含此包）。
+- 匹配关键词：支付成功 / 付款成功 / **交易成功** / **交易提醒** / **交易通知**（标题或正文任一命中即可）。
+- Native 杀路径 `NativeCaptureIngest` 的 `MUST_ALIPAY` 与 Dart 官方模板保持同步。
+- 微信规则未改，不影响微信监听。

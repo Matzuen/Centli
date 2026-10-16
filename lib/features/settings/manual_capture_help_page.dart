@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../app/theme.dart';
 
 /// Help for the three manual pending-capture paths when send-out
 /// (red packet / transfer) has no system notification.
@@ -100,7 +101,7 @@ class ManualCaptureHelpPage extends StatelessWidget {
     required String title,
     required List<Widget> children,
   }) {
-    return Card(
+    return CentliSoftCard(
       margin: const EdgeInsets.only(bottom: 12),
       child: Padding(
         padding: const EdgeInsets.all(16),

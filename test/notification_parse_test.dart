@@ -112,6 +112,132 @@ group('payment filter drops chat / non-pay', () {
       expect(r.templateId, 'alipay_pay_success_zh');
       expect(r.ok, isFalse);
     });
+
+    test('alipay jiaoyi reminder with amount matches', () {
+      final raw = RawNotification(
+        pkg: 'com.eg.android.AlipayGphone',
+        title: '交易提醒',
+        text: '向 全家便利店 付款 ¥15.80',
+        whenMs: 1,
+      );
+      final r = parseNotification(raw);
+      expect(r.templateId, 'alipay_pay_success_zh');
+      expect(r.ok, isTrue);
+      expect(r.amountMinor, 1580);
+      expect(r.merchant, contains('全家'));
+    });
+
+    test('alipay jiaoyi notice with amount matches', () {
+      final raw = RawNotification(
+        pkg: 'com.eg.android.AlipayGphone',
+        title: '交易通知',
+        text: '交易成功，支出 ¥42.00',
+        whenMs: 1,
+      );
+      final r = parseNotification(raw);
+      expect(r.templateId, 'alipay_pay_success_zh');
+      expect(r.ok, isTrue);
+      expect(r.amountMinor, 4200);
+    });
+
+    test('alipay non-pay message without keywords is dropped', () {
+      final raw = RawNotification(
+        pkg: 'com.eg.android.AlipayGphone',
+        title: '支付宝',
+        text: '你有一条新的生活号消息',
+        whenMs: 1,
+      );
+      final r = parseNotification(raw);
+      expect(r.templateId, isNull);
+      expect(r.ok, isFalse);
+    });
+
+    test('alipay 扣款 wording matches', () {
+      final raw = RawNotification(
+        pkg: 'com.eg.android.AlipayGphone',
+        title: '扣款提醒',
+        text: '已扣款 ¥36.00，商户 美团外卖',
+        whenMs: 1,
+      );
+      final r = parseNotification(raw);
+      expect(r.templateId, 'alipay_pay_success_zh');
+      expect(r.ok, isTrue);
+      expect(r.amountMinor, 3600);
+    });
+
+    test('alipay 支出 yen matches', () {
+      final raw = RawNotification(
+        pkg: 'com.eg.android.AlipayGphone',
+        title: '支付宝',
+        text: '支出 ¥9.90',
+        whenMs: 1,
+      );
+      final r = parseNotification(raw);
+      expect(r.templateId, 'alipay_pay_success_zh');
+      expect(r.ok, isTrue);
+      expect(r.amountMinor, 990);
+    });
+
+    test('alipay bare 付款 with amount matches', () {
+      final raw = RawNotification(
+        pkg: 'com.eg.android.AlipayGphone',
+        title: '付款',
+        text: '向 瑞幸咖啡 付款 ¥18.00',
+        whenMs: 1,
+      );
+      final r = parseNotification(raw);
+      expect(r.templateId, 'alipay_pay_success_zh');
+      expect(r.ok, isTrue);
+      expect(r.amountMinor, 1800);
+    });
+
+    test('alipay 生活号 still excluded even with amount', () {
+      final raw = RawNotification(
+        pkg: 'com.eg.android.AlipayGphone',
+        title: '生活号',
+        text: '生活号：本周优惠，支付 ¥1.00 即可领取',
+        whenMs: 1,
+      );
+      final r = parseNotification(raw);
+      expect(r.templateId, isNull);
+    });
+
+    test('wechat 商户消费 matches', () {
+      final raw = RawNotification(
+        pkg: 'com.tencent.mm',
+        title: '某某超市',
+        text: '商户消费，支付金额 ¥25.50',
+        whenMs: 1,
+      );
+      final r = parseNotification(raw);
+      expect(r.templateId, 'wechat_pay_success_zh');
+      expect(r.ok, isTrue);
+      expect(r.amountMinor, 2550);
+    });
+
+    test('wechat 付款成功 matches', () {
+      final raw = RawNotification(
+        pkg: 'com.tencent.mm',
+        title: '肯德基-微信支付',
+        text: '付款成功 ¥32.00',
+        whenMs: 1,
+      );
+      final r = parseNotification(raw);
+      expect(r.templateId, 'wechat_pay_success_zh');
+      expect(r.ok, isTrue);
+      expect(r.amountMinor, 3200);
+    });
+
+    test('wechat chat with 付款 word still excluded', () {
+      final raw = RawNotification(
+        pkg: 'com.tencent.mm',
+        title: '李四',
+        text: '发来一条消息：你付款了吗',
+        whenMs: 1,
+      );
+      final r = parseNotification(raw);
+      expect(r.templateId, isNull);
+    });
   });
 
 

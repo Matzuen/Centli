@@ -15,63 +15,85 @@ import '../../platform/notifications/notification_listener_stub.dart';
 
 final _homePendingListProvider =
     StreamProvider.family<List<PendingCapture>, String>((ref, ledgerId) {
-  return ref.watch(databaseProvider).watchPendingCaptures(ledgerId);
-});
+      return ref.watch(databaseProvider).watchPendingCaptures(ledgerId);
+    });
 
 final homeRangeProvider = StateProvider<DateRangeWindow>((ref) {
   return DateRangeWindow.lastDays(days: 30);
 });
 
-final _rangeBaseProvider = FutureProvider.family<
-    BaseRangeSummary,
-    ({String ledgerId, String key, int startMs, int endMs, String base})>((ref, args) async {
-  await ref.watch(fxBookProvider.future);
-  final db = ref.watch(databaseProvider);
-  return db.rangeSummaryInBase(
-    args.ledgerId,
-    args.startMs,
-    args.endMs,
-    args.base,
-  );
-});
-
-final _rangeTxProvider = StreamProvider.family<List<Transaction>,
-    ({String ledgerId, String key, int startMs, int endMs})>((ref, args) {
-  final db = ref.watch(databaseProvider);
-  return db.watchTransactionsInRange(args.ledgerId, args.startMs, args.endMs);
-});
-
-final _netWorthHomeProvider = FutureProvider.family<
-    BaseNetWorth, ({String ledgerId, String base})>((ref, args) async {
-  await ref.watch(fxBookProvider.future);
-  return ref.read(databaseProvider).netWorthInBase(args.ledgerId, args.base);
-});
-
-final _dailyExpenseProvider = FutureProvider.family<
-    List<({DateTime dayLocal, int totalMinor})>,
-    ({String ledgerId, String key, int startMs, int endMs, String base})>((ref, args) async {
-  await ref.watch(fxBookProvider.future);
-  return ref.read(databaseProvider).dailySeriesInBase(
+final _rangeBaseProvider =
+    FutureProvider.family<
+      BaseRangeSummary,
+      ({String ledgerId, String key, int startMs, int endMs, String base})
+    >((ref, args) async {
+      await ref.watch(fxBookProvider.future);
+      final db = ref.watch(databaseProvider);
+      return db.rangeSummaryInBase(
         args.ledgerId,
         args.startMs,
         args.endMs,
-        kind: 'out',
-        baseCurrency: args.base,
+        args.base,
       );
-});
+    });
 
-final _dailyIncomeProvider = FutureProvider.family<
-    List<({DateTime dayLocal, int totalMinor})>,
-    ({String ledgerId, String key, int startMs, int endMs, String base})>((ref, args) async {
-  await ref.watch(fxBookProvider.future);
-  return ref.read(databaseProvider).dailySeriesInBase(
+final _rangeTxProvider =
+    StreamProvider.family<
+      List<Transaction>,
+      ({String ledgerId, String key, int startMs, int endMs})
+    >((ref, args) {
+      final db = ref.watch(databaseProvider);
+      return db.watchTransactionsInRange(
         args.ledgerId,
         args.startMs,
         args.endMs,
-        kind: 'in',
-        baseCurrency: args.base,
       );
-});
+    });
+
+final _netWorthHomeProvider =
+    FutureProvider.family<BaseNetWorth, ({String ledgerId, String base})>((
+      ref,
+      args,
+    ) async {
+      await ref.watch(fxBookProvider.future);
+      return ref
+          .read(databaseProvider)
+          .netWorthInBase(args.ledgerId, args.base);
+    });
+
+final _dailyExpenseProvider =
+    FutureProvider.family<
+      List<({DateTime dayLocal, int totalMinor})>,
+      ({String ledgerId, String key, int startMs, int endMs, String base})
+    >((ref, args) async {
+      await ref.watch(fxBookProvider.future);
+      return ref
+          .read(databaseProvider)
+          .dailySeriesInBase(
+            args.ledgerId,
+            args.startMs,
+            args.endMs,
+            kind: 'out',
+            baseCurrency: args.base,
+          );
+    });
+
+final _dailyIncomeProvider =
+    FutureProvider.family<
+      List<({DateTime dayLocal, int totalMinor})>,
+      ({String ledgerId, String key, int startMs, int endMs, String base})
+    >((ref, args) async {
+      await ref.watch(fxBookProvider.future);
+      return ref
+          .read(databaseProvider)
+          .dailySeriesInBase(
+            args.ledgerId,
+            args.startMs,
+            args.endMs,
+            kind: 'in',
+            baseCurrency: args.base,
+          );
+    });
 
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
@@ -138,10 +160,8 @@ class _HomePageState extends ConsumerState<HomePage> {
                       children: [
                         Text(
                           'Centli',
-                          style:
-                              Theme.of(context).textTheme.titleLarge?.copyWith(
-                                    fontWeight: FontWeight.w800,
-                                  ),
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(fontWeight: FontWeight.w800),
                         ),
                         const Spacer(),
                         IconButton(
@@ -168,8 +188,9 @@ class _HomePageState extends ConsumerState<HomePage> {
                     child: Container(
                       padding: const EdgeInsets.all(4),
                       decoration: BoxDecoration(
-                        color: scheme.surfaceContainerHighest
-                            .withValues(alpha: 0.55),
+                        color: scheme.surfaceContainerHighest.withValues(
+                          alpha: 0.55,
+                        ),
                         borderRadius: BorderRadius.circular(22),
                       ),
                       child: Row(
@@ -185,7 +206,24 @@ class _HomePageState extends ConsumerState<HomePage> {
                             child: _ModeTab(
                               label: '日历',
                               selected: _mode == 1,
-                              onTap: () => setState(() => _mode = 1),
+                              onTap: () {
+                                setState(() {
+                                  _mode = 1;
+                                  _calendarDay = null;
+                                });
+                                // Calendar is a month grid; lastDays (default home
+                                // window) starts in the previous month mid-month and
+                                // would show e.g. Sep while today is Oct.
+                                final r = ref.read(homeRangeProvider);
+                                if (r.kind != DateRangeKind.month) {
+                                  final now = DateTime.now();
+                                  ref.read(homeRangeProvider.notifier).state =
+                                      DateRangeWindow.forMonth(
+                                        now.year,
+                                        now.month,
+                                      );
+                                }
+                              },
                             ),
                           ),
                         ],
@@ -198,13 +236,19 @@ class _HomePageState extends ConsumerState<HomePage> {
                         ref.invalidate(_rangeBaseProvider(baseArgs));
                         ref.invalidate(currentLedgerProvider);
                         ref.invalidate(
-                          _netWorthHomeProvider(
-                            (ledgerId: ledgerId, base: base),
-                          ),
+                          _netWorthHomeProvider((
+                            ledgerId: ledgerId,
+                            base: base,
+                          )),
                         );
                       },
                       child: ListView(
-                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
+                        padding: const EdgeInsets.fromLTRB(
+                          CentliSpacing.pageH,
+                          CentliSpacing.dense,
+                          CentliSpacing.pageH,
+                          CentliSpacing.pageBottomNav,
+                        ),
                         children: [
                           if (_mode == 0) ...[
                             _LedgerSummaryCard(
@@ -213,16 +257,16 @@ class _HomePageState extends ConsumerState<HomePage> {
                               netWorth: nw,
                               summary: summary,
                             ),
-                            const SizedBox(height: 12),
+                            const SizedBox(height: CentliSpacing.section),
                             _NetChangeChartCard(
                               base: base,
                               hide: hide,
                               incomeSeries: incomeSeries,
                               expenseSeries: expenseSeries,
                             ),
-                            const SizedBox(height: 12),
+                            const SizedBox(height: CentliSpacing.section),
                             _HomePendingSection(ledgerId: ledgerId, hide: hide),
-                            const SizedBox(height: 8),
+                            const SizedBox(height: CentliSpacing.item),
                             CentliSoftCard(
                               padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
                               child: Column(
@@ -231,7 +275,9 @@ class _HomePageState extends ConsumerState<HomePage> {
                                   DateRangeControl(
                                     range: range,
                                     onChanged: (next) {
-                                      ref.read(homeRangeProvider.notifier).state =
+                                      ref
+                                              .read(homeRangeProvider.notifier)
+                                              .state =
                                           next;
                                     },
                                   ),
@@ -254,7 +300,9 @@ class _HomePageState extends ConsumerState<HomePage> {
                                                 size: 40,
                                                 color: scheme.outline,
                                               ),
-                                              const SizedBox(height: 8),
+                                              const SizedBox(
+                                                height: CentliSpacing.item,
+                                              ),
                                               Text(
                                                 '暂无账单',
                                                 style: TextStyle(
@@ -298,14 +346,14 @@ class _HomePageState extends ConsumerState<HomePage> {
                               onSelectDay: (d) =>
                                   setState(() => _calendarDay = d),
                             ),
-                            const SizedBox(height: 12),
+                            const SizedBox(height: CentliSpacing.section),
                             _DailyTrendCard(
                               base: base,
                               hide: hide,
                               expenseSeries: expenseSeries,
                               incomeSeries: incomeSeries,
                             ),
-                            const SizedBox(height: 12),
+                            const SizedBox(height: CentliSpacing.section),
                             CentliSoftCard(
                               padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
                               child: recent.when(
@@ -323,18 +371,22 @@ class _HomePageState extends ConsumerState<HomePage> {
                                     list = txns.where((t) {
                                       final local =
                                           DateTime.fromMillisecondsSinceEpoch(
-                                        t.happenAt,
-                                        isUtc: true,
-                                      ).toLocal();
+                                            t.happenAt,
+                                            isUtc: true,
+                                          ).toLocal();
                                       return local.year == day.year &&
                                           local.month == day.month &&
                                           local.day == day.day;
                                     }).toList();
                                   }
                                   if (list.isEmpty) {
-                                    return const Padding(
-                                      padding: EdgeInsets.all(20),
-                                      child: Center(child: Text('当日暂无账单')),
+                                    return CentliEmptyState(
+                                      icon: Icons.event_busy_outlined,
+                                      title: '当日暂无账单',
+                                      message: '换一天查看，或点右下角记下这一天的账单。',
+                                      padding: const EdgeInsets.all(
+                                        CentliSpacing.cardPad,
+                                      ),
                                     );
                                   }
                                   return TxnGroupedSection(
@@ -425,9 +477,8 @@ class _LedgerSummaryCard extends StatelessWidget {
         children: [
           Text(
             '我的账本',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+            style: Theme.of(context).textTheme.titleMedium
+                ?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 10),
           Row(
@@ -437,9 +488,9 @@ class _LedgerSummaryCard extends StatelessWidget {
                 child: Text(
                   formatMinor(base, net, hide: hide),
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.4,
-                      ),
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.4,
+                  ),
                 ),
               ),
               if (delta != 0)
@@ -466,7 +517,7 @@ class _LedgerSummaryCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: CentliSpacing.item),
           Row(
             children: [
               Expanded(
@@ -488,9 +539,8 @@ class _LedgerSummaryCard extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             '本位币 $base（按发生日汇率折算）',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                ),
+            style: Theme.of(context).textTheme.bodySmall
+                ?.copyWith(color: scheme.onSurfaceVariant),
           ),
         ],
       ),
@@ -550,18 +600,21 @@ class _NetChangeChartCard extends StatelessWidget {
         children: [
           Text(
             '净资产变化',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+            style: Theme.of(context).textTheme.titleMedium
+                ?.copyWith(fontWeight: FontWeight.w700),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: CentliSpacing.item),
           SizedBox(
             height: 140,
             child: spots.length < 2
                 ? const Center(child: Text('暂无趋势数据'))
                 : LineChart(
                     LineChartData(
-                      minY: spots.map((s) => s.y).reduce((a, b) => a < b ? a : b) - 1,
+                      minY:
+                          spots
+                              .map((s) => s.y)
+                              .reduce((a, b) => a < b ? a : b) -
+                          1,
                       gridData: const FlGridData(show: false),
                       borderData: FlBorderData(show: false),
                       titlesData: const FlTitlesData(show: false),
@@ -575,7 +628,9 @@ class _NetChangeChartCard extends StatelessWidget {
                           dotData: const FlDotData(show: false),
                           belowBarData: BarAreaData(
                             show: true,
-                            color: CentliTheme.incomeGreen.withValues(alpha: 0.18),
+                            color: CentliTheme.incomeGreen.withValues(
+                              alpha: 0.18,
+                            ),
                           ),
                         ),
                       ],
@@ -586,8 +641,8 @@ class _NetChangeChartCard extends StatelessWidget {
             Text(
               '区间累计净流入（$base）',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
         ],
       ),
@@ -616,20 +671,39 @@ class _CalendarCard extends StatelessWidget {
   final ValueChanged<DateRangeWindow> onMonthChanged;
   final ValueChanged<DateTime> onSelectDay;
 
+  static String _dayKey(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
   @override
   Widget build(BuildContext context) {
-    final monthStart = DateTime(range.startLocal.year, range.startLocal.month, 1);
+    // Prefer explicit month window; if still on lastDays/custom, show the
+    // month of the last included day (not startLocal — that is often prior month).
+    final DateTime monthStart;
+    if (range.kind == DateRangeKind.month) {
+      monthStart = DateTime(range.startLocal.year, range.startLocal.month, 1);
+    } else {
+      final last = range.endLocal.subtract(const Duration(days: 1));
+      monthStart = DateTime(last.year, last.month, 1);
+    }
     final daysInMonth = DateTime(monthStart.year, monthStart.month + 1, 0).day;
     final firstWeekday = monthStart.weekday % 7; // Sun=0
+    // Key by full local date so Oct 13 amounts never paint onto Sep 13.
     final income = {
-      for (final e in incomeSeries.valueOrNull ?? const <({DateTime dayLocal, int totalMinor})>[])
-        e.dayLocal.day: e.totalMinor,
+      for (final e
+          in incomeSeries.valueOrNull ??
+              const <({DateTime dayLocal, int totalMinor})>[])
+        _dayKey(e.dayLocal): e.totalMinor,
     };
     final expense = {
-      for (final e in expenseSeries.valueOrNull ?? const <({DateTime dayLocal, int totalMinor})>[])
-        e.dayLocal.day: e.totalMinor,
+      for (final e
+          in expenseSeries.valueOrNull ??
+              const <({DateTime dayLocal, int totalMinor})>[])
+        _dayKey(e.dayLocal): e.totalMinor,
     };
     final today = DateTime.now();
+    final thisMonth = DateTime(today.year, today.month, 1);
+    final isCurrentMonth =
+        monthStart.year == thisMonth.year && monthStart.month == thisMonth.month;
     final labels = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
 
     return CentliSoftCard(
@@ -639,20 +713,32 @@ class _CalendarCard extends StatelessWidget {
           Row(
             children: [
               IconButton(
-                onPressed: () => onMonthChanged(range.prev()),
+                tooltip: '上一月',
+                onPressed: () {
+                  final p = DateTime(monthStart.year, monthStart.month - 1, 1);
+                  onMonthChanged(DateRangeWindow.forMonth(p.year, p.month));
+                },
                 icon: const Icon(Icons.chevron_left),
               ),
               Expanded(
                 child: Text(
                   '${monthStart.year}年${monthStart.month}月',
                   textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+                  style: Theme.of(context).textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w700),
                 ),
               ),
               IconButton(
-                onPressed: range.isLatest ? null : () => onMonthChanged(range.next()),
+                tooltip: '下一月',
+                onPressed: isCurrentMonth
+                    ? null
+                    : () {
+                        final n =
+                            DateTime(monthStart.year, monthStart.month + 1, 1);
+                        onMonthChanged(
+                          DateRangeWindow.forMonth(n.year, n.month),
+                        );
+                      },
                 icon: const Icon(Icons.chevron_right),
               ),
             ],
@@ -687,15 +773,17 @@ class _CalendarCard extends StatelessWidget {
               if (index < firstWeekday) return const SizedBox.shrink();
               final day = index - firstWeekday + 1;
               final date = DateTime(monthStart.year, monthStart.month, day);
-              final selected = selectedDay != null &&
+              final selected =
+                  selectedDay != null &&
                   selectedDay!.year == date.year &&
                   selectedDay!.month == date.month &&
                   selectedDay!.day == date.day;
-              final isToday = today.year == date.year &&
+              final isToday =
+                  today.year == date.year &&
                   today.month == date.month &&
                   today.day == date.day;
-              final inAmt = income[day] ?? 0;
-              final outAmt = expense[day] ?? 0;
+              final inAmt = income[_dayKey(date)] ?? 0;
+              final outAmt = expense[_dayKey(date)] ?? 0;
               return InkWell(
                 borderRadius: BorderRadius.circular(10),
                 onTap: () => onSelectDay(date),
@@ -704,8 +792,8 @@ class _CalendarCard extends StatelessWidget {
                     color: selected
                         ? CentliTheme.softBlue.withValues(alpha: 0.18)
                         : (isToday
-                            ? CentliTheme.softBlue.withValues(alpha: 0.08)
-                            : null),
+                              ? CentliTheme.softBlue.withValues(alpha: 0.08)
+                              : null),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   padding: const EdgeInsets.only(top: 4),
@@ -714,8 +802,9 @@ class _CalendarCard extends StatelessWidget {
                       Text(
                         '$day',
                         style: TextStyle(
-                          fontWeight:
-                              selected || isToday ? FontWeight.w800 : FontWeight.w500,
+                          fontWeight: selected || isToday
+                              ? FontWeight.w800
+                              : FontWeight.w500,
                           fontSize: 13,
                         ),
                       ),
@@ -788,11 +877,10 @@ class _DailyTrendCard extends StatelessWidget {
         children: [
           Text(
             '每日趋势',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+            style: Theme.of(context).textTheme.titleMedium
+                ?.copyWith(fontWeight: FontWeight.w700),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: CentliSpacing.item),
           SizedBox(
             height: 120,
             child: spots.length < 2
@@ -888,12 +976,25 @@ class _HomePendingCarouselState extends ConsumerState<_HomePendingCarousel> {
         children: [
           ListTile(
             dense: true,
-            title: Text('待确认 (${items.length})'),
+            visualDensity: VisualDensity.compact,
+            contentPadding: const EdgeInsets.fromLTRB(
+              CentliSpacing.cardPad,
+              CentliSpacing.dense,
+              CentliSpacing.item,
+              0,
+            ),
+            title: Text(
+              '待确认 (${items.length})',
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+            subtitle: const Text('左右滑动快速处理 · 点此查看全部'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => context.push('/home/pending'),
           ),
           SizedBox(
-            height: 108,
+            height: 96,
             child: PageView.builder(
               controller: _pageController,
               itemCount: items.length,
@@ -912,17 +1013,17 @@ class _HomePendingCarouselState extends ConsumerState<_HomePendingCarousel> {
           ),
           if (items.length > 1)
             Padding(
-              padding: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.only(bottom: CentliSpacing.item),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   for (var i = 0; i < items.length; i++)
                     Container(
-                      width: 6,
+                      width: i == _index ? 14 : 6,
                       height: 6,
                       margin: const EdgeInsets.symmetric(horizontal: 3),
                       decoration: BoxDecoration(
-                        shape: BoxShape.circle,
+                        borderRadius: BorderRadius.circular(3),
                         color: i == _index
                             ? scheme.primary
                             : scheme.outlineVariant,
@@ -975,28 +1076,33 @@ class _HomePendingSlide extends StatelessWidget {
         : '${_pkgLabel(c.sourcePkg)} · $amount';
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 8, 8),
+      padding: const EdgeInsets.fromLTRB(
+        CentliSpacing.cardPad,
+        0,
+        CentliSpacing.dense,
+        CentliSpacing.dense,
+      ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Expanded(
             child: InkWell(
               onTap: onOpen,
               borderRadius: BorderRadius.circular(8),
               child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
+                padding: const EdgeInsets.symmetric(vertical: 2),
                 child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       title,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
+                      style: Theme.of(context).textTheme.bodyMedium
+                          ?.copyWith(fontWeight: FontWeight.w600),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 2),
                     _CategoryHint(capture: c),
                   ],
                 ),
@@ -1004,6 +1110,10 @@ class _HomePendingSlide extends StatelessWidget {
             ),
           ),
           TextButton(
+            style: TextButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+            ),
             onPressed: busy ? null : onIgnore,
             child: const Text('忽略'),
           ),
@@ -1032,9 +1142,7 @@ class _CategoryHint extends ConsumerWidget {
     if (id == null || id.isEmpty) {
       return Text(
         '待选分类',
-        style: Theme.of(context)
-            .textTheme
-            .bodySmall
+        style: Theme.of(context).textTheme.bodySmall
             ?.copyWith(color: scheme.onSurfaceVariant),
       );
     }
@@ -1042,13 +1150,10 @@ class _CategoryHint extends ConsumerWidget {
       future: ref.read(databaseProvider).getCategory(id),
       builder: (context, snap) {
         final name = snap.data?.name;
-        final label =
-            (name == null || name.isEmpty) ? '待选分类' : '猜「$name」';
+        final label = (name == null || name.isEmpty) ? '待选分类' : '猜「$name」';
         return Text(
           label,
-          style: Theme.of(context)
-              .textTheme
-              .bodySmall
+          style: Theme.of(context).textTheme.bodySmall
               ?.copyWith(color: scheme.onSurfaceVariant),
         );
       },

@@ -105,7 +105,7 @@ class NotiTemplate {
 
 /// Friendly names for builtin / official template ids.
 const Map<String, String> kBuiltinTemplateNames = {
-  'alipay_pay_success_zh': '支付宝支付成功',
+  'alipay_pay_success_zh': '支付宝交易/支付成功',
   'wechat_pay_success_zh': '微信支付成功',
 };
 
@@ -166,10 +166,13 @@ const kAmountRegex =
 List<NotiTemplate> builtinNotiTemplates() => const [
       NotiTemplate(
         id: 'alipay_pay_success_zh',
-        name: '支付宝支付成功',
+        name: '支付宝交易/支付成功',
         packages: ['com.eg.android.AlipayGphone'],
-        mustContainRegex: '支付成功|付款成功',
-        excludeTextRegex: '验证码|登录|收款到账提醒|服务通知|余额宝收益',
+        // Prefer occasional false positives into 待确认 over missing pay notices.
+        // Do NOT use bare 「支付」 — it matches 「支付宝」 itself.
+        mustContainRegex:
+            '支付成功|付款成功|交易成功|交易提醒|交易通知|消费成功|已支付|扣款成功|扣款提醒|已扣款|支出\\s*[¥￥]|向.+付款|付款|支付金额|支付\\s*[¥￥]|付款\\s*[¥￥]|商户消费|成功付款',
+        excludeTextRegex: '验证码|登录|收款到账提醒|服务通知|余额宝收益|生活号',
         amountRegex: kAmountRegex,
         merchantRegex: r'(?:向|给|商户)\s*(.+?)(?:\s|$)',
         defaultAccountHint: 'alipay',
@@ -178,7 +181,8 @@ List<NotiTemplate> builtinNotiTemplates() => const [
         id: 'wechat_pay_success_zh',
         name: '微信支付成功',
         packages: ['com.tencent.mm'],
-        mustContainRegex: '微信支付|支付成功|已支付',
+        mustContainRegex:
+            '微信支付|支付成功|已支付|付款成功|商户消费|支付金额|付款金额|已付款|扣款成功',
         excludeTextRegex: '验证码|登录|朋友圈|微信消息|发来一条|会话|拍了拍|互动消息|新的朋友|群聊|语音通话|视频通话|收到一条|发来一个红包|领取了你的红包',
         amountRegex: kAmountRegex,
         merchantRegex: r'(.+?)(?:-微信支付|付款)',
@@ -487,6 +491,12 @@ Future<int> seedSamplePendingCaptures({
       title: '支付成功',
       text: '向 星巴克咖啡 付款成功 ¥28.50',
       whenMs: now - 3600000,
+    ),
+    RawNotification(
+      pkg: 'com.eg.android.AlipayGphone',
+      title: '交易提醒',
+      text: '向 全家便利店 付款 ¥15.80',
+      whenMs: now - 5400000,
     ),
     RawNotification(
       pkg: 'com.tencent.mm',

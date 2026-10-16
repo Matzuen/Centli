@@ -1,6 +1,53 @@
 import 'package:flutter/material.dart';
 
 /// Soft pastel theme: Centli chrome + Finch polish (cards/gradient/radii).
+/// Shared layout density tokens — prefer these over one-off magic numbers.
+abstract final class CentliSpacing {
+  /// Horizontal page inset (ListView / column).
+  static const double pageH = 16;
+
+  /// Top inset under app bar / safe area.
+  static const double pageTop = 8;
+
+  /// Bottom inset on settings-style pages (no bottom nav).
+  static const double pageBottom = 32;
+
+  /// Bottom inset on tab roots (clears bottom nav).
+  static const double pageBottomNav = 120;
+
+  /// Gap between soft cards / major blocks.
+  static const double section = 12;
+
+  /// Gap before a section title or looser break.
+  static const double sectionLoose = 16;
+
+  /// Gap between related items inside a section.
+  static const double item = 8;
+
+  /// Tight gap (labels under titles, chip runs).
+  static const double dense = 4;
+
+  /// Default inner padding for [CentliSoftCard] content.
+  static const double cardPad = 16;
+
+  /// Bookkeeping: note field → keypad.
+  static const double sheetGap = 12;
+
+  static const EdgeInsets pagePadding = EdgeInsets.fromLTRB(
+    pageH,
+    pageTop,
+    pageH,
+    pageBottom,
+  );
+
+  static const EdgeInsets pagePaddingNav = EdgeInsets.fromLTRB(
+    pageH,
+    pageTop,
+    pageH,
+    pageBottomNav,
+  );
+}
+
 abstract final class CentliTheme {
   static const seed = Color(0xFF5B8DEF);
 
@@ -22,11 +69,7 @@ abstract final class CentliTheme {
 
   static List<Color> scaffoldGradientColors({bool dark = false}) {
     if (dark) {
-      return const [
-        Color(0xFF1A1F2E),
-        Color(0xFF221F2E),
-        Color(0xFF2A1F28),
-      ];
+      return const [Color(0xFF1A1F2E), Color(0xFF221F2E), Color(0xFF2A1F28)];
     }
     return const [gradientTop, gradientMid, gradientBottom];
   }
@@ -42,12 +85,12 @@ abstract final class CentliTheme {
   }
 
   static List<BoxShadow> get softCardShadow => [
-        BoxShadow(
-          color: const Color(0xFF6B7A99).withValues(alpha: 0.08),
-          blurRadius: 18,
-          offset: const Offset(0, 6),
-        ),
-      ];
+    BoxShadow(
+      color: const Color(0xFF6B7A99).withValues(alpha: 0.08),
+      blurRadius: 18,
+      offset: const Offset(0, 6),
+    ),
+  ];
 
   static ThemeData light() {
     final scheme = ColorScheme.fromSeed(
@@ -122,15 +165,15 @@ abstract final class CentliTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: Colors.white,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-        ),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: const BorderSide(color: Color(0xFFE6E8EC)),
         ),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 12,
+        ),
       ),
       floatingActionButtonTheme: const FloatingActionButtonThemeData(
         elevation: 2,
@@ -234,24 +277,32 @@ class CentliSoftCard extends StatelessWidget {
     this.padding,
     this.margin,
     this.onTap,
+    this.color,
+    this.clipBehavior = Clip.antiAlias,
   });
 
   final Widget child;
   final EdgeInsetsGeometry? padding;
   final EdgeInsetsGeometry? margin;
   final VoidCallback? onTap;
+  /// When null, uses white / dark surfaceContainerHighest.
+  final Color? color;
+  final Clip clipBehavior;
 
   @override
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
+    final bg = color ??
+        (dark
+            ? Theme.of(context).colorScheme.surfaceContainerHighest
+            : Colors.white);
     return Container(
       margin: margin,
+      clipBehavior: clipBehavior,
       decoration: BoxDecoration(
-        color: dark
-            ? Theme.of(context).colorScheme.surfaceContainerHighest
-            : Colors.white,
+        color: bg,
         borderRadius: BorderRadius.circular(CentliTheme.cardRadius),
-        boxShadow: dark ? null : CentliTheme.softCardShadow,
+        boxShadow: (dark || color != null) ? null : CentliTheme.softCardShadow,
       ),
       child: Material(
         type: MaterialType.transparency,
@@ -266,3 +317,57 @@ class CentliSoftCard extends StatelessWidget {
     );
   }
 }
+
+/// Friendly empty / placeholder block used across list pages.
+class CentliEmptyState extends StatelessWidget {
+  const CentliEmptyState({
+    super.key,
+    required this.icon,
+    required this.title,
+    this.message,
+    this.action,
+    this.padding = const EdgeInsets.all(28),
+  });
+
+  final IconData icon;
+  final String title;
+  final String? message;
+  final Widget? action;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: padding,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 56, color: scheme.outline),
+          const SizedBox(height: CentliSpacing.item + 4),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          if (message != null && message!.trim().isNotEmpty) ...[
+            const SizedBox(height: CentliSpacing.item),
+            Text(
+              message!,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                    height: 1.4,
+                  ),
+            ),
+          ],
+          if (action != null) ...[
+            const SizedBox(height: CentliSpacing.sectionLoose),
+            action!,
+          ],
+        ],
+      ),
+    );
+  }
+}
+

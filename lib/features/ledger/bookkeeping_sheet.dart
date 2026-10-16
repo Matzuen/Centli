@@ -43,6 +43,7 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
   String _amountText = '0';
   String _toAmountText = '0';
   String? _fxRateText;
+
   /// When cross-ccy: user enters to_amount (true) or fx_rate (false).
   bool _useToAmount = true;
   String? _accountId;
@@ -56,6 +57,7 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
   var _speechListening = false;
   var _speechBusy = false;
   var _aiFilling = false;
+
   /// idle | starting | listening | recognizing
   String _speechPhase = 'idle';
   double _speechLevel = 0;
@@ -103,16 +105,20 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
         }
       }
     }
-    final cats =
-        await db.loadCategories(ledgerId, _type == 'in' ? 'in' : 'out');
+    final cats = await db.loadCategories(
+      ledgerId,
+      _type == 'in' ? 'in' : 'out',
+    );
     if (!mounted) return;
     setState(() {
       _ledgerId = ledgerId;
       _accounts = accounts;
       if (existing != null) {
         _type = existing.type;
-        _amountText = fromMinor(existing.currency, existing.amountMinor)
-            .toStringAsFixed(currencyDecimals[existing.currency] ?? 2);
+        _amountText = fromMinor(
+          existing.currency,
+          existing.amountMinor,
+        ).toStringAsFixed(currencyDecimals[existing.currency] ?? 2);
         // trim trailing zeros from whole amounts
         if (_amountText.contains('.')) {
           _amountText = _amountText.replaceFirst(RegExp(r'\.?0+$'), '');
@@ -129,9 +135,13 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
         ).toLocal();
         if (existing.toAmountMinor != null) {
           final toAcc = accounts.where((a) => a.id == existing.toAccountId);
-          final toCcy = toAcc.isNotEmpty ? toAcc.first.currency : existing.currency;
-          _toAmountText = fromMinor(toCcy, existing.toAmountMinor!)
-              .toStringAsFixed(currencyDecimals[toCcy] ?? 2);
+          final toCcy = toAcc.isNotEmpty
+              ? toAcc.first.currency
+              : existing.currency;
+          _toAmountText = fromMinor(
+            toCcy,
+            existing.toAmountMinor!,
+          ).toStringAsFixed(currencyDecimals[toCcy] ?? 2);
         }
         if (existing.fxRate != null) {
           _fxRateText = existing.fxRate.toString();
@@ -156,8 +166,10 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
   Future<void> _reloadCategories({bool resetSelection = false}) async {
     if (_ledgerId == null || _type == 'transfer') return;
     final db = ref.read(databaseProvider);
-    final cats =
-        await db.loadCategories(_ledgerId!, _type == 'in' ? 'in' : 'out');
+    final cats = await db.loadCategories(
+      _ledgerId!,
+      _type == 'in' ? 'in' : 'out',
+    );
     setState(() {
       _categories = cats;
       if (resetSelection ||
@@ -361,10 +373,7 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
                         value: true,
                         label: Text('\u5bf9\u65b9\u91d1\u989d'),
                       ),
-                      ButtonSegment(
-                        value: false,
-                        label: Text('\u6c47\u7387'),
-                      ),
+                      ButtonSegment(value: false, label: Text('\u6c47\u7387')),
                     ],
                     selected: {useTo},
                     onSelectionChanged: (s) => setLocal(() => useTo = s.first),
@@ -373,8 +382,9 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
                   if (useTo)
                     TextField(
                       controller: toCtrl,
-                      keyboardType:
-                          const TextInputType.numberWithOptions(decimal: true),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
                       decoration: InputDecoration(
                         labelText: '\u8f6c\u5165\u91d1\u989d ($toCcy)',
                         border: const OutlineInputBorder(),
@@ -383,8 +393,9 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
                   else
                     TextField(
                       controller: rateCtrl,
-                      keyboardType:
-                          const TextInputType.numberWithOptions(decimal: true),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
                       decoration: InputDecoration(
                         labelText: '1 $fromCcy = ? $toCcy',
                         border: const OutlineInputBorder(),
@@ -427,7 +438,10 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
     }
   }
 
-  Future<void> _save({bool skipCrossPrompt = false, bool keepOpen = false}) async {
+  Future<void> _save({
+    bool skipCrossPrompt = false,
+    bool keepOpen = false,
+  }) async {
     final major = _evalAmount(_amountText);
     if (major == null || major <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -450,13 +464,19 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
     if (_type == 'transfer') {
       if (_toAccountId == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('\u8bf7\u9009\u62e9\u8f6c\u5165\u8d26\u6237')),
+          const SnackBar(
+            content: Text('\u8bf7\u9009\u62e9\u8f6c\u5165\u8d26\u6237'),
+          ),
         );
         return;
       }
       if (_toAccountId == _accountId) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('\u8f6c\u51fa\u4e0e\u8f6c\u5165\u8d26\u6237\u4e0d\u80fd\u76f8\u540c')),
+          const SnackBar(
+            content: Text(
+              '\u8f6c\u51fa\u4e0e\u8f6c\u5165\u8d26\u6237\u4e0d\u80fd\u76f8\u540c',
+            ),
+          ),
         );
         return;
       }
@@ -487,7 +507,9 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
           final toMajor = double.tryParse(_toAmountText) ?? 0;
           if (toMajor <= 0) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('\u8bf7\u8f93\u5165\u5bf9\u65b9\u91d1\u989d')),
+              const SnackBar(
+                content: Text('\u8bf7\u8f93\u5165\u5bf9\u65b9\u91d1\u989d'),
+              ),
             );
             return;
           }
@@ -497,7 +519,9 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
           fxRate = double.tryParse(_fxRateText ?? '');
           if (fxRate == null || fxRate <= 0) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('\u8bf7\u8f93\u5165\u6709\u6548\u6c47\u7387')),
+              const SnackBar(
+                content: Text('\u8bf7\u8f93\u5165\u6709\u6548\u6c47\u7387'),
+              ),
             );
             return;
           }
@@ -507,10 +531,10 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
         toAmountMinor = amountMinor;
       }
 
-      final note =
-          _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim();
-      final merchant =
-          (_merchant ?? '').trim().isEmpty ? null : _merchant!.trim();
+      final note = _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim();
+      final merchant = (_merchant ?? '').trim().isEmpty
+          ? null
+          : _merchant!.trim();
       final toAcc = _type == 'transfer' ? _toAccountId : null;
       final cat = _type == 'transfer' ? null : _categoryId;
       if (widget.existing != null) {
@@ -555,9 +579,8 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
           _merchant = null;
           _happenAt = DateTime.now();
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('已保存，可继续记账')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('已保存，可继续记账')));
       } else {
         Navigator.of(context).pop();
       }
@@ -568,7 +591,8 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
 
   String get _happenAtLabel {
     final now = DateTime.now();
-    final sameDay = _happenAt.year == now.year &&
+    final sameDay =
+        _happenAt.year == now.year &&
         _happenAt.month == now.month &&
         _happenAt.day == now.day;
     if (sameDay) {
@@ -610,8 +634,6 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
       );
     });
   }
-
-
 
   void _bindSpeechCallbacks() {
     _speech.onStatusChanged = (status) {
@@ -700,10 +722,7 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
         setState(() => _speechPhase = 'idle');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              _speech.friendlyError ??
-                  '当前设备不支持语音识别，请改用文字话术',
-            ),
+            content: Text(_speech.friendlyError ?? '当前设备不支持语音识别，请改用文字话术'),
             duration: const Duration(seconds: 4),
           ),
         );
@@ -813,12 +832,10 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
   }
 
   Future<void> _applyAiTextFill() async {
-
     final raw = _aiTextCtrl.text.trim();
     if (raw.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请先输入记账话术')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('请先输入记账话术')));
       return;
     }
     if (_ledgerId == null) return;
@@ -878,9 +895,8 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
 
       if (!parsed.hasUsefulFill) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('未能识别，请换种说法或手动填写')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('未能识别，请换种说法或手动填写')));
         return;
       }
 
@@ -923,10 +939,10 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
       if (parsed.merchant != null &&
           parsed.merchant!.trim().isNotEmpty &&
           nextType != 'transfer') {
-        final key = parsed.merchant!
-            .trim()
-            .toLowerCase()
-            .replaceAll(RegExp(r'\s+'), ' ');
+        final key = parsed.merchant!.trim().toLowerCase().replaceAll(
+          RegExp(r'\s+'),
+          ' ',
+        );
         final rule = await db.findMerchantRule(_ledgerId!, key);
         if (rule?.categoryId != null) {
           final id = rule!.categoryId!;
@@ -957,10 +973,10 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
       }
       // Merchant-rule account if still default and rule has one.
       if (parsed.merchant != null && parsed.merchant!.trim().isNotEmpty) {
-        final key = parsed.merchant!
-            .trim()
-            .toLowerCase()
-            .replaceAll(RegExp(r'\s+'), ' ');
+        final key = parsed.merchant!.trim().toLowerCase().replaceAll(
+          RegExp(r'\s+'),
+          ' ',
+        );
         final rule = await db.findMerchantRule(_ledgerId!, key);
         if (rule?.accountId != null &&
             _accounts.any((a) => a.id == rule!.accountId)) {
@@ -980,7 +996,9 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
 
       // Note = leftover remark only. Merchant is stored on its own column.
       final leftover = parsed.note?.trim();
-      final noteText = (leftover != null && leftover.isNotEmpty) ? leftover : '';
+      final noteText = (leftover != null && leftover.isNotEmpty)
+          ? leftover
+          : '';
       final merchantText = parsed.merchant?.trim();
 
       if (!mounted) return;
@@ -1008,11 +1026,11 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
         _aiExpanded = false;
       });
 
-      final summary =
-          parsed.hits.isEmpty ? '已预填' : '已预填：${parsed.hits.join(' · ')}';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(summary)),
-      );
+      final summary = parsed.hits.isEmpty
+          ? '已预填'
+          : '已预填：${parsed.hits.join(' · ')}';
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(summary)));
     } finally {
       if (mounted) setState(() => _aiFilling = false);
     }
@@ -1055,7 +1073,9 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
         return _AccountPickerSheet(
           accounts: _accounts,
           selectedId: current,
-          title: toAccount ? '\u9009\u62e9\u8f6c\u5165\u8d26\u6237' : '\u9009\u62e9\u8d26\u6237',
+          title: toAccount
+              ? '\u9009\u62e9\u8f6c\u5165\u8d26\u6237'
+              : '\u9009\u62e9\u8d26\u6237',
         );
       },
     );
@@ -1072,384 +1092,454 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final height = MediaQuery.sizeOf(context).height * 0.92;
+    final maxHeight = MediaQuery.sizeOf(context).height * 0.92;
+    final viewInsets = MediaQuery.viewInsetsOf(context).bottom;
+    final safeBottom = MediaQuery.paddingOf(context).bottom;
 
-    return SizedBox(
-      height: height,
-      child: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : Column(
-              children: [
-                const SizedBox(height: 8),
-                Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: scheme.outlineVariant,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: SegmentedButton<String>(
-                          segments: const [
-                            ButtonSegment(
-                                value: 'out', label: Text('\u652f\u51fa')),
-                            ButtonSegment(
-                                value: 'in', label: Text('\u6536\u5165')),
-                            ButtonSegment(
-                                value: 'transfer', label: Text('\u8f6c\u8d26')),
-                          ],
-                          selected: {_type},
-                          onSelectionChanged: (s) {
-                            setState(() => _type = s.first);
-                            _reloadCategories(resetSelection: true);
-                          },
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: () => Navigator.pop(context),
-                        icon: const Icon(Icons.close),
-                      ),
-                    ],
-                  ),
-                ),
+    return Padding(
+      padding: EdgeInsets.only(bottom: viewInsets),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: maxHeight),
+        child: _loading
+            ? const SizedBox(
+                height: 200,
+                child: Center(child: CircularProgressIndicator()),
+              )
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    fit: FlexFit.loose,
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const SizedBox(height: CentliSpacing.item),
+                          Container(
+                            width: 40,
+                            height: 4,
+                            decoration: BoxDecoration(
+                              color: scheme.outlineVariant,
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: SegmentedButton<String>(
+                                    segments: const [
+                                      ButtonSegment(
+                                        value: 'out',
+                                        label: Text('\u652f\u51fa'),
+                                      ),
+                                      ButtonSegment(
+                                        value: 'in',
+                                        label: Text('\u6536\u5165'),
+                                      ),
+                                      ButtonSegment(
+                                        value: 'transfer',
+                                        label: Text('\u8f6c\u8d26'),
+                                      ),
+                                    ],
+                                    selected: {_type},
+                                    onSelectionChanged: (s) {
+                                      setState(() => _type = s.first);
+                                      _reloadCategories(resetSelection: true);
+                                    },
+                                  ),
+                                ),
+                                IconButton(
+                                  onPressed: () => Navigator.pop(context),
+                                  icon: const Icon(Icons.close),
+                                ),
+                              ],
+                            ),
+                          ),
 
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      InkWell(
-                        onTap: () =>
-                            setState(() => _aiExpanded = !_aiExpanded),
-                        borderRadius: BorderRadius.circular(8),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 6),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.auto_awesome,
-                                size: 18,
-                                color: scheme.primary,
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  '智能填单',
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                InkWell(
+                                  onTap: () => setState(
+                                    () => _aiExpanded = !_aiExpanded,
+                                  ),
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 4,
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          Icons.auto_awesome,
+                                          size: 18,
+                                          color: scheme.primary,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            '智能填单',
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .labelLarge
+                                                ?.copyWith(
+                                                  color: scheme.primary,
+                                                ),
+                                          ),
+                                        ),
+                                        Text(
+                                          '话术/语音 · 本地/大模型',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodySmall
+                                              ?.copyWith(
+                                                color: scheme.onSurfaceVariant,
+                                              ),
+                                        ),
+                                        Icon(
+                                          _aiExpanded
+                                              ? Icons.expand_less
+                                              : Icons.expand_more,
+                                          color: scheme.onSurfaceVariant,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                if (_aiExpanded) ...[
+                                  const SizedBox(height: 6),
+                                  Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Expanded(
+                                        child: TextField(
+                                          controller: _aiTextCtrl,
+                                          minLines: 1,
+                                          maxLines: 3,
+                                          textInputAction: TextInputAction.done,
+                                          onSubmitted: (_) =>
+                                              _applyAiTextFill(),
+                                          decoration: InputDecoration(
+                                            hintText:
+                                                _speechPhase == 'listening'
+                                                ? '正在听，请说出记账内容…'
+                                                : _speechPhase == 'recognizing'
+                                                ? '识别中…'
+                                                : '例：午餐花了28.5 / 昨天支付宝地铁4元',
+                                            border: const OutlineInputBorder(),
+                                            isDense: true,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      IconButton.filledTonal(
+                                        tooltip:
+                                            (_speechListening ||
+                                                _speechPhase == 'recognizing')
+                                            ? '停止'
+                                            : '语音填单',
+                                        onPressed: (_saving || _speechBusy)
+                                            ? null
+                                            : _toggleVoiceFill,
+                                        style: _speechPhase == 'listening'
+                                            ? IconButton.styleFrom(
+                                                foregroundColor: Theme.of(
+                                                  context,
+                                                ).colorScheme.error,
+                                              )
+                                            : null,
+                                        icon: _speechPhase == 'starting'
+                                            ? const SizedBox(
+                                                width: 22,
+                                                height: 22,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                      strokeWidth: 2,
+                                                    ),
+                                              )
+                                            : Icon(
+                                                _speechPhase == 'listening'
+                                                    ? Icons.mic
+                                                    : _speechPhase ==
+                                                          'recognizing'
+                                                    ? Icons.hearing
+                                                    : Icons.mic_none,
+                                              ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      FilledButton(
+                                        onPressed:
+                                            (_saving ||
+                                                _aiFilling ||
+                                                _speechPhase == 'listening')
+                                            ? null
+                                            : _applyAiTextFill,
+                                        child: Text(_aiFilling ? '…' : '填入'),
+                                      ),
+                                    ],
+                                  ),
+                                  if (_speechPhase != 'idle') ...[
+                                    const SizedBox(height: 8),
+                                    _SpeechStatusBanner(
+                                      label: _speechStatusLabel,
+                                      phase: _speechPhase,
+                                      level: _speechLevel,
+                                      onStop: (_speechBusy)
+                                          ? null
+                                          : () => _stopSpeech(
+                                              userInitiated: true,
+                                            ),
+                                    ),
+                                  ],
+                                ],
+                              ],
+                            ),
+                          ),
+
+                          // Finch rhythm: short amount row (top-right), chips flush under.
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                if (_amountHasOperator)
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: 2),
+                                    child: Text(
+                                      _amountText,
+                                      textAlign: TextAlign.right,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .labelLarge
+                                          ?.copyWith(
+                                            color: scheme.onSurfaceVariant,
+                                            height: 1.0,
+                                          ),
+                                    ),
+                                  ),
+                                Text(
+                                  formatMinor(
+                                    _currency,
+                                    toMinor(
+                                      _currency,
+                                      _evalAmount(_amountText) ?? 0,
+                                    ),
+                                  ),
+                                  textAlign: TextAlign.right,
                                   style: Theme.of(context)
                                       .textTheme
-                                      .labelLarge
-                                      ?.copyWith(color: scheme.primary),
-                                ),
-                              ),
-                              Text(
-                                '话术/语音 · 本地/大模型',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
-                                    ?.copyWith(
-                                      color: scheme.onSurfaceVariant,
-                                    ),
-                              ),
-                              Icon(
-                                _aiExpanded
-                                    ? Icons.expand_less
-                                    : Icons.expand_more,
-                                color: scheme.onSurfaceVariant,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      if (_aiExpanded) ...[
-                        const SizedBox(height: 6),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                controller: _aiTextCtrl,
-                                minLines: 1,
-                                maxLines: 3,
-                                textInputAction: TextInputAction.done,
-                                onSubmitted: (_) => _applyAiTextFill(),
-                                decoration: InputDecoration(
-                                  hintText: _speechPhase == 'listening'
-                                      ? '正在听，请说出记账内容…'
-                                      : _speechPhase == 'recognizing'
-                                          ? '识别中…'
-                                          : '例：午餐花了28.5 / 昨天支付宝地铁4元',
-                                  border: const OutlineInputBorder(),
-                                  isDense: true,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            IconButton.filledTonal(
-                              tooltip: (_speechListening ||
-                                      _speechPhase == 'recognizing')
-                                  ? '停止'
-                                  : '语音填单',
-                              onPressed: (_saving || _speechBusy)
-                                  ? null
-                                  : _toggleVoiceFill,
-                              style: _speechPhase == 'listening'
-                                  ? IconButton.styleFrom(
-                                      foregroundColor:
-                                          Theme.of(context).colorScheme.error,
-                                    )
-                                  : null,
-                              icon: _speechPhase == 'starting'
-                                  ? const SizedBox(
-                                      width: 22,
-                                      height: 22,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
+                                      .headlineMedium
+                                      ?.copyWith(
+                                        fontWeight: FontWeight.w800,
+                                        letterSpacing: -0.8,
+                                        height: 1.0,
+                                        fontSize: 36,
                                       ),
-                                    )
-                                  : Icon(
-                                      _speechPhase == 'listening'
-                                          ? Icons.mic
-                                          : _speechPhase == 'recognizing'
-                                              ? Icons.hearing
-                                              : Icons.mic_none,
-                                    ),
+                                ),
+                                const SizedBox(height: CentliSpacing.dense),
+                                const Divider(height: 1, thickness: 0.5),
+                              ],
                             ),
-                            const SizedBox(width: 4),
-                            FilledButton(
-                              onPressed: (_saving ||
-                                      _aiFilling ||
-                                      _speechPhase == 'listening')
-                                  ? null
-                                  : _applyAiTextFill,
-                              child: Text(_aiFilling ? '…' : '填入'),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 6, 0, 0),
+                            // One Finch-style row: time + category + account (or transfer legs)
+                            child: _ChipScrollRow(
+                              children: [
+                                _MetaChip(
+                                  icon: Icons.schedule_rounded,
+                                  label: _happenAtLabel,
+                                  onTap: _pickHappenAt,
+                                ),
+                                if (_type != 'transfer') ...[
+                                  Builder(
+                                    builder: (context) {
+                                      final cat = _categoryById(_categoryId);
+                                      return _MetaChip(
+                                        leading: cat == null
+                                            ? null
+                                            : CentliIconChip(
+                                                name: cat.name,
+                                                kind: cat.kind,
+                                                iconKey: cat.icon,
+                                                size: 22,
+                                              ),
+                                        icon: cat == null
+                                            ? Icons.category_outlined
+                                            : null,
+                                        label: cat?.name ?? '\u5206\u7c7b',
+                                        onTap: _pickCategory,
+                                      );
+                                    },
+                                  ),
+                                  Builder(
+                                    builder: (context) {
+                                      final acc = _accountById(_accountId);
+                                      return _MetaChip(
+                                        leading: acc == null
+                                            ? null
+                                            : CentliIconChip(
+                                                name: acc.name,
+                                                kind: 'account',
+                                                iconKey: acc.icon,
+                                                size: 22,
+                                              ),
+                                        icon: acc == null
+                                            ? Icons
+                                                  .account_balance_wallet_outlined
+                                            : null,
+                                        // Short: 现金 · CNY (no 人民币)
+                                        label: acc == null
+                                            ? '\u8d26\u6237'
+                                            : '${acc.name} \u00b7 ${acc.currency}',
+                                        onTap: () =>
+                                            _pickAccount(toAccount: false),
+                                      );
+                                    },
+                                  ),
+                                ] else ...[
+                                  Builder(
+                                    builder: (context) {
+                                      final acc = _accountById(_accountId);
+                                      return _MetaChip(
+                                        leading: acc == null
+                                            ? null
+                                            : CentliIconChip(
+                                                name: acc.name,
+                                                kind: 'account',
+                                                iconKey: acc.icon,
+                                                size: 22,
+                                              ),
+                                        icon: Icons.south_west_rounded,
+                                        label: acc == null
+                                            ? '\u8f6c\u51fa'
+                                            : '\u8f6c\u51fa \u00b7 ${acc.name}',
+                                        onTap: () =>
+                                            _pickAccount(toAccount: false),
+                                      );
+                                    },
+                                  ),
+                                  Builder(
+                                    builder: (context) {
+                                      final acc = _accountById(_toAccountId);
+                                      return _MetaChip(
+                                        leading: acc == null
+                                            ? null
+                                            : CentliIconChip(
+                                                name: acc.name,
+                                                kind: 'account',
+                                                iconKey: acc.icon,
+                                                size: 22,
+                                              ),
+                                        icon: Icons.north_east_rounded,
+                                        label: acc == null
+                                            ? '\u8f6c\u5165'
+                                            : '\u8f6c\u5165 \u00b7 ${acc.name}',
+                                        onTap: () =>
+                                            _pickAccount(toAccount: true),
+                                      );
+                                    },
+                                  ),
+                                ],
+                              ],
                             ),
-                          ],
-                        ),
-                        if (_speechPhase != 'idle') ...[
-                          const SizedBox(height: 8),
-                          _SpeechStatusBanner(
-                            label: _speechStatusLabel,
-                            phase: _speechPhase,
-                            level: _speechLevel,
-                            onStop: (_speechBusy)
-                                ? null
-                                : () => _stopSpeech(userInitiated: true),
+                          ),
+                          if (_type == 'transfer' && _isCrossCurrency)
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                              child: Text(
+                                '\u8de8\u5e01\uff1a\u4fdd\u5b58\u65f6\u4f1a\u8be2\u95ee\u5bf9\u65b9\u91d1\u989d/\u6c47\u7387',
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(color: scheme.onSurfaceVariant),
+                              ),
+                            ),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
+                            child: TextField(
+                              controller: _noteCtrl,
+                              decoration: InputDecoration(
+                                hintText: '\u5907\u6ce8',
+                                isDense: true,
+                                prefixIcon: Icon(
+                                  Icons.edit_outlined,
+                                  size: 20,
+                                  color: scheme.onSurfaceVariant,
+                                ),
+                                filled: true,
+                                fillColor: const Color(0xFFF7F8FA),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                  borderSide: const BorderSide(
+                                    color: Color(0xFFE6E8EC),
+                                  ),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                  borderSide: const BorderSide(
+                                    color: Color(0xFFE6E8EC),
+                                  ),
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 10,
+                                ),
+                              ),
+                            ),
                           ),
                         ],
-                      ],
-                    ],
-                  ),
-                ),
-
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        if (_amountHasOperator)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 2),
-                            child: Text(
-                              _amountText,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleSmall
-                                  ?.copyWith(
-                                    color: scheme.onSurfaceVariant,
-                                  ),
-                            ),
-                          ),
-                        Text(
-                          formatMinor(
-                            _currency,
-                            toMinor(
-                              _currency,
-                              _evalAmount(_amountText) ?? 0,
-                            ),
-                          ),
-                          style: Theme.of(context)
-                              .textTheme
-                              .displaySmall
-                              ?.copyWith(
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: -0.5,
-                                height: 1.05,
-                              ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          currencyLabel(_currency),
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodySmall
-                              ?.copyWith(
-                                color: scheme.onSurfaceVariant,
-                                fontWeight: FontWeight.w500,
-                              ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      _MetaChip(
-                        icon: Icons.schedule_rounded,
-                        label: _happenAtLabel,
-                        onTap: _pickHappenAt,
-                      ),
-                      if (_type != 'transfer') ...[
-                        Builder(
-                          builder: (context) {
-                            final cat = _categoryById(_categoryId);
-                            return _MetaChip(
-                              leading: cat == null
-                                  ? null
-                                  : CentliIconChip(
-                                      name: cat.name,
-                                      kind: cat.kind,
-                                      iconKey: cat.icon,
-                                      size: 22,
-                                    ),
-                              icon: cat == null
-                                  ? Icons.category_outlined
-                                  : null,
-                              label: cat?.name ?? '\u5206\u7c7b',
-                              onTap: _pickCategory,
-                            );
-                          },
-                        ),
-                        Builder(
-                          builder: (context) {
-                            final acc = _accountById(_accountId);
-                            return _MetaChip(
-                              leading: acc == null
-                                  ? null
-                                  : CentliIconChip(
-                                      name: acc.name,
-                                      kind: 'account',
-                                      iconKey: acc.icon,
-                                      size: 22,
-                                    ),
-                              icon: acc == null
-                                  ? Icons.account_balance_wallet_outlined
-                                  : null,
-                              label: acc == null
-                                  ? '\u8d26\u6237'
-                                  : '${acc.name} \u00b7 ${currencyLabel(acc.currency)}',
-                              onTap: () => _pickAccount(toAccount: false),
-                            );
-                          },
-                        ),
-                      ] else ...[
-                        Builder(
-                          builder: (context) {
-                            final acc = _accountById(_accountId);
-                            return _MetaChip(
-                              leading: acc == null
-                                  ? null
-                                  : CentliIconChip(
-                                      name: acc.name,
-                                      kind: 'account',
-                                      iconKey: acc.icon,
-                                      size: 22,
-                                    ),
-                              icon: Icons.south_west_rounded,
-                              label: acc == null
-                                  ? '\u8f6c\u51fa'
-                                  : '\u8f6c\u51fa \u00b7 ${acc.name}',
-                              onTap: () => _pickAccount(toAccount: false),
-                            );
-                          },
-                        ),
-                        Builder(
-                          builder: (context) {
-                            final acc = _accountById(_toAccountId);
-                            return _MetaChip(
-                              leading: acc == null
-                                  ? null
-                                  : CentliIconChip(
-                                      name: acc.name,
-                                      kind: 'account',
-                                      iconKey: acc.icon,
-                                      size: 22,
-                                    ),
-                              icon: Icons.north_east_rounded,
-                              label: acc == null
-                                  ? '\u8f6c\u5165'
-                                  : '\u8f6c\u5165 \u00b7 ${acc.name}',
-                              onTap: () => _pickAccount(toAccount: true),
-                            );
-                          },
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                if (_type == 'transfer' && _isCrossCurrency)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                    child: Text(
-                      '\u8de8\u5e01\uff1a\u4fdd\u5b58\u65f6\u4f1a\u8be2\u95ee\u5bf9\u65b9\u91d1\u989d/\u6c47\u7387',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: scheme.onSurfaceVariant,
-                          ),
-                    ),
-                  ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                  child: TextField(
-                    controller: _noteCtrl,
-                    decoration: InputDecoration(
-                      hintText: '\u5907\u6ce8',
-                      isDense: true,
-                      prefixIcon: Icon(
-                        Icons.edit_outlined,
-                        size: 20,
-                        color: scheme.onSurfaceVariant,
-                      ),
-                      filled: true,
-                      fillColor: const Color(0xFFF7F8FA),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: const BorderSide(color: Color(0xFFE6E8EC)),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: const BorderSide(color: Color(0xFFE6E8EC)),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 12,
                       ),
                     ),
                   ),
-                ),
-                const Spacer(),
-                _Keypad(
-                  onKey: _onKey,
-                  onSubmit: _saving ? null : () => _save(),
-                  onLongSubmit: (_saving || widget.existing != null)
-                      ? null
-                      : () => _save(keepOpen: true),
-                ),
-              ],
-            ),
+                  SizedBox(height: CentliSpacing.sheetGap),
+                  _Keypad(
+                    onKey: _onKey,
+                    onSubmit: _saving ? null : () => _save(),
+                    onLongSubmit: (_saving || widget.existing != null)
+                        ? null
+                        : () => _save(keepOpen: true),
+                  ),
+                  SizedBox(
+                    height: safeBottom > 0 ? safeBottom : CentliSpacing.dense,
+                  ),
+                ],
+              ),
+      ),
     );
   }
 }
 
+/// One Finch-style chip row: left-aligned, horizontal drag when overflowing.
+class _ChipScrollRow extends StatelessWidget {
+  const _ChipScrollRow({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    if (children.isEmpty) return const SizedBox.shrink();
+    return SizedBox(
+      height: 40,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.only(right: 16),
+        child: Row(
+          children: [
+            for (var i = 0; i < children.length; i++) ...[
+              if (i > 0) const SizedBox(width: CentliSpacing.item),
+              children[i],
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class _MetaChip extends StatelessWidget {
   const _MetaChip({
@@ -1474,7 +1564,7 @@ class _MetaChip extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(20),
         child: Container(
-          padding: const EdgeInsets.fromLTRB(10, 8, 12, 8),
+          padding: const EdgeInsets.fromLTRB(10, 6, 12, 6),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
             border: Border.all(color: const Color(0xFFE6E8EC)),
@@ -1502,10 +1592,8 @@ class _MetaChip extends StatelessWidget {
                   label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13,
-                      ),
+                  style: Theme.of(context).textTheme.labelLarge
+                      ?.copyWith(fontWeight: FontWeight.w600, fontSize: 13),
                 ),
               ),
             ],
@@ -1550,9 +1638,8 @@ class _AccountPickerSheet extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+                  style: Theme.of(context).textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w700),
                 ),
                 const Spacer(),
                 IconButton(
@@ -1581,8 +1668,7 @@ class _AccountPickerSheet extends StatelessWidget {
                   title: Text(
                     a.name,
                     style: TextStyle(
-                      fontWeight:
-                          selected ? FontWeight.w700 : FontWeight.w500,
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                     ),
                   ),
                   subtitle: Text(currencyLabel(a.currency)),
@@ -1609,6 +1695,7 @@ class _Keypad extends StatelessWidget {
 
   final void Function(String key) onKey;
   final VoidCallback? onSubmit;
+
   /// Long-press on check: save and keep sheet open (再记一笔).
   final VoidCallback? onLongSubmit;
 
@@ -1636,8 +1723,9 @@ class _Keypad extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+      padding: const EdgeInsets.fromLTRB(10, 0, 10, 4),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           for (final row in _keys)
             Row(
@@ -1645,9 +1733,9 @@ class _Keypad extends StatelessWidget {
                 for (final k in row)
                   Expanded(
                     child: Padding(
-                      padding: const EdgeInsets.all(4),
+                      padding: const EdgeInsets.all(3),
                       child: SizedBox(
-                        height: 54,
+                        height: 52,
                         child: Material(
                           color: _bg(k),
                           borderRadius: BorderRadius.circular(14),
@@ -1684,7 +1772,6 @@ class _Keypad extends StatelessWidget {
   }
 }
 
-
 class _SpeechStatusBanner extends StatelessWidget {
   const _SpeechStatusBanner({
     required this.label,
@@ -1720,8 +1807,8 @@ class _SpeechStatusBanner extends StatelessWidget {
               listening
                   ? Icons.graphic_eq
                   : phase == 'recognizing'
-                      ? Icons.hourglass_top
-                      : Icons.mic_none,
+                  ? Icons.hourglass_top
+                  : Icons.mic_none,
               color: listening ? scheme.error : scheme.onSecondaryContainer,
             ),
             const SizedBox(width: 10),
@@ -1732,11 +1819,11 @@ class _SpeechStatusBanner extends StatelessWidget {
                   Text(
                     label,
                     style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: listening
-                              ? scheme.onErrorContainer
-                              : scheme.onSecondaryContainer,
-                          fontWeight: FontWeight.w600,
-                        ),
+                      color: listening
+                          ? scheme.onErrorContainer
+                          : scheme.onSecondaryContainer,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   const SizedBox(height: 6),
                   ClipRRect(
@@ -1754,10 +1841,7 @@ class _SpeechStatusBanner extends StatelessWidget {
             ),
             if (onStop != null) ...[
               const SizedBox(width: 8),
-              TextButton(
-                onPressed: onStop,
-                child: const Text('停止'),
-              ),
+              TextButton(onPressed: onStop, child: const Text('停止')),
             ],
           ],
         ),

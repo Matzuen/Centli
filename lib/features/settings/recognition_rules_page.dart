@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/utils/money.dart';
 import '../../platform/notifications/notification_parse.dart';
 import '../../platform/notifications/noti_template_store.dart';
+import '../../app/theme.dart';
 
 /// Settings → 自动记账 → 识别规则.
 class RecognitionRulesPage extends StatefulWidget {
@@ -30,9 +31,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
     text: 'com.eg.android.AlipayGphone',
   );
   final _tryTitle = TextEditingController();
-  final _tryBody = TextEditingController(
-    text: '向 星巴克 付款成功 ¥28.50',
-  );
+  final _tryBody = TextEditingController(text: '向 星巴克 付款成功 ¥28.50');
   ParseExplainResult? _tryResult;
   bool _busy = false;
 
@@ -104,9 +103,8 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
       await NotiTemplateStore.deleteUserTemplate(t.id);
       await _reload();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已删除')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('已删除')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -132,14 +130,12 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
       final json = await NotiTemplateStore.exportUserRulesJson();
       await Clipboard.setData(ClipboardData(text: json));
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已复制我的规则 JSON 到剪贴板')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('已复制我的规则 JSON 到剪贴板')));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('导出失败: $e')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('导出失败: $e')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -156,9 +152,8 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
       final bytes = await f.readAsBytes();
       if (bytes.isEmpty) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('无法读取文件内容，请重试')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('无法读取文件内容，请重试')));
         return;
       }
       final fileText = utf8.decode(bytes);
@@ -194,14 +189,99 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
       );
       await _reload();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('已导入 $n 条规则')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('已导入 $n 条规则')));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('导入失败: $e')),
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('导入失败: $e')));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _importUserFromUrl() async {
+    final urlCtrl = TextEditingController();
+    final url = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('从网络导入我的规则'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              '粘贴 HTTPS 地址，下载 JSON 后按与本地导入相同的格式校验。'
+              '仅更新「我的规则」，不会改动官方模板。不会在启动时自动拉取。',
+            ),
+            const SizedBox(height: CentliSpacing.section),
+            TextField(
+              controller: urlCtrl,
+              autofocus: true,
+              keyboardType: TextInputType.url,
+              decoration: const InputDecoration(
+                labelText: 'HTTPS JSON 地址',
+                hintText: 'https://example.com/user_rules.json',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, urlCtrl.text.trim()),
+            child: const Text('下一步'),
+          ),
+        ],
+      ),
+    );
+    final pasted = url?.trim() ?? '';
+    urlCtrl.dispose();
+    if (pasted.isEmpty) return;
+    if (!mounted) return;
+
+    final merge = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('导入方式'),
+        content: Text('从\n$pasted\n下载后，合并到现有规则，还是完全替换？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('替换'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('合并'),
+          ),
+        ],
+      ),
+    );
+    if (merge == null) return;
+
+    setState(() => _busy = true);
+    try {
+      final n = await NotiTemplateStore.importUserRulesFromUrl(
+        pasted,
+        merge: merge,
       );
+      await _reload();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('已从网络导入 $n 条规则')));
+    } catch (e) {
+      if (!mounted) return;
+      final msg = e is FormatException ? (e.message) : '$e';
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('网络导入失败: $msg')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -225,16 +305,13 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  t.displayName,
-                  style: Theme.of(ctx).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 4),
+                Text(t.displayName, style: Theme.of(ctx).textTheme.titleLarge),
+                const SizedBox(height: CentliSpacing.dense),
                 Text(
                   disabled ? '已禁用 · 官方规则 · 只读' : '官方规则 · 只读',
                   style: Theme.of(ctx).textTheme.bodySmall,
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: CentliSpacing.section),
                 _kv('ID', t.id),
                 _kv('包名', t.packages.map(_pkgLabel).join('、')),
                 _kv('必须包含', t.mustContainRegex ?? '—'),
@@ -245,7 +322,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
                 _kv('商户取自标题', t.merchantFromTitle ? '是' : '否'),
                 _kv('账户提示', t.defaultAccountHint ?? '—'),
                 _kv('默认币种', t.defaultCurrency),
-                const SizedBox(height: 16),
+                const SizedBox(height: CentliSpacing.sectionLoose),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('启用此官方规则'),
@@ -268,7 +345,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
 
   Widget _kv(String k, String v) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: CentliSpacing.item),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -277,8 +354,8 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
             child: Text(
               k,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
           ),
           Expanded(child: SelectableText(v)),
@@ -299,10 +376,12 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
             onSelected: (v) {
               if (v == 'export') _exportUser();
               if (v == 'import') _importUser();
+              if (v == 'import_url') _importUserFromUrl();
             },
             itemBuilder: (_) => const [
               PopupMenuItem(value: 'export', child: Text('导出我的规则')),
-              PopupMenuItem(value: 'import', child: Text('导入我的规则')),
+              PopupMenuItem(value: 'import', child: Text('从文件导入')),
+              PopupMenuItem(value: 'import_url', child: Text('从网络导入')),
             ],
           ),
         ],
@@ -320,31 +399,41 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+              padding: const EdgeInsets.fromLTRB(
+                CentliSpacing.pageH,
+                CentliSpacing.pageTop,
+                CentliSpacing.pageH,
+                96,
+              ),
               children: [
                 Text(
-                  '官方规则只读；可在「我的规则」中自定义。解析时优先匹配我的规则。',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
+                  '官方规则只读，可单独启停；「我的规则」优先匹配。'
+                  '右上角可导入/导出规则；右下角添加自定义；底部「试一试」验证样例。',
+                  style: Theme.of(context).textTheme.bodyMedium
+                      ?.copyWith(color: scheme.onSurfaceVariant, height: 1.4),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: CentliSpacing.sectionLoose),
                 Text('官方规则', style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 4),
+                const SizedBox(height: CentliSpacing.dense),
                 Text(
                   'v$_version · $_source · ${_official.length} 条',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
+                  style: Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(color: scheme.onSurfaceVariant),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: CentliSpacing.item),
                 if (_official.isEmpty)
-                  const Card(
-                    child: ListTile(title: Text('暂无官方规则')),
+                  CentliSoftCard(
+                    padding: const EdgeInsets.all(CentliSpacing.cardPad),
+                    child: CentliEmptyState(
+                      icon: Icons.rule_folder_outlined,
+                      title: '暂无官方规则',
+                      message: '内置模板未加载时会出现这里；可从右上角导入规则包。',
+                      padding: EdgeInsets.zero,
+                    ),
                   )
                 else
                   for (final t in _official) ...[
-                    Card(
+                    CentliSoftCard(
                       child: ListTile(
                         leading: Icon(
                           _disabled.contains(t.id)
@@ -365,9 +454,9 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
                         onTap: () => _showOfficialDetail(t),
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: CentliSpacing.item),
                   ],
-                const SizedBox(height: 8),
+                const SizedBox(height: CentliSpacing.item),
                 Row(
                   children: [
                     Expanded(
@@ -378,30 +467,29 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
                     ),
                     Text(
                       '${_user.length} 条',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: scheme.onSurfaceVariant,
-                          ),
+                      style: Theme.of(context).textTheme.bodySmall
+                          ?.copyWith(color: scheme.onSurfaceVariant),
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: CentliSpacing.item),
                 if (_user.isEmpty)
-                  Card(
-                    child: ListTile(
-                      leading: Icon(Icons.playlist_add, color: scheme.primary),
-                      title: const Text('还没有自定义规则'),
-                      subtitle: const Text('点右下角「添加规则」创建'),
+                  CentliSoftCard(
+                    padding: const EdgeInsets.all(CentliSpacing.cardPad),
+                    child: CentliEmptyState(
+                      icon: Icons.playlist_add,
+                      title: '还没有自定义规则',
+                      message: '点右下角 + 添加，或右上角从文件/网络导入。解析时优先匹配我的规则。',
+                      padding: EdgeInsets.zero,
                     ),
                   )
                 else
                   for (final t in _user) ...[
-                    Card(
+                    CentliSoftCard(
                       child: ListTile(
                         leading: Icon(Icons.edit_note, color: scheme.primary),
                         title: Text(t.displayName),
-                        subtitle: Text(
-                          t.packages.map(_pkgLabel).join('、'),
-                        ),
+                        subtitle: Text(t.packages.map(_pkgLabel).join('、')),
                         trailing: PopupMenuButton<String>(
                           onSelected: (v) async {
                             if (v == 'edit') {
@@ -426,19 +514,18 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
                         },
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: CentliSpacing.item),
                   ],
-                const SizedBox(height: 16),
+                const SizedBox(height: CentliSpacing.sectionLoose),
                 Text('试一试', style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 4),
+                const SizedBox(height: CentliSpacing.dense),
                 Text(
                   '粘贴一条通知样例，用当前合并规则试解析（不入库）。',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
+                  style: Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(color: scheme.onSurfaceVariant),
                 ),
-                const SizedBox(height: 8),
-                Card(
+                const SizedBox(height: CentliSpacing.item),
+                CentliSoftCard(
                   child: Padding(
                     padding: const EdgeInsets.all(12),
                     child: Column(
@@ -460,10 +547,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
                               value: 'wechat',
                               child: Text('微信'),
                             ),
-                            DropdownMenuItem(
-                              value: 'other',
-                              child: Text('其它'),
-                            ),
+                            DropdownMenuItem(value: 'other', child: Text('其它')),
                           ],
                           onChanged: (v) {
                             if (v == null) return;
@@ -479,7 +563,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
                           },
                         ),
                         if (_tryAppChoice == 'other') ...[
-                          const SizedBox(height: 8),
+                          const SizedBox(height: CentliSpacing.item),
                           TextField(
                             controller: _tryPkgCtrl,
                             decoration: const InputDecoration(
@@ -490,7 +574,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
                             ),
                           ),
                         ],
-                        const SizedBox(height: 8),
+                        const SizedBox(height: CentliSpacing.item),
                         TextField(
                           controller: _tryTitle,
                           decoration: const InputDecoration(
@@ -499,7 +583,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
                             isDense: true,
                           ),
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: CentliSpacing.item),
                         TextField(
                           controller: _tryBody,
                           minLines: 3,
@@ -510,14 +594,14 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
                             alignLabelWithHint: true,
                           ),
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: CentliSpacing.section),
                         FilledButton.tonalIcon(
                           onPressed: _runTry,
                           icon: const Icon(Icons.play_arrow),
                           label: const Text('试解析'),
                         ),
                         if (_tryResult != null) ...[
-                          const SizedBox(height: 12),
+                          const SizedBox(height: CentliSpacing.section),
                           _TryResultCard(result: _tryResult!),
                         ],
                       ],
@@ -557,21 +641,17 @@ class _TryResultCard extends StatelessWidget {
         children: [
           Text(
             result.reason,
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  color: okColor,
-                ),
+            style: Theme.of(context).textTheme.titleSmall
+                ?.copyWith(color: okColor),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: CentliSpacing.item),
           Text('金额：$amountText'),
           Text('商户：${r.merchant ?? '—'}'),
           Text('规则：${r.templateId ?? '—'}'),
           Text('币种：${r.currency ?? '—'}'),
           if (result.steps.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text(
-              '步骤',
-              style: Theme.of(context).textTheme.labelLarge,
-            ),
+            const SizedBox(height: CentliSpacing.item),
+            Text('步骤', style: Theme.of(context).textTheme.labelLarge),
             for (final s in result.steps) Text('· $s'),
           ],
         ],

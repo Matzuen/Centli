@@ -7,6 +7,7 @@ import '../../data/db/database_provider.dart';
 import '../../platform/notifications/notification_listener_stub.dart';
 import '../../platform/notifications/notification_parse.dart';
 import '../../platform/notifications/noti_template_store.dart';
+import '../../app/theme.dart';
 
 /// Full auto-capture settings at `/me/auto` (wireframe §8).
 class AutoCapturePage extends ConsumerStatefulWidget {
@@ -111,9 +112,8 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
         if (!mounted) return;
         setState(() => _granted = granted);
         if (!granted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('请先在系统设置中开启通知使用权')),
-          );
+          ScaffoldMessenger.of(context)
+              .showSnackBar(const SnackBar(content: Text('请先在系统设置中开启通知使用权')));
           return;
         }
       }
@@ -133,9 +133,8 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
       if (!mounted) return;
       setState(() => _listenerConnected = connected);
       if (connected) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('已请求重新连接通知监听')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('已请求重新连接通知监听')));
         return;
       }
     }
@@ -174,11 +173,7 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
       if (!mounted) return;
       setState(() => _accountMap = map);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            accountId == null ? '已清除映射' : '已保存默认账户',
-          ),
-        ),
+        SnackBar(content: Text(accountId == null ? '已清除映射' : '已保存默认账户')),
       );
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -189,7 +184,9 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
     setState(() => _busy = true);
     try {
       final result = await NotiTemplateStore.checkAndApplyUpdate();
-      await ref.read(databaseProvider).setSetting(
+      await ref
+          .read(databaseProvider)
+          .setSetting(
             'notification_template_version',
             '${result.activeVersion}',
           );
@@ -199,9 +196,8 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
         _templateUpdatedAt = NotiTemplateStore.updatedAt;
         _templateSource = result.source;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result.message)),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(result.message)));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -212,9 +208,8 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
     if (ledgerId == null) return;
     if (_pendingCount == 0) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('暂无待确认账单')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('暂无待确认账单')));
       return;
     }
 
@@ -223,9 +218,7 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('清空待确认'),
-        content: Text(
-          '将删除当前账本下 $_pendingCount 条待确认记录（不影响已入账流水）。此操作不可撤销。',
-        ),
+        content: Text('将删除当前账本下 $_pendingCount 条待确认记录（不影响已入账流水）。此操作不可撤销。'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -275,8 +268,7 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
               children: [
                 Text('版本：$_templateVersion'),
                 Text('来源：$_templateSource'),
-                if (_templateUpdatedAt != null)
-                  Text('更新于：$_templateUpdatedAt'),
+                if (_templateUpdatedAt != null) Text('更新于：$_templateUpdatedAt'),
                 const SizedBox(height: 12),
                 Text(
                   '模板共 ${templates.length} 条',
@@ -288,9 +280,7 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
                     contentPadding: EdgeInsets.zero,
                     dense: true,
                     title: Text(t.id),
-                    subtitle: Text(
-                      t.packages.map(_pkgLabel).join('、'),
-                    ),
+                    subtitle: Text(t.packages.map(_pkgLabel).join('、')),
                   ),
                 ],
                 const SizedBox(height: 4),
@@ -329,18 +319,17 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+              padding: CentliSpacing.pagePadding,
               children: [
                 Text(
                   '开启后将读取支付宝/微信等支付成功类通知，生成待确认账单；'
                   '不会自动入账或静默改账。',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
+                  style: Theme.of(context).textTheme.bodyMedium
+                      ?.copyWith(color: scheme.onSurfaceVariant),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: CentliSpacing.sectionLoose),
                 if (!supported) ...[
-                  Card(
+                  CentliSoftCard(
                     child: ListTile(
                       leading: Icon(
                         Icons.desktop_windows_outlined,
@@ -352,17 +341,17 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
                       ),
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: CentliSpacing.section),
                 ],
-                Card(
+                CentliSoftCard(
                   child: SwitchListTile(
                     title: const Text('启用通知捕获'),
                     subtitle: Text(
                       !supported
                           ? '当前平台不可用'
                           : (_granted
-                              ? (_enabled ? '已开启' : '已关闭')
-                              : '需先授予通知使用权'),
+                                ? (_enabled ? '已开启' : '已关闭')
+                                : '需先授予通知使用权'),
                     ),
                     value: switchOn,
                     onChanged: (!supported || _busy)
@@ -370,20 +359,43 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
                         : (v) => _setEnabled(v),
                   ),
                 ),
-                const SizedBox(height: 8),
-                Card(
+                const SizedBox(height: CentliSpacing.section),
+                CentliSoftCard(
                   child: ListTile(
                     leading: const Icon(Icons.rule_outlined),
                     title: const Text('识别规则'),
-                    subtitle: Text(
-                      '官方 v$_templateVersion · 自定义解析模板',
-                    ),
+                    subtitle: Text('官方 v$_templateVersion · 自定义解析模板'),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () => context.push('/me/auto/rules'),
                   ),
                 ),
-                const SizedBox(height: 8),
-                Card(
+                const SizedBox(height: CentliSpacing.section),
+                CentliSoftCard(
+                  child: Column(
+                    children: [
+                      ListTile(
+                        leading: const Icon(Icons.tips_and_updates_outlined),
+                        title: const Text('发出去没通知？'),
+                        subtitle: const Text(
+                          '红包/转账常无支付成功通知。可用分享账单、截图识别或剪贴板导入到待确认。',
+                        ),
+                        isThreeLine: true,
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => context.push('/me/auto/manual-help'),
+                      ),
+                      const Divider(height: 1, indent: 56),
+                      ListTile(
+                        leading: const Icon(Icons.pending_actions_outlined),
+                        title: const Text('打开待确认'),
+                        subtitle: const Text('集中确认、忽略或补全解析失败项'),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => context.push('/home/pending'),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: CentliSpacing.section),
+                CentliSoftCard(
                   child: ListTile(
                     leading: Icon(
                       _granted
@@ -396,10 +408,10 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
                       !supported
                           ? '仅 Android 可申请'
                           : (!_granted
-                              ? '未开启 · 去开启'
-                              : (_listenerConnected
-                                  ? '已开启 · 监听已连接'
-                                  : '已开启 · 监听未连接（请点此重连或开关一次通知使用权）')),
+                                ? '未开启 · 去开启'
+                                : (_listenerConnected
+                                      ? '已开启 · 监听已连接'
+                                      : '已开启 · 监听未连接（请点此重连或开关一次通知使用权）')),
                     ),
                     trailing: supported && !_granted
                         ? FilledButton.tonal(
@@ -407,15 +419,15 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
                             child: const Text('去开启'),
                           )
                         : (supported
-                            ? TextButton(
-                                onPressed: _busy ? null : _openPermission,
-                                child: const Text('系统设置'),
-                              )
-                            : null),
+                              ? TextButton(
+                                  onPressed: _busy ? null : _openPermission,
+                                  child: const Text('系统设置'),
+                                )
+                              : null),
                   ),
                 ),
-                const SizedBox(height: 8),
-                Card(
+                const SizedBox(height: CentliSpacing.section),
+                CentliSoftCard(
                   child: ListTile(
                     leading: Icon(
                       _batteryIgnored
@@ -428,8 +440,8 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
                       !supported
                           ? '仅 Android 相关：系统杀后台会导致漏记'
                           : (_batteryIgnored
-                              ? '已忽略电池优化，有利于后台捕获'
-                              : '建议将 Centli 设为「不优化」，减少通知监听被系统杀掉'),
+                                ? '已忽略电池优化，有利于后台捕获'
+                                : '建议将 Centli 设为「不优化」，减少通知监听被系统杀掉'),
                     ),
                     trailing: supported
                         ? FilledButton.tonal(
@@ -439,20 +451,25 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
                         : null,
                   ),
                 ),
-                const SizedBox(height: 16),
-                Text('应用 → 默认账户', style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 4),
+                const SizedBox(height: CentliSpacing.sectionLoose),
+                Text(
+                  '应用 → 默认账户',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: CentliSpacing.dense),
                 Text(
                   '解析成功后预填账户；仍需在待确认页点「入账」。',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
+                  style: Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(color: scheme.onSurfaceVariant),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: CentliSpacing.section),
                 for (final def in kCaptureAppDefs) ...[
-                  Card(
+                  CentliSoftCard(
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: CentliSpacing.item,
+                      ),
                       child: Row(
                         children: [
                           Expanded(
@@ -467,7 +484,8 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
                               key: ValueKey(
                                 'cap-map-${def.hint}-${_accountMap[def.hint]}',
                               ),
-                              initialValue: _accountMap[def.hint] != null &&
+                              initialValue:
+                                  _accountMap[def.hint] != null &&
                                       _accounts.any(
                                         (a) => a.id == _accountMap[def.hint],
                                       )
@@ -499,10 +517,10 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
                       ),
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: CentliSpacing.section),
                 ],
-                const SizedBox(height: 8),
-                Card(
+                const SizedBox(height: CentliSpacing.section),
+                CentliSoftCard(
                   child: ListTile(
                     leading: const Icon(Icons.rule_folder_outlined),
                     title: const Text('解析模板'),
@@ -515,14 +533,12 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
                     onTap: _showTemplateVersion,
                   ),
                 ),
-                const SizedBox(height: 8),
-                Card(
+                const SizedBox(height: CentliSpacing.section),
+                CentliSoftCard(
                   child: ListTile(
                     leading: const Icon(Icons.system_update_alt),
                     title: const Text('检查模板更新'),
-                    subtitle: const Text(
-                      '对比内置 assets；有更新或尚无本地覆盖时写入 documents',
-                    ),
+                    subtitle: const Text('对比内置 assets；有更新或尚无本地覆盖时写入 documents'),
                     trailing: _busy
                         ? const SizedBox(
                             width: 24,
@@ -533,20 +549,16 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
                     onTap: _busy ? null : _checkTemplateUpdate,
                   ),
                 ),
-                const SizedBox(height: 8),
-                                Text(
-                  '发出去没通知？',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 4),
+                const SizedBox(height: CentliSpacing.section),
+                Text('发出去没通知？', style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: CentliSpacing.dense),
                 Text(
                   '微信/支付宝发出去的红包、转账常无系统通知。可用分享账单、截图 OCR、剪贴板/快捷指令 URL 加入同一待确认队列',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
+                  style: Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(color: scheme.onSurfaceVariant),
                 ),
-                const SizedBox(height: 8),
-                Card(
+                const SizedBox(height: CentliSpacing.section),
+                CentliSoftCard(
                   child: ListTile(
                     leading: const Icon(Icons.share_outlined),
                     title: const Text('分享账单到 Centli'),
@@ -555,8 +567,8 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
                     onTap: () => context.push('/me/auto/manual-help'),
                   ),
                 ),
-                const SizedBox(height: 8),
-                Card(
+                const SizedBox(height: CentliSpacing.section),
+                CentliSoftCard(
                   child: ListTile(
                     leading: const Icon(Icons.document_scanner_outlined),
                     title: const Text('从截图识别'),
@@ -565,32 +577,31 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
                     onTap: () => context.push('/home/pending'),
                   ),
                 ),
-                const SizedBox(height: 8),
-                Card(
+                const SizedBox(height: CentliSpacing.section),
+                CentliSoftCard(
                   child: ListTile(
                     leading: const Icon(Icons.link_outlined),
                     title: const Text('剪贴板 / 快捷指令'),
-                    subtitle: const Text('centli://pending?text=... 或待确认页「从剪贴板导入」'),
+                    subtitle: const Text(
+                      'centli://pending?text=... 或待确认页「从剪贴板导入」',
+                    ),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () => context.push('/me/auto/manual-help'),
                   ),
                 ),
-                const SizedBox(height: 8),
-                const SizedBox(height: 8),
-Card(
+                const SizedBox(height: CentliSpacing.section),
+                CentliSoftCard(
                   child: ListTile(
                     leading: const Icon(Icons.pending_actions_outlined),
                     title: const Text('待确认队列'),
                     subtitle: Text(
-                      _pendingCount == 0
-                          ? '暂无待确认'
-                          : '$_pendingCount 条待确认',
+                      _pendingCount == 0 ? '暂无待确认' : '$_pendingCount 条待确认',
                     ),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () => context.push('/home/pending'),
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: CentliSpacing.sectionLoose),
                 Row(
                   children: [
                     Expanded(
@@ -600,7 +611,7 @@ Card(
                         label: const Text('清空待确认'),
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: CentliSpacing.section),
                     Expanded(
                       child: OutlinedButton.icon(
                         onPressed: _showTemplateVersion,

@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:excel/excel.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../core/utils/money.dart';
@@ -44,7 +45,20 @@ class ExportService {
   final CentliDatabase db;
 
   static const exportVersion = 1;
-  static const appVersion = '1.0.1+2';
+
+  /// Matches About / pubspec via [PackageInfo]; fallback if unavailable.
+  static Future<String> currentAppVersion() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      final name = info.version.trim();
+      final build = info.buildNumber.trim();
+      if (name.isEmpty) return '1.1.0+3';
+      if (build.isEmpty) return name;
+      return '$name+$build';
+    } catch (_) {
+      return '1.1.0+3';
+    }
+  }
 
   Future<Map<String, dynamic>> buildBundle({
     required String ledgerId,
@@ -74,7 +88,7 @@ class ExportService {
       'export_version': exportVersion,
       'schema_version': 3,
       'exported_at': DateTime.now().toUtc().toIso8601String(),
-      'app_version': appVersion,
+      'app_version': await currentAppVersion(),
       'ledger': ledger.toJson(),
       'accounts': accounts.map((e) => e.toJson()).toList(),
       'categories': categories.map((e) => e.toJson()).toList(),

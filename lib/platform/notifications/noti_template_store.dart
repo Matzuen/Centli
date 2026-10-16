@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
@@ -340,6 +342,58 @@ abstract final class NotiTemplateStore {
     return imported.length;
   }
 
+  /// Fetch user-rules JSON from an HTTPS URL, then [importUserRulesJson].
+  /// Does **not** run on startup — only when the user triggers it.
+  /// Throws [FormatException] / [TimeoutException] / [HttpException]-style
+  /// messages with Chinese-friendly text for the UI.
+  static Future<int> importUserRulesFromUrl(
+    String url, {
+    bool merge = true,
+    http.Client? client,
+    Duration timeout = const Duration(seconds: 20),
+  }) async {
+    final trimmed = url.trim();
+    if (trimmed.isEmpty) {
+      throw const FormatException('请填写规则 JSON 的 HTTPS 地址');
+    }
+    final uri = Uri.tryParse(trimmed);
+    if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
+      throw const FormatException('URL 无效');
+    }
+    if (uri.scheme.toLowerCase() != 'https') {
+      throw const FormatException('仅支持 HTTPS 地址');
+    }
+
+    final ownsClient = client == null;
+    final httpClient = client ?? http.Client();
+    try {
+      final res = await httpClient.get(uri).timeout(timeout);
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        throw FormatException('下载失败（HTTP ${res.statusCode}）');
+      }
+      final body = res.body;
+      if (body.trim().isEmpty) {
+        throw const FormatException('响应内容为空');
+      }
+      return await importUserRulesJson(body, merge: merge);
+    } on TimeoutException {
+      throw const FormatException('下载超时，请检查网络后重试');
+    } on FormatException {
+      rethrow;
+    } on http.ClientException catch (e) {
+      throw FormatException('网络错误: ${e.message}');
+    } on SocketException catch (e) {
+      throw FormatException('无法连接: ${e.message}');
+    } catch (e) {
+      if (e is FormatException) rethrow;
+      // jsonDecode / schema errors propagate as FormatException from import
+      if (e.toString().contains('FormatException')) rethrow;
+      throw FormatException('导入失败: $e');
+    } finally {
+      if (ownsClient) httpClient.close();
+    }
+  }
+
   static Future<void> _persistUserFile() async {
     final doc = await _userDocumentsFile();
     await doc.parent.create(recursive: true);
@@ -440,4 +494,4 @@ class TemplateUpdateResult {
 }
 
 /// Keep in sync with assets/noti_templates.json `version`.
-const int kNotiTemplateFallbackVersion = 3;
+const int kNotiTemplateFallbackVersion = 5;
