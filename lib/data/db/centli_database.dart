@@ -2113,21 +2113,33 @@ class CentliDatabase extends _$CentliDatabase {
     bool replaceFxRates = true,
   }) async {
     final ledgerRow = Ledger.fromJson(ledgerMap);
-    final accountRows = [for (final m in accountMaps) Account.fromJson(m)];
+    final lid = ledgerRow.id;
+    // Force every child row onto the restored ledger (R1-3 / audit).
+    final accountRows = [
+      for (final m in accountMaps) Account.fromJson(m).copyWith(ledgerId: lid),
+    ];
     final categoryRows = _sortCategoriesForInsert([
-      for (final m in categoryMaps) Category.fromJson(m),
+      for (final m in categoryMaps)
+        Category.fromJson(m).copyWith(ledgerId: lid),
     ]);
-    final txnRows = [for (final m in transactionMaps) Transaction.fromJson(m)];
-    final ruleRows = [for (final m in merchantRuleMaps) MerchantRule.fromJson(m)];
+    final txnRows = [
+      for (final m in transactionMaps)
+        Transaction.fromJson(m).copyWith(ledgerId: lid),
+    ];
+    final ruleRows = [
+      for (final m in merchantRuleMaps)
+        MerchantRule.fromJson(m).copyWith(ledgerId: lid),
+    ];
     final pendingRows = [
-      for (final m in pendingCaptureMaps) PendingCapture.fromJson(m),
+      for (final m in pendingCaptureMaps)
+        PendingCapture.fromJson(m).copyWith(ledgerId: lid),
     ];
     final fxRows = [for (final m in fxRateMaps) FxRate.fromJson(m)];
-    final budgetRows = [for (final m in budgetMaps) Budget.fromJson(m)];
+    final budgetRows = [
+      for (final m in budgetMaps) Budget.fromJson(m).copyWith(ledgerId: lid),
+    ];
 
     var settingsWritten = 0;
-
-    final lid = ledgerRow.id;
 
     await transaction(() async {
       // Scoped wipe: only the ledger being restored (export is single-ledger).

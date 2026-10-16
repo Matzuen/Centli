@@ -50,6 +50,36 @@ class NotiTemplate {
     );
   }
 
+  /// Parse + validate regex fields. Returns null on schema/regex errors.
+  static NotiTemplate? tryParse(Map<String, dynamic> j) {
+    try {
+      final t = NotiTemplate.fromJson(j);
+      t.validateRegexes();
+      return t;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Throws [FormatException] if any regex field is invalid.
+  void validateRegexes() {
+    for (final entry in [
+      ('amountRegex', amountRegex),
+      ('titleRegex', titleRegex),
+      ('mustContainRegex', mustContainRegex),
+      ('excludeTextRegex', excludeTextRegex),
+      ('merchantRegex', merchantRegex),
+    ]) {
+      final raw = entry.$2?.trim();
+      if (raw == null || raw.isEmpty) continue;
+      try {
+        RegExp(raw);
+      } catch (e) {
+        throw FormatException('${entry.$1} 正则无效: $e');
+      }
+    }
+  }
+
   Map<String, dynamic> toJson() => {
         'id': id,
         if (name != null) 'name': name,
@@ -200,42 +230,47 @@ ParseResult parseNotification(
   final when = DateTime.fromMillisecondsSinceEpoch(raw.whenMs, isUtc: false);
 
   for (final t in matched) {
-    if (t.titleRegex != null &&
-        !RegExp(t.titleRegex!).hasMatch(raw.title)) {
-      continue;
-    }
-    final body = raw.fullText;
-    if (t.excludeTextRegex != null &&
-        RegExp(t.excludeTextRegex!).hasMatch(body)) {
-      continue;
-    }
-    if (t.mustContainRegex != null &&
-        !RegExp(t.mustContainRegex!).hasMatch(body)) {
-      continue;
-    }
-
-    final extracted = _extractAmount(body, t.amountRegex, t.defaultCurrency);
-    String? merchant;
-    if (t.merchantFromTitle && raw.title.trim().isNotEmpty) {
-      merchant = raw.title.trim();
-      if (t.merchantRegex != null) {
-        final m = RegExp(t.merchantRegex!).firstMatch(raw.title);
-        if (m != null) merchant = (m.group(1) ?? merchant).trim();
+    try {
+      if (t.titleRegex != null &&
+          !RegExp(t.titleRegex!).hasMatch(raw.title)) {
+        continue;
       }
-    } else if (t.merchantRegex != null) {
-      final m = RegExp(t.merchantRegex!).firstMatch(body);
-      if (m != null) merchant = (m.group(1) ?? '').trim();
-    }
+      final body = raw.fullText;
+      if (t.excludeTextRegex != null &&
+          RegExp(t.excludeTextRegex!).hasMatch(body)) {
+        continue;
+      }
+      if (t.mustContainRegex != null &&
+          !RegExp(t.mustContainRegex!).hasMatch(body)) {
+        continue;
+      }
 
-    return ParseResult(
-      amountMinor: extracted?.minor,
-      currency: extracted?.currency ?? t.defaultCurrency,
-      merchant: merchant?.isEmpty == true ? null : merchant,
-      happenAt: when,
-      ok: extracted != null,
-      templateId: t.id,
-      accountHint: t.defaultAccountHint,
-    );
+      final extracted = _extractAmount(body, t.amountRegex, t.defaultCurrency);
+      String? merchant;
+      if (t.merchantFromTitle && raw.title.trim().isNotEmpty) {
+        merchant = raw.title.trim();
+        if (t.merchantRegex != null) {
+          final m = RegExp(t.merchantRegex!).firstMatch(raw.title);
+          if (m != null) merchant = (m.group(1) ?? merchant).trim();
+        }
+      } else if (t.merchantRegex != null) {
+        final m = RegExp(t.merchantRegex!).firstMatch(body);
+        if (m != null) merchant = (m.group(1) ?? '').trim();
+      }
+
+      return ParseResult(
+        amountMinor: extracted?.minor,
+        currency: extracted?.currency ?? t.defaultCurrency,
+        merchant: merchant?.isEmpty == true ? null : merchant,
+        happenAt: when,
+        ok: extracted != null,
+        templateId: t.id,
+        accountHint: t.defaultAccountHint,
+      );
+    } catch (_) {
+      // Bad regex / rule - skip and try next template (R1-3 resilience).
+      continue;
+    }
   }
 
   return ParseResult(ok: false, happenAt: when, currency: 'CNY');
