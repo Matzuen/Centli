@@ -152,6 +152,128 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
     }
   }
 
+
+  Future<void> _importOfficialFile() async {
+    try {
+      final files = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['json'],
+      );
+      if (files.isEmpty) return;
+      final bytes = await files.first.readAsBytes();
+      if (bytes.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('无法读取文件内容，请重试')),
+        );
+        return;
+      }
+      setState(() => _busy = true);
+      final r = await NotiTemplateStore.importOfficialRulesJson(utf8.decode(bytes));
+      await _reload();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(r.message)));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('导入官方规则失败: $e')));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _importOfficialFromUrl() async {
+    final urlCtrl = TextEditingController(
+      text: NotiTemplateStore.kDefaultOfficialRulesUrl,
+    );
+    final url = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('从网络导入官方规则'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              '粘贴 HTTPS 地址下载官方规则 JSON。'
+              '仅当 version 更高时覆盖；失败则保留原规则。'
+              '默认地址留空，请使用自建 Raw/Gist。',
+            ),
+            const SizedBox(height: CentliSpacing.section),
+            TextField(
+              controller: urlCtrl,
+              autofocus: true,
+              keyboardType: TextInputType.url,
+              decoration: const InputDecoration(
+                labelText: 'HTTPS JSON 地址',
+                hintText: 'https://example.com/noti_templates.json',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, urlCtrl.text.trim()),
+            child: const Text('下载'),
+          ),
+        ],
+      ),
+    );
+    if (url == null || url.isEmpty) return;
+    try {
+      setState(() => _busy = true);
+      final r = await NotiTemplateStore.importOfficialRulesFromUrl(url);
+      await _reload();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(r.message)));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('网络导入失败: $e')));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _rollbackOfficial() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('恢复内置官方规则'),
+        content: const Text('将用 App 内置模板覆盖本地官方规则（不影响「我的规则」）。确定？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('恢复'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      setState(() => _busy = true);
+      final r = await NotiTemplateStore.rollbackOfficialToAsset();
+      await _reload();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(r.message)));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('恢复失败: $e')));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _importUser() async {
     try {
       final files = await FilePicker.pickFiles(
@@ -388,11 +510,17 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
               if (v == 'export') _exportUser();
               if (v == 'import') _importUser();
               if (v == 'import_url') _importUserFromUrl();
+              if (v == 'import_official') _importOfficialFile();
+              if (v == 'import_official_url') _importOfficialFromUrl();
+              if (v == 'rollback_official') _rollbackOfficial();
             },
             itemBuilder: (_) => const [
               PopupMenuItem(value: 'export', child: Text('导出我的规则')),
-              PopupMenuItem(value: 'import', child: Text('从文件导入')),
-              PopupMenuItem(value: 'import_url', child: Text('从网络导入')),
+              PopupMenuItem(value: 'import', child: Text('从文件导入我的规则')),
+              PopupMenuItem(value: 'import_url', child: Text('从网络导入我的规则')),
+              PopupMenuItem(value: 'import_official', child: Text('从文件导入官方规则')),
+              PopupMenuItem(value: 'import_official_url', child: Text('从网络导入官方规则')),
+              PopupMenuItem(value: 'rollback_official', child: Text('恢复内置官方规则')),
             ],
           ),
         ],

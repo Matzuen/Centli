@@ -185,11 +185,48 @@ abstract final class NotiTemplateStore {
     List<NotiTemplate> official,
     Set<String> disabled,
   ) {
-    final out = <NotiTemplate>[...user];
+    final officialById = {for (final t in official) t.id: t};
+    final out = <NotiTemplate>[];
+    final usedOfficial = <String>{};
+    for (final u in user) {
+      final o = officialById[u.id];
+      if (o != null) {
+        out.add(_fieldMergeUserOverOfficial(o, u));
+        usedOfficial.add(u.id);
+      } else {
+        out.add(u);
+      }
+    }
     for (final t in official) {
-      if (!disabled.contains(t.id)) out.add(t);
+      if (disabled.contains(t.id)) continue;
+      if (usedOfficial.contains(t.id)) continue;
+      out.add(t);
     }
     return out;
+  }
+
+  /// Same id: user-provided fields win; nullish user optionals fall back to official.
+  static NotiTemplate _fieldMergeUserOverOfficial(
+    NotiTemplate official,
+    NotiTemplate user,
+  ) {
+    return NotiTemplate(
+      id: user.id,
+      name: (user.name != null && user.name!.trim().isNotEmpty)
+          ? user.name
+          : official.name,
+      packages: user.packages.isNotEmpty ? user.packages : official.packages,
+      defaultCurrency: user.defaultCurrency,
+      titleRegex: user.titleRegex ?? official.titleRegex,
+      mustContainRegex: user.mustContainRegex ?? official.mustContainRegex,
+      excludeTextRegex: user.excludeTextRegex ?? official.excludeTextRegex,
+      amountRegex: user.amountRegex,
+      merchantRegex: user.merchantRegex ?? official.merchantRegex,
+      merchantFromTitle: user.merchantFromTitle,
+      defaultAccountHint:
+          user.defaultAccountHint ?? official.defaultAccountHint,
+      direction: NotiTemplate.normalizeDirection(user.direction),
+    );
   }
 
   /// Test-only wrapper around [_merge].
@@ -283,6 +320,152 @@ abstract final class NotiTemplateStore {
       );
     }
   }
+
+  /// Empty by design — user pastes their own HTTPS URL (no invented official host).
+  static const String kDefaultOfficialRulesUrl = '';
+
+  /// Import official rules from a local JSON string (file picker / paste).
+  /// Validates via [_parseOfficialJson]; version must be higher than active
+  /// (same/lower → reject). Atomic write to documents. Syncs native after.
+  static Future<TemplateUpdateResult> importOfficialRulesJson(String raw) async {
+    await load();
+    final activeVersion = _version;
+    final parsed = _parseOfficialJson(raw);
+    if (parsed == null || parsed.templates.isEmpty) {
+      return TemplateUpdateResult(
+        updated: false,
+        activeVersion: activeVersion,
+        assetsVersion: activeVersion,
+        message: '官方规则无效或为空，已保留原规则',
+        source: _source,
+      );
+    }
+    if (parsed.version < activeVersion) {
+      return TemplateUpdateResult(
+        updated: false,
+        activeVersion: activeVersion,
+        assetsVersion: parsed.version,
+        message: '版本过低（v${parsed.version} < 当前 v$activeVersion），已拒绝',
+        source: _source,
+      );
+    }
+    if (parsed.version == activeVersion && _source == 'documents') {
+      return TemplateUpdateResult(
+        updated: false,
+        activeVersion: activeVersion,
+        assetsVersion: parsed.version,
+        message: '版本相同（v$activeVersion），无需写入',
+        source: _source,
+      );
+    }
+    try {
+      await _persistOfficialAtomic(raw, parsed);
+      await load(force: true);
+      return TemplateUpdateResult(
+        updated: true,
+        activeVersion: _version,
+        assetsVersion: parsed.version,
+        message: '已导入官方规则 v$_version（${parsed.templates.length} 条）',
+        source: _source,
+      );
+    } catch (e) {
+      return TemplateUpdateResult(
+        updated: false,
+        activeVersion: activeVersion,
+        assetsVersion: parsed.version,
+        message: '写入失败，原规则未改动: $e',
+        source: _source,
+      );
+    }
+  }
+
+  /// Download official rules from HTTPS URL → validate → write.
+  static Future<TemplateUpdateResult> importOfficialRulesFromUrl(
+    String url, {
+    Duration timeout = const Duration(seconds: 15),
+  }) async {
+    final trimmed = url.trim();
+    if (trimmed.isEmpty) {
+      return TemplateUpdateResult(
+        updated: false,
+        activeVersion: _version,
+        assetsVersion: _version,
+        message: '请填写 HTTPS 地址',
+        source: _source,
+      );
+    }
+    if (!trimmed.startsWith('https://')) {
+      return TemplateUpdateResult(
+        updated: false,
+        activeVersion: _version,
+        assetsVersion: _version,
+        message: '仅支持 HTTPS 地址',
+        source: _source,
+      );
+    }
+    try {
+      final client = HttpClient();
+      try {
+        final req = await client.getUrl(Uri.parse(trimmed)).timeout(timeout);
+        final res = await req.close().timeout(timeout);
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          return TemplateUpdateResult(
+            updated: false,
+            activeVersion: _version,
+            assetsVersion: _version,
+            message: '下载失败（HTTP ${res.statusCode}），原规则未改动',
+            source: _source,
+          );
+        }
+        final body = await res.transform(utf8.decoder).join().timeout(timeout);
+        return await importOfficialRulesJson(body);
+      } finally {
+        client.close(force: true);
+      }
+    } catch (e) {
+      return TemplateUpdateResult(
+        updated: false,
+        activeVersion: _version,
+        assetsVersion: _version,
+        message: '网络不可达或超时，原规则未改动: $e',
+        source: _source,
+      );
+    }
+  }
+
+  /// Restore official rules from bundled assets (rollback).
+  static Future<TemplateUpdateResult> rollbackOfficialToAsset() async {
+    return installBundledOverride();
+  }
+
+  static Future<void> _persistOfficialAtomic(
+    String raw,
+    _ParsedTemplates parsed,
+  ) async {
+    final doc = await _officialDocumentsFile();
+    await doc.parent.create(recursive: true);
+    final tmp = File('${doc.path}.tmp');
+    final bak = File('${doc.path}.bak');
+    // Normalize JSON for stable on-disk form.
+    final decoded = jsonDecode(raw);
+    if (decoded is! Map) {
+      throw const FormatException('根节点不是对象');
+    }
+    final map = Map<String, dynamic>.from(decoded);
+    map['version'] = parsed.version;
+    if (parsed.updatedAt != null) map['updated_at'] = parsed.updatedAt;
+    const encoder = JsonEncoder.withIndent('  ');
+    await tmp.writeAsString(encoder.convert(map), flush: true);
+    if (await doc.exists()) {
+      try {
+        if (await bak.exists()) await bak.delete();
+        await doc.copy(bak.path);
+      } catch (_) {}
+    }
+    if (await doc.exists()) await doc.delete();
+    await tmp.rename(doc.path);
+  }
+
 
   // ---------------------------------------------------------------------------
   // User rules CRUD + disable official
