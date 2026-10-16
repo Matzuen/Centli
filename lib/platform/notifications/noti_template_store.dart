@@ -29,11 +29,21 @@ abstract final class NotiTemplateStore {
   static String _source = 'builtin';
   static String? _updatedAt;
   static bool _loaded = false;
+  static int _lastSkippedCount = 0;
+  static String? _lastLoadError;
 
   static int get version => _version;
   static String get source => _source;
   static String? get updatedAt => _updatedAt;
   static bool get isLoaded => _loaded;
+
+  /// Skipped user-template entries from the most recent [_loadUserFile] call.
+  /// Reset each load (not cumulative). First-install / missing file → 0.
+  static int get lastSkippedCount => _lastSkippedCount;
+
+  /// Structural / I/O error from the most recent [_loadUserFile], if any.
+  /// Null when the file is missing (first install) or parse succeeded.
+  static String? get lastLoadError => _lastLoadError;
 
   /// Official templates currently loaded (assets/documents/builtin), including
   /// ones the user disabled locally.
@@ -106,36 +116,62 @@ abstract final class NotiTemplateStore {
   }
 
   static Future<void> _loadUserFile() async {
-    _user = [];
-    _disabledOfficialIds = {};
+    // Do not clear in-memory rules up front — a parse failure must not wipe
+    // good state (audit §3.2). Only replace after a successful parse.
+    // Reset per-load diagnostics (not cumulative across loads).
+    _lastSkippedCount = 0;
+    _lastLoadError = null;
     try {
       final doc = await _userDocumentsFile();
-      if (!await doc.exists()) return;
+      if (!await doc.exists()) {
+        // First run / no file yet: empty is correct; no warning / no error.
+        if (!_loaded) {
+          _user = [];
+          _disabledOfficialIds = {};
+        }
+        return;
+      }
       final raw = await doc.readAsString();
       final decoded = jsonDecode(raw);
-      if (decoded is! Map) return;
+      if (decoded is! Map) {
+        // Keep previous in-memory; do not wipe.
+        _lastLoadError = '规则文件格式有误（根节点不是对象）';
+        return;
+      }
       final map = Map<String, dynamic>.from(decoded);
+      final nextDisabled = <String>{};
       final disabled = map['disabled_official_ids'];
       if (disabled is List) {
-        _disabledOfficialIds = {
-          for (final e in disabled)
-            if (e is String && e.isNotEmpty) e,
-        };
-      }
-      final list = map['templates'];
-      if (list is! List) return;
-      final templates = <NotiTemplate>[];
-      for (final item in list) {
-        if (item is Map) {
-          templates.add(
-            NotiTemplate.fromJson(Map<String, dynamic>.from(item)),
-          );
+        for (final e in disabled) {
+          if (e is String && e.isNotEmpty) nextDisabled.add(e);
         }
       }
+      // disabled_official_ids parse failure is not counted as skipped rules.
+      final list = map['templates'];
+      if (list is! List) {
+        _lastLoadError = '规则文件格式有误（templates 不是数组）';
+        return;
+      }
+      final templates = <NotiTemplate>[];
+      var skipped = 0;
+      for (final item in list) {
+        if (item is! Map) {
+          skipped++;
+          continue;
+        }
+        final parsed = NotiTemplate.tryParse(Map<String, dynamic>.from(item));
+        if (parsed != null) {
+          templates.add(parsed);
+        } else {
+          skipped++;
+        }
+      }
+      _lastSkippedCount = skipped;
       _user = templates;
-    } catch (_) {
-      _user = [];
-      _disabledOfficialIds = {};
+      _disabledOfficialIds = nextDisabled;
+    } catch (e) {
+      // Keep previous _user / _disabledOfficialIds — never silently clear.
+      _lastLoadError = '读取规则文件失败: $e';
     }
   }
 
@@ -310,9 +346,19 @@ abstract final class NotiTemplateStore {
     }
     final imported = <NotiTemplate>[];
     for (final item in list) {
-      if (item is Map) {
-        imported.add(NotiTemplate.fromJson(Map<String, dynamic>.from(item)));
+      if (item is! Map) {
+        continue;
       }
+      final parsed = NotiTemplate.tryParse(Map<String, dynamic>.from(item));
+      if (parsed == null) {
+        continue;
+      }
+      imported.add(parsed);
+    }
+    if (imported.isEmpty && list.isNotEmpty) {
+      throw FormatException(
+        '导入失败：全部 ${list.length} 条规则校验未通过（schema/正则）',
+      );
     }
     Set<String>? disabled;
     final d = map['disabled_official_ids'];
@@ -397,6 +443,15 @@ abstract final class NotiTemplateStore {
   static Future<void> _persistUserFile() async {
     final doc = await _userDocumentsFile();
     await doc.parent.create(recursive: true);
+    // Backup previous file before overwrite (audit §3.2).
+    if (await doc.exists()) {
+      try {
+        final bakFile = File('${doc.path}.bak');
+        await doc.copy(bakFile.path);
+      } catch (_) {
+        // Best-effort backup; still proceed to write.
+      }
+    }
     await doc.writeAsString(_encodeUserFile());
   }
 
@@ -444,11 +499,9 @@ abstract final class NotiTemplateStore {
     if (list is! List) return null;
     final templates = <NotiTemplate>[];
     for (final item in list) {
-      if (item is Map) {
-        templates.add(
-          NotiTemplate.fromJson(Map<String, dynamic>.from(item)),
-        );
-      }
+      if (item is! Map) continue;
+      final parsed = NotiTemplate.tryParse(Map<String, dynamic>.from(item));
+      if (parsed != null) templates.add(parsed);
     }
     if (templates.isEmpty) return null;
     return _ParsedTemplates(

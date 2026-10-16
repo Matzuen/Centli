@@ -34,6 +34,9 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
   final _tryBody = TextEditingController(text: '向 星巴克 付款成功 ¥28.50');
   ParseExplainResult? _tryResult;
   bool _busy = false;
+  bool _loadWarnDismissed = false;
+  int _skippedCount = 0;
+  String? _loadError;
 
   @override
   void initState() {
@@ -59,6 +62,8 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
       _disabled = NotiTemplateStore.peekDisabledOfficialIds();
       _version = NotiTemplateStore.version;
       _source = NotiTemplateStore.source;
+      _skippedCount = NotiTemplateStore.lastSkippedCount;
+      _loadError = NotiTemplateStore.lastLoadError;
       _loading = false;
     });
   }
@@ -120,8 +125,14 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
       text: _tryBody.text,
       whenMs: DateTime.now().millisecondsSinceEpoch,
     );
-    final explained = explainNotificationParse(raw, NotiTemplateStore.peek());
-    setState(() => _tryResult = explained);
+    try {
+      final explained = explainNotificationParse(raw, NotiTemplateStore.peek());
+      setState(() => _tryResult = explained);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('试跑失败: $e')),
+      );
+    }
   }
 
   Future<void> _exportUser() async {
@@ -406,6 +417,49 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
                 96,
               ),
               children: [
+                if (!_loadWarnDismissed &&
+                    (_skippedCount > 0 || _loadError != null)) ...[
+                  Card(
+                    color: scheme.errorContainer,
+                    margin: EdgeInsets.zero,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            Icons.warning_amber_rounded,
+                            color: scheme.onErrorContainer,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _loadError != null
+                                  ? (_skippedCount > 0
+                                      ? '$_loadError。另有 $_skippedCount 条规则格式有误已跳过，其余规则正常。建议导出备份后检查。'
+                                      : '$_loadError。建议导出备份后检查。')
+                                  : '有 $_skippedCount 条规则格式有误已跳过，其余规则正常。建议导出备份后检查。',
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(
+                                    color: scheme.onErrorContainer,
+                                    height: 1.35,
+                                  ),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () =>
+                                setState(() => _loadWarnDismissed = true),
+                            child: Text(
+                              '关闭',
+                              style: TextStyle(color: scheme.onErrorContainer),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: CentliSpacing.section),
+                ],
                 Text(
                   '官方规则只读，可单独启停；「我的规则」优先匹配。'
                   '右上角可导入/导出规则；右下角添加自定义；底部「试一试」验证样例。',
