@@ -151,7 +151,7 @@ class StatsPage extends ConsumerWidget {
               CentliSpacing.pageH,
               CentliSpacing.pageTop,
               CentliSpacing.pageH,
-              24,
+              CentliSpacing.pageBottomNav,
             ),
             children: [
               DateRangeControl(
@@ -269,26 +269,8 @@ class StatsPage extends ConsumerWidget {
                 range: range,
                 hide: hide,
               ),
-
-              SegmentedButton<String>(
-                segments: const [
-                  ButtonSegment<String>(
-                    value: 'out',
-                    label: Text('\u5206\u7c7b\u652f\u51fa'),
-                  ),
-                  ButtonSegment<String>(
-                    value: 'in',
-                    label: Text('\u5206\u7c7b\u6536\u5165'),
-                  ),
-                ],
-                selected: {breakdownKind},
-                onSelectionChanged: (next) {
-                  if (next.isEmpty) return;
-                  ref.read(statsBreakdownKindProvider.notifier).state =
-                      next.first;
-                },
-              ),
               const SizedBox(height: CentliSpacing.sectionLoose),
+
               Text(trendTitle, style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: CentliSpacing.item),
               daily.when(
@@ -319,6 +301,25 @@ class StatsPage extends ConsumerWidget {
                       ),
                     ),
                   );
+                },
+              ),
+              const SizedBox(height: CentliSpacing.sectionLoose),
+              SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment<String>(
+                    value: 'out',
+                    label: Text('\u5206\u7c7b\u652f\u51fa'),
+                  ),
+                  ButtonSegment<String>(
+                    value: 'in',
+                    label: Text('\u5206\u7c7b\u6536\u5165'),
+                  ),
+                ],
+                selected: {breakdownKind},
+                onSelectionChanged: (next) {
+                  if (next.isEmpty) return;
+                  ref.read(statsBreakdownKindProvider.notifier).state =
+                      next.first;
                 },
               ),
               const SizedBox(height: CentliSpacing.sectionLoose),
