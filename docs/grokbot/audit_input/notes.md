@@ -1,7 +1,7 @@
 # Centli B4 execution notes
 
 Baseline (work-order): commit `a1869f1` · schema v7 · tests 150  
-Finish HEAD: see end · schema **v10** · tests **182 passed / 0 failed**  
+Finish HEAD: 9c5a52a · schema **v10** · tests **182 passed / 0 failed**  
 `flutter analyze` → No issues found!  
 Debug APK: `build/app/outputs/flutter-apk/app-debug.apk` (~240 MB)  
 **NO push.** Live DeepSeek vision call: **未联网验证** (mock unit tests only).
@@ -30,7 +30,7 @@ Debug APK: `build/app/outputs/flutter-apk/app-debug.apk` (~240 MB)
 | T6 | `f5f201d` | golden font + sheet container |
 | T6 flake | `5b7e604` | 0.05% golden tolerance |
 | T7-1 | `9965351` | PRODUCT_SCOPE.md |
-| T8 | (this notes + audit_input) | |
+| T8 | 9c5a52a | audit_input + notes + README |
 
 ## §6.2 answers (selected)
 
