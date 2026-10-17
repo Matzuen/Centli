@@ -17,6 +17,7 @@ import 'tables/ledgers.dart';
 import 'tables/merchant_rules.dart';
 import 'tables/pending_captures.dart';
 import 'tables/budgets.dart';
+import 'tables/recurring_rules.dart';
 import 'tables/transactions.dart';
 import 'txn_tags.dart';
 import '../txn_templates.dart';
@@ -34,6 +35,7 @@ part 'centli_database.g.dart';
     FxRates,
     Budgets,
     AppSettings,
+    RecurringRules,
   ],
 )
 class CentliDatabase extends _$CentliDatabase {
@@ -42,7 +44,7 @@ class CentliDatabase extends _$CentliDatabase {
   CentliDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -63,6 +65,11 @@ class CentliDatabase extends _$CentliDatabase {
           }
           if (from < 5) {
             await m.addColumn(transactions, transactions.member);
+          }
+          if (from < 6) {
+            await m.createTable(recurringRules);
+            await m.addColumn(pendingCaptures, pendingCaptures.direction);
+            await m.addColumn(transactions, transactions.occurrenceKey);
           }
           await _ensureQueryIndexes();
         },
@@ -94,6 +101,10 @@ class CentliDatabase extends _$CentliDatabase {
     await customStatement(
       'CREATE INDEX IF NOT EXISTS idx_pending_status_created '
       'ON pending_captures(status, created_at)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_txn_occurrence_key '
+      'ON transactions(occurrence_key)',
     );
   }
 
@@ -781,6 +792,7 @@ class CentliDatabase extends _$CentliDatabase {
     int? toAmountMinor,
     int includeInStat = 1,
     int includeInBudget = 1,
+    String? occurrenceKey,
   }) async {
     final ts = nowMs();
     final happen = happenAt?.toUtc().millisecondsSinceEpoch ?? ts;
@@ -803,6 +815,7 @@ class CentliDatabase extends _$CentliDatabase {
         toAmountMinor: Value(toAmountMinor),
         includeInStat: Value(includeInStat),
         includeInBudget: Value(includeInBudget),
+        occurrenceKey: Value(occurrenceKey),
         createdAt: ts,
         updatedAt: ts,
       ),

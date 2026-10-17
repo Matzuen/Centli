@@ -36,6 +36,9 @@ class Transactions extends Table {
   TextColumn get source =>
       text().withDefault(const Constant('manual'))();
   TextColumn get pendingId => text().named('pending_id').nullable()();
+  /// Idempotency key for recurring generations: `rec:ruleId:ms`.
+  TextColumn get occurrenceKey =>
+      text().named('occurrence_key').nullable()();
   IntColumn get createdAt => integer().named('created_at')();
   IntColumn get updatedAt => integer().named('updated_at')();
   IntColumn get deletedAt => integer().named('deleted_at').nullable()();

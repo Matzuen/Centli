@@ -1799,6 +1799,17 @@ class $TransactionsTable extends Transactions
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _occurrenceKeyMeta = const VerificationMeta(
+    'occurrenceKey',
+  );
+  @override
+  late final GeneratedColumn<String> occurrenceKey = GeneratedColumn<String>(
+    'occurrence_key',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -1854,6 +1865,7 @@ class $TransactionsTable extends Transactions
     toAmountMinor,
     source,
     pendingId,
+    occurrenceKey,
     createdAt,
     updatedAt,
     deletedAt,
@@ -2019,6 +2031,15 @@ class $TransactionsTable extends Transactions
         pendingId.isAcceptableOrUnknown(data['pending_id']!, _pendingIdMeta),
       );
     }
+    if (data.containsKey('occurrence_key')) {
+      context.handle(
+        _occurrenceKeyMeta,
+        occurrenceKey.isAcceptableOrUnknown(
+          data['occurrence_key']!,
+          _occurrenceKeyMeta,
+        ),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -2130,6 +2151,10 @@ class $TransactionsTable extends Transactions
         DriftSqlType.string,
         data['${effectivePrefix}pending_id'],
       ),
+      occurrenceKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}occurrence_key'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}created_at'],
@@ -2176,6 +2201,9 @@ class Transaction extends DataClass implements Insertable<Transaction> {
   final int? toAmountMinor;
   final String source;
   final String? pendingId;
+
+  /// Idempotency key for recurring generations: rec:<ruleId>:<ms>
+  final String? occurrenceKey;
   final int createdAt;
   final int updatedAt;
   final int? deletedAt;
@@ -2200,6 +2228,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     this.toAmountMinor,
     required this.source,
     this.pendingId,
+    this.occurrenceKey,
     required this.createdAt,
     required this.updatedAt,
     this.deletedAt,
@@ -2247,6 +2276,9 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     if (!nullToAbsent || pendingId != null) {
       map['pending_id'] = Variable<String>(pendingId);
     }
+    if (!nullToAbsent || occurrenceKey != null) {
+      map['occurrence_key'] = Variable<String>(occurrenceKey);
+    }
     map['created_at'] = Variable<int>(createdAt);
     map['updated_at'] = Variable<int>(updatedAt);
     if (!nullToAbsent || deletedAt != null) {
@@ -2293,6 +2325,9 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       pendingId: pendingId == null && nullToAbsent
           ? const Value.absent()
           : Value(pendingId),
+      occurrenceKey: occurrenceKey == null && nullToAbsent
+          ? const Value.absent()
+          : Value(occurrenceKey),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
       deletedAt: deletedAt == null && nullToAbsent
@@ -2327,6 +2362,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       toAmountMinor: serializer.fromJson<int?>(json['toAmountMinor']),
       source: serializer.fromJson<String>(json['source']),
       pendingId: serializer.fromJson<String?>(json['pendingId']),
+      occurrenceKey: serializer.fromJson<String?>(json['occurrenceKey']),
       createdAt: serializer.fromJson<int>(json['createdAt']),
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
       deletedAt: serializer.fromJson<int?>(json['deletedAt']),
@@ -2356,6 +2392,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       'toAmountMinor': serializer.toJson<int?>(toAmountMinor),
       'source': serializer.toJson<String>(source),
       'pendingId': serializer.toJson<String?>(pendingId),
+      'occurrenceKey': serializer.toJson<String?>(occurrenceKey),
       'createdAt': serializer.toJson<int>(createdAt),
       'updatedAt': serializer.toJson<int>(updatedAt),
       'deletedAt': serializer.toJson<int?>(deletedAt),
@@ -2383,6 +2420,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     Value<int?> toAmountMinor = const Value.absent(),
     String? source,
     Value<String?> pendingId = const Value.absent(),
+    Value<String?> occurrenceKey = const Value.absent(),
     int? createdAt,
     int? updatedAt,
     Value<int?> deletedAt = const Value.absent(),
@@ -2411,6 +2449,9 @@ class Transaction extends DataClass implements Insertable<Transaction> {
         : this.toAmountMinor,
     source: source ?? this.source,
     pendingId: pendingId.present ? pendingId.value : this.pendingId,
+    occurrenceKey: occurrenceKey.present
+        ? occurrenceKey.value
+        : this.occurrenceKey,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
     deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
@@ -2451,6 +2492,9 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           : this.toAmountMinor,
       source: data.source.present ? data.source.value : this.source,
       pendingId: data.pendingId.present ? data.pendingId.value : this.pendingId,
+      occurrenceKey: data.occurrenceKey.present
+          ? data.occurrenceKey.value
+          : this.occurrenceKey,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
@@ -2480,6 +2524,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           ..write('toAmountMinor: $toAmountMinor, ')
           ..write('source: $source, ')
           ..write('pendingId: $pendingId, ')
+          ..write('occurrenceKey: $occurrenceKey, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('deletedAt: $deletedAt')
@@ -2509,6 +2554,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     toAmountMinor,
     source,
     pendingId,
+    occurrenceKey,
     createdAt,
     updatedAt,
     deletedAt,
@@ -2537,6 +2583,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           other.toAmountMinor == this.toAmountMinor &&
           other.source == this.source &&
           other.pendingId == this.pendingId &&
+          other.occurrenceKey == this.occurrenceKey &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt &&
           other.deletedAt == this.deletedAt);
@@ -2563,6 +2610,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
   final Value<int?> toAmountMinor;
   final Value<String> source;
   final Value<String?> pendingId;
+  final Value<String?> occurrenceKey;
   final Value<int> createdAt;
   final Value<int> updatedAt;
   final Value<int?> deletedAt;
@@ -2588,6 +2636,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     this.toAmountMinor = const Value.absent(),
     this.source = const Value.absent(),
     this.pendingId = const Value.absent(),
+    this.occurrenceKey = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.deletedAt = const Value.absent(),
@@ -2614,6 +2663,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     this.toAmountMinor = const Value.absent(),
     this.source = const Value.absent(),
     this.pendingId = const Value.absent(),
+    this.occurrenceKey = const Value.absent(),
     required int createdAt,
     required int updatedAt,
     this.deletedAt = const Value.absent(),
@@ -2648,6 +2698,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     Expression<int>? toAmountMinor,
     Expression<String>? source,
     Expression<String>? pendingId,
+    Expression<String>? occurrenceKey,
     Expression<int>? createdAt,
     Expression<int>? updatedAt,
     Expression<int>? deletedAt,
@@ -2674,6 +2725,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       if (toAmountMinor != null) 'to_amount_minor': toAmountMinor,
       if (source != null) 'source': source,
       if (pendingId != null) 'pending_id': pendingId,
+      if (occurrenceKey != null) 'occurrence_key': occurrenceKey,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (deletedAt != null) 'deleted_at': deletedAt,
@@ -2702,6 +2754,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     Value<int?>? toAmountMinor,
     Value<String>? source,
     Value<String?>? pendingId,
+    Value<String?>? occurrenceKey,
     Value<int>? createdAt,
     Value<int>? updatedAt,
     Value<int?>? deletedAt,
@@ -2728,6 +2781,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       toAmountMinor: toAmountMinor ?? this.toAmountMinor,
       source: source ?? this.source,
       pendingId: pendingId ?? this.pendingId,
+      occurrenceKey: occurrenceKey ?? this.occurrenceKey,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       deletedAt: deletedAt ?? this.deletedAt,
@@ -2798,6 +2852,9 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     if (pendingId.present) {
       map['pending_id'] = Variable<String>(pendingId.value);
     }
+    if (occurrenceKey.present) {
+      map['occurrence_key'] = Variable<String>(occurrenceKey.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<int>(createdAt.value);
     }
@@ -2836,6 +2893,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
           ..write('toAmountMinor: $toAmountMinor, ')
           ..write('source: $source, ')
           ..write('pendingId: $pendingId, ')
+          ..write('occurrenceKey: $occurrenceKey, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('deletedAt: $deletedAt, ')
@@ -3002,6 +3060,17 @@ class $PendingCapturesTable extends PendingCaptures
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _directionMeta = const VerificationMeta(
+    'direction',
+  );
+  @override
+  late final GeneratedColumn<String> direction = GeneratedColumn<String>(
+    'direction',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -3040,6 +3109,7 @@ class $PendingCapturesTable extends PendingCaptures
     status,
     dedupeKey,
     parseOk,
+    direction,
     createdAt,
     updatedAt,
   ];
@@ -3157,6 +3227,12 @@ class $PendingCapturesTable extends PendingCaptures
         parseOk.isAcceptableOrUnknown(data['parse_ok']!, _parseOkMeta),
       );
     }
+    if (data.containsKey('direction')) {
+      context.handle(
+        _directionMeta,
+        direction.isAcceptableOrUnknown(data['direction']!, _directionMeta),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -3242,6 +3318,10 @@ class $PendingCapturesTable extends PendingCaptures
         DriftSqlType.int,
         data['${effectivePrefix}parse_ok'],
       )!,
+      direction: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}direction'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}created_at'],
@@ -3274,6 +3354,9 @@ class PendingCapture extends DataClass implements Insertable<PendingCapture> {
   final String status;
   final String dedupeKey;
   final int parseOk;
+
+  /// Persisted parse direction: in / out / refund. Null = legacy, treat as out.
+  final String? direction;
   final int createdAt;
   final int updatedAt;
   const PendingCapture({
@@ -3291,6 +3374,7 @@ class PendingCapture extends DataClass implements Insertable<PendingCapture> {
     required this.status,
     required this.dedupeKey,
     required this.parseOk,
+    this.direction,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -3325,6 +3409,9 @@ class PendingCapture extends DataClass implements Insertable<PendingCapture> {
     map['status'] = Variable<String>(status);
     map['dedupe_key'] = Variable<String>(dedupeKey);
     map['parse_ok'] = Variable<int>(parseOk);
+    if (!nullToAbsent || direction != null) {
+      map['direction'] = Variable<String>(direction);
+    }
     map['created_at'] = Variable<int>(createdAt);
     map['updated_at'] = Variable<int>(updatedAt);
     return map;
@@ -3360,6 +3447,9 @@ class PendingCapture extends DataClass implements Insertable<PendingCapture> {
       status: Value(status),
       dedupeKey: Value(dedupeKey),
       parseOk: Value(parseOk),
+      direction: direction == null && nullToAbsent
+          ? const Value.absent()
+          : Value(direction),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
     );
@@ -3389,6 +3479,7 @@ class PendingCapture extends DataClass implements Insertable<PendingCapture> {
       status: serializer.fromJson<String>(json['status']),
       dedupeKey: serializer.fromJson<String>(json['dedupeKey']),
       parseOk: serializer.fromJson<int>(json['parseOk']),
+      direction: serializer.fromJson<String?>(json['direction']),
       createdAt: serializer.fromJson<int>(json['createdAt']),
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
     );
@@ -3411,6 +3502,7 @@ class PendingCapture extends DataClass implements Insertable<PendingCapture> {
       'status': serializer.toJson<String>(status),
       'dedupeKey': serializer.toJson<String>(dedupeKey),
       'parseOk': serializer.toJson<int>(parseOk),
+      'direction': serializer.toJson<String?>(direction),
       'createdAt': serializer.toJson<int>(createdAt),
       'updatedAt': serializer.toJson<int>(updatedAt),
     };
@@ -3431,6 +3523,7 @@ class PendingCapture extends DataClass implements Insertable<PendingCapture> {
     String? status,
     String? dedupeKey,
     int? parseOk,
+    Value<String?> direction = const Value.absent(),
     int? createdAt,
     int? updatedAt,
   }) => PendingCapture(
@@ -3452,6 +3545,7 @@ class PendingCapture extends DataClass implements Insertable<PendingCapture> {
     status: status ?? this.status,
     dedupeKey: dedupeKey ?? this.dedupeKey,
     parseOk: parseOk ?? this.parseOk,
+    direction: direction.present ? direction.value : this.direction,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -3477,6 +3571,7 @@ class PendingCapture extends DataClass implements Insertable<PendingCapture> {
       status: data.status.present ? data.status.value : this.status,
       dedupeKey: data.dedupeKey.present ? data.dedupeKey.value : this.dedupeKey,
       parseOk: data.parseOk.present ? data.parseOk.value : this.parseOk,
+      direction: data.direction.present ? data.direction.value : this.direction,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -3499,6 +3594,7 @@ class PendingCapture extends DataClass implements Insertable<PendingCapture> {
           ..write('status: $status, ')
           ..write('dedupeKey: $dedupeKey, ')
           ..write('parseOk: $parseOk, ')
+          ..write('direction: $direction, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -3521,6 +3617,7 @@ class PendingCapture extends DataClass implements Insertable<PendingCapture> {
     status,
     dedupeKey,
     parseOk,
+    direction,
     createdAt,
     updatedAt,
   );
@@ -3542,6 +3639,7 @@ class PendingCapture extends DataClass implements Insertable<PendingCapture> {
           other.status == this.status &&
           other.dedupeKey == this.dedupeKey &&
           other.parseOk == this.parseOk &&
+          other.direction == this.direction &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
 }
@@ -3561,6 +3659,7 @@ class PendingCapturesCompanion extends UpdateCompanion<PendingCapture> {
   final Value<String> status;
   final Value<String> dedupeKey;
   final Value<int> parseOk;
+  final Value<String?> direction;
   final Value<int> createdAt;
   final Value<int> updatedAt;
   final Value<int> rowid;
@@ -3579,6 +3678,7 @@ class PendingCapturesCompanion extends UpdateCompanion<PendingCapture> {
     this.status = const Value.absent(),
     this.dedupeKey = const Value.absent(),
     this.parseOk = const Value.absent(),
+    this.direction = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -3598,6 +3698,7 @@ class PendingCapturesCompanion extends UpdateCompanion<PendingCapture> {
     required String status,
     required String dedupeKey,
     this.parseOk = const Value.absent(),
+    this.direction = const Value.absent(),
     required int createdAt,
     required int updatedAt,
     this.rowid = const Value.absent(),
@@ -3624,6 +3725,7 @@ class PendingCapturesCompanion extends UpdateCompanion<PendingCapture> {
     Expression<String>? status,
     Expression<String>? dedupeKey,
     Expression<int>? parseOk,
+    Expression<String>? direction,
     Expression<int>? createdAt,
     Expression<int>? updatedAt,
     Expression<int>? rowid,
@@ -3645,6 +3747,7 @@ class PendingCapturesCompanion extends UpdateCompanion<PendingCapture> {
       if (status != null) 'status': status,
       if (dedupeKey != null) 'dedupe_key': dedupeKey,
       if (parseOk != null) 'parse_ok': parseOk,
+      if (direction != null) 'direction': direction,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (rowid != null) 'rowid': rowid,
@@ -3666,6 +3769,7 @@ class PendingCapturesCompanion extends UpdateCompanion<PendingCapture> {
     Value<String>? status,
     Value<String>? dedupeKey,
     Value<int>? parseOk,
+    Value<String?>? direction,
     Value<int>? createdAt,
     Value<int>? updatedAt,
     Value<int>? rowid,
@@ -3685,6 +3789,7 @@ class PendingCapturesCompanion extends UpdateCompanion<PendingCapture> {
       status: status ?? this.status,
       dedupeKey: dedupeKey ?? this.dedupeKey,
       parseOk: parseOk ?? this.parseOk,
+      direction: direction ?? this.direction,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       rowid: rowid ?? this.rowid,
@@ -3738,6 +3843,9 @@ class PendingCapturesCompanion extends UpdateCompanion<PendingCapture> {
     if (parseOk.present) {
       map['parse_ok'] = Variable<int>(parseOk.value);
     }
+    if (direction.present) {
+      map['direction'] = Variable<String>(direction.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<int>(createdAt.value);
     }
@@ -3767,6 +3875,7 @@ class PendingCapturesCompanion extends UpdateCompanion<PendingCapture> {
           ..write('status: $status, ')
           ..write('dedupeKey: $dedupeKey, ')
           ..write('parseOk: $parseOk, ')
+          ..write('direction: $direction, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('rowid: $rowid')
@@ -5345,6 +5454,1173 @@ class AppSettingsCompanion extends UpdateCompanion<AppSetting> {
   }
 }
 
+class $RecurringRulesTable extends RecurringRules
+    with TableInfo<$RecurringRulesTable, RecurringRule> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $RecurringRulesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _ledgerIdMeta = const VerificationMeta(
+    'ledgerId',
+  );
+  @override
+  late final GeneratedColumn<String> ledgerId = GeneratedColumn<String>(
+    'ledger_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES ledgers (id)',
+    ),
+  );
+  static const VerificationMeta _typeMeta = const VerificationMeta('type');
+  @override
+  late final GeneratedColumn<String> type = GeneratedColumn<String>(
+    'type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _amountMinorMeta = const VerificationMeta(
+    'amountMinor',
+  );
+  @override
+  late final GeneratedColumn<int> amountMinor = GeneratedColumn<int>(
+    'amount_minor',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _currencyMeta = const VerificationMeta(
+    'currency',
+  );
+  @override
+  late final GeneratedColumn<String> currency = GeneratedColumn<String>(
+    'currency',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _accountIdMeta = const VerificationMeta(
+    'accountId',
+  );
+  @override
+  late final GeneratedColumn<String> accountId = GeneratedColumn<String>(
+    'account_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES accounts (id)',
+    ),
+  );
+  static const VerificationMeta _categoryIdMeta = const VerificationMeta(
+    'categoryId',
+  );
+  @override
+  late final GeneratedColumn<String> categoryId = GeneratedColumn<String>(
+    'category_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES categories (id)',
+    ),
+  );
+  static const VerificationMeta _merchantMeta = const VerificationMeta(
+    'merchant',
+  );
+  @override
+  late final GeneratedColumn<String> merchant = GeneratedColumn<String>(
+    'merchant',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _noteMeta = const VerificationMeta('note');
+  @override
+  late final GeneratedColumn<String> note = GeneratedColumn<String>(
+    'note',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _tagsMeta = const VerificationMeta('tags');
+  @override
+  late final GeneratedColumn<String> tags = GeneratedColumn<String>(
+    'tags',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _includeInStatMeta = const VerificationMeta(
+    'includeInStat',
+  );
+  @override
+  late final GeneratedColumn<int> includeInStat = GeneratedColumn<int>(
+    'include_in_stat',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _includeInBudgetMeta = const VerificationMeta(
+    'includeInBudget',
+  );
+  @override
+  late final GeneratedColumn<int> includeInBudget = GeneratedColumn<int>(
+    'include_in_budget',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _periodKindMeta = const VerificationMeta(
+    'periodKind',
+  );
+  @override
+  late final GeneratedColumn<String> periodKind = GeneratedColumn<String>(
+    'period_kind',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _periodIntervalMeta = const VerificationMeta(
+    'periodInterval',
+  );
+  @override
+  late final GeneratedColumn<int> periodInterval = GeneratedColumn<int>(
+    'period_interval',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _startAtMeta = const VerificationMeta(
+    'startAt',
+  );
+  @override
+  late final GeneratedColumn<int> startAt = GeneratedColumn<int>(
+    'start_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nextRunAtMeta = const VerificationMeta(
+    'nextRunAt',
+  );
+  @override
+  late final GeneratedColumn<int> nextRunAt = GeneratedColumn<int>(
+    'next_run_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _lastRunAtMeta = const VerificationMeta(
+    'lastRunAt',
+  );
+  @override
+  late final GeneratedColumn<int> lastRunAt = GeneratedColumn<int>(
+    'last_run_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _enabledMeta = const VerificationMeta(
+    'enabled',
+  );
+  @override
+  late final GeneratedColumn<int> enabled = GeneratedColumn<int>(
+    'enabled',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _skippedCountMeta = const VerificationMeta(
+    'skippedCount',
+  );
+  @override
+  late final GeneratedColumn<int> skippedCount = GeneratedColumn<int>(
+    'skipped_count',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<int> createdAt = GeneratedColumn<int>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<int> updatedAt = GeneratedColumn<int>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    ledgerId,
+    type,
+    amountMinor,
+    currency,
+    accountId,
+    categoryId,
+    merchant,
+    note,
+    tags,
+    includeInStat,
+    includeInBudget,
+    periodKind,
+    periodInterval,
+    startAt,
+    nextRunAt,
+    lastRunAt,
+    enabled,
+    skippedCount,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'recurring_rules';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<RecurringRule> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('ledger_id')) {
+      context.handle(
+        _ledgerIdMeta,
+        ledgerId.isAcceptableOrUnknown(data['ledger_id']!, _ledgerIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_ledgerIdMeta);
+    }
+    if (data.containsKey('type')) {
+      context.handle(
+        _typeMeta,
+        type.isAcceptableOrUnknown(data['type']!, _typeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_typeMeta);
+    }
+    if (data.containsKey('amount_minor')) {
+      context.handle(
+        _amountMinorMeta,
+        amountMinor.isAcceptableOrUnknown(
+          data['amount_minor']!,
+          _amountMinorMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_amountMinorMeta);
+    }
+    if (data.containsKey('currency')) {
+      context.handle(
+        _currencyMeta,
+        currency.isAcceptableOrUnknown(data['currency']!, _currencyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_currencyMeta);
+    }
+    if (data.containsKey('account_id')) {
+      context.handle(
+        _accountIdMeta,
+        accountId.isAcceptableOrUnknown(data['account_id']!, _accountIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_accountIdMeta);
+    }
+    if (data.containsKey('category_id')) {
+      context.handle(
+        _categoryIdMeta,
+        categoryId.isAcceptableOrUnknown(data['category_id']!, _categoryIdMeta),
+      );
+    }
+    if (data.containsKey('merchant')) {
+      context.handle(
+        _merchantMeta,
+        merchant.isAcceptableOrUnknown(data['merchant']!, _merchantMeta),
+      );
+    }
+    if (data.containsKey('note')) {
+      context.handle(
+        _noteMeta,
+        note.isAcceptableOrUnknown(data['note']!, _noteMeta),
+      );
+    }
+    if (data.containsKey('tags')) {
+      context.handle(
+        _tagsMeta,
+        tags.isAcceptableOrUnknown(data['tags']!, _tagsMeta),
+      );
+    }
+    if (data.containsKey('include_in_stat')) {
+      context.handle(
+        _includeInStatMeta,
+        includeInStat.isAcceptableOrUnknown(
+          data['include_in_stat']!,
+          _includeInStatMeta,
+        ),
+      );
+    }
+    if (data.containsKey('include_in_budget')) {
+      context.handle(
+        _includeInBudgetMeta,
+        includeInBudget.isAcceptableOrUnknown(
+          data['include_in_budget']!,
+          _includeInBudgetMeta,
+        ),
+      );
+    }
+    if (data.containsKey('period_kind')) {
+      context.handle(
+        _periodKindMeta,
+        periodKind.isAcceptableOrUnknown(data['period_kind']!, _periodKindMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_periodKindMeta);
+    }
+    if (data.containsKey('period_interval')) {
+      context.handle(
+        _periodIntervalMeta,
+        periodInterval.isAcceptableOrUnknown(
+          data['period_interval']!,
+          _periodIntervalMeta,
+        ),
+      );
+    }
+    if (data.containsKey('start_at')) {
+      context.handle(
+        _startAtMeta,
+        startAt.isAcceptableOrUnknown(data['start_at']!, _startAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_startAtMeta);
+    }
+    if (data.containsKey('next_run_at')) {
+      context.handle(
+        _nextRunAtMeta,
+        nextRunAt.isAcceptableOrUnknown(data['next_run_at']!, _nextRunAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nextRunAtMeta);
+    }
+    if (data.containsKey('last_run_at')) {
+      context.handle(
+        _lastRunAtMeta,
+        lastRunAt.isAcceptableOrUnknown(data['last_run_at']!, _lastRunAtMeta),
+      );
+    }
+    if (data.containsKey('enabled')) {
+      context.handle(
+        _enabledMeta,
+        enabled.isAcceptableOrUnknown(data['enabled']!, _enabledMeta),
+      );
+    }
+    if (data.containsKey('skipped_count')) {
+      context.handle(
+        _skippedCountMeta,
+        skippedCount.isAcceptableOrUnknown(
+          data['skipped_count']!,
+          _skippedCountMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  RecurringRule map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return RecurringRule(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      ledgerId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}ledger_id'],
+      )!,
+      type: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}type'],
+      )!,
+      amountMinor: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}amount_minor'],
+      )!,
+      currency: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}currency'],
+      )!,
+      accountId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}account_id'],
+      )!,
+      categoryId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}category_id'],
+      ),
+      merchant: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}merchant'],
+      ),
+      note: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}note'],
+      ),
+      tags: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}tags'],
+      ),
+      includeInStat: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}include_in_stat'],
+      )!,
+      includeInBudget: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}include_in_budget'],
+      )!,
+      periodKind: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}period_kind'],
+      )!,
+      periodInterval: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}period_interval'],
+      )!,
+      startAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}start_at'],
+      )!,
+      nextRunAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}next_run_at'],
+      )!,
+      lastRunAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}last_run_at'],
+      ),
+      enabled: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}enabled'],
+      )!,
+      skippedCount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}skipped_count'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $RecurringRulesTable createAlias(String alias) {
+    return $RecurringRulesTable(attachedDatabase, alias);
+  }
+}
+
+class RecurringRule extends DataClass implements Insertable<RecurringRule> {
+  final String id;
+  final String ledgerId;
+
+  /// 'in' | 'out'
+  final String type;
+  final int amountMinor;
+  final String currency;
+  final String accountId;
+  final String? categoryId;
+  final String? merchant;
+  final String? note;
+
+  /// JSON array string, same convention as transactions.tags.
+  final String? tags;
+  final int includeInStat;
+  final int includeInBudget;
+
+  /// day / week / month / quarter / year
+  final String periodKind;
+  final int periodInterval;
+  final int startAt;
+  final int nextRunAt;
+  final int? lastRunAt;
+  final int enabled;
+
+  /// Periods skipped due to maxOccurrences cap (for UI tip).
+  final int skippedCount;
+  final int createdAt;
+  final int updatedAt;
+  const RecurringRule({
+    required this.id,
+    required this.ledgerId,
+    required this.type,
+    required this.amountMinor,
+    required this.currency,
+    required this.accountId,
+    this.categoryId,
+    this.merchant,
+    this.note,
+    this.tags,
+    required this.includeInStat,
+    required this.includeInBudget,
+    required this.periodKind,
+    required this.periodInterval,
+    required this.startAt,
+    required this.nextRunAt,
+    this.lastRunAt,
+    required this.enabled,
+    required this.skippedCount,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['ledger_id'] = Variable<String>(ledgerId);
+    map['type'] = Variable<String>(type);
+    map['amount_minor'] = Variable<int>(amountMinor);
+    map['currency'] = Variable<String>(currency);
+    map['account_id'] = Variable<String>(accountId);
+    if (!nullToAbsent || categoryId != null) {
+      map['category_id'] = Variable<String>(categoryId);
+    }
+    if (!nullToAbsent || merchant != null) {
+      map['merchant'] = Variable<String>(merchant);
+    }
+    if (!nullToAbsent || note != null) {
+      map['note'] = Variable<String>(note);
+    }
+    if (!nullToAbsent || tags != null) {
+      map['tags'] = Variable<String>(tags);
+    }
+    map['include_in_stat'] = Variable<int>(includeInStat);
+    map['include_in_budget'] = Variable<int>(includeInBudget);
+    map['period_kind'] = Variable<String>(periodKind);
+    map['period_interval'] = Variable<int>(periodInterval);
+    map['start_at'] = Variable<int>(startAt);
+    map['next_run_at'] = Variable<int>(nextRunAt);
+    if (!nullToAbsent || lastRunAt != null) {
+      map['last_run_at'] = Variable<int>(lastRunAt);
+    }
+    map['enabled'] = Variable<int>(enabled);
+    map['skipped_count'] = Variable<int>(skippedCount);
+    map['created_at'] = Variable<int>(createdAt);
+    map['updated_at'] = Variable<int>(updatedAt);
+    return map;
+  }
+
+  RecurringRulesCompanion toCompanion(bool nullToAbsent) {
+    return RecurringRulesCompanion(
+      id: Value(id),
+      ledgerId: Value(ledgerId),
+      type: Value(type),
+      amountMinor: Value(amountMinor),
+      currency: Value(currency),
+      accountId: Value(accountId),
+      categoryId: categoryId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(categoryId),
+      merchant: merchant == null && nullToAbsent
+          ? const Value.absent()
+          : Value(merchant),
+      note: note == null && nullToAbsent ? const Value.absent() : Value(note),
+      tags: tags == null && nullToAbsent ? const Value.absent() : Value(tags),
+      includeInStat: Value(includeInStat),
+      includeInBudget: Value(includeInBudget),
+      periodKind: Value(periodKind),
+      periodInterval: Value(periodInterval),
+      startAt: Value(startAt),
+      nextRunAt: Value(nextRunAt),
+      lastRunAt: lastRunAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastRunAt),
+      enabled: Value(enabled),
+      skippedCount: Value(skippedCount),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory RecurringRule.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return RecurringRule(
+      id: serializer.fromJson<String>(json['id']),
+      ledgerId: serializer.fromJson<String>(json['ledgerId']),
+      type: serializer.fromJson<String>(json['type']),
+      amountMinor: serializer.fromJson<int>(json['amountMinor']),
+      currency: serializer.fromJson<String>(json['currency']),
+      accountId: serializer.fromJson<String>(json['accountId']),
+      categoryId: serializer.fromJson<String?>(json['categoryId']),
+      merchant: serializer.fromJson<String?>(json['merchant']),
+      note: serializer.fromJson<String?>(json['note']),
+      tags: serializer.fromJson<String?>(json['tags']),
+      includeInStat: serializer.fromJson<int>(json['includeInStat']),
+      includeInBudget: serializer.fromJson<int>(json['includeInBudget']),
+      periodKind: serializer.fromJson<String>(json['periodKind']),
+      periodInterval: serializer.fromJson<int>(json['periodInterval']),
+      startAt: serializer.fromJson<int>(json['startAt']),
+      nextRunAt: serializer.fromJson<int>(json['nextRunAt']),
+      lastRunAt: serializer.fromJson<int?>(json['lastRunAt']),
+      enabled: serializer.fromJson<int>(json['enabled']),
+      skippedCount: serializer.fromJson<int>(json['skippedCount']),
+      createdAt: serializer.fromJson<int>(json['createdAt']),
+      updatedAt: serializer.fromJson<int>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'ledgerId': serializer.toJson<String>(ledgerId),
+      'type': serializer.toJson<String>(type),
+      'amountMinor': serializer.toJson<int>(amountMinor),
+      'currency': serializer.toJson<String>(currency),
+      'accountId': serializer.toJson<String>(accountId),
+      'categoryId': serializer.toJson<String?>(categoryId),
+      'merchant': serializer.toJson<String?>(merchant),
+      'note': serializer.toJson<String?>(note),
+      'tags': serializer.toJson<String?>(tags),
+      'includeInStat': serializer.toJson<int>(includeInStat),
+      'includeInBudget': serializer.toJson<int>(includeInBudget),
+      'periodKind': serializer.toJson<String>(periodKind),
+      'periodInterval': serializer.toJson<int>(periodInterval),
+      'startAt': serializer.toJson<int>(startAt),
+      'nextRunAt': serializer.toJson<int>(nextRunAt),
+      'lastRunAt': serializer.toJson<int?>(lastRunAt),
+      'enabled': serializer.toJson<int>(enabled),
+      'skippedCount': serializer.toJson<int>(skippedCount),
+      'createdAt': serializer.toJson<int>(createdAt),
+      'updatedAt': serializer.toJson<int>(updatedAt),
+    };
+  }
+
+  RecurringRule copyWith({
+    String? id,
+    String? ledgerId,
+    String? type,
+    int? amountMinor,
+    String? currency,
+    String? accountId,
+    Value<String?> categoryId = const Value.absent(),
+    Value<String?> merchant = const Value.absent(),
+    Value<String?> note = const Value.absent(),
+    Value<String?> tags = const Value.absent(),
+    int? includeInStat,
+    int? includeInBudget,
+    String? periodKind,
+    int? periodInterval,
+    int? startAt,
+    int? nextRunAt,
+    Value<int?> lastRunAt = const Value.absent(),
+    int? enabled,
+    int? skippedCount,
+    int? createdAt,
+    int? updatedAt,
+  }) => RecurringRule(
+    id: id ?? this.id,
+    ledgerId: ledgerId ?? this.ledgerId,
+    type: type ?? this.type,
+    amountMinor: amountMinor ?? this.amountMinor,
+    currency: currency ?? this.currency,
+    accountId: accountId ?? this.accountId,
+    categoryId: categoryId.present ? categoryId.value : this.categoryId,
+    merchant: merchant.present ? merchant.value : this.merchant,
+    note: note.present ? note.value : this.note,
+    tags: tags.present ? tags.value : this.tags,
+    includeInStat: includeInStat ?? this.includeInStat,
+    includeInBudget: includeInBudget ?? this.includeInBudget,
+    periodKind: periodKind ?? this.periodKind,
+    periodInterval: periodInterval ?? this.periodInterval,
+    startAt: startAt ?? this.startAt,
+    nextRunAt: nextRunAt ?? this.nextRunAt,
+    lastRunAt: lastRunAt.present ? lastRunAt.value : this.lastRunAt,
+    enabled: enabled ?? this.enabled,
+    skippedCount: skippedCount ?? this.skippedCount,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  RecurringRule copyWithCompanion(RecurringRulesCompanion data) {
+    return RecurringRule(
+      id: data.id.present ? data.id.value : this.id,
+      ledgerId: data.ledgerId.present ? data.ledgerId.value : this.ledgerId,
+      type: data.type.present ? data.type.value : this.type,
+      amountMinor: data.amountMinor.present
+          ? data.amountMinor.value
+          : this.amountMinor,
+      currency: data.currency.present ? data.currency.value : this.currency,
+      accountId: data.accountId.present ? data.accountId.value : this.accountId,
+      categoryId: data.categoryId.present
+          ? data.categoryId.value
+          : this.categoryId,
+      merchant: data.merchant.present ? data.merchant.value : this.merchant,
+      note: data.note.present ? data.note.value : this.note,
+      tags: data.tags.present ? data.tags.value : this.tags,
+      includeInStat: data.includeInStat.present
+          ? data.includeInStat.value
+          : this.includeInStat,
+      includeInBudget: data.includeInBudget.present
+          ? data.includeInBudget.value
+          : this.includeInBudget,
+      periodKind: data.periodKind.present
+          ? data.periodKind.value
+          : this.periodKind,
+      periodInterval: data.periodInterval.present
+          ? data.periodInterval.value
+          : this.periodInterval,
+      startAt: data.startAt.present ? data.startAt.value : this.startAt,
+      nextRunAt: data.nextRunAt.present ? data.nextRunAt.value : this.nextRunAt,
+      lastRunAt: data.lastRunAt.present ? data.lastRunAt.value : this.lastRunAt,
+      enabled: data.enabled.present ? data.enabled.value : this.enabled,
+      skippedCount: data.skippedCount.present
+          ? data.skippedCount.value
+          : this.skippedCount,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RecurringRule(')
+          ..write('id: $id, ')
+          ..write('ledgerId: $ledgerId, ')
+          ..write('type: $type, ')
+          ..write('amountMinor: $amountMinor, ')
+          ..write('currency: $currency, ')
+          ..write('accountId: $accountId, ')
+          ..write('categoryId: $categoryId, ')
+          ..write('merchant: $merchant, ')
+          ..write('note: $note, ')
+          ..write('tags: $tags, ')
+          ..write('includeInStat: $includeInStat, ')
+          ..write('includeInBudget: $includeInBudget, ')
+          ..write('periodKind: $periodKind, ')
+          ..write('periodInterval: $periodInterval, ')
+          ..write('startAt: $startAt, ')
+          ..write('nextRunAt: $nextRunAt, ')
+          ..write('lastRunAt: $lastRunAt, ')
+          ..write('enabled: $enabled, ')
+          ..write('skippedCount: $skippedCount, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hashAll([
+    id,
+    ledgerId,
+    type,
+    amountMinor,
+    currency,
+    accountId,
+    categoryId,
+    merchant,
+    note,
+    tags,
+    includeInStat,
+    includeInBudget,
+    periodKind,
+    periodInterval,
+    startAt,
+    nextRunAt,
+    lastRunAt,
+    enabled,
+    skippedCount,
+    createdAt,
+    updatedAt,
+  ]);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is RecurringRule &&
+          other.id == this.id &&
+          other.ledgerId == this.ledgerId &&
+          other.type == this.type &&
+          other.amountMinor == this.amountMinor &&
+          other.currency == this.currency &&
+          other.accountId == this.accountId &&
+          other.categoryId == this.categoryId &&
+          other.merchant == this.merchant &&
+          other.note == this.note &&
+          other.tags == this.tags &&
+          other.includeInStat == this.includeInStat &&
+          other.includeInBudget == this.includeInBudget &&
+          other.periodKind == this.periodKind &&
+          other.periodInterval == this.periodInterval &&
+          other.startAt == this.startAt &&
+          other.nextRunAt == this.nextRunAt &&
+          other.lastRunAt == this.lastRunAt &&
+          other.enabled == this.enabled &&
+          other.skippedCount == this.skippedCount &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class RecurringRulesCompanion extends UpdateCompanion<RecurringRule> {
+  final Value<String> id;
+  final Value<String> ledgerId;
+  final Value<String> type;
+  final Value<int> amountMinor;
+  final Value<String> currency;
+  final Value<String> accountId;
+  final Value<String?> categoryId;
+  final Value<String?> merchant;
+  final Value<String?> note;
+  final Value<String?> tags;
+  final Value<int> includeInStat;
+  final Value<int> includeInBudget;
+  final Value<String> periodKind;
+  final Value<int> periodInterval;
+  final Value<int> startAt;
+  final Value<int> nextRunAt;
+  final Value<int?> lastRunAt;
+  final Value<int> enabled;
+  final Value<int> skippedCount;
+  final Value<int> createdAt;
+  final Value<int> updatedAt;
+  final Value<int> rowid;
+  const RecurringRulesCompanion({
+    this.id = const Value.absent(),
+    this.ledgerId = const Value.absent(),
+    this.type = const Value.absent(),
+    this.amountMinor = const Value.absent(),
+    this.currency = const Value.absent(),
+    this.accountId = const Value.absent(),
+    this.categoryId = const Value.absent(),
+    this.merchant = const Value.absent(),
+    this.note = const Value.absent(),
+    this.tags = const Value.absent(),
+    this.includeInStat = const Value.absent(),
+    this.includeInBudget = const Value.absent(),
+    this.periodKind = const Value.absent(),
+    this.periodInterval = const Value.absent(),
+    this.startAt = const Value.absent(),
+    this.nextRunAt = const Value.absent(),
+    this.lastRunAt = const Value.absent(),
+    this.enabled = const Value.absent(),
+    this.skippedCount = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  RecurringRulesCompanion.insert({
+    required String id,
+    required String ledgerId,
+    required String type,
+    required int amountMinor,
+    required String currency,
+    required String accountId,
+    this.categoryId = const Value.absent(),
+    this.merchant = const Value.absent(),
+    this.note = const Value.absent(),
+    this.tags = const Value.absent(),
+    this.includeInStat = const Value.absent(),
+    this.includeInBudget = const Value.absent(),
+    required String periodKind,
+    this.periodInterval = const Value.absent(),
+    required int startAt,
+    required int nextRunAt,
+    this.lastRunAt = const Value.absent(),
+    this.enabled = const Value.absent(),
+    this.skippedCount = const Value.absent(),
+    required int createdAt,
+    required int updatedAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       ledgerId = Value(ledgerId),
+       type = Value(type),
+       amountMinor = Value(amountMinor),
+       currency = Value(currency),
+       accountId = Value(accountId),
+       periodKind = Value(periodKind),
+       startAt = Value(startAt),
+       nextRunAt = Value(nextRunAt),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<RecurringRule> custom({
+    Expression<String>? id,
+    Expression<String>? ledgerId,
+    Expression<String>? type,
+    Expression<int>? amountMinor,
+    Expression<String>? currency,
+    Expression<String>? accountId,
+    Expression<String>? categoryId,
+    Expression<String>? merchant,
+    Expression<String>? note,
+    Expression<String>? tags,
+    Expression<int>? includeInStat,
+    Expression<int>? includeInBudget,
+    Expression<String>? periodKind,
+    Expression<int>? periodInterval,
+    Expression<int>? startAt,
+    Expression<int>? nextRunAt,
+    Expression<int>? lastRunAt,
+    Expression<int>? enabled,
+    Expression<int>? skippedCount,
+    Expression<int>? createdAt,
+    Expression<int>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (ledgerId != null) 'ledger_id': ledgerId,
+      if (type != null) 'type': type,
+      if (amountMinor != null) 'amount_minor': amountMinor,
+      if (currency != null) 'currency': currency,
+      if (accountId != null) 'account_id': accountId,
+      if (categoryId != null) 'category_id': categoryId,
+      if (merchant != null) 'merchant': merchant,
+      if (note != null) 'note': note,
+      if (tags != null) 'tags': tags,
+      if (includeInStat != null) 'include_in_stat': includeInStat,
+      if (includeInBudget != null) 'include_in_budget': includeInBudget,
+      if (periodKind != null) 'period_kind': periodKind,
+      if (periodInterval != null) 'period_interval': periodInterval,
+      if (startAt != null) 'start_at': startAt,
+      if (nextRunAt != null) 'next_run_at': nextRunAt,
+      if (lastRunAt != null) 'last_run_at': lastRunAt,
+      if (enabled != null) 'enabled': enabled,
+      if (skippedCount != null) 'skipped_count': skippedCount,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  RecurringRulesCompanion copyWith({
+    Value<String>? id,
+    Value<String>? ledgerId,
+    Value<String>? type,
+    Value<int>? amountMinor,
+    Value<String>? currency,
+    Value<String>? accountId,
+    Value<String?>? categoryId,
+    Value<String?>? merchant,
+    Value<String?>? note,
+    Value<String?>? tags,
+    Value<int>? includeInStat,
+    Value<int>? includeInBudget,
+    Value<String>? periodKind,
+    Value<int>? periodInterval,
+    Value<int>? startAt,
+    Value<int>? nextRunAt,
+    Value<int?>? lastRunAt,
+    Value<int>? enabled,
+    Value<int>? skippedCount,
+    Value<int>? createdAt,
+    Value<int>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return RecurringRulesCompanion(
+      id: id ?? this.id,
+      ledgerId: ledgerId ?? this.ledgerId,
+      type: type ?? this.type,
+      amountMinor: amountMinor ?? this.amountMinor,
+      currency: currency ?? this.currency,
+      accountId: accountId ?? this.accountId,
+      categoryId: categoryId ?? this.categoryId,
+      merchant: merchant ?? this.merchant,
+      note: note ?? this.note,
+      tags: tags ?? this.tags,
+      includeInStat: includeInStat ?? this.includeInStat,
+      includeInBudget: includeInBudget ?? this.includeInBudget,
+      periodKind: periodKind ?? this.periodKind,
+      periodInterval: periodInterval ?? this.periodInterval,
+      startAt: startAt ?? this.startAt,
+      nextRunAt: nextRunAt ?? this.nextRunAt,
+      lastRunAt: lastRunAt ?? this.lastRunAt,
+      enabled: enabled ?? this.enabled,
+      skippedCount: skippedCount ?? this.skippedCount,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (ledgerId.present) {
+      map['ledger_id'] = Variable<String>(ledgerId.value);
+    }
+    if (type.present) {
+      map['type'] = Variable<String>(type.value);
+    }
+    if (amountMinor.present) {
+      map['amount_minor'] = Variable<int>(amountMinor.value);
+    }
+    if (currency.present) {
+      map['currency'] = Variable<String>(currency.value);
+    }
+    if (accountId.present) {
+      map['account_id'] = Variable<String>(accountId.value);
+    }
+    if (categoryId.present) {
+      map['category_id'] = Variable<String>(categoryId.value);
+    }
+    if (merchant.present) {
+      map['merchant'] = Variable<String>(merchant.value);
+    }
+    if (note.present) {
+      map['note'] = Variable<String>(note.value);
+    }
+    if (tags.present) {
+      map['tags'] = Variable<String>(tags.value);
+    }
+    if (includeInStat.present) {
+      map['include_in_stat'] = Variable<int>(includeInStat.value);
+    }
+    if (includeInBudget.present) {
+      map['include_in_budget'] = Variable<int>(includeInBudget.value);
+    }
+    if (periodKind.present) {
+      map['period_kind'] = Variable<String>(periodKind.value);
+    }
+    if (periodInterval.present) {
+      map['period_interval'] = Variable<int>(periodInterval.value);
+    }
+    if (startAt.present) {
+      map['start_at'] = Variable<int>(startAt.value);
+    }
+    if (nextRunAt.present) {
+      map['next_run_at'] = Variable<int>(nextRunAt.value);
+    }
+    if (lastRunAt.present) {
+      map['last_run_at'] = Variable<int>(lastRunAt.value);
+    }
+    if (enabled.present) {
+      map['enabled'] = Variable<int>(enabled.value);
+    }
+    if (skippedCount.present) {
+      map['skipped_count'] = Variable<int>(skippedCount.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<int>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<int>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RecurringRulesCompanion(')
+          ..write('id: $id, ')
+          ..write('ledgerId: $ledgerId, ')
+          ..write('type: $type, ')
+          ..write('amountMinor: $amountMinor, ')
+          ..write('currency: $currency, ')
+          ..write('accountId: $accountId, ')
+          ..write('categoryId: $categoryId, ')
+          ..write('merchant: $merchant, ')
+          ..write('note: $note, ')
+          ..write('tags: $tags, ')
+          ..write('includeInStat: $includeInStat, ')
+          ..write('includeInBudget: $includeInBudget, ')
+          ..write('periodKind: $periodKind, ')
+          ..write('periodInterval: $periodInterval, ')
+          ..write('startAt: $startAt, ')
+          ..write('nextRunAt: $nextRunAt, ')
+          ..write('lastRunAt: $lastRunAt, ')
+          ..write('enabled: $enabled, ')
+          ..write('skippedCount: $skippedCount, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$CentliDatabase extends GeneratedDatabase {
   _$CentliDatabase(QueryExecutor e) : super(e);
   $CentliDatabaseManager get managers => $CentliDatabaseManager(this);
@@ -5359,6 +6635,7 @@ abstract class _$CentliDatabase extends GeneratedDatabase {
   late final $FxRatesTable fxRates = $FxRatesTable(this);
   late final $BudgetsTable budgets = $BudgetsTable(this);
   late final $AppSettingsTable appSettings = $AppSettingsTable(this);
+  late final $RecurringRulesTable recurringRules = $RecurringRulesTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -5373,6 +6650,7 @@ abstract class _$CentliDatabase extends GeneratedDatabase {
     fxRates,
     budgets,
     appSettings,
+    recurringRules,
   ];
 }
 
@@ -5466,6 +6744,25 @@ final class $$LedgersTableReferences
     ).filter((f) => f.ledgerId.id.sqlEquals($_itemColumn<String>('id')!));
 
     final cache = $_typedResult.readTableOrNull(_budgetsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$RecurringRulesTable, List<RecurringRule>>
+  _recurringRulesRefsTable(_$CentliDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.recurringRules,
+        aliasName: 'ledgers__id__recurring_rules__ledger_id',
+      );
+
+  $$RecurringRulesTableProcessedTableManager get recurringRulesRefs {
+    final manager = $$RecurringRulesTableTableManager(
+      $_db,
+      $_db.recurringRules,
+    ).filter((f) => f.ledgerId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_recurringRulesRefsTable($_db));
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
     );
@@ -5597,6 +6894,31 @@ class $$LedgersTableFilterComposer
           }) => $$BudgetsTableFilterComposer(
             $db: $db,
             $table: $db.budgets,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> recurringRulesRefs(
+    Expression<bool> Function($$RecurringRulesTableFilterComposer f) f,
+  ) {
+    final $$RecurringRulesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.recurringRules,
+      getReferencedColumn: (t) => t.ledgerId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$RecurringRulesTableFilterComposer(
+            $db: $db,
+            $table: $db.recurringRules,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -5767,6 +7089,31 @@ class $$LedgersTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> recurringRulesRefs<T extends Object>(
+    Expression<T> Function($$RecurringRulesTableAnnotationComposer a) f,
+  ) {
+    final $$RecurringRulesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.recurringRules,
+      getReferencedColumn: (t) => t.ledgerId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$RecurringRulesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.recurringRules,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$LedgersTableTableManager
@@ -5787,6 +7134,7 @@ class $$LedgersTableTableManager
             bool categoriesRefs,
             bool transactionsRefs,
             bool budgetsRefs,
+            bool recurringRulesRefs,
           })
         > {
   $$LedgersTableTableManager(_$CentliDatabase db, $LedgersTable table)
@@ -5846,6 +7194,7 @@ class $$LedgersTableTableManager
                 categoriesRefs = false,
                 transactionsRefs = false,
                 budgetsRefs = false,
+                recurringRulesRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
@@ -5854,6 +7203,7 @@ class $$LedgersTableTableManager
                     if (categoriesRefs) db.categories,
                     if (transactionsRefs) db.transactions,
                     if (budgetsRefs) db.budgets,
+                    if (recurringRulesRefs) db.recurringRules,
                   ],
                   addJoins: null,
                   getPrefetchedDataCallback: (items) async {
@@ -5942,6 +7292,27 @@ class $$LedgersTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (recurringRulesRefs)
+                        await $_getPrefetchedData<
+                          Ledger,
+                          $LedgersTable,
+                          RecurringRule
+                        >(
+                          currentTable: table,
+                          referencedTable: $$LedgersTableReferences
+                              ._recurringRulesRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$LedgersTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).recurringRulesRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.ledgerId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -5967,6 +7338,7 @@ typedef $$LedgersTableProcessedTableManager =
         bool categoriesRefs,
         bool transactionsRefs,
         bool budgetsRefs,
+        bool recurringRulesRefs,
       })
     >;
 typedef $$AccountsTableCreateCompanionBuilder = AccountsCompanion Function({
@@ -6053,6 +7425,25 @@ final class $$AccountsTableReferences
     ).filter((f) => f.toAccountId.id.sqlEquals($_itemColumn<String>('id')!));
 
     final cache = $_typedResult.readTableOrNull(_incomingTransfersTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$RecurringRulesTable, List<RecurringRule>>
+  _recurringRulesRefsTable(_$CentliDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.recurringRules,
+        aliasName: 'accounts__id__recurring_rules__account_id',
+      );
+
+  $$RecurringRulesTableProcessedTableManager get recurringRulesRefs {
+    final manager = $$RecurringRulesTableTableManager(
+      $_db,
+      $_db.recurringRules,
+    ).filter((f) => f.accountId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_recurringRulesRefsTable($_db));
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
     );
@@ -6182,6 +7573,31 @@ class $$AccountsTableFilterComposer
           }) => $$TransactionsTableFilterComposer(
             $db: $db,
             $table: $db.transactions,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> recurringRulesRefs(
+    Expression<bool> Function($$RecurringRulesTableFilterComposer f) f,
+  ) {
+    final $$RecurringRulesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.recurringRules,
+      getReferencedColumn: (t) => t.accountId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$RecurringRulesTableFilterComposer(
+            $db: $db,
+            $table: $db.recurringRules,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -6388,6 +7804,31 @@ class $$AccountsTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> recurringRulesRefs<T extends Object>(
+    Expression<T> Function($$RecurringRulesTableAnnotationComposer a) f,
+  ) {
+    final $$RecurringRulesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.recurringRules,
+      getReferencedColumn: (t) => t.accountId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$RecurringRulesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.recurringRules,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$AccountsTableTableManager
@@ -6407,6 +7848,7 @@ class $$AccountsTableTableManager
             bool ledgerId,
             bool outgoingTransactions,
             bool incomingTransfers,
+            bool recurringRulesRefs,
           })
         > {
   $$AccountsTableTableManager(_$CentliDatabase db, $AccountsTable table)
@@ -6489,12 +7931,14 @@ class $$AccountsTableTableManager
                 ledgerId = false,
                 outgoingTransactions = false,
                 incomingTransfers = false,
+                recurringRulesRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
                   explicitlyWatchedTables: [
                     if (outgoingTransactions) db.transactions,
                     if (incomingTransfers) db.transactions,
+                    if (recurringRulesRefs) db.recurringRules,
                   ],
                   addJoins:
                       <
@@ -6570,6 +8014,27 @@ class $$AccountsTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (recurringRulesRefs)
+                        await $_getPrefetchedData<
+                          Account,
+                          $AccountsTable,
+                          RecurringRule
+                        >(
+                          currentTable: table,
+                          referencedTable: $$AccountsTableReferences
+                              ._recurringRulesRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$AccountsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).recurringRulesRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.accountId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -6594,6 +8059,7 @@ typedef $$AccountsTableProcessedTableManager =
         bool ledgerId,
         bool outgoingTransactions,
         bool incomingTransfers,
+        bool recurringRulesRefs,
       })
     >;
 typedef $$CategoriesTableCreateCompanionBuilder = CategoriesCompanion Function({
@@ -6655,6 +8121,25 @@ final class $$CategoriesTableReferences
     ).filter((f) => f.categoryId.id.sqlEquals($_itemColumn<String>('id')!));
 
     final cache = $_typedResult.readTableOrNull(_transactionsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$RecurringRulesTable, List<RecurringRule>>
+  _recurringRulesRefsTable(_$CentliDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.recurringRules,
+        aliasName: 'categories__id__recurring_rules__category_id',
+      );
+
+  $$RecurringRulesTableProcessedTableManager get recurringRulesRefs {
+    final manager = $$RecurringRulesTableTableManager(
+      $_db,
+      $_db.recurringRules,
+    ).filter((f) => f.categoryId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_recurringRulesRefsTable($_db));
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
     );
@@ -6749,6 +8234,31 @@ class $$CategoriesTableFilterComposer
           }) => $$TransactionsTableFilterComposer(
             $db: $db,
             $table: $db.transactions,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> recurringRulesRefs(
+    Expression<bool> Function($$RecurringRulesTableFilterComposer f) f,
+  ) {
+    final $$RecurringRulesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.recurringRules,
+      getReferencedColumn: (t) => t.categoryId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$RecurringRulesTableFilterComposer(
+            $db: $db,
+            $table: $db.recurringRules,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -6912,6 +8422,31 @@ class $$CategoriesTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> recurringRulesRefs<T extends Object>(
+    Expression<T> Function($$RecurringRulesTableAnnotationComposer a) f,
+  ) {
+    final $$RecurringRulesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.recurringRules,
+      getReferencedColumn: (t) => t.categoryId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$RecurringRulesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.recurringRules,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$CategoriesTableTableManager
@@ -6927,7 +8462,11 @@ class $$CategoriesTableTableManager
           $$CategoriesTableUpdateCompanionBuilder,
           (Category, $$CategoriesTableReferences),
           Category,
-          PrefetchHooks Function({bool ledgerId, bool transactionsRefs})
+          PrefetchHooks Function({
+            bool ledgerId,
+            bool transactionsRefs,
+            bool recurringRulesRefs,
+          })
         > {
   $$CategoriesTableTableManager(_$CentliDatabase db, $CategoriesTable table)
     : super(
@@ -6997,11 +8536,16 @@ class $$CategoriesTableTableManager
               )
               .toList(),
           prefetchHooksCallback:
-              ({ledgerId = false, transactionsRefs = false}) {
+              ({
+                ledgerId = false,
+                transactionsRefs = false,
+                recurringRulesRefs = false,
+              }) {
                 return PrefetchHooks(
                   db: db,
                   explicitlyWatchedTables: [
                     if (transactionsRefs) db.transactions,
+                    if (recurringRulesRefs) db.recurringRules,
                   ],
                   addJoins:
                       <
@@ -7056,6 +8600,27 @@ class $$CategoriesTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (recurringRulesRefs)
+                        await $_getPrefetchedData<
+                          Category,
+                          $CategoriesTable,
+                          RecurringRule
+                        >(
+                          currentTable: table,
+                          referencedTable: $$CategoriesTableReferences
+                              ._recurringRulesRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$CategoriesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).recurringRulesRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.categoryId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -7076,7 +8641,11 @@ typedef $$CategoriesTableProcessedTableManager =
       $$CategoriesTableUpdateCompanionBuilder,
       (Category, $$CategoriesTableReferences),
       Category,
-      PrefetchHooks Function({bool ledgerId, bool transactionsRefs})
+      PrefetchHooks Function({
+        bool ledgerId,
+        bool transactionsRefs,
+        bool recurringRulesRefs,
+      })
     >;
 typedef $$TransactionsTableCreateCompanionBuilder =
     TransactionsCompanion Function({
@@ -7100,6 +8669,7 @@ typedef $$TransactionsTableCreateCompanionBuilder =
       Value<int?> toAmountMinor,
       Value<String> source,
       Value<String?> pendingId,
+      Value<String?> occurrenceKey,
       required int createdAt,
       required int updatedAt,
       Value<int?> deletedAt,
@@ -7127,6 +8697,7 @@ typedef $$TransactionsTableUpdateCompanionBuilder =
       Value<int?> toAmountMinor,
       Value<String> source,
       Value<String?> pendingId,
+      Value<String?> occurrenceKey,
       Value<int> createdAt,
       Value<int> updatedAt,
       Value<int?> deletedAt,
@@ -7292,6 +8863,11 @@ class $$TransactionsTableFilterComposer
 
   ColumnFilters<String> get pendingId => $composableBuilder(
     column: $table.pendingId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get occurrenceKey => $composableBuilder(
+    column: $table.occurrenceKey,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -7492,6 +9068,11 @@ class $$TransactionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get occurrenceKey => $composableBuilder(
+    column: $table.occurrenceKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -7667,6 +9248,11 @@ class $$TransactionsTableAnnotationComposer
   GeneratedColumn<String> get pendingId =>
       $composableBuilder(column: $table.pendingId, builder: (column) => column);
 
+  GeneratedColumn<String> get occurrenceKey => $composableBuilder(
+    column: $table.occurrenceKey,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<int> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
 
@@ -7822,6 +9408,7 @@ class $$TransactionsTableTableManager
                 Value<int?> toAmountMinor = const Value.absent(),
                 Value<String> source = const Value.absent(),
                 Value<String?> pendingId = const Value.absent(),
+                Value<String?> occurrenceKey = const Value.absent(),
                 Value<int> createdAt = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<int?> deletedAt = const Value.absent(),
@@ -7847,6 +9434,7 @@ class $$TransactionsTableTableManager
                 toAmountMinor: toAmountMinor,
                 source: source,
                 pendingId: pendingId,
+                occurrenceKey: occurrenceKey,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 deletedAt: deletedAt,
@@ -7874,6 +9462,7 @@ class $$TransactionsTableTableManager
                 Value<int?> toAmountMinor = const Value.absent(),
                 Value<String> source = const Value.absent(),
                 Value<String?> pendingId = const Value.absent(),
+                Value<String?> occurrenceKey = const Value.absent(),
                 required int createdAt,
                 required int updatedAt,
                 Value<int?> deletedAt = const Value.absent(),
@@ -7899,6 +9488,7 @@ class $$TransactionsTableTableManager
                 toAmountMinor: toAmountMinor,
                 source: source,
                 pendingId: pendingId,
+                occurrenceKey: occurrenceKey,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 deletedAt: deletedAt,
@@ -8029,6 +9619,7 @@ typedef $$PendingCapturesTableCreateCompanionBuilder =
       required String status,
       required String dedupeKey,
       Value<int> parseOk,
+      Value<String?> direction,
       required int createdAt,
       required int updatedAt,
       Value<int> rowid,
@@ -8049,6 +9640,7 @@ typedef $$PendingCapturesTableUpdateCompanionBuilder =
       Value<String> status,
       Value<String> dedupeKey,
       Value<int> parseOk,
+      Value<String?> direction,
       Value<int> createdAt,
       Value<int> updatedAt,
       Value<int> rowid,
@@ -8130,6 +9722,11 @@ class $$PendingCapturesTableFilterComposer
 
   ColumnFilters<int> get parseOk => $composableBuilder(
     column: $table.parseOk,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get direction => $composableBuilder(
+    column: $table.direction,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -8223,6 +9820,11 @@ class $$PendingCapturesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get direction => $composableBuilder(
+    column: $table.direction,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -8291,6 +9893,9 @@ class $$PendingCapturesTableAnnotationComposer
   GeneratedColumn<int> get parseOk =>
       $composableBuilder(column: $table.parseOk, builder: (column) => column);
 
+  GeneratedColumn<String> get direction =>
+      $composableBuilder(column: $table.direction, builder: (column) => column);
+
   GeneratedColumn<int> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
 
@@ -8349,6 +9954,7 @@ class $$PendingCapturesTableTableManager
                 Value<String> status = const Value.absent(),
                 Value<String> dedupeKey = const Value.absent(),
                 Value<int> parseOk = const Value.absent(),
+                Value<String?> direction = const Value.absent(),
                 Value<int> createdAt = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -8367,6 +9973,7 @@ class $$PendingCapturesTableTableManager
                 status: status,
                 dedupeKey: dedupeKey,
                 parseOk: parseOk,
+                direction: direction,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -8387,6 +9994,7 @@ class $$PendingCapturesTableTableManager
                 required String status,
                 required String dedupeKey,
                 Value<int> parseOk = const Value.absent(),
+                Value<String?> direction = const Value.absent(),
                 required int createdAt,
                 required int updatedAt,
                 Value<int> rowid = const Value.absent(),
@@ -8405,6 +10013,7 @@ class $$PendingCapturesTableTableManager
                 status: status,
                 dedupeKey: dedupeKey,
                 parseOk: parseOk,
+                direction: direction,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -9418,6 +11027,817 @@ typedef $$AppSettingsTableProcessedTableManager =
       AppSetting,
       PrefetchHooks Function()
     >;
+typedef $$RecurringRulesTableCreateCompanionBuilder =
+    RecurringRulesCompanion Function({
+      required String id,
+      required String ledgerId,
+      required String type,
+      required int amountMinor,
+      required String currency,
+      required String accountId,
+      Value<String?> categoryId,
+      Value<String?> merchant,
+      Value<String?> note,
+      Value<String?> tags,
+      Value<int> includeInStat,
+      Value<int> includeInBudget,
+      required String periodKind,
+      Value<int> periodInterval,
+      required int startAt,
+      required int nextRunAt,
+      Value<int?> lastRunAt,
+      Value<int> enabled,
+      Value<int> skippedCount,
+      required int createdAt,
+      required int updatedAt,
+      Value<int> rowid,
+    });
+typedef $$RecurringRulesTableUpdateCompanionBuilder =
+    RecurringRulesCompanion Function({
+      Value<String> id,
+      Value<String> ledgerId,
+      Value<String> type,
+      Value<int> amountMinor,
+      Value<String> currency,
+      Value<String> accountId,
+      Value<String?> categoryId,
+      Value<String?> merchant,
+      Value<String?> note,
+      Value<String?> tags,
+      Value<int> includeInStat,
+      Value<int> includeInBudget,
+      Value<String> periodKind,
+      Value<int> periodInterval,
+      Value<int> startAt,
+      Value<int> nextRunAt,
+      Value<int?> lastRunAt,
+      Value<int> enabled,
+      Value<int> skippedCount,
+      Value<int> createdAt,
+      Value<int> updatedAt,
+      Value<int> rowid,
+    });
+
+final class $$RecurringRulesTableReferences
+    extends
+        BaseReferences<_$CentliDatabase, $RecurringRulesTable, RecurringRule> {
+  $$RecurringRulesTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $LedgersTable _ledgerIdTable(_$CentliDatabase db) =>
+      db.ledgers.createAlias('recurring_rules__ledger_id__ledgers__id');
+
+  $$LedgersTableProcessedTableManager get ledgerId {
+    final $_column = $_itemColumn<String>('ledger_id')!;
+
+    final manager = $$LedgersTableTableManager(
+      $_db,
+      $_db.ledgers,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_ledgerIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $AccountsTable _accountIdTable(_$CentliDatabase db) =>
+      db.accounts.createAlias('recurring_rules__account_id__accounts__id');
+
+  $$AccountsTableProcessedTableManager get accountId {
+    final $_column = $_itemColumn<String>('account_id')!;
+
+    final manager = $$AccountsTableTableManager(
+      $_db,
+      $_db.accounts,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_accountIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $CategoriesTable _categoryIdTable(_$CentliDatabase db) =>
+      db.categories.createAlias('recurring_rules__category_id__categories__id');
+
+  $$CategoriesTableProcessedTableManager? get categoryId {
+    final $_column = $_itemColumn<String>('category_id');
+    if ($_column == null) return null;
+    final manager = $$CategoriesTableTableManager(
+      $_db,
+      $_db.categories,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_categoryIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$RecurringRulesTableFilterComposer
+    extends Composer<_$CentliDatabase, $RecurringRulesTable> {
+  $$RecurringRulesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get type => $composableBuilder(
+    column: $table.type,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get amountMinor => $composableBuilder(
+    column: $table.amountMinor,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get currency => $composableBuilder(
+    column: $table.currency,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get merchant => $composableBuilder(
+    column: $table.merchant,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get note => $composableBuilder(
+    column: $table.note,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get tags => $composableBuilder(
+    column: $table.tags,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get includeInStat => $composableBuilder(
+    column: $table.includeInStat,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get includeInBudget => $composableBuilder(
+    column: $table.includeInBudget,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get periodKind => $composableBuilder(
+    column: $table.periodKind,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get periodInterval => $composableBuilder(
+    column: $table.periodInterval,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get startAt => $composableBuilder(
+    column: $table.startAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get nextRunAt => $composableBuilder(
+    column: $table.nextRunAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get lastRunAt => $composableBuilder(
+    column: $table.lastRunAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get enabled => $composableBuilder(
+    column: $table.enabled,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get skippedCount => $composableBuilder(
+    column: $table.skippedCount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$LedgersTableFilterComposer get ledgerId {
+    final $$LedgersTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.ledgerId,
+      referencedTable: $db.ledgers,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LedgersTableFilterComposer(
+            $db: $db,
+            $table: $db.ledgers,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$AccountsTableFilterComposer get accountId {
+    final $$AccountsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.accountId,
+      referencedTable: $db.accounts,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AccountsTableFilterComposer(
+            $db: $db,
+            $table: $db.accounts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$CategoriesTableFilterComposer get categoryId {
+    final $$CategoriesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.categoryId,
+      referencedTable: $db.categories,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CategoriesTableFilterComposer(
+            $db: $db,
+            $table: $db.categories,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$RecurringRulesTableOrderingComposer
+    extends Composer<_$CentliDatabase, $RecurringRulesTable> {
+  $$RecurringRulesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get type => $composableBuilder(
+    column: $table.type,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get amountMinor => $composableBuilder(
+    column: $table.amountMinor,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get currency => $composableBuilder(
+    column: $table.currency,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get merchant => $composableBuilder(
+    column: $table.merchant,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get note => $composableBuilder(
+    column: $table.note,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get tags => $composableBuilder(
+    column: $table.tags,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get includeInStat => $composableBuilder(
+    column: $table.includeInStat,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get includeInBudget => $composableBuilder(
+    column: $table.includeInBudget,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get periodKind => $composableBuilder(
+    column: $table.periodKind,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get periodInterval => $composableBuilder(
+    column: $table.periodInterval,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get startAt => $composableBuilder(
+    column: $table.startAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get nextRunAt => $composableBuilder(
+    column: $table.nextRunAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get lastRunAt => $composableBuilder(
+    column: $table.lastRunAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get enabled => $composableBuilder(
+    column: $table.enabled,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get skippedCount => $composableBuilder(
+    column: $table.skippedCount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$LedgersTableOrderingComposer get ledgerId {
+    final $$LedgersTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.ledgerId,
+      referencedTable: $db.ledgers,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LedgersTableOrderingComposer(
+            $db: $db,
+            $table: $db.ledgers,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$AccountsTableOrderingComposer get accountId {
+    final $$AccountsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.accountId,
+      referencedTable: $db.accounts,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AccountsTableOrderingComposer(
+            $db: $db,
+            $table: $db.accounts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$CategoriesTableOrderingComposer get categoryId {
+    final $$CategoriesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.categoryId,
+      referencedTable: $db.categories,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CategoriesTableOrderingComposer(
+            $db: $db,
+            $table: $db.categories,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$RecurringRulesTableAnnotationComposer
+    extends Composer<_$CentliDatabase, $RecurringRulesTable> {
+  $$RecurringRulesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get type =>
+      $composableBuilder(column: $table.type, builder: (column) => column);
+
+  GeneratedColumn<int> get amountMinor => $composableBuilder(
+    column: $table.amountMinor,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get currency =>
+      $composableBuilder(column: $table.currency, builder: (column) => column);
+
+  GeneratedColumn<String> get merchant =>
+      $composableBuilder(column: $table.merchant, builder: (column) => column);
+
+  GeneratedColumn<String> get note =>
+      $composableBuilder(column: $table.note, builder: (column) => column);
+
+  GeneratedColumn<String> get tags =>
+      $composableBuilder(column: $table.tags, builder: (column) => column);
+
+  GeneratedColumn<int> get includeInStat => $composableBuilder(
+    column: $table.includeInStat,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get includeInBudget => $composableBuilder(
+    column: $table.includeInBudget,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get periodKind => $composableBuilder(
+    column: $table.periodKind,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get periodInterval => $composableBuilder(
+    column: $table.periodInterval,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get startAt =>
+      $composableBuilder(column: $table.startAt, builder: (column) => column);
+
+  GeneratedColumn<int> get nextRunAt =>
+      $composableBuilder(column: $table.nextRunAt, builder: (column) => column);
+
+  GeneratedColumn<int> get lastRunAt =>
+      $composableBuilder(column: $table.lastRunAt, builder: (column) => column);
+
+  GeneratedColumn<int> get enabled =>
+      $composableBuilder(column: $table.enabled, builder: (column) => column);
+
+  GeneratedColumn<int> get skippedCount => $composableBuilder(
+    column: $table.skippedCount,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<int> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  $$LedgersTableAnnotationComposer get ledgerId {
+    final $$LedgersTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.ledgerId,
+      referencedTable: $db.ledgers,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LedgersTableAnnotationComposer(
+            $db: $db,
+            $table: $db.ledgers,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$AccountsTableAnnotationComposer get accountId {
+    final $$AccountsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.accountId,
+      referencedTable: $db.accounts,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AccountsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.accounts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$CategoriesTableAnnotationComposer get categoryId {
+    final $$CategoriesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.categoryId,
+      referencedTable: $db.categories,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CategoriesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.categories,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$RecurringRulesTableTableManager
+    extends
+        RootTableManager<
+          _$CentliDatabase,
+          $RecurringRulesTable,
+          RecurringRule,
+          $$RecurringRulesTableFilterComposer,
+          $$RecurringRulesTableOrderingComposer,
+          $$RecurringRulesTableAnnotationComposer,
+          $$RecurringRulesTableCreateCompanionBuilder,
+          $$RecurringRulesTableUpdateCompanionBuilder,
+          (RecurringRule, $$RecurringRulesTableReferences),
+          RecurringRule,
+          PrefetchHooks Function({
+            bool ledgerId,
+            bool accountId,
+            bool categoryId,
+          })
+        > {
+  $$RecurringRulesTableTableManager(
+    _$CentliDatabase db,
+    $RecurringRulesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$RecurringRulesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$RecurringRulesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$RecurringRulesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> ledgerId = const Value.absent(),
+                Value<String> type = const Value.absent(),
+                Value<int> amountMinor = const Value.absent(),
+                Value<String> currency = const Value.absent(),
+                Value<String> accountId = const Value.absent(),
+                Value<String?> categoryId = const Value.absent(),
+                Value<String?> merchant = const Value.absent(),
+                Value<String?> note = const Value.absent(),
+                Value<String?> tags = const Value.absent(),
+                Value<int> includeInStat = const Value.absent(),
+                Value<int> includeInBudget = const Value.absent(),
+                Value<String> periodKind = const Value.absent(),
+                Value<int> periodInterval = const Value.absent(),
+                Value<int> startAt = const Value.absent(),
+                Value<int> nextRunAt = const Value.absent(),
+                Value<int?> lastRunAt = const Value.absent(),
+                Value<int> enabled = const Value.absent(),
+                Value<int> skippedCount = const Value.absent(),
+                Value<int> createdAt = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => RecurringRulesCompanion(
+                id: id,
+                ledgerId: ledgerId,
+                type: type,
+                amountMinor: amountMinor,
+                currency: currency,
+                accountId: accountId,
+                categoryId: categoryId,
+                merchant: merchant,
+                note: note,
+                tags: tags,
+                includeInStat: includeInStat,
+                includeInBudget: includeInBudget,
+                periodKind: periodKind,
+                periodInterval: periodInterval,
+                startAt: startAt,
+                nextRunAt: nextRunAt,
+                lastRunAt: lastRunAt,
+                enabled: enabled,
+                skippedCount: skippedCount,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String ledgerId,
+                required String type,
+                required int amountMinor,
+                required String currency,
+                required String accountId,
+                Value<String?> categoryId = const Value.absent(),
+                Value<String?> merchant = const Value.absent(),
+                Value<String?> note = const Value.absent(),
+                Value<String?> tags = const Value.absent(),
+                Value<int> includeInStat = const Value.absent(),
+                Value<int> includeInBudget = const Value.absent(),
+                required String periodKind,
+                Value<int> periodInterval = const Value.absent(),
+                required int startAt,
+                required int nextRunAt,
+                Value<int?> lastRunAt = const Value.absent(),
+                Value<int> enabled = const Value.absent(),
+                Value<int> skippedCount = const Value.absent(),
+                required int createdAt,
+                required int updatedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => RecurringRulesCompanion.insert(
+                id: id,
+                ledgerId: ledgerId,
+                type: type,
+                amountMinor: amountMinor,
+                currency: currency,
+                accountId: accountId,
+                categoryId: categoryId,
+                merchant: merchant,
+                note: note,
+                tags: tags,
+                includeInStat: includeInStat,
+                includeInBudget: includeInBudget,
+                periodKind: periodKind,
+                periodInterval: periodInterval,
+                startAt: startAt,
+                nextRunAt: nextRunAt,
+                lastRunAt: lastRunAt,
+                enabled: enabled,
+                skippedCount: skippedCount,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$RecurringRulesTable, RecurringRule>(table),
+                  $$RecurringRulesTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback:
+              ({ledgerId = false, accountId = false, categoryId = false}) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [],
+                  addJoins:
+                      <
+                        T extends TableManagerState<
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic
+                        >
+                      >(state) {
+                        if (ledgerId) {
+                          state = state.withJoin(
+                            currentTable: table,
+                            currentColumn: table.ledgerId,
+                            referencedTable: $$RecurringRulesTableReferences
+                                ._ledgerIdTable(db),
+                            referencedColumn: $$RecurringRulesTableReferences
+                                ._ledgerIdTable(db)
+                                .id,
+                          ) as T;
+                        }
+                        if (accountId) {
+                          state = state.withJoin(
+                            currentTable: table,
+                            currentColumn: table.accountId,
+                            referencedTable: $$RecurringRulesTableReferences
+                                ._accountIdTable(db),
+                            referencedColumn: $$RecurringRulesTableReferences
+                                ._accountIdTable(db)
+                                .id,
+                          ) as T;
+                        }
+                        if (categoryId) {
+                          state = state.withJoin(
+                            currentTable: table,
+                            currentColumn: table.categoryId,
+                            referencedTable: $$RecurringRulesTableReferences
+                                ._categoryIdTable(db),
+                            referencedColumn: $$RecurringRulesTableReferences
+                                ._categoryIdTable(db)
+                                .id,
+                          ) as T;
+                        }
+
+                        return state;
+                      },
+                  getPrefetchedDataCallback: (items) async {
+                    return [];
+                  },
+                );
+              },
+        ),
+      );
+}
+
+typedef $$RecurringRulesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$CentliDatabase,
+      $RecurringRulesTable,
+      RecurringRule,
+      $$RecurringRulesTableFilterComposer,
+      $$RecurringRulesTableOrderingComposer,
+      $$RecurringRulesTableAnnotationComposer,
+      $$RecurringRulesTableCreateCompanionBuilder,
+      $$RecurringRulesTableUpdateCompanionBuilder,
+      (RecurringRule, $$RecurringRulesTableReferences),
+      RecurringRule,
+      PrefetchHooks Function({bool ledgerId, bool accountId, bool categoryId})
+    >;
 
 class $CentliDatabaseManager {
   final _$CentliDatabase _db;
@@ -9440,4 +11860,6 @@ class $CentliDatabaseManager {
       $$BudgetsTableTableManager(_db, _db.budgets);
   $$AppSettingsTableTableManager get appSettings =>
       $$AppSettingsTableTableManager(_db, _db.appSettings);
+  $$RecurringRulesTableTableManager get recurringRules =>
+      $$RecurringRulesTableTableManager(_db, _db.recurringRules);
 }
