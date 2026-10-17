@@ -40,3 +40,10 @@ Stash kept: `stash@{0}: pre-r2-workdir-auto-accounting-wip`
 - Consent: image_ai_consent + first-use dialog; settings page notice
 - Removed google_mlkit_text_recognition + lib/platform/ocr/
 - Live DeepSeek vision call: NOT yet verified (mock unit tests only)
+
+
+## B4 T4 — WeChat hold-to-talk voice
+- Listener pointer down/move/up (immediate press, no long-press delay)
+- Full-width bar: press=speak / release=end / slide-up>60dp=cancel
+- Min hold 0.5s tip; text field kept editable; settings kept
+- VoiceSpeechBackend injectable; HoldTalkPhysics unit-tested

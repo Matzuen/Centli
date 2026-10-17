@@ -19,8 +19,23 @@ class LocalSpeechResult {
   final bool finalResult;
 }
 
+/// Injectable speech backend used by VoiceBookkeepingSheet (tests can fake it).
+abstract class VoiceSpeechBackend {
+  Future<bool> ensureReady({String localeId = 'zh_CN'});
+  String? get friendlyError;
+  set onStatusChanged(void Function(String status)? cb);
+  set onSoundLevel(void Function(double level)? cb);
+  set onErrorMessage(void Function(String message)? cb);
+  Future<void> start({
+    required void Function(LocalSpeechResult result) onResult,
+    String? localeId,
+  });
+  Future<void> stop();
+  Future<void> cancel();
+}
+
 /// Thin wrapper so the bookkeeping UI stays free of plugin details.
-class LocalSpeechService {
+class LocalSpeechService implements VoiceSpeechBackend {
   LocalSpeechService({SpeechToText? plugin}) : _plugin = plugin ?? SpeechToText();
 
   final SpeechToText _plugin;
@@ -39,6 +54,7 @@ class LocalSpeechService {
   String get lastStatus => _lastStatus;
 
   /// Human-readable Chinese hint for the last error (or null).
+  @override
   String? get friendlyError {
     final e = _lastError;
     if (e == null || e.isEmpty) return null;
@@ -72,6 +88,7 @@ class LocalSpeechService {
     return '语音识别失败：$e';
   }
 
+  @override
   Future<bool> ensureReady({String localeId = 'zh_CN'}) async {
     if (kIsWeb) {
       _lastError = 'web_unsupported';
@@ -177,6 +194,7 @@ class LocalSpeechService {
     );
   }
 
+  @override
   Future<void> start({
     required void Function(LocalSpeechResult result) onResult,
     String? localeId,
@@ -228,6 +246,7 @@ class LocalSpeechService {
     }
   }
 
+  @override
   Future<void> stop() async {
     if (!_ready) {
       _listening = false;
@@ -242,6 +261,7 @@ class LocalSpeechService {
     }
   }
 
+  @override
   Future<void> cancel() async {
     if (!_ready) {
       _listening = false;
