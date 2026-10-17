@@ -180,3 +180,12 @@ Grok Bot 按新工单继续
 > 每单跑 `flutter analyze` + `flutter test`；
 > 把 `git diff`、`git status`、analyze 与 test 的**真实输出**、以及一份说明写入 `docs/grokbot/audit_input/`；
 > 有不符、有风险、有工单外改动，都在说明里讲清楚。
+
+
+---
+
+## 基线快照（B4 收尾）
+
+- schema **v10**（asset_types）
+- `flutter test` **182 passed / 0 failed**（基线曾为 150）
+- HEAD 见 `audit_input/commits.txt`
