@@ -12,6 +12,7 @@ import '../../core/utils/id_gen.dart';
 import '../../core/icons/centli_icon_defaults.dart';
 import '../../core/utils/fx.dart';
 import 'tables/accounts.dart';
+import 'tables/asset_types.dart';
 import 'tables/app_settings.dart';
 import 'tables/categories.dart';
 import 'tables/fx_rates.dart';
@@ -30,6 +31,7 @@ part 'centli_database.g.dart';
   tables: [
     Ledgers,
     Accounts,
+    AssetTypes,
     Categories,
     Transactions,
     PendingCaptures,
@@ -46,7 +48,7 @@ class CentliDatabase extends _$CentliDatabase {
   CentliDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 9;
+  int get schemaVersion => 10;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -129,6 +131,10 @@ END
               "DELETE FROM app_settings WHERE key LIKE 'subscription_%'",
             );
           }
+          if (from < 10) {
+            await m.createTable(assetTypes);
+            await _migrateAccountsToAssetTypes();
+          }
           await _ensureQueryIndexes();
         },
         beforeOpen: (details) async {
@@ -166,6 +172,227 @@ END
     );
   }
 
+
+  static const kDefaultAssetTypeNames = <String>[
+    '现金',
+    '银行卡',
+    '电子钱包',
+    '信用卡',
+    '其他',
+  ];
+
+  static const _legacyTypeToName = <String, String>{
+    'cash': '现金',
+    'bank': '银行卡',
+    'ewallet': '电子钱包',
+    'credit': '信用卡',
+    'other': '其他',
+  };
+
+  /// Seed five default asset types for [ledgerId]; returns name → id.
+  /// Idempotent: existing names are reused (no duplicate rows).
+  Future<Map<String, String>> seedDefaultAssetTypes(String ledgerId) async {
+    final existing = await (select(assetTypes)
+          ..where((t) => t.ledgerId.equals(ledgerId)))
+        .get();
+    final byName = {for (final r in existing) r.name: r.id};
+    final ts = nowMs();
+    for (var i = 0; i < kDefaultAssetTypeNames.length; i++) {
+      final name = kDefaultAssetTypeNames[i];
+      if (byName.containsKey(name)) continue;
+      final id = newId();
+      await into(assetTypes).insert(
+        AssetTypesCompanion.insert(
+          id: id,
+          ledgerId: ledgerId,
+          name: name,
+          sortOrder: Value(i),
+          createdAt: ts,
+          updatedAt: ts,
+        ),
+      );
+      byName[name] = id;
+    }
+    return byName;
+  }
+
+  Future<void> _migrateAccountsToAssetTypes() async {
+    final ledgerRows = await select(ledgers).get();
+    for (final ledger in ledgerRows) {
+      final nameToId = await seedDefaultAssetTypes(ledger.id);
+      final otherId = nameToId['其他']!;
+      final accs = await (select(accounts)
+            ..where((t) => t.ledgerId.equals(ledger.id)))
+          .get();
+      for (final a in accs) {
+        final raw = a.type.trim();
+        // Already an asset_types id?
+        if (nameToId.values.contains(raw)) continue;
+        final name = _legacyTypeToName[raw] ??
+            (raw.isEmpty ? '其他' : (nameToId.containsKey(raw) ? raw : '其他'));
+        final newId = nameToId[name] ?? otherId;
+        if (newId == a.type) continue;
+        await (update(accounts)..where((t) => t.id.equals(a.id))).write(
+          AccountsCompanion(type: Value(newId)),
+        );
+      }
+    }
+  }
+
+  Future<List<AssetType>> loadAssetTypes(
+    String ledgerId, {
+    bool includeArchived = false,
+  }) {
+    final q = select(assetTypes)..where((t) => t.ledgerId.equals(ledgerId));
+    if (!includeArchived) {
+      q.where((t) => t.archived.equals(0));
+    }
+    q.orderBy([(t) => OrderingTerm.asc(t.sortOrder)]);
+    return q.get();
+  }
+
+  Stream<List<AssetType>> watchAssetTypes(
+    String ledgerId, {
+    bool includeArchived = true,
+  }) {
+    final q = select(assetTypes)..where((t) => t.ledgerId.equals(ledgerId));
+    if (!includeArchived) {
+      q.where((t) => t.archived.equals(0));
+    }
+    q.orderBy([(t) => OrderingTerm.asc(t.sortOrder)]);
+    return q.watch();
+  }
+
+  Future<AssetType?> getAssetType(String id) {
+    return (select(assetTypes)..where((t) => t.id.equals(id))).getSingleOrNull();
+  }
+
+  Future<String> resolveAssetTypeId({
+    required String ledgerId,
+    required String raw,
+  }) async {
+    final nameToId = await seedDefaultAssetTypes(ledgerId);
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return nameToId['其他']!;
+    if (nameToId.values.contains(trimmed)) return trimmed;
+    final legacy = _legacyTypeToName[trimmed];
+    if (legacy != null) return nameToId[legacy]!;
+    if (nameToId.containsKey(trimmed)) return nameToId[trimmed]!;
+    // Look up by id in DB (including archived)
+    final byId = await getAssetType(trimmed);
+    if (byId != null && byId.ledgerId == ledgerId) return byId.id;
+    return nameToId['其他']!;
+  }
+
+  Future<String> createAssetType({
+    required String ledgerId,
+    required String name,
+    String? icon,
+  }) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) {
+      throw StateError('分类名称不能为空');
+    }
+    final existing = await (select(assetTypes)
+          ..where((t) => t.ledgerId.equals(ledgerId) & t.name.equals(trimmed)))
+        .get();
+    if (existing.isNotEmpty) {
+      throw StateError('同账本已有同名分类');
+    }
+    final maxOrder = await customSelect(
+      'SELECT COALESCE(MAX(sort_order), -1) AS m FROM asset_types WHERE ledger_id = ?',
+      variables: [Variable.withString(ledgerId)],
+      readsFrom: {assetTypes},
+    ).getSingle();
+    final order = (maxOrder.read<int>('m')) + 1;
+    final id = newId();
+    final ts = nowMs();
+    await into(assetTypes).insert(
+      AssetTypesCompanion.insert(
+        id: id,
+        ledgerId: ledgerId,
+        name: trimmed,
+        icon: Value(icon),
+        sortOrder: Value(order),
+        createdAt: ts,
+        updatedAt: ts,
+      ),
+    );
+    return id;
+  }
+
+  Future<void> renameAssetType({
+    required String id,
+    required String name,
+  }) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) throw StateError('分类名称不能为空');
+    final row = await getAssetType(id);
+    if (row == null) throw StateError('分类不存在');
+    final clash = await (select(assetTypes)
+          ..where((t) =>
+              t.ledgerId.equals(row.ledgerId) &
+              t.name.equals(trimmed) &
+              t.id.equals(id).not()))
+        .get();
+    if (clash.isNotEmpty) throw StateError('同账本已有同名分类');
+    await (update(assetTypes)..where((t) => t.id.equals(id))).write(
+      AssetTypesCompanion(name: Value(trimmed), updatedAt: Value(nowMs())),
+    );
+  }
+
+  Future<void> setAssetTypeArchived(String id, bool archived) async {
+    await (update(assetTypes)..where((t) => t.id.equals(id))).write(
+      AssetTypesCompanion(
+        archived: Value(archived ? 1 : 0),
+        updatedAt: Value(nowMs()),
+      ),
+    );
+  }
+
+  Future<void> reorderAssetType(String id, {required bool up}) async {
+    final row = await getAssetType(id);
+    if (row == null) return;
+    final siblings = await (select(assetTypes)
+          ..where((t) => t.ledgerId.equals(row.ledgerId))
+          ..orderBy([(t) => OrderingTerm.asc(t.sortOrder)]))
+        .get();
+    final idx = siblings.indexWhere((s) => s.id == id);
+    if (idx < 0) return;
+    final swapWith = up ? idx - 1 : idx + 1;
+    if (swapWith < 0 || swapWith >= siblings.length) return;
+    final a = siblings[idx];
+    final b = siblings[swapWith];
+    final ts = nowMs();
+    await (update(assetTypes)..where((t) => t.id.equals(a.id))).write(
+      AssetTypesCompanion(sortOrder: Value(b.sortOrder), updatedAt: Value(ts)),
+    );
+    await (update(assetTypes)..where((t) => t.id.equals(b.id))).write(
+      AssetTypesCompanion(sortOrder: Value(a.sortOrder), updatedAt: Value(ts)),
+    );
+  }
+
+  Future<void> deleteAssetType(String id) async {
+    final row = await getAssetType(id);
+    if (row == null) return;
+    final all = await (select(assetTypes)
+          ..where((t) => t.ledgerId.equals(row.ledgerId)))
+        .get();
+    if (all.length <= 1) {
+      throw StateError('至少保留一个资产分类');
+    }
+    final inUse = await (select(accounts)..where((t) => t.type.equals(id))).get();
+    if (inUse.isNotEmpty) {
+      throw StateError('有 ${inUse.length} 个账户在用，无法删除（可先归档）');
+    }
+    await (delete(assetTypes)..where((t) => t.id.equals(id))).go();
+  }
+
+  Future<int> countAccountsForAssetType(String typeId) async {
+    final rows = await (select(accounts)..where((t) => t.type.equals(typeId))).get();
+    return rows.length;
+  }
+
   Future<void> seedDefaults() async {
     final existing = await (select(ledgers)..limit(1)).get();
     if (existing.isNotEmpty) return;
@@ -182,19 +409,21 @@ END
       ),
     );
 
-    final accountDefs = <(String name, String type, int order)>[
+    final typeIds = await seedDefaultAssetTypes(ledgerId);
+    final accountDefs = <(String name, String legacyType, int order)>[
       ('\u73b0\u91d1', 'cash', 0),
       ('\u652f\u4ed8\u5b9d', 'ewallet', 1),
       ('\u5fae\u4fe1', 'ewallet', 2),
     ];
     for (final a in accountDefs) {
+      final typeId = typeIds[_legacyTypeToName[a.$2] ?? '其他'] ?? typeIds['其他']!;
       await into(accounts).insert(
         AccountsCompanion.insert(
           id: newId(),
           ledgerId: ledgerId,
           name: a.$1,
           currency: 'CNY',
-          type: a.$2,
+          type: typeId,
           icon: Value(defaultIconKeyForAccount(name: a.$1, type: a.$2)),
           sortOrder: Value(a.$3),
           createdAt: ts,
@@ -446,19 +675,21 @@ END
       ),
     );
 
-    final accountDefs = <(String name, String type, int order)>[
+    final typeIds = await seedDefaultAssetTypes(ledgerId);
+    final accountDefs = <(String name, String legacyType, int order)>[
       ('现金', 'cash', 0),
       ('支付宝', 'ewallet', 1),
       ('微信', 'ewallet', 2),
     ];
     for (final a in accountDefs) {
+      final typeId = typeIds[_legacyTypeToName[a.$2] ?? '其他'] ?? typeIds['其他']!;
       await into(accounts).insert(
         AccountsCompanion.insert(
           id: newId(),
           ledgerId: ledgerId,
           name: a.$1,
           currency: baseCurrency,
-          type: a.$2,
+          type: typeId,
           icon: Value(defaultIconKeyForAccount(name: a.$1, type: a.$2)),
           sortOrder: Value(a.$3),
           createdAt: ts,
@@ -888,6 +1119,7 @@ END
     String? icon,
   }) async {
     final ts = nowMs();
+    final typeId = await resolveAssetTypeId(ledgerId: ledgerId, raw: type);
     final existing = await loadActiveAccounts(ledgerId);
     final order = existing.isEmpty
         ? 0
@@ -901,7 +1133,7 @@ END
         ledgerId: ledgerId,
         name: name,
         currency: currency,
-        type: type,
+        type: typeId,
         icon: Value(iconKey),
         openingBalanceMinor: Value(openingBalanceMinor),
         sortOrder: Value(order),
@@ -920,11 +1152,16 @@ END
     String? icon,
   }) async {
     final ts = nowMs();
+    final existing = await (select(accounts)..where((t) => t.id.equals(id)))
+        .getSingleOrNull();
+    final typeId = existing == null
+        ? type
+        : await resolveAssetTypeId(ledgerId: existing.ledgerId, raw: type);
     await (update(accounts)..where((t) => t.id.equals(id))).write(
       AccountsCompanion(
         name: Value(name),
         currency: Value(currency),
-        type: Value(type),
+        type: Value(typeId),
         openingBalanceMinor: Value(openingBalanceMinor),
         icon: Value(icon),
         updatedAt: Value(ts),

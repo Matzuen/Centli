@@ -1019,6 +1019,512 @@ class AccountsCompanion extends UpdateCompanion<Account> {
   }
 }
 
+class $AssetTypesTable extends AssetTypes
+    with TableInfo<$AssetTypesTable, AssetType> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $AssetTypesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _ledgerIdMeta = const VerificationMeta(
+    'ledgerId',
+  );
+  @override
+  late final GeneratedColumn<String> ledgerId = GeneratedColumn<String>(
+    'ledger_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES ledgers (id)',
+    ),
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _iconMeta = const VerificationMeta('icon');
+  @override
+  late final GeneratedColumn<String> icon = GeneratedColumn<String>(
+    'icon',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sortOrderMeta = const VerificationMeta(
+    'sortOrder',
+  );
+  @override
+  late final GeneratedColumn<int> sortOrder = GeneratedColumn<int>(
+    'sort_order',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _archivedMeta = const VerificationMeta(
+    'archived',
+  );
+  @override
+  late final GeneratedColumn<int> archived = GeneratedColumn<int>(
+    'archived',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<int> createdAt = GeneratedColumn<int>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<int> updatedAt = GeneratedColumn<int>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    ledgerId,
+    name,
+    icon,
+    sortOrder,
+    archived,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'asset_types';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<AssetType> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('ledger_id')) {
+      context.handle(
+        _ledgerIdMeta,
+        ledgerId.isAcceptableOrUnknown(data['ledger_id']!, _ledgerIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_ledgerIdMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('icon')) {
+      context.handle(
+        _iconMeta,
+        icon.isAcceptableOrUnknown(data['icon']!, _iconMeta),
+      );
+    }
+    if (data.containsKey('sort_order')) {
+      context.handle(
+        _sortOrderMeta,
+        sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
+      );
+    }
+    if (data.containsKey('archived')) {
+      context.handle(
+        _archivedMeta,
+        archived.isAcceptableOrUnknown(data['archived']!, _archivedMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  AssetType map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return AssetType(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      ledgerId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}ledger_id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      icon: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}icon'],
+      ),
+      sortOrder: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sort_order'],
+      )!,
+      archived: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}archived'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $AssetTypesTable createAlias(String alias) {
+    return $AssetTypesTable(attachedDatabase, alias);
+  }
+}
+
+class AssetType extends DataClass implements Insertable<AssetType> {
+  final String id;
+  final String ledgerId;
+  final String name;
+  final String? icon;
+  final int sortOrder;
+  final int archived;
+  final int createdAt;
+  final int updatedAt;
+  const AssetType({
+    required this.id,
+    required this.ledgerId,
+    required this.name,
+    this.icon,
+    required this.sortOrder,
+    required this.archived,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['ledger_id'] = Variable<String>(ledgerId);
+    map['name'] = Variable<String>(name);
+    if (!nullToAbsent || icon != null) {
+      map['icon'] = Variable<String>(icon);
+    }
+    map['sort_order'] = Variable<int>(sortOrder);
+    map['archived'] = Variable<int>(archived);
+    map['created_at'] = Variable<int>(createdAt);
+    map['updated_at'] = Variable<int>(updatedAt);
+    return map;
+  }
+
+  AssetTypesCompanion toCompanion(bool nullToAbsent) {
+    return AssetTypesCompanion(
+      id: Value(id),
+      ledgerId: Value(ledgerId),
+      name: Value(name),
+      icon: icon == null && nullToAbsent ? const Value.absent() : Value(icon),
+      sortOrder: Value(sortOrder),
+      archived: Value(archived),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory AssetType.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return AssetType(
+      id: serializer.fromJson<String>(json['id']),
+      ledgerId: serializer.fromJson<String>(json['ledgerId']),
+      name: serializer.fromJson<String>(json['name']),
+      icon: serializer.fromJson<String?>(json['icon']),
+      sortOrder: serializer.fromJson<int>(json['sortOrder']),
+      archived: serializer.fromJson<int>(json['archived']),
+      createdAt: serializer.fromJson<int>(json['createdAt']),
+      updatedAt: serializer.fromJson<int>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'ledgerId': serializer.toJson<String>(ledgerId),
+      'name': serializer.toJson<String>(name),
+      'icon': serializer.toJson<String?>(icon),
+      'sortOrder': serializer.toJson<int>(sortOrder),
+      'archived': serializer.toJson<int>(archived),
+      'createdAt': serializer.toJson<int>(createdAt),
+      'updatedAt': serializer.toJson<int>(updatedAt),
+    };
+  }
+
+  AssetType copyWith({
+    String? id,
+    String? ledgerId,
+    String? name,
+    Value<String?> icon = const Value.absent(),
+    int? sortOrder,
+    int? archived,
+    int? createdAt,
+    int? updatedAt,
+  }) => AssetType(
+    id: id ?? this.id,
+    ledgerId: ledgerId ?? this.ledgerId,
+    name: name ?? this.name,
+    icon: icon.present ? icon.value : this.icon,
+    sortOrder: sortOrder ?? this.sortOrder,
+    archived: archived ?? this.archived,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  AssetType copyWithCompanion(AssetTypesCompanion data) {
+    return AssetType(
+      id: data.id.present ? data.id.value : this.id,
+      ledgerId: data.ledgerId.present ? data.ledgerId.value : this.ledgerId,
+      name: data.name.present ? data.name.value : this.name,
+      icon: data.icon.present ? data.icon.value : this.icon,
+      sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+      archived: data.archived.present ? data.archived.value : this.archived,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AssetType(')
+          ..write('id: $id, ')
+          ..write('ledgerId: $ledgerId, ')
+          ..write('name: $name, ')
+          ..write('icon: $icon, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('archived: $archived, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    ledgerId,
+    name,
+    icon,
+    sortOrder,
+    archived,
+    createdAt,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is AssetType &&
+          other.id == this.id &&
+          other.ledgerId == this.ledgerId &&
+          other.name == this.name &&
+          other.icon == this.icon &&
+          other.sortOrder == this.sortOrder &&
+          other.archived == this.archived &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class AssetTypesCompanion extends UpdateCompanion<AssetType> {
+  final Value<String> id;
+  final Value<String> ledgerId;
+  final Value<String> name;
+  final Value<String?> icon;
+  final Value<int> sortOrder;
+  final Value<int> archived;
+  final Value<int> createdAt;
+  final Value<int> updatedAt;
+  final Value<int> rowid;
+  const AssetTypesCompanion({
+    this.id = const Value.absent(),
+    this.ledgerId = const Value.absent(),
+    this.name = const Value.absent(),
+    this.icon = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    this.archived = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  AssetTypesCompanion.insert({
+    required String id,
+    required String ledgerId,
+    required String name,
+    this.icon = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    this.archived = const Value.absent(),
+    required int createdAt,
+    required int updatedAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       ledgerId = Value(ledgerId),
+       name = Value(name),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<AssetType> custom({
+    Expression<String>? id,
+    Expression<String>? ledgerId,
+    Expression<String>? name,
+    Expression<String>? icon,
+    Expression<int>? sortOrder,
+    Expression<int>? archived,
+    Expression<int>? createdAt,
+    Expression<int>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (ledgerId != null) 'ledger_id': ledgerId,
+      if (name != null) 'name': name,
+      if (icon != null) 'icon': icon,
+      if (sortOrder != null) 'sort_order': sortOrder,
+      if (archived != null) 'archived': archived,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  AssetTypesCompanion copyWith({
+    Value<String>? id,
+    Value<String>? ledgerId,
+    Value<String>? name,
+    Value<String?>? icon,
+    Value<int>? sortOrder,
+    Value<int>? archived,
+    Value<int>? createdAt,
+    Value<int>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return AssetTypesCompanion(
+      id: id ?? this.id,
+      ledgerId: ledgerId ?? this.ledgerId,
+      name: name ?? this.name,
+      icon: icon ?? this.icon,
+      sortOrder: sortOrder ?? this.sortOrder,
+      archived: archived ?? this.archived,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (ledgerId.present) {
+      map['ledger_id'] = Variable<String>(ledgerId.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (icon.present) {
+      map['icon'] = Variable<String>(icon.value);
+    }
+    if (sortOrder.present) {
+      map['sort_order'] = Variable<int>(sortOrder.value);
+    }
+    if (archived.present) {
+      map['archived'] = Variable<int>(archived.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<int>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<int>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AssetTypesCompanion(')
+          ..write('id: $id, ')
+          ..write('ledgerId: $ledgerId, ')
+          ..write('name: $name, ')
+          ..write('icon: $icon, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('archived: $archived, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $CategoriesTable extends Categories
     with TableInfo<$CategoriesTable, Category> {
   @override
@@ -6575,6 +7081,7 @@ abstract class _$CentliDatabase extends GeneratedDatabase {
   $CentliDatabaseManager get managers => $CentliDatabaseManager(this);
   late final $LedgersTable ledgers = $LedgersTable(this);
   late final $AccountsTable accounts = $AccountsTable(this);
+  late final $AssetTypesTable assetTypes = $AssetTypesTable(this);
   late final $CategoriesTable categories = $CategoriesTable(this);
   late final $TransactionsTable transactions = $TransactionsTable(this);
   late final $PendingCapturesTable pendingCaptures = $PendingCapturesTable(
@@ -6592,6 +7099,7 @@ abstract class _$CentliDatabase extends GeneratedDatabase {
   List<DatabaseSchemaEntity> get allSchemaEntities => [
     ledgers,
     accounts,
+    assetTypes,
     categories,
     transactions,
     pendingCaptures,
@@ -6638,6 +7146,24 @@ final class $$LedgersTableReferences
     ).filter((f) => f.ledgerId.id.sqlEquals($_itemColumn<String>('id')!));
 
     final cache = $_typedResult.readTableOrNull(_accountsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$AssetTypesTable, List<AssetType>>
+  _assetTypesRefsTable(_$CentliDatabase db) => MultiTypedResultKey.fromTable(
+    db.assetTypes,
+    aliasName: 'ledgers__id__asset_types__ledger_id',
+  );
+
+  $$AssetTypesTableProcessedTableManager get assetTypesRefs {
+    final manager = $$AssetTypesTableTableManager(
+      $_db,
+      $_db.assetTypes,
+    ).filter((f) => f.ledgerId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_assetTypesRefsTable($_db));
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
     );
@@ -6768,6 +7294,31 @@ class $$LedgersTableFilterComposer
           }) => $$AccountsTableFilterComposer(
             $db: $db,
             $table: $db.accounts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> assetTypesRefs(
+    Expression<bool> Function($$AssetTypesTableFilterComposer f) f,
+  ) {
+    final $$AssetTypesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.assetTypes,
+      getReferencedColumn: (t) => t.ledgerId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AssetTypesTableFilterComposer(
+            $db: $db,
+            $table: $db.assetTypes,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -6964,6 +7515,31 @@ class $$LedgersTableAnnotationComposer
     return f(composer);
   }
 
+  Expression<T> assetTypesRefs<T extends Object>(
+    Expression<T> Function($$AssetTypesTableAnnotationComposer a) f,
+  ) {
+    final $$AssetTypesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.assetTypes,
+      getReferencedColumn: (t) => t.ledgerId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AssetTypesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.assetTypes,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
   Expression<T> categoriesRefs<T extends Object>(
     Expression<T> Function($$CategoriesTableAnnotationComposer a) f,
   ) {
@@ -7080,6 +7656,7 @@ class $$LedgersTableTableManager
           Ledger,
           PrefetchHooks Function({
             bool accountsRefs,
+            bool assetTypesRefs,
             bool categoriesRefs,
             bool transactionsRefs,
             bool budgetsRefs,
@@ -7140,6 +7717,7 @@ class $$LedgersTableTableManager
           prefetchHooksCallback:
               ({
                 accountsRefs = false,
+                assetTypesRefs = false,
                 categoriesRefs = false,
                 transactionsRefs = false,
                 budgetsRefs = false,
@@ -7149,6 +7727,7 @@ class $$LedgersTableTableManager
                   db: db,
                   explicitlyWatchedTables: [
                     if (accountsRefs) db.accounts,
+                    if (assetTypesRefs) db.assetTypes,
                     if (categoriesRefs) db.categories,
                     if (transactionsRefs) db.transactions,
                     if (budgetsRefs) db.budgets,
@@ -7172,6 +7751,27 @@ class $$LedgersTableTableManager
                                 table,
                                 p0,
                               ).accountsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.ledgerId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (assetTypesRefs)
+                        await $_getPrefetchedData<
+                          Ledger,
+                          $LedgersTable,
+                          AssetType
+                        >(
+                          currentTable: table,
+                          referencedTable: $$LedgersTableReferences
+                              ._assetTypesRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$LedgersTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).assetTypesRefs,
                           referencedItemsForCurrentItem:
                               (item, referencedItems) => referencedItems.where(
                                 (e) => e.ledgerId == item.id,
@@ -7284,6 +7884,7 @@ typedef $$LedgersTableProcessedTableManager =
       Ledger,
       PrefetchHooks Function({
         bool accountsRefs,
+        bool assetTypesRefs,
         bool categoriesRefs,
         bool transactionsRefs,
         bool budgetsRefs,
@@ -8010,6 +8611,376 @@ typedef $$AccountsTableProcessedTableManager =
         bool incomingTransfers,
         bool recurringRulesRefs,
       })
+    >;
+typedef $$AssetTypesTableCreateCompanionBuilder = AssetTypesCompanion Function({
+  required String id,
+  required String ledgerId,
+  required String name,
+  Value<String?> icon,
+  Value<int> sortOrder,
+  Value<int> archived,
+  required int createdAt,
+  required int updatedAt,
+  Value<int> rowid,
+});
+typedef $$AssetTypesTableUpdateCompanionBuilder = AssetTypesCompanion Function({
+  Value<String> id,
+  Value<String> ledgerId,
+  Value<String> name,
+  Value<String?> icon,
+  Value<int> sortOrder,
+  Value<int> archived,
+  Value<int> createdAt,
+  Value<int> updatedAt,
+  Value<int> rowid,
+});
+
+final class $$AssetTypesTableReferences
+    extends BaseReferences<_$CentliDatabase, $AssetTypesTable, AssetType> {
+  $$AssetTypesTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $LedgersTable _ledgerIdTable(_$CentliDatabase db) =>
+      db.ledgers.createAlias('asset_types__ledger_id__ledgers__id');
+
+  $$LedgersTableProcessedTableManager get ledgerId {
+    final $_column = $_itemColumn<String>('ledger_id')!;
+
+    final manager = $$LedgersTableTableManager(
+      $_db,
+      $_db.ledgers,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_ledgerIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$AssetTypesTableFilterComposer
+    extends Composer<_$CentliDatabase, $AssetTypesTable> {
+  $$AssetTypesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get icon => $composableBuilder(
+    column: $table.icon,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get archived => $composableBuilder(
+    column: $table.archived,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$LedgersTableFilterComposer get ledgerId {
+    final $$LedgersTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.ledgerId,
+      referencedTable: $db.ledgers,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LedgersTableFilterComposer(
+            $db: $db,
+            $table: $db.ledgers,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$AssetTypesTableOrderingComposer
+    extends Composer<_$CentliDatabase, $AssetTypesTable> {
+  $$AssetTypesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get icon => $composableBuilder(
+    column: $table.icon,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get archived => $composableBuilder(
+    column: $table.archived,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$LedgersTableOrderingComposer get ledgerId {
+    final $$LedgersTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.ledgerId,
+      referencedTable: $db.ledgers,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LedgersTableOrderingComposer(
+            $db: $db,
+            $table: $db.ledgers,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$AssetTypesTableAnnotationComposer
+    extends Composer<_$CentliDatabase, $AssetTypesTable> {
+  $$AssetTypesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get icon =>
+      $composableBuilder(column: $table.icon, builder: (column) => column);
+
+  GeneratedColumn<int> get sortOrder =>
+      $composableBuilder(column: $table.sortOrder, builder: (column) => column);
+
+  GeneratedColumn<int> get archived =>
+      $composableBuilder(column: $table.archived, builder: (column) => column);
+
+  GeneratedColumn<int> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<int> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  $$LedgersTableAnnotationComposer get ledgerId {
+    final $$LedgersTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.ledgerId,
+      referencedTable: $db.ledgers,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LedgersTableAnnotationComposer(
+            $db: $db,
+            $table: $db.ledgers,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$AssetTypesTableTableManager
+    extends
+        RootTableManager<
+          _$CentliDatabase,
+          $AssetTypesTable,
+          AssetType,
+          $$AssetTypesTableFilterComposer,
+          $$AssetTypesTableOrderingComposer,
+          $$AssetTypesTableAnnotationComposer,
+          $$AssetTypesTableCreateCompanionBuilder,
+          $$AssetTypesTableUpdateCompanionBuilder,
+          (AssetType, $$AssetTypesTableReferences),
+          AssetType,
+          PrefetchHooks Function({bool ledgerId})
+        > {
+  $$AssetTypesTableTableManager(_$CentliDatabase db, $AssetTypesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$AssetTypesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$AssetTypesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$AssetTypesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> ledgerId = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String?> icon = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+                Value<int> archived = const Value.absent(),
+                Value<int> createdAt = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => AssetTypesCompanion(
+                id: id,
+                ledgerId: ledgerId,
+                name: name,
+                icon: icon,
+                sortOrder: sortOrder,
+                archived: archived,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String ledgerId,
+                required String name,
+                Value<String?> icon = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+                Value<int> archived = const Value.absent(),
+                required int createdAt,
+                required int updatedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => AssetTypesCompanion.insert(
+                id: id,
+                ledgerId: ledgerId,
+                name: name,
+                icon: icon,
+                sortOrder: sortOrder,
+                archived: archived,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$AssetTypesTable, AssetType>(table),
+                  $$AssetTypesTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({ledgerId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (ledgerId) {
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.ledgerId,
+                        referencedTable: $$AssetTypesTableReferences
+                            ._ledgerIdTable(db),
+                        referencedColumn: $$AssetTypesTableReferences
+                            ._ledgerIdTable(db)
+                            .id,
+                      ) as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$AssetTypesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$CentliDatabase,
+      $AssetTypesTable,
+      AssetType,
+      $$AssetTypesTableFilterComposer,
+      $$AssetTypesTableOrderingComposer,
+      $$AssetTypesTableAnnotationComposer,
+      $$AssetTypesTableCreateCompanionBuilder,
+      $$AssetTypesTableUpdateCompanionBuilder,
+      (AssetType, $$AssetTypesTableReferences),
+      AssetType,
+      PrefetchHooks Function({bool ledgerId})
     >;
 typedef $$CategoriesTableCreateCompanionBuilder = CategoriesCompanion Function({
   required String id,
@@ -11776,6 +12747,8 @@ class $CentliDatabaseManager {
       $$LedgersTableTableManager(_db, _db.ledgers);
   $$AccountsTableTableManager get accounts =>
       $$AccountsTableTableManager(_db, _db.accounts);
+  $$AssetTypesTableTableManager get assetTypes =>
+      $$AssetTypesTableTableManager(_db, _db.assetTypes);
   $$CategoriesTableTableManager get categories =>
       $$CategoriesTableTableManager(_db, _db.categories);
   $$TransactionsTableTableManager get transactions =>
