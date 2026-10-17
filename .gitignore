@@ -89,4 +89,5 @@ docs/grokbot/audit_input*/
 # Brand source: keep only adopted logo.png
 logo/logo1.png
 logo/logo2.png
-
+tools/_*.py
+tools/*_patch*.py

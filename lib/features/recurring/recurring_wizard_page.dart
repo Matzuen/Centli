@@ -11,7 +11,6 @@ import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
 import 'recurring_runner.dart';
 
-/// Optional prefill from subscription link (T2-5).
 class RecurringWizardArgs {
   const RecurringWizardArgs({
     this.amountMinor,
