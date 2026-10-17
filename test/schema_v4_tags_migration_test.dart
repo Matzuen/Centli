@@ -23,7 +23,7 @@ void main() {
     expect(decodeTxnTags(long).single.length, 12);
   });
 
-  test('v6 onCreate: tags+member+occurrence_key, indexes (PRAGMA), soft-delete keeps tags', () async {
+  test('v7 onCreate: tags+member+occurrence_key, indexes (PRAGMA), soft-delete keeps tags', () async {
     final db = CentliDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);
     await db.seedDefaults();
@@ -85,7 +85,7 @@ void main() {
     );
 
     final ver = await db.customSelect('PRAGMA user_version').getSingle();
-    expect(ver.read<int>('user_version'), 6);
+    expect(ver.read<int>('user_version'), 7);
 
     final cols = {
       for (final r in await db.customSelect('PRAGMA table_info(transactions)').get())
