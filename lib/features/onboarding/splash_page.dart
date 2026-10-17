@@ -8,6 +8,7 @@ import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
 import '../../data/fx/fx_remote_service.dart';
 import '../recurring/recurring_runner.dart';
+import '../../app/deep_link.dart';
 import '../security/app_lock_controller.dart';
 
 /// Cold-start splash: brand mark + open DB / read settings, then route.
@@ -49,13 +50,16 @@ class _SplashPageState extends ConsumerState<SplashPage> {
     if (!mounted) return;
     if (done == 'true') {
       if (lockOn) {
+        // Keep PendingDeepLink for after unlock — do not take() here.
         ref.read(appLockUnlockedProvider.notifier).lock();
         context.go('/lock');
       } else {
         ref.read(appLockUnlockedProvider.notifier).unlock();
-        context.go('/home');
+        final deep = PendingDeepLink.take();
+        context.go(deep ?? '/home');
       }
     } else {
+      // Keep PendingDeepLink until onboarding finishes — do not take() here.
       context.go('/onboarding');
     }
   }

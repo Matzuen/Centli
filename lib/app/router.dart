@@ -42,9 +42,15 @@ GoRouter createRouter({
   return GoRouter(
     navigatorKey: rootNavigatorKey,
     initialLocation: '/splash',
+    overridePlatformDefaultLocation: true,
     refreshListenable: refreshListenable,
     redirect: redirect,
+    errorBuilder: (context, state) => const _UnknownRoutePage(),
     routes: [
+      GoRoute(
+        path: '/',
+        redirect: (context, state) => '/splash',
+      ),
       GoRoute(
         path: '/splash',
         builder: (context, state) => const SplashPage(),
@@ -261,4 +267,54 @@ GoRouter createRouter({
       ),
     ],
   );
+}
+
+/// Friendly unknown-route page — never surfaces raw GoException to users.
+class _UnknownRoutePage extends StatelessWidget {
+  const _UnknownRoutePage();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Scaffold(
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.map_outlined,
+                  size: 64,
+                  color: scheme.onSurfaceVariant,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  '页面不存在',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '这个地址打不开，回首页继续记账吧',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                ),
+                const SizedBox(height: 24),
+                FilledButton.icon(
+                  onPressed: () => context.go('/home'),
+                  icon: const Icon(Icons.home_rounded),
+                  label: const Text('回首页'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

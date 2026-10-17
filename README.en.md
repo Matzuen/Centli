@@ -61,6 +61,8 @@ Prefer JSON (`format: centli-export`). Excel import is best-effort (no fx/settin
 - Drop the member field (legacy values merged into note)
 - Merge text + voice bookkeeping into Quick Bookkeeping (long-press bottom 「记一笔」)
 - Screenshot bookkeeping entry on home (scanner icon) and inside the quick sheet
+- Fix home-widget cold start 「Page Not Found」 by overriding platform default route and handing off after splash
+- Unknown routes show a friendly page instead of raw GoException
 
 ### 1.4.1 (2026-10-17)
 - B4: custom asset types; DeepSeek vision for screenshot booking; hold-to-talk voice; pending tab split + repay notifications; drop subscriptions

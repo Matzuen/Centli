@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../app/deep_link.dart';
+
 import 'app_lock_controller.dart';
 import 'app_lock_service.dart';
 import 'pin_pad.dart';
@@ -96,7 +98,7 @@ class _AppLockPageState extends ConsumerState<AppLockPage> {
   void _finishUnlock() {
     ref.read(appLockUnlockedProvider.notifier).unlock();
     if (!mounted) return;
-    context.go('/home');
+    context.go(PendingDeepLink.take() ?? '/home');
   }
 
   @override

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../app/deep_link.dart';
+
 import '../../data/db/database_provider.dart';
 import '../../platform/notifications/notification_listener_stub.dart';
 import '../../app/theme.dart';
@@ -29,7 +31,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   Future<void> _finish() async {
     await ref.read(databaseProvider).setSetting('onboarding_done', 'true');
     if (!mounted) return;
-    context.go('/home');
+    context.go(PendingDeepLink.take() ?? '/home');
   }
 
   Future<void> _openNotificationPermission() async {

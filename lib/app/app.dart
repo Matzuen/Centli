@@ -14,6 +14,7 @@ import '../platform/notifications/notification_ingest_bridge.dart';
 import '../platform/pending/pending_capture_intake.dart';
 import '../platform/notifications/noti_template_store.dart';
 import '../platform/notifications/notification_listener_stub.dart';
+import 'deep_link.dart';
 import 'router.dart';
 import 'theme.dart';
 
@@ -38,6 +39,9 @@ class _CentliAppState extends ConsumerState<CentliApp> {
   @override
   void initState() {
     super.initState();
+    PendingDeepLink.capture(
+      WidgetsBinding.instance.platformDispatcher.defaultRouteName,
+    );
     _router = createRouter(
       refreshListenable: _refresh,
       redirect: _redirect,
