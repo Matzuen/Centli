@@ -18,6 +18,7 @@ import 'tables/merchant_rules.dart';
 import 'tables/pending_captures.dart';
 import 'tables/budgets.dart';
 import 'tables/recurring_rules.dart';
+import 'tables/subscriptions.dart';
 import 'tables/transactions.dart';
 import 'txn_tags.dart';
 import '../txn_templates.dart';
@@ -36,6 +37,7 @@ part 'centli_database.g.dart';
     Budgets,
     AppSettings,
     RecurringRules,
+    Subscriptions,
   ],
 )
 class CentliDatabase extends _$CentliDatabase {
@@ -44,7 +46,7 @@ class CentliDatabase extends _$CentliDatabase {
   CentliDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -70,6 +72,9 @@ class CentliDatabase extends _$CentliDatabase {
             await m.createTable(recurringRules);
             await m.addColumn(pendingCaptures, pendingCaptures.direction);
             await m.addColumn(transactions, transactions.occurrenceKey);
+          }
+          if (from < 7) {
+            await m.createTable(subscriptions);
           }
           await _ensureQueryIndexes();
         },
