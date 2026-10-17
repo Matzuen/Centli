@@ -12,6 +12,7 @@ import '../../core/utils/money.dart';
 import '../../core/utils/fx.dart';
 import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
+import '../capture/capture_intake_actions.dart';
 import '../../platform/notifications/notification_listener_stub.dart';
 
 final _homePendingListProvider =
@@ -262,6 +263,12 @@ class _HomePageState extends ConsumerState<HomePage> {
                           ),
                         ),
                         const Spacer(),
+                        IconButton(
+                          tooltip: '截图记账',
+                          onPressed: () =>
+                              importCaptureFromScreenshot(context, ref),
+                          icon: const Icon(Icons.document_scanner_outlined),
+                        ),
                         IconButton(
                           tooltip: '搜索账单',
                           onPressed: () => context.push('/home/search'),

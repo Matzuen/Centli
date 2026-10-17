@@ -6,6 +6,7 @@ import '../../app/theme.dart';
 import '../../data/db/database_provider.dart';
 import 'local_speech.dart';
 import 'smart_bookkeeping_submit.dart';
+import '../capture/capture_intake_actions.dart';
 
 Future<void> showQuickBookkeepingSheet(BuildContext context) {
   return showModalBottomSheet<void>(
@@ -475,6 +476,42 @@ class _QuickBookkeepingSheetState extends ConsumerState<QuickBookkeepingSheet> {
                   ),
                 ),
               ),
+              if (!_holding && !_submitting) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          final nav = Navigator.of(context);
+                          nav.pop();
+                          final overlayCtx = nav.overlay?.context;
+                          if (overlayCtx != null && overlayCtx.mounted) {
+                            importCaptureFromScreenshot(overlayCtx, ref);
+                          }
+                        },
+                        icon: const Icon(Icons.document_scanner_outlined),
+                        label: const Text('截图识别'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          final nav = Navigator.of(context);
+                          nav.pop();
+                          final overlayCtx = nav.overlay?.context;
+                          if (overlayCtx != null && overlayCtx.mounted) {
+                            importCaptureFromClipboard(overlayCtx, ref);
+                          }
+                        },
+                        icon: const Icon(Icons.content_paste_outlined),
+                        label: const Text('剪贴板'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
               if (!_holding &&
                   _textCtrl.text.trim().isNotEmpty &&
                   !_submitting) ...[

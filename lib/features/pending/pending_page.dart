@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
@@ -11,7 +10,7 @@ import '../../data/db/database_provider.dart';
 import '../../platform/notifications/notification_parse.dart';
 import '../../platform/notifications/notification_listener_stub.dart';
 import '../../platform/notifications/noti_template_store.dart';
-import '../../platform/pending/pending_capture_intake.dart';
+import '../capture/capture_intake_actions.dart';
 import '../../app/theme.dart';
 
 
@@ -116,12 +115,12 @@ class _PendingPageBodyState extends ConsumerState<PendingPage> {
           IconButton(
             tooltip: '截图识别',
             icon: const Icon(Icons.document_scanner_outlined),
-            onPressed: () => _fromScreenshot(context),
+            onPressed: () => importCaptureFromScreenshot(context, ref),
           ),
           IconButton(
             tooltip: '从剪贴板导入',
             icon: const Icon(Icons.content_paste_go_outlined),
-            onPressed: () => _fromClipboard(context),
+            onPressed: () => importCaptureFromClipboard(context, ref),
           ),
           IconButton(
             tooltip: '发出去没通知？',
@@ -234,14 +233,14 @@ class _PendingPageBodyState extends ConsumerState<PendingPage> {
                                     label: const Text('自动记账'),
                                   ),
                                   OutlinedButton.icon(
-                                    onPressed: () => _fromScreenshot(context),
+                                    onPressed: () => importCaptureFromScreenshot(context, ref),
                                     icon: const Icon(
                                       Icons.document_scanner_outlined,
                                     ),
                                     label: const Text('截图识别'),
                                   ),
                                   OutlinedButton.icon(
-                                    onPressed: () => _fromClipboard(context),
+                                    onPressed: () => importCaptureFromClipboard(context, ref),
                                     icon: const Icon(
                                       Icons.content_paste_go_outlined,
                                     ),
@@ -296,82 +295,6 @@ class _PendingPageBodyState extends ConsumerState<PendingPage> {
     );
   }
 
-
-  Future<void> _fromClipboard(BuildContext context) async {
-    final db = ref.read(databaseProvider);
-    final result = await PendingCaptureIntake.ingestClipboard(db);
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(result.snackbarText())),
-    );
-  }
-
-  Future<void> _fromScreenshot(BuildContext context) async {
-    final source = await showModalBottomSheet<ImageSource>(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: Wrap(
-          children: [
-            ListTile(
-              leading: const Icon(Icons.photo_library_outlined),
-              title: const Text('从相册选择'),
-              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
-            ),
-            ListTile(
-              leading: const Icon(Icons.photo_camera_outlined),
-              title: const Text('拍照'),
-              onTap: () => Navigator.pop(ctx, ImageSource.camera),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (source == null || !context.mounted) return;
-    final picker = ImagePicker();
-    final file = await picker.pickImage(source: source, imageQuality: 92);
-    if (file == null || !context.mounted) return;
-    final db = ref.read(databaseProvider);
-    var consented = await PendingCaptureIntake.hasImageAiConsent(db);
-    if (!consented) {
-      if (!context.mounted) return;
-      final ok = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('截图识别说明'),
-          content: const Text(
-            '截图识别会把图片发送到 DeepSeek（或你配置的大模型服务），是否继续？',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('同意'),
-            ),
-          ],
-        ),
-      );
-      if (ok != true || !context.mounted) return;
-      await PendingCaptureIntake.setImageAiConsent(db, true);
-      consented = true;
-    }
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('正在识别截图…')),
-    );
-    final result = await PendingCaptureIntake.ingestImagePath(
-      db,
-      file.path,
-      sourceKind: 'screenshot',
-      consentAlreadyGranted: consented,
-    );
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(result.snackbarText())),
-    );
-  }
 
   Future<void> _ignoreAll(BuildContext context) async {
     final ledger = ref.read(currentLedgerProvider).valueOrNull;
