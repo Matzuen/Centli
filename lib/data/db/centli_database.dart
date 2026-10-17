@@ -1295,6 +1295,54 @@ class CentliDatabase extends _$CentliDatabase {
     return row != null;
   }
 
+  /// Distinct historical merchants for autocomplete (no schema change).
+  /// Merges non-empty [transactions.merchant] with [merchant_rules.merchantKey],
+  /// newest activity first. Optional [query] filters by substring (case-insensitive).
+  Future<List<String>> listMerchantSuggestions(
+    String ledgerId, {
+    String query = '',
+    int limit = 30,
+  }) async {
+    final q = query.trim().toLowerCase();
+    final rows = await customSelect(
+      'SELECT merchant AS name, MAX(happen_at) AS last_at '
+      'FROM transactions '
+      'WHERE ledger_id = ? AND deleted_at IS NULL '
+      "AND merchant IS NOT NULL AND TRIM(merchant) != '' "
+      'GROUP BY LOWER(TRIM(merchant)) '
+      'ORDER BY last_at DESC '
+      'LIMIT ?',
+      variables: [Variable.withString(ledgerId), Variable.withInt(limit * 3)],
+      readsFrom: {transactions},
+    ).get();
+
+    final seen = <String>{};
+    final out = <String>[];
+    for (final r in rows) {
+      final name = (r.read<String>('name')).trim();
+      if (name.isEmpty) continue;
+      final key = name.toLowerCase();
+      if (seen.contains(key)) continue;
+      if (q.isNotEmpty && !key.contains(q)) continue;
+      seen.add(key);
+      out.add(name);
+      if (out.length >= limit) return out;
+    }
+
+    final rules = await loadMerchantRules(ledgerId);
+    for (final rule in rules) {
+      final name = rule.merchantKey.trim();
+      if (name.isEmpty) continue;
+      final key = name.toLowerCase();
+      if (seen.contains(key)) continue;
+      if (q.isNotEmpty && !key.contains(q)) continue;
+      seen.add(key);
+      out.add(name);
+      if (out.length >= limit) break;
+    }
+    return out;
+  }
+
   Future<MerchantRule?> findMerchantRule(
     String ledgerId,
     String merchantKey,

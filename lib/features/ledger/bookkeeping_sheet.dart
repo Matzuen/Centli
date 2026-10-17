@@ -53,8 +53,10 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
   String? _accountId;
   String? _toAccountId;
   String? _categoryId;
-  String? _merchant;
+  final _merchantCtrl = TextEditingController();
+  final _merchantFocus = FocusNode();
   final _noteCtrl = TextEditingController();
+  List<String> _merchantSuggestions = [];
   List<String> _tags = [];
 List<Account> _accounts = [];
   List<Category> _categories = [];
@@ -72,6 +74,8 @@ List<Account> _accounts = [];
 
   @override
   void dispose() {
+    _merchantCtrl.dispose();
+    _merchantFocus.dispose();
     _noteCtrl.dispose();
     super.dispose();
   }
@@ -102,8 +106,10 @@ List<Account> _accounts = [];
       ledgerId,
       _type == 'in' ? 'in' : 'out',
     );
+    final merchants = await db.listMerchantSuggestions(ledgerId);
     if (!mounted) return;
     setState(() {
+      _merchantSuggestions = merchants;
       _ledgerId = ledgerId;
       _accounts = accounts;
       if (existing != null) {
@@ -120,7 +126,7 @@ List<Account> _accounts = [];
         _accountId = existing.accountId;
         _toAccountId = existing.toAccountId;
         _categoryId = existing.categoryId;
-        _merchant = existing.merchant;
+        _merchantCtrl.text = existing.merchant ?? '';
         _noteCtrl.text = existing.note ?? '';
         _tags = List<String>.from(decodeTxnTags(existing.tags));
         _happenAt = DateTime.fromMillisecondsSinceEpoch(
@@ -411,9 +417,9 @@ List<Account> _accounts = [];
       }
 
       final note = _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim();
-      final merchant = (_merchant ?? '').trim().isEmpty
+      final merchant = _merchantCtrl.text.trim().isEmpty
           ? null
-          : _merchant!.trim();
+          : _merchantCtrl.text.trim();
       final toAcc = _type == 'transfer' ? _toAccountId : null;
       final cat = _type == 'transfer' ? null : _categoryId;
       if (widget.existing != null) {
@@ -457,7 +463,7 @@ List<Account> _accounts = [];
           _toAmountText = '0';
           _fxRateText = null;
           _noteCtrl.clear();
-          _merchant = null;
+          _merchantCtrl.clear();
           _happenAt = DateTime.now();
         });
         ScaffoldMessenger.of(context)
@@ -961,6 +967,102 @@ List<Account> _accounts = [];
                                 '\u8de8\u5e01\uff1a\u4fdd\u5b58\u65f6\u4f1a\u8be2\u95ee\u5bf9\u65b9\u91d1\u989d/\u6c47\u7387',
                                 style: Theme.of(context).textTheme.bodySmall
                                     ?.copyWith(color: scheme.onSurfaceVariant),
+                              ),
+                            ),
+                          if (_type != 'transfer')
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
+                              child: RawAutocomplete<String>(
+                                textEditingController: _merchantCtrl,
+                                focusNode: _merchantFocus,
+                                optionsBuilder: (TextEditingValue tev) {
+                                  final q = tev.text.trim().toLowerCase();
+                                  Iterable<String> src = _merchantSuggestions;
+                                  if (q.isNotEmpty) {
+                                    src = src.where(
+                                      (m) => m.toLowerCase().contains(q),
+                                    );
+                                  }
+                                  return src.take(8);
+                                },
+                                onSelected: (String s) {
+                                  _merchantCtrl.text = s;
+                                  _merchantCtrl.selection =
+                                      TextSelection.collapsed(offset: s.length);
+                                },
+                                fieldViewBuilder: (
+                                  context,
+                                  textController,
+                                  focusNode,
+                                  onFieldSubmitted,
+                                ) {
+                                  return TextField(
+                                    controller: textController,
+                                    focusNode: focusNode,
+                                    onSubmitted: (_) => onFieldSubmitted(),
+                                    decoration: InputDecoration(
+                                      hintText: '\u5546\u6237',
+                                      isDense: true,
+                                      prefixIcon: Icon(
+                                        Icons.storefront_outlined,
+                                        size: 20,
+                                        color: scheme.onSurfaceVariant,
+                                      ),
+                                      filled: true,
+                                      fillColor: scheme.surfaceContainerHighest,
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(14),
+                                        borderSide: BorderSide(
+                                          color: scheme.outlineVariant,
+                                        ),
+                                      ),
+                                      enabledBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(14),
+                                        borderSide: BorderSide(
+                                          color: scheme.outlineVariant,
+                                        ),
+                                      ),
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 10,
+                                      ),
+                                    ),
+                                  );
+                                },
+                                optionsViewBuilder:
+                                    (context, onSelected, options) {
+                                  final opts = options.toList();
+                                  if (opts.isEmpty) {
+                                    return const SizedBox.shrink();
+                                  }
+                                  return Align(
+                                    alignment: Alignment.topLeft,
+                                    child: Material(
+                                      elevation: 4,
+                                      borderRadius: BorderRadius.circular(12),
+                                      child: ConstrainedBox(
+                                        constraints: const BoxConstraints(
+                                          maxHeight: 200,
+                                          maxWidth: 320,
+                                        ),
+                                        child: ListView.builder(
+                                          padding: EdgeInsets.zero,
+                                          shrinkWrap: true,
+                                          itemCount: opts.length,
+                                          itemBuilder: (context, i) {
+                                            final opt = opts[i];
+                                            return ListTile(
+                                              dense: true,
+                                              title: Text(opt),
+                                              onTap: () => onSelected(opt),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
                               ),
                             ),
                           Padding(
