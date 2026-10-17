@@ -1017,9 +1017,9 @@ class _CalendarCard extends StatelessWidget {
             itemCount: firstWeekday + daysInMonth,
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 7,
-              mainAxisSpacing: 4,
+              mainAxisSpacing: 2,
               crossAxisSpacing: 2,
-              childAspectRatio: 0.62,
+              childAspectRatio: 0.82,
             ),
             itemBuilder: (context, index) {
               if (index < firstWeekday) return const SizedBox.shrink();
@@ -1049,7 +1049,9 @@ class _CalendarCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(10),
                   ),
                   padding: const EdgeInsets.only(top: 2, left: 1, right: 1),
-                  child: Column(
+                  child: MediaQuery.withClampedTextScaling(
+                    maxScaleFactor: 1.15,
+                    child: Column(
                     children: [
                       Text(
                         '$day',
@@ -1064,6 +1066,7 @@ class _CalendarCard extends StatelessWidget {
                       _amtLine(context, inMinor, CentliTheme.incomeGreen),
                       _amtLine(context, outMinor, CentliTheme.expenseRed),
                     ],
+                  ),
                   ),
                 ),
               );
