@@ -80,6 +80,7 @@ class _PendingPageBodyState extends ConsumerState<PendingPage> {
     super.initState();
     final f = widget.initialFilter;
     if (f != null &&
+        // 'all' kept only as legacy alias for confirmed (router ?tab=all).
         {'pending', 'parse_failed', 'ignored', 'confirmed', 'all'}
             .contains(f)) {
       // Legacy route ?tab=all → confirmed (partition replaced "全部").
