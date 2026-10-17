@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/db/centli_database.dart';
+import '../../data/db/database_provider.dart';
 import 'txn_list_tile.dart';
 
 /// Local calendar day label: 今天 / 昨天 / M月d日 / yyyy年M月d日.
@@ -38,7 +40,6 @@ List<({String label, List<Transaction> items})> groupTransactionsByDate(
     }
     groups[day]!.add(t);
   }
-  // Newest day first (typical ledger).
   order.sort((a, b) => b.compareTo(a));
   return [
     for (final day in order)
@@ -49,8 +50,13 @@ List<({String label, List<Transaction> items})> groupTransactionsByDate(
   ];
 }
 
+final _txnListLookupsProvider =
+    FutureProvider.family<TxnListLookups, String>((ref, ledgerId) {
+  return ref.watch(databaseProvider).loadTxnListLookups(ledgerId);
+});
+
 /// Date-grouped transaction list body (white card, bold date headers).
-class TxnGroupedList extends StatelessWidget {
+class TxnGroupedList extends ConsumerWidget {
   const TxnGroupedList({
     super.key,
     required this.txns,
@@ -67,7 +73,12 @@ class TxnGroupedList extends StatelessWidget {
   final ScrollPhysics? physics;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ledgerId = txns.isEmpty ? null : txns.first.ledgerId;
+    final lookupsAsync = ledgerId == null
+        ? const AsyncValue.data(TxnListLookups.empty)
+        : ref.watch(_txnListLookupsProvider(ledgerId));
+    final lookups = lookupsAsync.valueOrNull ?? TxnListLookups.empty;
     final groups = groupTransactionsByDate(txns);
     return ListView.builder(
       padding: padding,
@@ -81,6 +92,7 @@ class TxnGroupedList extends StatelessWidget {
           items: g.items,
           hide: hide,
           isFirst: gi == 0,
+          lookups: lookups,
         );
       },
     );
@@ -88,7 +100,7 @@ class TxnGroupedList extends StatelessWidget {
 }
 
 /// Non-scrolling column of date groups — embed inside a parent ListView.
-class TxnGroupedSection extends StatelessWidget {
+class TxnGroupedSection extends ConsumerWidget {
   const TxnGroupedSection({
     super.key,
     required this.txns,
@@ -99,7 +111,12 @@ class TxnGroupedSection extends StatelessWidget {
   final bool hide;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ledgerId = txns.isEmpty ? null : txns.first.ledgerId;
+    final lookupsAsync = ledgerId == null
+        ? const AsyncValue.data(TxnListLookups.empty)
+        : ref.watch(_txnListLookupsProvider(ledgerId));
+    final lookups = lookupsAsync.valueOrNull ?? TxnListLookups.empty;
     final groups = groupTransactionsByDate(txns);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -110,6 +127,7 @@ class TxnGroupedSection extends StatelessWidget {
             items: groups[i].items,
             hide: hide,
             isFirst: i == 0,
+            lookups: lookups,
           ),
       ],
     );
@@ -122,12 +140,14 @@ class _TxnDateGroup extends StatelessWidget {
     required this.items,
     required this.hide,
     required this.isFirst,
+    required this.lookups,
   });
 
   final String label;
   final List<Transaction> items;
   final bool hide;
   final bool isFirst;
+  final TxnListLookups lookups;
 
   @override
   Widget build(BuildContext context) {
@@ -155,6 +175,7 @@ class _TxnDateGroup extends StatelessWidget {
                   txn: items[i],
                   hide: hide,
                   showSeparator: i > 0,
+                  lookups: lookups,
                 ),
             ],
           ),

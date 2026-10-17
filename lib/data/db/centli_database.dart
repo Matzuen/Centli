@@ -833,6 +833,21 @@ class CentliDatabase extends _$CentliDatabase {
         .get();
   }
 
+
+  /// Category + account maps for list tiles (one load, many sync lookups).
+  Future<TxnListLookups> loadTxnListLookups(String ledgerId) async {
+    final cats = await (select(categories)
+          ..where((t) => t.ledgerId.equals(ledgerId)))
+        .get();
+    final accs = await (select(accounts)
+          ..where((t) => t.ledgerId.equals(ledgerId)))
+        .get();
+    return TxnListLookups(
+      categoriesById: {for (final c in cats) c.id: c},
+      accountsById: {for (final a in accs) a.id: a},
+    );
+  }
+
   Future<List<Category>> loadCategories(String ledgerId, String kind) {
     return (select(categories)
           ..where(
@@ -2434,6 +2449,23 @@ String budgetYearMonth([DateTime? date]) {
   final d = date ?? DateTime.now();
   final mm = d.month.toString().padLeft(2, '0');
   return '${d.year}-$mm';
+}
+
+
+
+class TxnListLookups {
+  const TxnListLookups({
+    required this.categoriesById,
+    required this.accountsById,
+  });
+
+  final Map<String, Category> categoriesById;
+  final Map<String, Account> accountsById;
+
+  static const empty = TxnListLookups(
+    categoriesById: {},
+    accountsById: {},
+  );
 }
 
 class CategoryBudgetProgress {

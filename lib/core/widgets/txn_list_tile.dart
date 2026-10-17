@@ -17,12 +17,16 @@ const Color kTxnIncomeGreen = Color(0xFF43A047);
 
 /// Shared transaction row: category icon · name / 账户·备注 · amount+time.
 /// Used by home, search, stats drill-down (and mirrored on account detail).
+///
+/// Pass [lookups] from the list level so category/account names resolve
+/// synchronously (avoids N+1 FutureBuilders per row).
 class TxnListTile extends ConsumerWidget {
   const TxnListTile({
     super.key,
     required this.txn,
     required this.hide,
     this.showSeparator = false,
+    this.lookups = TxnListLookups.empty,
   });
 
   final Transaction txn;
@@ -30,6 +34,9 @@ class TxnListTile extends ConsumerWidget {
 
   /// Light divider above this row (indented past the icon).
   final bool showSeparator;
+
+  /// Preloaded category/account maps for this ledger.
+  final TxnListLookups lookups;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -41,9 +48,13 @@ class TxnListTile extends ConsumerWidget {
     final time = DateTime.fromMillisecondsSinceEpoch(txn.happenAt, isUtc: true)
         .toLocal();
     final timeLabel = DateFormat('HH:mm').format(time);
-    final db = ref.read(databaseProvider);
     final scheme = Theme.of(context).colorScheme;
     final muted = scheme.onSurfaceVariant;
+    final cat = (txn.categoryId == null || txn.categoryId!.isEmpty)
+        ? null
+        : lookups.categoriesById[txn.categoryId!];
+    final title = _categoryTitle(cat);
+    final subtitle = _subtitle();
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -63,54 +74,38 @@ class TxnListTile extends ConsumerWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                FutureBuilder<_CatMeta>(
-                  future: _catMeta(db),
-                  builder: (context, snap) {
-                    final meta = snap.data;
-                    return CategoryCircleIcon(
-                      name: meta?.name ?? '',
-                      kind: isTransfer ? 'transfer' : txn.type,
-                      iconKey: meta?.icon,
-                    );
-                  },
+                CategoryCircleIcon(
+                  name: (cat?.name ?? '').trim(),
+                  kind: isTransfer ? 'transfer' : txn.type,
+                  iconKey: cat?.icon,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      FutureBuilder<String>(
-                        future: _categoryTitle(db),
-                        builder: (context, snap) => Text(
-                          snap.data ?? '\u2026',
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              height: 1.2,
+                              color: scheme.onSurface,
+                            ),
+                      ),
+                      if (subtitle.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          subtitle,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w600,
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: muted,
                                 height: 1.2,
-                                color: scheme.onSurface,
                               ),
                         ),
-                      ),
-                      const SizedBox(height: 4),
-                      FutureBuilder<String>(
-                        future: _subtitle(db),
-                        builder: (context, snap) {
-                          final text = snap.data ?? '';
-                          if (text.isEmpty) {
-                            return const SizedBox.shrink();
-                          }
-                          return Text(
-                            text,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: muted,
-                                  height: 1.2,
-                                ),
-                          );
-                        },
-                      ),
+                      ],
                       if (decodeTxnTags(txn.tags).isNotEmpty) ...[
                         const SizedBox(height: 4),
                         _TxnTagChips(tags: decodeTxnTags(txn.tags)),
@@ -152,7 +147,7 @@ class TxnListTile extends ConsumerWidget {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          unconverted ? '$timeLabel \u00b7 \u672a\u6298\u7b97' : timeLabel,
+                          unconverted ? '$timeLabel · \u672a\u6298\u7b97' : timeLabel,
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                 color: unconverted ? scheme.error : muted,
                                 height: 1.2,
@@ -178,34 +173,20 @@ class TxnListTile extends ConsumerWidget {
     final numStr = decimals == 0
         ? '${major.round()}'
         : major.toStringAsFixed(decimals);
-    // Reference: "¥ 20" with a space after the symbol.
     return '$symbol $numStr';
   }
 
-  Future<_CatMeta> _catMeta(CentliDatabase db) async {
-    if (txn.categoryId == null || txn.categoryId!.isEmpty) {
-      return const _CatMeta(name: '', icon: null);
-    }
-    final cat = await db.getCategory(txn.categoryId!);
-    return _CatMeta(name: (cat?.name ?? '').trim(), icon: cat?.icon);
-  }
-
-  /// Bold title: category only (转账 / 未分类 fallback).
-  Future<String> _categoryTitle(CentliDatabase db) async {
+  String _categoryTitle(Category? cat) {
     if (txn.type == 'transfer') return '\u8f6c\u8d26';
-    String base = '\u672a\u5206\u7c7b';
-    if (txn.categoryId != null && txn.categoryId!.isNotEmpty) {
-      final cat = await db.getCategory(txn.categoryId!);
-      final name = (cat?.name ?? '').trim();
-      if (name.isNotEmpty) base = name;
-    }
-    if (txn.type == 'refund') return '\u9000\u6b3e \u00b7 $base';
+    var base = '\u672a\u5206\u7c7b';
+    final name = (cat?.name ?? '').trim();
+    if (name.isNotEmpty) base = name;
+    if (txn.type == 'refund') return '\u9000\u6b3e · $base';
     return base;
   }
 
-  /// Subtitle: 账户 · 备注/商家 (account always preferred visible).
-  Future<String> _subtitle(CentliDatabase db) async {
-    final accountPart = await _accountPart(db);
+  String _subtitle() {
+    final accountPart = _accountPart();
     final note = (txn.note ?? '').trim();
     final merchant = (txn.merchant ?? '').trim();
     final right = note.isNotEmpty ? note : merchant;
@@ -213,20 +194,20 @@ class TxnListTile extends ConsumerWidget {
     if (accountPart.isEmpty && right.isEmpty) return txn.currency;
     if (accountPart.isEmpty) return right;
     if (right.isEmpty) return accountPart;
-    return '$accountPart \u00b7 $right';
+    return '$accountPart · $right';
   }
 
-  Future<String> _accountPart(CentliDatabase db) async {
-    final from = await db.getAccount(txn.accountId);
+  String _accountPart() {
+    final from = lookups.accountsById[txn.accountId];
     final fromName = (from?.name ?? '').trim();
 
     if (txn.type == 'transfer') {
       final toId = txn.toAccountId;
       if (toId != null && toId.isNotEmpty) {
-        final to = await db.getAccount(toId);
+        final to = lookups.accountsById[toId];
         final toName = (to?.name ?? '').trim();
         if (fromName.isNotEmpty && toName.isNotEmpty) {
-          return '$fromName \u2192 $toName';
+          return '$fromName → $toName';
         }
         if (toName.isNotEmpty) return toName;
       }
@@ -234,13 +215,6 @@ class TxnListTile extends ConsumerWidget {
     return fromName;
   }
 }
-
-class _CatMeta {
-  const _CatMeta({required this.name, required this.icon});
-  final String name;
-  final String? icon;
-}
-
 
 class _TxnTagChips extends StatelessWidget {
   const _TxnTagChips({required this.tags});
