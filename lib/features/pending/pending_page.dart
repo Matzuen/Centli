@@ -156,6 +156,12 @@ class _PendingPageBodyState extends ConsumerState<PendingPage> {
               Padding(
                 padding: const EdgeInsets.fromLTRB(CentliSpacing.pageH, CentliSpacing.item, CentliSpacing.pageH, 0),
                 child: SegmentedButton<String>(
+                  showSelectedIcon: false,
+                  style: SegmentedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    visualDensity: VisualDensity.compact,
+                    textStyle: const TextStyle(fontSize: 13),
+                  ),
                   segments: const [
                     ButtonSegment(value: 'pending', label: Text('待确认')),
                     ButtonSegment(
