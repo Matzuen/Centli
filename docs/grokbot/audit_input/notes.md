@@ -1,7 +1,7 @@
 # Centli B4-PATCH G25 notes
 
 Generated: 2026-10-17 (Asia/Shanghai)
-HEAD: `e6da77e8b44106500589a26507746ec238754ada`
+HEAD: `1286607d12a23668ddffffd2fc22c2fa716ee4e4`
 Version: `1.4.2+8`
 schemaVersion: `11`
 
@@ -13,7 +13,7 @@ Baseline HEAD (before G25): `f18dabd` · version `1.4.2+8` · schema **11** · t
 |---|---|---|
 | G25.1 | `d87edf0` | verify.sh/ps1: delete artifacts → generate → MISSING/EMPTY asserts; remove always-true HEAD compare |
 | G25.2 | `e6da77e` | `test/audit_notes_freshness_test.dart`: notes HEAD ancestor-or-equal via merge-base |
-| G25.3 | (this commit) | Annotate invalid G23 Corrupted-HEAD.txt STALE self-proof as 无效; paste self-proof outputs |
+| G25.3 | `1286607` | Annotate invalid G23 Corrupted-HEAD.txt STALE self-proof as 无效; paste self-proof outputs |
 
 ## G23 self-prove（产品方否定 / G25.3）
 
@@ -81,5 +81,5 @@ Last verify: `00:06 +224: All tests passed!` then +1 freshness test → **225** 
 - G23 Corrupted-HEAD.txt STALE self-proof marked **无效** (not deleted)
 
 ## Final
-- Final HEAD: → after this notes commit (`git log -1`)
+- Final HEAD: `1286607d12a23668ddffffd2fc22c2fa716ee4e4` (`1286607`)
 - version: **1.4.2+8** · schema **11** · tests **225**
