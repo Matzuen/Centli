@@ -1,7 +1,7 @@
 # B4-PATCH remaining notes (G16–G19)
 
 Generated: 2026-10-17 (Asia/Shanghai)
-HEAD: `eeee8af1f5c72fcbeb94059201718000e71b1670`
+HEAD: `5e37f87235f70efc46f3bb1a3dc91d017d35e891`
 Version: `1.4.2+8`
 schemaVersion: `11`
 
