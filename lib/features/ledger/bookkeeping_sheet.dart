@@ -570,11 +570,18 @@ List<Account> _accounts = [];
   }
 
   Future<void> _pickHappenAt() async {
+    final today = DateTime.now();
+    final last = DateTime(today.year, today.month, today.day);
+    var initial = _happenAt;
+    if (initial.isAfter(last)) initial = last;
+    if (initial.isBefore(DateTime(2020, 1, 1))) {
+      initial = DateTime(2020, 1, 1);
+    }
     final date = await showDatePicker(
       context: context,
-      initialDate: _happenAt,
+      initialDate: initial,
       firstDate: DateTime(2020, 1, 1),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
+      lastDate: last,
       locale: const Locale('zh', 'CN'),
       helpText: '选择日期',
     );
