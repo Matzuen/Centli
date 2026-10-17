@@ -30,6 +30,8 @@ final _balancesProvider = StreamProvider.family<Map<String, int>, String>((
   ref,
   ledgerId,
 ) {
+  // Opening balance lives on accounts — restart when accounts change.
+  ref.watch(_accountsProvider(ledgerId));
   return ref.watch(databaseProvider).watchAccountBalances(ledgerId);
 });
 
@@ -39,6 +41,7 @@ final _netWorthBaseProvider =
       args,
     ) async {
       await ref.watch(_balancesProvider(args.ledgerId).future);
+      await ref.watch(_accountsProvider(args.ledgerId).future);
       await ref.watch(fxBookProvider.future);
       return ref
           .read(databaseProvider)
@@ -849,6 +852,30 @@ Future<void> showAccountEditor(
       icon: iconKey,
     );
   } else {
+    if (openingMinor != existing.openingBalanceMinor) {
+      if (!context.mounted) return;
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('确认修改期初余额'),
+          content: const Text(
+            '修改期初余额会改变该账户全部历史余额的起点，确认继续？',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('确认修改'),
+            ),
+          ],
+        ),
+      );
+      if (ok != true) return;
+      if (!context.mounted) return;
+    }
     await db.updateAccount(
       id: existing.id,
       name: name,

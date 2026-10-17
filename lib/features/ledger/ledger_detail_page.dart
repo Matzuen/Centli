@@ -129,6 +129,15 @@ class _DetailBody extends ConsumerWidget {
               },
             ),
           ),
+          if ((txn.note ?? '').trim() == '\u4f59\u989d\u6821\u6b63') ...[
+            const SizedBox(height: 8),
+            Center(
+              child: Chip(
+                avatar: Icon(Icons.tune, size: 16, color: scheme.primary),
+                label: const Text('\u4f59\u989d\u6821\u6b63\uff08\u4e0d\u8ba1\u5165\u7edf\u8ba1\uff09'),
+              ),
+            ),
+          ],
           const SizedBox(height: 24),
           CentliSoftCard(
             child: Column(

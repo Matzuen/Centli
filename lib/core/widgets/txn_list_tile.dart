@@ -42,9 +42,12 @@ class TxnListTile extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final isOut = txn.type == 'out';
     final isTransfer = txn.type == 'transfer';
-    final amountColor = isTransfer
-        ? Theme.of(context).colorScheme.onSurface
-        : (isOut ? kTxnExpenseRed : kTxnIncomeGreen); // refund → income green
+    final isBalanceAdjust = (txn.note ?? '').trim() == '余额校正';
+    final amountColor = isBalanceAdjust
+        ? Theme.of(context).colorScheme.onSurfaceVariant
+        : isTransfer
+            ? Theme.of(context).colorScheme.onSurface
+            : (isOut ? kTxnExpenseRed : kTxnIncomeGreen); // refund → income green
     final time = DateTime.fromMillisecondsSinceEpoch(txn.happenAt, isUtc: true)
         .toLocal();
     final timeLabel = DateFormat('HH:mm').format(time);
@@ -53,8 +56,12 @@ class TxnListTile extends ConsumerWidget {
     final cat = (txn.categoryId == null || txn.categoryId!.isEmpty)
         ? null
         : lookups.categoriesById[txn.categoryId!];
-    final title = _categoryTitle(cat);
-    final subtitle = _subtitle();
+    final title = isBalanceAdjust
+        ? '余额校正'
+        : _categoryTitle(cat);
+    final subtitle = isBalanceAdjust
+        ? '不计入统计／预算'
+        : _subtitle();
 
     return Column(
       mainAxisSize: MainAxisSize.min,
