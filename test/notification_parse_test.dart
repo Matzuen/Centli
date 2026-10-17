@@ -467,4 +467,112 @@ group('manual capture parser (share/OCR/clipboard)', () {
       expect(r.templateId, isNull);
     });
   });
+
+  group('T0B repay + yuan amount', () {
+    test('huabei repay notice → repay 12.54', () {
+      final r = parseNotification(
+        RawNotification(
+          pkg: 'com.eg.android.AlipayGphone',
+          title: '10月花呗账单还清啦',
+          text: '10月花呗账单还清啦，从银行卡还款12.54元，本月账单已还清',
+          whenMs: DateTime(2026, 10, 17, 11, 43).millisecondsSinceEpoch,
+        ),
+      );
+      expect(r.ok, isTrue);
+      expect(r.direction, 'repay');
+      expect(r.amountMinor, 1254);
+      expect(r.templateId, 'alipay_repay_zh');
+    });
+
+    test('待还 reminder is excluded', () {
+      final r = parseNotification(
+        RawNotification(
+          pkg: 'com.eg.android.AlipayGphone',
+          title: '花呗还款提醒',
+          text: '本月待还 1234.56 元，请于 10 月 8 日前还款',
+          whenMs: DateTime(2026, 10, 1).millisecondsSinceEpoch,
+        ),
+      );
+      expect(r.templateId, isNull);
+    });
+
+    test('应还 reminder is excluded', () {
+      final r = parseNotification(
+        RawNotification(
+          pkg: 'com.eg.android.AlipayGphone',
+          title: '账单提醒',
+          text: '本月应还 99.00 元',
+          whenMs: DateTime(2026, 10, 1).millisecondsSinceEpoch,
+        ),
+      );
+      expect(r.templateId, isNull);
+    });
+
+    test('yuan suffix extracts 12.54 and 1,234.56', () {
+      final a = parseNotification(
+        RawNotification(
+          pkg: 'com.eg.android.AlipayGphone',
+          title: '还清',
+          text: '还款12.54元',
+          whenMs: 1,
+        ),
+      );
+      expect(a.ok, isTrue);
+      expect(a.amountMinor, 1254);
+
+      final b = parseNotification(
+        RawNotification(
+          pkg: 'com.eg.android.AlipayGphone',
+          title: '还清',
+          text: '还款1,234.56元已还清',
+          whenMs: 2,
+        ),
+      );
+      expect(b.ok, isTrue);
+      expect(b.amountMinor, 123456);
+    });
+
+    test('10月 / ISO date not mistaken for amount', () {
+      final a = parseNotification(
+        RawNotification(
+          pkg: 'com.eg.android.AlipayGphone',
+          title: '10月花呗账单还清啦',
+          text: '10月花呗账单还清啦',
+          whenMs: 3,
+        ),
+      );
+      // May match repay template but must not invent amount 10.
+      expect(a.amountMinor, isNull);
+
+      final b = parseNotification(
+        RawNotification(
+          pkg: 'com.eg.android.AlipayGphone',
+          title: '还清',
+          text: '账单还清 2026-10-17 12:00',
+          whenMs: 4,
+        ),
+      );
+      expect(b.amountMinor, isNull);
+    });
+
+    test('currency symbol wins over yuan fallback', () {
+      final r = parseNotification(
+        RawNotification(
+          pkg: 'com.eg.android.AlipayGphone',
+          title: '支付成功',
+          text: '实付¥16.93，0.5元红包',
+          whenMs: 5,
+        ),
+      );
+      expect(r.ok, isTrue);
+      expect(r.amountMinor, 1693);
+      expect(r.direction, 'out');
+    });
+
+    test('normalizeDirection accepts repay', () {
+      expect(NotiTemplate.normalizeDirection('repay'), 'repay');
+      expect(NotiTemplate.normalizeDirection('nope'), 'out');
+    });
+  });
+
 }

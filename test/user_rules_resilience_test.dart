@@ -60,7 +60,7 @@ void main() {
     });
 
     test('in / out / refund round-trip via toJson', () {
-      for (final d in ['in', 'out', 'refund']) {
+      for (final d in ['in', 'out', 'refund', 'repay']) {
         final m = _goodMap(id: 'd_$d')..['direction'] = d;
         final t = NotiTemplate.tryParse(m);
         expect(t, isNotNull);
@@ -77,6 +77,7 @@ void main() {
       expect(NotiTemplate.normalizeDirection('IN'), 'out');
       expect(NotiTemplate.normalizeDirection('in'), 'in');
       expect(NotiTemplate.normalizeDirection('refund'), 'refund');
+      expect(NotiTemplate.normalizeDirection('repay'), 'repay');
     });
   });
 
