@@ -17,7 +17,6 @@ class Transactions extends Table {
       text().named('to_account_id').nullable().references(Accounts, #id)();
   TextColumn get categoryId =>
       text().named('category_id').nullable().references(Categories, #id)();
-  TextColumn get merchant => text().nullable()();
   /// Optional household member label (free text; no member entity table).
   TextColumn get member => text().nullable()();
   TextColumn get note => text().nullable()();

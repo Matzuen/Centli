@@ -8,7 +8,8 @@ class PendingCaptures extends Table {
   TextColumn get rawText => text().named('raw_text')();
   IntColumn get amountMinor => integer().named('amount_minor').nullable()();
   TextColumn get currency => text().nullable()();
-  TextColumn get merchant => text().nullable()();
+  /// Parsed merchant merged into note (B4 T1); no separate merchant column.
+  TextColumn get note => text().nullable()();
   IntColumn get happenAt => integer().named('happen_at').nullable()();
   TextColumn get suggestedCategoryId =>
       text().named('suggested_category_id').nullable()();

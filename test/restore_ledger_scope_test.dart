@@ -84,7 +84,7 @@ Map<String, dynamic> _txn({
   required String accountId,
   required String categoryId,
   required int amountMinor,
-  String? merchant,
+  String? note,
 }) {
   final ts = DateTime.now().millisecondsSinceEpoch;
   return {
@@ -96,8 +96,7 @@ Map<String, dynamic> _txn({
     'accountId': accountId,
     'toAccountId': null,
     'categoryId': categoryId,
-    'merchant': merchant,
-    'note': null,
+    'note': note,
     'happenAt': ts,
     'includeInStat': 1,
     'includeInBudget': 1,
@@ -144,7 +143,7 @@ void main() {
           accountId: 'accA',
           categoryId: 'catA',
           amountMinor: 1000,
-          merchant: 'A-old',
+          note: 'A-old',
         ),
       ],
     )));
@@ -163,7 +162,7 @@ void main() {
           accountId: 'accB',
           categoryId: 'catB',
           amountMinor: 2500,
-          merchant: 'B-keep',
+          note: 'B-keep',
         ),
       ],
       fxRates: [],
@@ -172,7 +171,7 @@ void main() {
 
     final bBefore = await db.loadTransactionsForExport('ledB');
     expect(bBefore, hasLength(1));
-    expect(bBefore.single.merchant, 'B-keep');
+    expect(bBefore.single.note, 'B-keep');
     expect(bBefore.single.amountMinor, 2500);
     final bAccBefore = await db.loadAllAccounts('ledB');
     final bCatBefore = await db.loadAllCategories('ledB');
@@ -192,7 +191,7 @@ void main() {
           accountId: 'accA2',
           categoryId: 'catA2',
           amountMinor: 8888,
-          merchant: 'A-new',
+          note: 'A-new',
         ),
       ],
     )));
@@ -200,13 +199,13 @@ void main() {
 
     final aAfter = await db.loadTransactionsForExport('ledA');
     expect(aAfter.map((e) => e.id).toList(), ['txnA2']);
-    expect(aAfter.single.merchant, 'A-new');
+    expect(aAfter.single.note, 'A-new');
     expect(aAfter.single.amountMinor, 8888);
 
     final bAfter = await db.loadTransactionsForExport('ledB');
     expect(bAfter, hasLength(1));
     expect(bAfter.single.id, 'txnB1');
-    expect(bAfter.single.merchant, 'B-keep');
+    expect(bAfter.single.note, 'B-keep');
     expect(bAfter.single.amountMinor, 2500);
     final bAccAfter = await db.loadAllAccounts('ledB');
     final bCatAfter = await db.loadAllCategories('ledB');
@@ -245,7 +244,7 @@ void main() {
           accountId: 'accA',
           categoryId: 'catA',
           amountMinor: 4242,
-          merchant: 'cross',
+          note: 'cross',
         ),
       ],
     )));

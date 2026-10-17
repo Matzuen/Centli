@@ -52,7 +52,7 @@ void main() {
       currency: 'CNY',
       accountId: account.id,
       categoryId: incomeCat.id,
-      merchant: 'corp',
+      note: 'corp',
       type: resolveType(incomeCat.id),
     );
 

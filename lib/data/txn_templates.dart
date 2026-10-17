@@ -1,4 +1,6 @@
-﻿import 'dart:convert';
+import 'dart:convert';
+
+import '../core/utils/note_compose.dart';
 
 /// One saved bookkeeping prefills (amount/category/account/note/tags/…).
 class TxnTemplate {
@@ -10,7 +12,6 @@ class TxnTemplate {
     required this.currency,
     required this.accountId,
     this.categoryId,
-    this.merchant,
     this.note,
     this.tags = const [],
   });
@@ -22,7 +23,6 @@ class TxnTemplate {
   final String currency;
   final String accountId;
   final String? categoryId;
-  final String? merchant;
   final String? note;
   final List<String> tags;
 
@@ -34,7 +34,6 @@ class TxnTemplate {
         'currency': currency,
         'accountId': accountId,
         'categoryId': categoryId,
-        'merchant': merchant,
         'note': note,
         'tags': tags,
       };
@@ -53,8 +52,13 @@ class TxnTemplate {
         : int.tryParse('$amount') ?? 0;
     if (id.isEmpty || name.isEmpty || accountId.isEmpty) return null;
     final cat = '${m['categoryId'] ?? ''}'.trim();
+    // Legacy templates may still carry merchant; fold into note.
     final merchant = '${m['merchant'] ?? ''}'.trim();
-    final note = '${m['note'] ?? ''}'.trim();
+    final noteRaw = '${m['note'] ?? ''}'.trim();
+    final note = composeNote(
+      merchant: merchant.isEmpty ? null : merchant,
+      note: noteRaw.isEmpty ? null : noteRaw,
+    );
     final tagsRaw = m['tags'];
     final tags = <String>[];
     if (tagsRaw is List) {
@@ -71,8 +75,7 @@ class TxnTemplate {
       currency: currency.isEmpty ? 'CNY' : currency,
       accountId: accountId,
       categoryId: cat.isEmpty ? null : cat,
-      merchant: merchant.isEmpty ? null : merchant,
-      note: note.isEmpty ? null : note,
+      note: note,
       tags: tags,
     );
   }

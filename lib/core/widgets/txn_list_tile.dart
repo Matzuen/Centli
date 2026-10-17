@@ -195,8 +195,7 @@ class TxnListTile extends ConsumerWidget {
   String _subtitle() {
     final accountPart = _accountPart();
     final note = (txn.note ?? '').trim();
-    final merchant = (txn.merchant ?? '').trim();
-    final right = note.isNotEmpty ? note : merchant;
+    final right = note;
 
     if (accountPart.isEmpty && right.isEmpty) return txn.currency;
     if (accountPart.isEmpty) return right;

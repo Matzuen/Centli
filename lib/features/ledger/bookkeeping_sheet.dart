@@ -54,8 +54,6 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
   String? _accountId;
   String? _toAccountId;
   String? _categoryId;
-  final _merchantCtrl = TextEditingController();
-  final _merchantFocus = FocusNode();
   final _memberCtrl = TextEditingController();
   final _noteCtrl = TextEditingController();
   List<String> _tags = [];
@@ -75,8 +73,6 @@ List<Account> _accounts = [];
 
   @override
   void dispose() {
-    _merchantCtrl.dispose();
-    _merchantFocus.dispose();
     _memberCtrl.dispose();
     _noteCtrl.dispose();
     super.dispose();
@@ -126,8 +122,7 @@ List<Account> _accounts = [];
         _accountId = existing.accountId;
         _toAccountId = existing.toAccountId;
         _categoryId = existing.categoryId;
-        _merchantCtrl.text = existing.merchant ?? '';
-        _memberCtrl.text = existing.member ?? '';
+            _memberCtrl.text = existing.member ?? '';
         _noteCtrl.text = existing.note ?? '';
         _tags = List<String>.from(decodeTxnTags(existing.tags));
         _happenAt = DateTime.fromMillisecondsSinceEpoch(
@@ -266,8 +261,7 @@ List<Account> _accounts = [];
       }
       _accountId = t.accountId;
       _categoryId = t.categoryId;
-      _merchantCtrl.text = t.merchant ?? '';
-      _noteCtrl.text = t.note ?? '';
+        _noteCtrl.text = t.note ?? '';
       _tags = List<String>.from(t.tags);
     });
     await _reloadCategories(resetSelection: false);
@@ -499,9 +493,6 @@ List<Account> _accounts = [];
       }
 
       final note = _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim();
-      final merchant = _merchantCtrl.text.trim().isEmpty
-          ? null
-          : _merchantCtrl.text.trim();
       final member = _memberCtrl.text.trim().isEmpty
           ? null
           : _memberCtrl.text.trim();
@@ -516,8 +507,7 @@ List<Account> _accounts = [];
           accountId: _accountId!,
           toAccountId: toAcc,
           categoryId: cat,
-          merchant: merchant,
-          member: member,
+            member: member,
           note: note,
           tags: _tags,
           happenAt: _happenAt,
@@ -533,8 +523,7 @@ List<Account> _accounts = [];
           accountId: _accountId!,
           toAccountId: toAcc,
           categoryId: cat,
-          merchant: merchant,
-          member: member,
+            member: member,
           note: note,
           tags: _tags,
           happenAt: _happenAt,
@@ -550,8 +539,7 @@ List<Account> _accounts = [];
           _toAmountText = '0';
           _fxRateText = null;
           _noteCtrl.clear();
-          _merchantCtrl.clear();
-          _memberCtrl.clear();
+              _memberCtrl.clear();
           _happenAt = DateTime.now();
         });
         ScaffoldMessenger.of(context)

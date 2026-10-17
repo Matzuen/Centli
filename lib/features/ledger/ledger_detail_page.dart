@@ -216,9 +216,9 @@ class _DetailBody extends ConsumerWidget {
                 ListTile(
                   title: const Text('\u5546\u6237'),
                   trailing: Text(
-                    (txn.merchant == null || txn.merchant!.isEmpty)
+                    (txn.note == null || txn.note!.isEmpty)
                         ? '\u2014'
-                        : txn.merchant!,
+                        : txn.note!,
                   ),
                 ),
                 const Divider(height: 1),
@@ -441,9 +441,9 @@ class _DetailBody extends ConsumerWidget {
     Transaction txn,
   ) async {
     final nameCtrl = TextEditingController(
-      text: (txn.merchant ?? txn.note ?? '').trim().isEmpty
+      text: (txn.note ?? '').trim().isEmpty
           ? '\u5e38\u7528\u6d41\u6c34'
-          : (txn.merchant ?? txn.note)!.trim(),
+          : txn.note!.trim(),
     );
     final ok = await showDialog<bool>(
       context: context,
@@ -483,7 +483,6 @@ class _DetailBody extends ConsumerWidget {
         currency: txn.currency,
         accountId: txn.accountId,
         categoryId: txn.categoryId,
-        merchant: txn.merchant,
         note: txn.note,
         tags: decodeTxnTags(txn.tags),
       ),

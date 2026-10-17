@@ -14,8 +14,7 @@ void main() {
       currency: 'CNY',
       accountId: 'acc1',
       categoryId: 'cat1',
-      merchant: 'canteen',
-      note: 'weekday',
+      note: 'canteen · weekday',
       tags: ['daily'],
     );
     final list = TxnTemplate.decodeList(TxnTemplate.encodeList([t]));
@@ -23,7 +22,7 @@ void main() {
     expect(list.first.name, 'lunch');
     expect(list.first.amountMinor, 2500);
     expect(list.first.tags, ['daily']);
-    expect(list.first.merchant, 'canteen');
+    expect(list.first.note, 'canteen · weekday');
   });
 
   test('save and load txn templates via settings', () async {

@@ -1300,7 +1300,7 @@ class _HomePendingSlide extends StatelessWidget {
     final amount = c.amountMinor == null
         ? '金额未知'
         : formatMinor(ccy, c.amountMinor!, hide: hide);
-    final merchant = (c.merchant ?? '').trim();
+    final merchant = (c.note ?? '').trim();
     final title = merchant.isNotEmpty
         ? '${_pkgLabel(c.sourcePkg)} · $amount · $merchant'
         : '${_pkgLabel(c.sourcePkg)} · $amount';

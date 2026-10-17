@@ -1674,17 +1674,6 @@ class $TransactionsTable extends Transactions
       'REFERENCES categories (id)',
     ),
   );
-  static const VerificationMeta _merchantMeta = const VerificationMeta(
-    'merchant',
-  );
-  @override
-  late final GeneratedColumn<String> merchant = GeneratedColumn<String>(
-    'merchant',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
   static const VerificationMeta _memberMeta = const VerificationMeta('member');
   @override
   late final GeneratedColumn<String> member = GeneratedColumn<String>(
@@ -1853,7 +1842,6 @@ class $TransactionsTable extends Transactions
     accountId,
     toAccountId,
     categoryId,
-    merchant,
     member,
     note,
     tags,
@@ -1943,12 +1931,6 @@ class $TransactionsTable extends Transactions
       context.handle(
         _categoryIdMeta,
         categoryId.isAcceptableOrUnknown(data['category_id']!, _categoryIdMeta),
-      );
-    }
-    if (data.containsKey('merchant')) {
-      context.handle(
-        _merchantMeta,
-        merchant.isAcceptableOrUnknown(data['merchant']!, _merchantMeta),
       );
     }
     if (data.containsKey('member')) {
@@ -2103,10 +2085,6 @@ class $TransactionsTable extends Transactions
         DriftSqlType.string,
         data['${effectivePrefix}category_id'],
       ),
-      merchant: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}merchant'],
-      ),
       member: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}member'],
@@ -2185,7 +2163,6 @@ class Transaction extends DataClass implements Insertable<Transaction> {
   final String accountId;
   final String? toAccountId;
   final String? categoryId;
-  final String? merchant;
 
   /// Optional household member label (free text; no member entity table).
   final String? member;
@@ -2216,7 +2193,6 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     required this.accountId,
     this.toAccountId,
     this.categoryId,
-    this.merchant,
     this.member,
     this.note,
     this.tags,
@@ -2247,9 +2223,6 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     }
     if (!nullToAbsent || categoryId != null) {
       map['category_id'] = Variable<String>(categoryId);
-    }
-    if (!nullToAbsent || merchant != null) {
-      map['merchant'] = Variable<String>(merchant);
     }
     if (!nullToAbsent || member != null) {
       map['member'] = Variable<String>(member);
@@ -2301,9 +2274,6 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       categoryId: categoryId == null && nullToAbsent
           ? const Value.absent()
           : Value(categoryId),
-      merchant: merchant == null && nullToAbsent
-          ? const Value.absent()
-          : Value(merchant),
       member: member == null && nullToAbsent
           ? const Value.absent()
           : Value(member),
@@ -2350,7 +2320,6 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       accountId: serializer.fromJson<String>(json['accountId']),
       toAccountId: serializer.fromJson<String?>(json['toAccountId']),
       categoryId: serializer.fromJson<String?>(json['categoryId']),
-      merchant: serializer.fromJson<String?>(json['merchant']),
       member: serializer.fromJson<String?>(json['member']),
       note: serializer.fromJson<String?>(json['note']),
       tags: serializer.fromJson<String?>(json['tags']),
@@ -2380,7 +2349,6 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       'accountId': serializer.toJson<String>(accountId),
       'toAccountId': serializer.toJson<String?>(toAccountId),
       'categoryId': serializer.toJson<String?>(categoryId),
-      'merchant': serializer.toJson<String?>(merchant),
       'member': serializer.toJson<String?>(member),
       'note': serializer.toJson<String?>(note),
       'tags': serializer.toJson<String?>(tags),
@@ -2408,7 +2376,6 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     String? accountId,
     Value<String?> toAccountId = const Value.absent(),
     Value<String?> categoryId = const Value.absent(),
-    Value<String?> merchant = const Value.absent(),
     Value<String?> member = const Value.absent(),
     Value<String?> note = const Value.absent(),
     Value<String?> tags = const Value.absent(),
@@ -2433,7 +2400,6 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     accountId: accountId ?? this.accountId,
     toAccountId: toAccountId.present ? toAccountId.value : this.toAccountId,
     categoryId: categoryId.present ? categoryId.value : this.categoryId,
-    merchant: merchant.present ? merchant.value : this.merchant,
     member: member.present ? member.value : this.member,
     note: note.present ? note.value : this.note,
     tags: tags.present ? tags.value : this.tags,
@@ -2472,7 +2438,6 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       categoryId: data.categoryId.present
           ? data.categoryId.value
           : this.categoryId,
-      merchant: data.merchant.present ? data.merchant.value : this.merchant,
       member: data.member.present ? data.member.value : this.member,
       note: data.note.present ? data.note.value : this.note,
       tags: data.tags.present ? data.tags.value : this.tags,
@@ -2512,7 +2477,6 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           ..write('accountId: $accountId, ')
           ..write('toAccountId: $toAccountId, ')
           ..write('categoryId: $categoryId, ')
-          ..write('merchant: $merchant, ')
           ..write('member: $member, ')
           ..write('note: $note, ')
           ..write('tags: $tags, ')
@@ -2542,7 +2506,6 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     accountId,
     toAccountId,
     categoryId,
-    merchant,
     member,
     note,
     tags,
@@ -2571,7 +2534,6 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           other.accountId == this.accountId &&
           other.toAccountId == this.toAccountId &&
           other.categoryId == this.categoryId &&
-          other.merchant == this.merchant &&
           other.member == this.member &&
           other.note == this.note &&
           other.tags == this.tags &&
@@ -2598,7 +2560,6 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
   final Value<String> accountId;
   final Value<String?> toAccountId;
   final Value<String?> categoryId;
-  final Value<String?> merchant;
   final Value<String?> member;
   final Value<String?> note;
   final Value<String?> tags;
@@ -2624,7 +2585,6 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     this.accountId = const Value.absent(),
     this.toAccountId = const Value.absent(),
     this.categoryId = const Value.absent(),
-    this.merchant = const Value.absent(),
     this.member = const Value.absent(),
     this.note = const Value.absent(),
     this.tags = const Value.absent(),
@@ -2651,7 +2611,6 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     required String accountId,
     this.toAccountId = const Value.absent(),
     this.categoryId = const Value.absent(),
-    this.merchant = const Value.absent(),
     this.member = const Value.absent(),
     this.note = const Value.absent(),
     this.tags = const Value.absent(),
@@ -2686,7 +2645,6 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     Expression<String>? accountId,
     Expression<String>? toAccountId,
     Expression<String>? categoryId,
-    Expression<String>? merchant,
     Expression<String>? member,
     Expression<String>? note,
     Expression<String>? tags,
@@ -2713,7 +2671,6 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       if (accountId != null) 'account_id': accountId,
       if (toAccountId != null) 'to_account_id': toAccountId,
       if (categoryId != null) 'category_id': categoryId,
-      if (merchant != null) 'merchant': merchant,
       if (member != null) 'member': member,
       if (note != null) 'note': note,
       if (tags != null) 'tags': tags,
@@ -2742,7 +2699,6 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     Value<String>? accountId,
     Value<String?>? toAccountId,
     Value<String?>? categoryId,
-    Value<String?>? merchant,
     Value<String?>? member,
     Value<String?>? note,
     Value<String?>? tags,
@@ -2769,7 +2725,6 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       accountId: accountId ?? this.accountId,
       toAccountId: toAccountId ?? this.toAccountId,
       categoryId: categoryId ?? this.categoryId,
-      merchant: merchant ?? this.merchant,
       member: member ?? this.member,
       note: note ?? this.note,
       tags: tags ?? this.tags,
@@ -2815,9 +2770,6 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     }
     if (categoryId.present) {
       map['category_id'] = Variable<String>(categoryId.value);
-    }
-    if (merchant.present) {
-      map['merchant'] = Variable<String>(merchant.value);
     }
     if (member.present) {
       map['member'] = Variable<String>(member.value);
@@ -2881,7 +2833,6 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
           ..write('accountId: $accountId, ')
           ..write('toAccountId: $toAccountId, ')
           ..write('categoryId: $categoryId, ')
-          ..write('merchant: $merchant, ')
           ..write('member: $member, ')
           ..write('note: $note, ')
           ..write('tags: $tags, ')
@@ -2984,12 +2935,10 @@ class $PendingCapturesTable extends PendingCaptures
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
-  static const VerificationMeta _merchantMeta = const VerificationMeta(
-    'merchant',
-  );
+  static const VerificationMeta _noteMeta = const VerificationMeta('note');
   @override
-  late final GeneratedColumn<String> merchant = GeneratedColumn<String>(
-    'merchant',
+  late final GeneratedColumn<String> note = GeneratedColumn<String>(
+    'note',
     aliasedName,
     true,
     type: DriftSqlType.string,
@@ -3102,7 +3051,7 @@ class $PendingCapturesTable extends PendingCaptures
     rawText,
     amountMinor,
     currency,
-    merchant,
+    note,
     happenAt,
     suggestedCategoryId,
     suggestedAccountId,
@@ -3175,10 +3124,10 @@ class $PendingCapturesTable extends PendingCaptures
         currency.isAcceptableOrUnknown(data['currency']!, _currencyMeta),
       );
     }
-    if (data.containsKey('merchant')) {
+    if (data.containsKey('note')) {
       context.handle(
-        _merchantMeta,
-        merchant.isAcceptableOrUnknown(data['merchant']!, _merchantMeta),
+        _noteMeta,
+        note.isAcceptableOrUnknown(data['note']!, _noteMeta),
       );
     }
     if (data.containsKey('happen_at')) {
@@ -3290,9 +3239,9 @@ class $PendingCapturesTable extends PendingCaptures
         DriftSqlType.string,
         data['${effectivePrefix}currency'],
       ),
-      merchant: attachedDatabase.typeMapping.read(
+      note: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
-        data['${effectivePrefix}merchant'],
+        data['${effectivePrefix}note'],
       ),
       happenAt: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
@@ -3347,7 +3296,9 @@ class PendingCapture extends DataClass implements Insertable<PendingCapture> {
   final String rawText;
   final int? amountMinor;
   final String? currency;
-  final String? merchant;
+
+  /// Parsed merchant merged into note (B4 T1); no separate merchant column.
+  final String? note;
   final int? happenAt;
   final String? suggestedCategoryId;
   final String? suggestedAccountId;
@@ -3355,7 +3306,7 @@ class PendingCapture extends DataClass implements Insertable<PendingCapture> {
   final String dedupeKey;
   final int parseOk;
 
-  /// Persisted parse direction: in / out / refund. Null = legacy, treat as out.
+  /// Persisted parse direction: in / out / refund / repay. Null = legacy, treat as out.
   final String? direction;
   final int createdAt;
   final int updatedAt;
@@ -3367,7 +3318,7 @@ class PendingCapture extends DataClass implements Insertable<PendingCapture> {
     required this.rawText,
     this.amountMinor,
     this.currency,
-    this.merchant,
+    this.note,
     this.happenAt,
     this.suggestedCategoryId,
     this.suggestedAccountId,
@@ -3394,8 +3345,8 @@ class PendingCapture extends DataClass implements Insertable<PendingCapture> {
     if (!nullToAbsent || currency != null) {
       map['currency'] = Variable<String>(currency);
     }
-    if (!nullToAbsent || merchant != null) {
-      map['merchant'] = Variable<String>(merchant);
+    if (!nullToAbsent || note != null) {
+      map['note'] = Variable<String>(note);
     }
     if (!nullToAbsent || happenAt != null) {
       map['happen_at'] = Variable<int>(happenAt);
@@ -3432,9 +3383,7 @@ class PendingCapture extends DataClass implements Insertable<PendingCapture> {
       currency: currency == null && nullToAbsent
           ? const Value.absent()
           : Value(currency),
-      merchant: merchant == null && nullToAbsent
-          ? const Value.absent()
-          : Value(merchant),
+      note: note == null && nullToAbsent ? const Value.absent() : Value(note),
       happenAt: happenAt == null && nullToAbsent
           ? const Value.absent()
           : Value(happenAt),
@@ -3468,7 +3417,7 @@ class PendingCapture extends DataClass implements Insertable<PendingCapture> {
       rawText: serializer.fromJson<String>(json['rawText']),
       amountMinor: serializer.fromJson<int?>(json['amountMinor']),
       currency: serializer.fromJson<String?>(json['currency']),
-      merchant: serializer.fromJson<String?>(json['merchant']),
+      note: serializer.fromJson<String?>(json['note']),
       happenAt: serializer.fromJson<int?>(json['happenAt']),
       suggestedCategoryId: serializer.fromJson<String?>(
         json['suggestedCategoryId'],
@@ -3495,7 +3444,7 @@ class PendingCapture extends DataClass implements Insertable<PendingCapture> {
       'rawText': serializer.toJson<String>(rawText),
       'amountMinor': serializer.toJson<int?>(amountMinor),
       'currency': serializer.toJson<String?>(currency),
-      'merchant': serializer.toJson<String?>(merchant),
+      'note': serializer.toJson<String?>(note),
       'happenAt': serializer.toJson<int?>(happenAt),
       'suggestedCategoryId': serializer.toJson<String?>(suggestedCategoryId),
       'suggestedAccountId': serializer.toJson<String?>(suggestedAccountId),
@@ -3516,7 +3465,7 @@ class PendingCapture extends DataClass implements Insertable<PendingCapture> {
     String? rawText,
     Value<int?> amountMinor = const Value.absent(),
     Value<String?> currency = const Value.absent(),
-    Value<String?> merchant = const Value.absent(),
+    Value<String?> note = const Value.absent(),
     Value<int?> happenAt = const Value.absent(),
     Value<String?> suggestedCategoryId = const Value.absent(),
     Value<String?> suggestedAccountId = const Value.absent(),
@@ -3534,7 +3483,7 @@ class PendingCapture extends DataClass implements Insertable<PendingCapture> {
     rawText: rawText ?? this.rawText,
     amountMinor: amountMinor.present ? amountMinor.value : this.amountMinor,
     currency: currency.present ? currency.value : this.currency,
-    merchant: merchant.present ? merchant.value : this.merchant,
+    note: note.present ? note.value : this.note,
     happenAt: happenAt.present ? happenAt.value : this.happenAt,
     suggestedCategoryId: suggestedCategoryId.present
         ? suggestedCategoryId.value
@@ -3560,7 +3509,7 @@ class PendingCapture extends DataClass implements Insertable<PendingCapture> {
           ? data.amountMinor.value
           : this.amountMinor,
       currency: data.currency.present ? data.currency.value : this.currency,
-      merchant: data.merchant.present ? data.merchant.value : this.merchant,
+      note: data.note.present ? data.note.value : this.note,
       happenAt: data.happenAt.present ? data.happenAt.value : this.happenAt,
       suggestedCategoryId: data.suggestedCategoryId.present
           ? data.suggestedCategoryId.value
@@ -3587,7 +3536,7 @@ class PendingCapture extends DataClass implements Insertable<PendingCapture> {
           ..write('rawText: $rawText, ')
           ..write('amountMinor: $amountMinor, ')
           ..write('currency: $currency, ')
-          ..write('merchant: $merchant, ')
+          ..write('note: $note, ')
           ..write('happenAt: $happenAt, ')
           ..write('suggestedCategoryId: $suggestedCategoryId, ')
           ..write('suggestedAccountId: $suggestedAccountId, ')
@@ -3610,7 +3559,7 @@ class PendingCapture extends DataClass implements Insertable<PendingCapture> {
     rawText,
     amountMinor,
     currency,
-    merchant,
+    note,
     happenAt,
     suggestedCategoryId,
     suggestedAccountId,
@@ -3632,7 +3581,7 @@ class PendingCapture extends DataClass implements Insertable<PendingCapture> {
           other.rawText == this.rawText &&
           other.amountMinor == this.amountMinor &&
           other.currency == this.currency &&
-          other.merchant == this.merchant &&
+          other.note == this.note &&
           other.happenAt == this.happenAt &&
           other.suggestedCategoryId == this.suggestedCategoryId &&
           other.suggestedAccountId == this.suggestedAccountId &&
@@ -3652,7 +3601,7 @@ class PendingCapturesCompanion extends UpdateCompanion<PendingCapture> {
   final Value<String> rawText;
   final Value<int?> amountMinor;
   final Value<String?> currency;
-  final Value<String?> merchant;
+  final Value<String?> note;
   final Value<int?> happenAt;
   final Value<String?> suggestedCategoryId;
   final Value<String?> suggestedAccountId;
@@ -3671,7 +3620,7 @@ class PendingCapturesCompanion extends UpdateCompanion<PendingCapture> {
     this.rawText = const Value.absent(),
     this.amountMinor = const Value.absent(),
     this.currency = const Value.absent(),
-    this.merchant = const Value.absent(),
+    this.note = const Value.absent(),
     this.happenAt = const Value.absent(),
     this.suggestedCategoryId = const Value.absent(),
     this.suggestedAccountId = const Value.absent(),
@@ -3691,7 +3640,7 @@ class PendingCapturesCompanion extends UpdateCompanion<PendingCapture> {
     required String rawText,
     this.amountMinor = const Value.absent(),
     this.currency = const Value.absent(),
-    this.merchant = const Value.absent(),
+    this.note = const Value.absent(),
     this.happenAt = const Value.absent(),
     this.suggestedCategoryId = const Value.absent(),
     this.suggestedAccountId = const Value.absent(),
@@ -3718,7 +3667,7 @@ class PendingCapturesCompanion extends UpdateCompanion<PendingCapture> {
     Expression<String>? rawText,
     Expression<int>? amountMinor,
     Expression<String>? currency,
-    Expression<String>? merchant,
+    Expression<String>? note,
     Expression<int>? happenAt,
     Expression<String>? suggestedCategoryId,
     Expression<String>? suggestedAccountId,
@@ -3738,7 +3687,7 @@ class PendingCapturesCompanion extends UpdateCompanion<PendingCapture> {
       if (rawText != null) 'raw_text': rawText,
       if (amountMinor != null) 'amount_minor': amountMinor,
       if (currency != null) 'currency': currency,
-      if (merchant != null) 'merchant': merchant,
+      if (note != null) 'note': note,
       if (happenAt != null) 'happen_at': happenAt,
       if (suggestedCategoryId != null)
         'suggested_category_id': suggestedCategoryId,
@@ -3762,7 +3711,7 @@ class PendingCapturesCompanion extends UpdateCompanion<PendingCapture> {
     Value<String>? rawText,
     Value<int?>? amountMinor,
     Value<String?>? currency,
-    Value<String?>? merchant,
+    Value<String?>? note,
     Value<int?>? happenAt,
     Value<String?>? suggestedCategoryId,
     Value<String?>? suggestedAccountId,
@@ -3782,7 +3731,7 @@ class PendingCapturesCompanion extends UpdateCompanion<PendingCapture> {
       rawText: rawText ?? this.rawText,
       amountMinor: amountMinor ?? this.amountMinor,
       currency: currency ?? this.currency,
-      merchant: merchant ?? this.merchant,
+      note: note ?? this.note,
       happenAt: happenAt ?? this.happenAt,
       suggestedCategoryId: suggestedCategoryId ?? this.suggestedCategoryId,
       suggestedAccountId: suggestedAccountId ?? this.suggestedAccountId,
@@ -3820,8 +3769,8 @@ class PendingCapturesCompanion extends UpdateCompanion<PendingCapture> {
     if (currency.present) {
       map['currency'] = Variable<String>(currency.value);
     }
-    if (merchant.present) {
-      map['merchant'] = Variable<String>(merchant.value);
+    if (note.present) {
+      map['note'] = Variable<String>(note.value);
     }
     if (happenAt.present) {
       map['happen_at'] = Variable<int>(happenAt.value);
@@ -3868,7 +3817,7 @@ class PendingCapturesCompanion extends UpdateCompanion<PendingCapture> {
           ..write('rawText: $rawText, ')
           ..write('amountMinor: $amountMinor, ')
           ..write('currency: $currency, ')
-          ..write('merchant: $merchant, ')
+          ..write('note: $note, ')
           ..write('happenAt: $happenAt, ')
           ..write('suggestedCategoryId: $suggestedCategoryId, ')
           ..write('suggestedAccountId: $suggestedAccountId, ')
@@ -9704,7 +9653,6 @@ typedef $$TransactionsTableCreateCompanionBuilder =
       required String accountId,
       Value<String?> toAccountId,
       Value<String?> categoryId,
-      Value<String?> merchant,
       Value<String?> member,
       Value<String?> note,
       Value<String?> tags,
@@ -9732,7 +9680,6 @@ typedef $$TransactionsTableUpdateCompanionBuilder =
       Value<String> accountId,
       Value<String?> toAccountId,
       Value<String?> categoryId,
-      Value<String?> merchant,
       Value<String?> member,
       Value<String?> note,
       Value<String?> tags,
@@ -9850,11 +9797,6 @@ class $$TransactionsTableFilterComposer
 
   ColumnFilters<String> get currency => $composableBuilder(
     column: $table.currency,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get merchant => $composableBuilder(
-    column: $table.merchant,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -10055,11 +9997,6 @@ class $$TransactionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get merchant => $composableBuilder(
-    column: $table.merchant,
-    builder: (column) => ColumnOrderings(column),
-  );
-
   ColumnOrderings<String> get member => $composableBuilder(
     column: $table.member,
     builder: (column) => ColumnOrderings(column),
@@ -10251,9 +10188,6 @@ class $$TransactionsTableAnnotationComposer
   GeneratedColumn<String> get currency =>
       $composableBuilder(column: $table.currency, builder: (column) => column);
 
-  GeneratedColumn<String> get merchant =>
-      $composableBuilder(column: $table.merchant, builder: (column) => column);
-
   GeneratedColumn<String> get member =>
       $composableBuilder(column: $table.member, builder: (column) => column);
 
@@ -10443,7 +10377,6 @@ class $$TransactionsTableTableManager
                 Value<String> accountId = const Value.absent(),
                 Value<String?> toAccountId = const Value.absent(),
                 Value<String?> categoryId = const Value.absent(),
-                Value<String?> merchant = const Value.absent(),
                 Value<String?> member = const Value.absent(),
                 Value<String?> note = const Value.absent(),
                 Value<String?> tags = const Value.absent(),
@@ -10469,7 +10402,6 @@ class $$TransactionsTableTableManager
                 accountId: accountId,
                 toAccountId: toAccountId,
                 categoryId: categoryId,
-                merchant: merchant,
                 member: member,
                 note: note,
                 tags: tags,
@@ -10497,7 +10429,6 @@ class $$TransactionsTableTableManager
                 required String accountId,
                 Value<String?> toAccountId = const Value.absent(),
                 Value<String?> categoryId = const Value.absent(),
-                Value<String?> merchant = const Value.absent(),
                 Value<String?> member = const Value.absent(),
                 Value<String?> note = const Value.absent(),
                 Value<String?> tags = const Value.absent(),
@@ -10523,7 +10454,6 @@ class $$TransactionsTableTableManager
                 accountId: accountId,
                 toAccountId: toAccountId,
                 categoryId: categoryId,
-                merchant: merchant,
                 member: member,
                 note: note,
                 tags: tags,
@@ -10659,7 +10589,7 @@ typedef $$PendingCapturesTableCreateCompanionBuilder =
       required String rawText,
       Value<int?> amountMinor,
       Value<String?> currency,
-      Value<String?> merchant,
+      Value<String?> note,
       Value<int?> happenAt,
       Value<String?> suggestedCategoryId,
       Value<String?> suggestedAccountId,
@@ -10680,7 +10610,7 @@ typedef $$PendingCapturesTableUpdateCompanionBuilder =
       Value<String> rawText,
       Value<int?> amountMinor,
       Value<String?> currency,
-      Value<String?> merchant,
+      Value<String?> note,
       Value<int?> happenAt,
       Value<String?> suggestedCategoryId,
       Value<String?> suggestedAccountId,
@@ -10737,8 +10667,8 @@ class $$PendingCapturesTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get merchant => $composableBuilder(
-    column: $table.merchant,
+  ColumnFilters<String> get note => $composableBuilder(
+    column: $table.note,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -10832,8 +10762,8 @@ class $$PendingCapturesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get merchant => $composableBuilder(
-    column: $table.merchant,
+  ColumnOrderings<String> get note => $composableBuilder(
+    column: $table.note,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -10915,8 +10845,8 @@ class $$PendingCapturesTableAnnotationComposer
   GeneratedColumn<String> get currency =>
       $composableBuilder(column: $table.currency, builder: (column) => column);
 
-  GeneratedColumn<String> get merchant =>
-      $composableBuilder(column: $table.merchant, builder: (column) => column);
+  GeneratedColumn<String> get note =>
+      $composableBuilder(column: $table.note, builder: (column) => column);
 
   GeneratedColumn<int> get happenAt =>
       $composableBuilder(column: $table.happenAt, builder: (column) => column);
@@ -10994,7 +10924,7 @@ class $$PendingCapturesTableTableManager
                 Value<String> rawText = const Value.absent(),
                 Value<int?> amountMinor = const Value.absent(),
                 Value<String?> currency = const Value.absent(),
-                Value<String?> merchant = const Value.absent(),
+                Value<String?> note = const Value.absent(),
                 Value<int?> happenAt = const Value.absent(),
                 Value<String?> suggestedCategoryId = const Value.absent(),
                 Value<String?> suggestedAccountId = const Value.absent(),
@@ -11013,7 +10943,7 @@ class $$PendingCapturesTableTableManager
                 rawText: rawText,
                 amountMinor: amountMinor,
                 currency: currency,
-                merchant: merchant,
+                note: note,
                 happenAt: happenAt,
                 suggestedCategoryId: suggestedCategoryId,
                 suggestedAccountId: suggestedAccountId,
@@ -11034,7 +10964,7 @@ class $$PendingCapturesTableTableManager
                 required String rawText,
                 Value<int?> amountMinor = const Value.absent(),
                 Value<String?> currency = const Value.absent(),
-                Value<String?> merchant = const Value.absent(),
+                Value<String?> note = const Value.absent(),
                 Value<int?> happenAt = const Value.absent(),
                 Value<String?> suggestedCategoryId = const Value.absent(),
                 Value<String?> suggestedAccountId = const Value.absent(),
@@ -11053,7 +10983,7 @@ class $$PendingCapturesTableTableManager
                 rawText: rawText,
                 amountMinor: amountMinor,
                 currency: currency,
-                merchant: merchant,
+                note: note,
                 happenAt: happenAt,
                 suggestedCategoryId: suggestedCategoryId,
                 suggestedAccountId: suggestedAccountId,

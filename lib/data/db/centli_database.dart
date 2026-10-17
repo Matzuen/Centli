@@ -6,6 +6,8 @@ import 'package:drift/native.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../../core/utils/note_compose.dart';
+
 import '../../core/utils/id_gen.dart';
 import '../../core/icons/centli_icon_defaults.dart';
 import '../../core/utils/fx.dart';
@@ -46,7 +48,7 @@ class CentliDatabase extends _$CentliDatabase {
   CentliDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -75,6 +77,35 @@ class CentliDatabase extends _$CentliDatabase {
           }
           if (from < 7) {
             await m.createTable(subscriptions);
+          }
+          if (from < 8) {
+            await customStatement('''
+UPDATE transactions SET note = CASE
+  WHEN merchant IS NOT NULL AND length(trim(merchant)) > 0
+       AND note IS NOT NULL AND length(trim(note)) > 0
+    THEN trim(merchant) || ' · ' || trim(note)
+  WHEN merchant IS NOT NULL AND length(trim(merchant)) > 0
+    THEN trim(merchant)
+  WHEN note IS NOT NULL AND length(trim(note)) > 0
+    THEN trim(note)
+  ELSE NULL
+END
+''');
+            await m.addColumn(pendingCaptures, pendingCaptures.note);
+            await customStatement('''
+UPDATE pending_captures SET note = CASE
+  WHEN merchant IS NOT NULL AND length(trim(merchant)) > 0
+       AND note IS NOT NULL AND length(trim(note)) > 0
+    THEN trim(merchant) || ' · ' || trim(note)
+  WHEN merchant IS NOT NULL AND length(trim(merchant)) > 0
+    THEN trim(merchant)
+  WHEN note IS NOT NULL AND length(trim(note)) > 0
+    THEN trim(note)
+  ELSE NULL
+END
+''');
+            await m.alterTable(TableMigration(transactions));
+            await m.alterTable(TableMigration(pendingCaptures));
           }
           await _ensureQueryIndexes();
         },
@@ -590,7 +621,7 @@ class CentliDatabase extends _$CentliDatabase {
             }
 
             if (pattern != null) {
-              Expression<bool> textHit = t.merchant.lower().like(pattern) |
+              Expression<bool> textHit =
                   t.note.lower().like(pattern) |
                   t.tags.lower().like(pattern);
               if (nameCatIds.isNotEmpty) {
@@ -811,9 +842,8 @@ class CentliDatabase extends _$CentliDatabase {
         accountId: accountId,
         toAccountId: Value(toAccountId),
         categoryId: Value(categoryId),
-        merchant: Value(merchant),
         member: Value(member),
-        note: Value(note),
+        note: Value(composeNote(merchant: merchant, note: note)),
         tags: Value(encodeTxnTags(tags)),
         happenAt: happen,
         fxRate: Value(fxRate),
@@ -1229,9 +1259,8 @@ class CentliDatabase extends _$CentliDatabase {
         accountId: Value(accountId),
         toAccountId: Value(toAccountId),
         categoryId: Value(categoryId),
-        merchant: Value(merchant),
         member: Value(member),
-        note: Value(note),
+        note: Value(composeNote(merchant: merchant, note: note)),
         tags: Value(encodeTxnTags(tags)),
         happenAt: happen != null ? Value(happen) : const Value.absent(),
         fxRate: Value(fxRate),
@@ -1401,55 +1430,6 @@ class CentliDatabase extends _$CentliDatabase {
         .getSingleOrNull();
     return row != null;
   }
-
-  /// Distinct historical merchants for autocomplete (no schema change).
-  /// Merges non-empty [transactions.merchant] with [merchant_rules.merchantKey],
-  /// newest activity first. Optional [query] filters by substring (case-insensitive).
-  Future<List<String>> listMerchantSuggestions(
-    String ledgerId, {
-    String query = '',
-    int limit = 30,
-  }) async {
-    final q = query.trim().toLowerCase();
-    final rows = await customSelect(
-      'SELECT merchant AS name, MAX(happen_at) AS last_at '
-      'FROM transactions '
-      'WHERE ledger_id = ? AND deleted_at IS NULL '
-      "AND merchant IS NOT NULL AND TRIM(merchant) != '' "
-      'GROUP BY LOWER(TRIM(merchant)) '
-      'ORDER BY last_at DESC '
-      'LIMIT ?',
-      variables: [Variable.withString(ledgerId), Variable.withInt(limit * 3)],
-      readsFrom: {transactions},
-    ).get();
-
-    final seen = <String>{};
-    final out = <String>[];
-    for (final r in rows) {
-      final name = (r.read<String>('name')).trim();
-      if (name.isEmpty) continue;
-      final key = name.toLowerCase();
-      if (seen.contains(key)) continue;
-      if (q.isNotEmpty && !key.contains(q)) continue;
-      seen.add(key);
-      out.add(name);
-      if (out.length >= limit) return out;
-    }
-
-    final rules = await loadMerchantRules(ledgerId);
-    for (final rule in rules) {
-      final name = rule.merchantKey.trim();
-      if (name.isEmpty) continue;
-      final key = name.toLowerCase();
-      if (seen.contains(key)) continue;
-      if (q.isNotEmpty && !key.contains(q)) continue;
-      seen.add(key);
-      out.add(name);
-      if (out.length >= limit) break;
-    }
-    return out;
-  }
-
 
   static String _txnTemplatesKey(String ledgerId) => 'txn_templates_$ledgerId';
 
@@ -1632,7 +1612,7 @@ class CentliDatabase extends _$CentliDatabase {
         rawText: rawText,
         amountMinor: Value(amountMinor),
         currency: Value(currency ?? 'CNY'),
-        merchant: Value(merchant),
+        note: Value(composeNote(merchant: merchant, note: null)),
         happenAt: Value(happenAt ?? ts),
         suggestedCategoryId: Value(suggestedCategory),
         suggestedAccountId: Value(suggestedAccount),
@@ -1665,7 +1645,8 @@ class CentliDatabase extends _$CentliDatabase {
     required String currency,
     required String accountId,
     required String categoryId,
-    String? merchant,
+    String? note,
+    String? merchantForRule,
     String type = 'out',
     List<String>? tags,
     int includeInStat = 1,
@@ -1692,7 +1673,7 @@ class CentliDatabase extends _$CentliDatabase {
           currency: currency,
           accountId: accountId,
           categoryId: Value(categoryId),
-          merchant: Value(merchant ?? pending.merchant),
+          note: Value(note ?? pending.note),
           happenAt: pending.happenAt ?? ts,
           source: Value(source),
           tags: Value(encodeTxnTags(tags)),
@@ -1709,13 +1690,13 @@ class CentliDatabase extends _$CentliDatabase {
           status: const Value('confirmed'),
           amountMinor: Value(amountMinor),
           currency: Value(currency),
-          merchant: Value(merchant ?? pending.merchant),
+          note: Value(note ?? pending.note),
           suggestedCategoryId: Value(categoryId),
           suggestedAccountId: Value(accountId),
           updatedAt: Value(ts),
         ),
       );
-      final m = (merchant ?? pending.merchant)?.trim();
+      final m = merchantForRule?.trim();
       if (m != null && m.isNotEmpty) {
         final key = m.toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
         await upsertMerchantRule(
@@ -2394,6 +2375,30 @@ class CentliDatabase extends _$CentliDatabase {
   /// Replace one ledger's rows (+ optional FX + budgets), insert backup maps, merge settings.
   /// Other ledgers are left intact. [replaceFxRates] false keeps existing FX (Excel path).
   /// [settingsSkipKeys] are left unchanged (e.g. app_lock*). Always sets current_ledger_id.
+
+  /// Fold legacy `merchant` into `note` for import/restore maps (T1).
+  static Map<String, dynamic> _normalizeTxnImportMap(Map<String, dynamic> m) {
+    final out = Map<String, dynamic>.from(m);
+    final composed = composeNote(
+      merchant: out['merchant']?.toString(),
+      note: out['note']?.toString(),
+    );
+    out.remove('merchant');
+    out['note'] = composed;
+    return out;
+  }
+
+  static Map<String, dynamic> _normalizePendingImportMap(Map<String, dynamic> m) {
+    final out = Map<String, dynamic>.from(m);
+    final composed = composeNote(
+      merchant: out['merchant']?.toString(),
+      note: out['note']?.toString(),
+    );
+    out.remove('merchant');
+    out['note'] = composed;
+    return out;
+  }
+
   Future<RestoreImportStats> restoreFromImportBundle({
     required Map<String, dynamic> ledgerMap,
     required List<Map<String, dynamic>> accountMaps,
@@ -2419,7 +2424,7 @@ class CentliDatabase extends _$CentliDatabase {
     ]);
     final txnRows = [
       for (final m in transactionMaps)
-        Transaction.fromJson(m).copyWith(ledgerId: lid),
+        Transaction.fromJson(_normalizeTxnImportMap(m)).copyWith(ledgerId: lid),
     ];
     final ruleRows = [
       for (final m in merchantRuleMaps)
@@ -2427,7 +2432,8 @@ class CentliDatabase extends _$CentliDatabase {
     ];
     final pendingRows = [
       for (final m in pendingCaptureMaps)
-        PendingCapture.fromJson(m).copyWith(ledgerId: lid),
+        PendingCapture.fromJson(_normalizePendingImportMap(m))
+            .copyWith(ledgerId: lid),
     ];
     final fxRows = [for (final m in fxRateMaps) FxRate.fromJson(m)];
     final budgetRows = [

@@ -67,8 +67,8 @@ class RecycleBinPage extends ConsumerWidget {
                             isUtc: true,
                           ).toLocal(),
                         );
-                  final title = (t.merchant ?? '').isNotEmpty
-                      ? t.merchant!
+                  final title = (t.note ?? '').isNotEmpty
+                      ? t.note!
                       : (t.note ?? t.type);
                   return CentliSoftCard(
                     child: ListTile(

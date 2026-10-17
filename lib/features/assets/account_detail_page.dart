@@ -499,8 +499,7 @@ class _AccountTxnTile extends ConsumerWidget {
 
   Future<String> _subtitle(CentliDatabase db) async {
     final note = (txn.note ?? '').trim();
-    final merchant = (txn.merchant ?? '').trim();
-    final right = note.isNotEmpty ? note : merchant;
+    final right = note;
     final typeLabel = _typeLabel(txn.type);
     if (right.isEmpty) return typeLabel;
     return '$typeLabel \u00b7 $right';

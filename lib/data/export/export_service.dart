@@ -342,7 +342,6 @@ class ExportService {
       TextCellValue('to_account_name'),
       TextCellValue('category_id'),
       TextCellValue('category_name'),
-      TextCellValue('merchant'),
       TextCellValue('note'),
       TextCellValue('tags'),
       TextCellValue('source'),
@@ -380,7 +379,6 @@ class ExportService {
         TextCellValue(
           categoryId == null ? '' : (categoryName[categoryId] ?? ''),
         ),
-        TextCellValue('${t['merchant'] ?? ''}'),
         TextCellValue('${t['note'] ?? ''}'),
         TextCellValue('${t['tags'] ?? ''}'),
         TextCellValue('${t['source'] ?? ''}'),
@@ -405,7 +403,7 @@ class ExportService {
       TextCellValue('amount_minor'),
       TextCellValue('amount'),
       TextCellValue('currency'),
-      TextCellValue('merchant'),
+      TextCellValue('note'),
       TextCellValue('happen_at_iso'),
       TextCellValue('parse_ok'),
       TextCellValue('raw_title'),
@@ -429,7 +427,7 @@ class ExportService {
             ? TextCellValue('')
             : DoubleCellValue(fromMinor(ccy, minor)),
         TextCellValue(ccy),
-        TextCellValue('${c['merchant'] ?? ''}'),
+        TextCellValue('${c['note'] ?? ''}'),
         TextCellValue(iso),
         IntCellValue(c['parseOk'] as int? ?? 0),
         TextCellValue('${c['rawTitle'] ?? ''}'),

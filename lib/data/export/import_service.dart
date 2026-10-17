@@ -1,3 +1,4 @@
+import '../../core/utils/note_compose.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -517,8 +518,10 @@ class ImportService {
         'accountId': _cellBy(row, txnHeader, 'account_id'),
         'toAccountId': toAccount.isEmpty ? null : toAccount,
         'categoryId': categoryId.isEmpty ? null : categoryId,
-        'merchant': merchant.isEmpty ? null : merchant,
-        'note': note.isEmpty ? null : note,
+        'note': composeNote(
+          merchant: merchant.isEmpty ? null : merchant,
+          note: note.isEmpty ? null : note,
+        ),
         'tags': tags.isEmpty ? null : tags,
         'source': _cellBy(row, txnHeader, 'source', fallback: 'manual'),
         'includeInStat': _cellIntBy(
@@ -554,7 +557,7 @@ class ImportService {
         'sourcePkg': _cellStr(row, 2),
         'amountMinor': amtRaw.isEmpty ? null : int.tryParse(amtRaw),
         'currency': ccy,
-        'merchant': merchant.isEmpty ? null : merchant,
+        'note': composeNote(merchant: merchant.isEmpty ? null : merchant, note: null),
         'happenAt': _parseIsoToMs(iso),
         'parseOk': _cellInt(row, 8),
         'rawTitle': title.isEmpty ? null : title,

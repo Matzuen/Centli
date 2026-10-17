@@ -4,6 +4,7 @@
 /// the traditional keypad sheet.
 library;
 
+import '../../core/utils/note_compose.dart';
 import '../../core/utils/money.dart';
 import '../../data/db/centli_database.dart';
 import 'ai_text_fill.dart';
@@ -196,11 +197,7 @@ Future<SmartBookkeepingOutcome> submitSmartBookkeepingText({
   }
   final currency = account?.currency ?? 'CNY';
   final amountMinor = toMinor(currency, amount);
-  final leftover = parsed.note?.trim();
-  final note = (leftover != null && leftover.isNotEmpty) ? leftover : null;
-  final merchantText = parsed.merchant?.trim();
-  final merchant =
-      (merchantText != null && merchantText.isNotEmpty) ? merchantText : null;
+  final note = composeNote(merchant: parsed.merchant, note: parsed.note);
 
   int? toAmountMinor;
   if (type == 'transfer') {
@@ -229,7 +226,6 @@ Future<SmartBookkeepingOutcome> submitSmartBookkeepingText({
     accountId: accountId!,
     toAccountId: type == 'transfer' ? toAccountId : null,
     categoryId: type == 'transfer' ? null : categoryId,
-    merchant: merchant,
     note: note,
     happenAt: parsed.happenAt,
     toAmountMinor: toAmountMinor,

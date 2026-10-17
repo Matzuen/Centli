@@ -453,7 +453,7 @@ class _PendingCard extends ConsumerStatefulWidget {
 class _PendingCardState extends ConsumerState<_PendingCard> {
   late String? _categoryId;
   late String? _accountId;
-  late final TextEditingController _merchantCtrl;
+  late final TextEditingController _noteCtrl;
   late final TextEditingController _amountCtrl;
   bool _busy = false;
   bool _expanded = false;
@@ -467,7 +467,7 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
   @override
   void initState() {
     super.initState();
-    _merchantCtrl = TextEditingController(text: c.merchant ?? '');
+    _noteCtrl = TextEditingController(text: c.note ?? '');
     final ccy = c.currency ?? 'CNY';
     final amt = c.amountMinor;
     _amountCtrl = TextEditingController(
@@ -532,7 +532,7 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
 
   @override
   void dispose() {
-    _merchantCtrl.dispose();
+    _noteCtrl.dispose();
     _amountCtrl.dispose();
     super.dispose();
   }
@@ -610,9 +610,9 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
             DateTime.fromMillisecondsSinceEpoch(c.happenAt!),
           );
     final isPending = c.status == 'pending';
-    final merchant = _merchantCtrl.text.trim().isEmpty
-        ? ((c.merchant ?? '').isEmpty ? '无商户' : c.merchant!)
-        : _merchantCtrl.text.trim();
+    final merchant = _noteCtrl.text.trim().isEmpty
+        ? ((c.note ?? '').isEmpty ? '无备注' : c.note!)
+        : _noteCtrl.text.trim();
 
     return CentliSoftCard(
       child: Padding(
@@ -726,9 +726,9 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
                 ),
                 const SizedBox(height: 8),
                 TextField(
-                  controller: _merchantCtrl,
+                  controller: _noteCtrl,
                   decoration: const InputDecoration(
-                    labelText: '商户',
+                    labelText: '备注',
                     border: OutlineInputBorder(),
                     isDense: true,
                   ),
@@ -848,7 +848,7 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
                       fontWeight: FontWeight.w600,
                     ),
               ),
-              if ((c.merchant ?? '').isNotEmpty) Text(c.merchant!),
+              if ((c.note ?? '').isNotEmpty) Text(c.note!),
               Text(
                 c.rawText,
                 maxLines: 2,
@@ -913,15 +913,27 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
       }
       final isRepay = _direction == 'repay';
       final include = isRepay ? (_includeRepayInStat ? 1 : 0) : 1;
+      // Merchant text for auto-categorize rules (not stored as a column).
+      final templates = NotiTemplateStore.peek();
+      final parsedForRule = parseNotification(
+        RawNotification(
+          pkg: c.sourcePkg,
+          title: c.rawTitle ?? '',
+          text: c.rawText,
+          whenMs: c.happenAt ?? c.createdAt,
+        ),
+        templates.isEmpty ? null : templates,
+      );
       await ref.read(databaseProvider).confirmPendingCapture(
             pendingId: c.id,
             amountMinor: toMinor(ccy, major),
             currency: ccy,
             accountId: _accountId!,
             categoryId: _categoryId!,
-            merchant: _merchantCtrl.text.trim().isEmpty
+            note: _noteCtrl.text.trim().isEmpty
                 ? null
-                : _merchantCtrl.text.trim(),
+                : _noteCtrl.text.trim(),
+            merchantForRule: parsedForRule.merchant,
             type: isRepay ? 'out' : txnType,
             includeInStat: include,
             includeInBudget: include,
