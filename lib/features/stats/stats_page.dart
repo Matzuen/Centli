@@ -99,9 +99,14 @@ final _statsBudgetProvider =
     });
 
 /// Test aliases (same instances as private providers above).
+/// Test-only public aliases for private providers (B1 refresh tests).
+@visibleForTesting
 final statsBaseProvider = _statsBaseProvider;
+@visibleForTesting
 final statsBreakdownBaseProvider = _statsBreakdownBaseProvider;
+@visibleForTesting
 final statsDailyBaseProvider = _statsDailyBaseProvider;
+@visibleForTesting
 final statsBudgetProvider = _statsBudgetProvider;
 
 class StatsPage extends ConsumerWidget {

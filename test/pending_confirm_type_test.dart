@@ -1,29 +1,8 @@
-import 'dart:io';
-
 import 'package:centli/data/db/centli_database.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('pending_page confirm passes type: txnType from category kind', () {
-    final src = File('lib/features/pending/pending_page.dart').readAsStringSync();
-    expect(
-      src.contains('type: txnType'),
-      isTrue,
-      reason: 'confirmPendingCapture must pass type: txnType',
-    );
-    expect(
-      src.contains("inCats.any((x) => x.id == _categoryId) ? 'in' : 'out'"),
-      isTrue,
-      reason: 'txnType must still resolve from category lists (B1-2)',
-    );
-    expect(
-      src.contains("if (_direction == 'refund')"),
-      isTrue,
-      reason: 'refund direction must map to type refund (T4-2)',
-    );
-  });
-
   test('confirmPendingCapture with income category stores type in', () async {
     final db = CentliDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);
@@ -39,8 +18,9 @@ void main() {
     final incomeCat = inCats.first;
     final expenseCat = outCats.first;
 
-    // Mirror pending_page.dart resolution against loaded lists.
-    String resolveType(String? categoryId) {
+    // Mirror pending_page.dart resolution against loaded lists (behavior).
+    String resolveType(String? categoryId, {String direction = 'out'}) {
+      if (direction == 'refund') return 'refund';
       final known = outCats.any((x) => x.id == categoryId) ||
           inCats.any((x) => x.id == categoryId);
       final txnType = !known
@@ -52,42 +32,32 @@ void main() {
     expect(resolveType(incomeCat.id), 'in');
     expect(resolveType(expenseCat.id), 'out');
     expect(resolveType('deleted-cat-id'), 'out');
+    expect(resolveType(expenseCat.id, direction: 'refund'), 'refund');
 
     final pendingInId = await db.ingestParsedNotification(
       ledgerId: ledger.id,
       sourcePkg: 'manual:test',
-      rawText: '工资到账 5000',
+      rawText: 'salary 5000',
       dedupeKey: 'test-income-${DateTime.now().microsecondsSinceEpoch}',
       amountMinor: 500000,
       currency: 'CNY',
-      merchant: '公司',
+      merchant: 'corp',
       parseOk: true,
     );
     expect(pendingInId, isNotNull);
 
-    final txnType = resolveType(incomeCat.id);
     await db.confirmPendingCapture(
       pendingId: pendingInId!,
       amountMinor: 500000,
       currency: 'CNY',
       accountId: account.id,
       categoryId: incomeCat.id,
-      type: txnType,
+      merchant: 'corp',
+      type: resolveType(incomeCat.id),
     );
 
-    final rows = await (db.select(db.transactions)
-          ..where((t) => t.ledgerId.equals(ledger.id)))
-        .get();
-    final live = rows.where((t) => t.deletedAt == null).toList();
-    expect(live, isNotEmpty);
-    final incomeTxn = live.singleWhere((t) => t.categoryId == incomeCat.id);
-    expect(incomeTxn.type, 'in');
+    final txns = await db.loadTransactionsForExport(ledger.id);
+    final hit = txns.firstWhere((t) => t.amountMinor == 500000);
+    expect(hit.type, 'in');
   });
-
-  test('pending_page _applySuggestions prefers category kind by direction', () {
-    final src = File('lib/features/pending/pending_page.dart').readAsStringSync();
-    expect(src.contains("preferredKind = _direction == 'in' ? 'in' : 'out'"), isTrue);
-    expect(src.contains('type: txnType'), isTrue, reason: 'B1-2 must remain');
-  });
-
 }

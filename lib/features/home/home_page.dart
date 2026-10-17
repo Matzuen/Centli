@@ -116,9 +116,14 @@ final _dailyIncomeProvider =
 
 
 /// Test aliases (same instances as private providers above).
+/// Test-only public aliases for private providers (B1 refresh tests).
+@visibleForTesting
 final homeRangeBaseProvider = _rangeBaseProvider;
+@visibleForTesting
 final homeNetWorthProvider = _netWorthHomeProvider;
+@visibleForTesting
 final homeDailyExpenseProvider = _dailyExpenseProvider;
+@visibleForTesting
 final homeDailyIncomeProvider = _dailyIncomeProvider;
 
 class HomePage extends ConsumerStatefulWidget {
@@ -663,10 +668,9 @@ class _LedgerSummaryCard extends StatelessWidget {
             const SizedBox(height: CentliSpacing.item),
             Text(
               '\u672a\u6298\u7b97\uff1a${nw.unconvertedByCcy.entries.map((e) => '${e.key} ${formatMinor(e.key, e.value, hide: hide)}').join('\u3001')}',
-              style: TextStyle(
-                fontSize: 12,
-                color: scheme.onSurfaceVariant,
-              ),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
             ),
           ],
           const SizedBox(height: CentliSpacing.section),
