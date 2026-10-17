@@ -5,9 +5,12 @@ import '../../core/utils/money.dart';
 import '../../data/db/centli_database.dart';
 import '../notifications/notification_listener_stub.dart';
 import '../notifications/notification_parse.dart';
-import '../ocr/bill_ocr_service.dart' deferred as bill_ocr;
+import 'dart:io';
+import '../../core/utils/image_for_llm.dart';
+import '../../core/utils/note_compose.dart';
+import '../../features/ledger/llm_text_fill.dart';
 
-/// Result of a manual pending ingest (share / OCR / clipboard / URL).
+/// Result of a manual pending ingest (share / 截图视觉 / clipboard / URL).
 class ManualIngestResult {
   const ManualIngestResult({
     required this.ok,
@@ -43,7 +46,7 @@ class ManualIngestResult {
   }
 }
 
-/// Shared pipeline for share / OCR / clipboard / URL → pending_captures.
+/// Shared pipeline for share / 截图视觉 / clipboard / URL → pending_captures.
 ///
 /// Does **not** require [auto_capture_enabled] — user explicitly chose content.
 /// Reuses [CentliDatabase.ingestParsedNotification] (same queue as notifications).
@@ -249,39 +252,110 @@ abstract final class PendingCaptureIntake {
     );
   }
 
+  static const imageAiConsentKey = 'image_ai_consent';
+
+  /// Returns false if user has not consented to uploading images to the LLM.
+  static Future<bool> hasImageAiConsent(CentliDatabase db) async {
+    final v = await db.getSetting(imageAiConsentKey);
+    return v == 'true' || v == '1';
+  }
+
+  static Future<void> setImageAiConsent(CentliDatabase db, bool yes) async {
+    await db.setSetting(imageAiConsentKey, yes ? 'true' : 'false');
+  }
+
   static Future<ManualIngestResult> ingestImagePath(
     CentliDatabase db,
     String path, {
     required String sourceKind,
     bool navigate = false,
+    bool consentAlreadyGranted = false,
   }) async {
     if (path.trim().isEmpty) {
       return const ManualIngestResult(ok: false, message: '未选择图片');
     }
-    // ML Kit is heavy — load only when user shares / picks an image.
-    await bill_ocr.loadLibrary();
-    final ocr = bill_ocr.BillOcrService();
+    if (!consentAlreadyGranted && !await hasImageAiConsent(db)) {
+      return const ManualIngestResult(
+        ok: false,
+        message: '截图识别会把图片发送到已配置的大模型服务，请先在确认对话框中同意',
+      );
+    }
     try {
-      final text = await ocr.recognizeChinese(path);
-      if (text.trim().isEmpty) {
+      final raw = await File(path).readAsBytes();
+      final prepared = prepareImageForLlm(raw);
+      final cfg = await SmartFillLlmSettings().load(db);
+      if (!cfg.isReady) {
         return const ManualIngestResult(
           ok: false,
-          message: '未能从图片识别出文字',
+          message: '请先在智能填单里启用大模型并配置 API Key',
         );
       }
-      return await ingestText(
-        db,
-        text: text,
-        sourceKind: sourceKind,
-        navigate: navigate,
+      final filled = await parseBookkeepingImageWithLlm(
+        prepared.bytes,
+        config: cfg,
       );
-    } catch (e) {
+      if (filled == null) {
+        return const ManualIngestResult(
+          ok: false,
+          message: '图片识别未返回结果',
+        );
+      }
+      final ledgerId = await db.currentLedgerId();
+      if (ledgerId == null || ledgerId.isEmpty) {
+        return const ManualIngestResult(ok: false, message: '尚未初始化账本');
+      }
+      final amountMinor = filled.amount == null
+          ? null
+          : toMinor('CNY', filled.amount!);
+      final composedNote = composeNote(merchant: filled.merchant, note: filled.note);
+      final whenMs = filled.happenAt?.millisecondsSinceEpoch ??
+          DateTime.now().millisecondsSinceEpoch;
+      final rawText = [
+        if (filled.merchant != null) '商户 ${filled.merchant}',
+        if (filled.amount != null) '金额 ${filled.amount}',
+        ?composedNote,
+        '来源:截图视觉识别',
+      ].join('\n');
+      final key = 'vision:$sourceKind:${path.hashCode}:$whenMs:$amountMinor';
+      final id = await db.ingestParsedNotification(
+        ledgerId: ledgerId,
+        sourcePkg: 'manual:$sourceKind',
+        rawTitle: '截图识别',
+        rawText: rawText.isEmpty ? '截图识别' : rawText,
+        dedupeKey: key,
+        amountMinor: amountMinor,
+        currency: 'CNY',
+        merchant: filled.merchant,
+        happenAt: whenMs,
+        parseOk: amountMinor != null,
+        direction: filled.type == 'in'
+            ? 'in'
+            : filled.type == 'transfer'
+                ? 'out'
+                : 'out',
+      );
+      if (id == null) {
+        return const ManualIngestResult(
+          ok: false,
+          message: '已存在相同待确认（去重）',
+        );
+      }
+      if (navigate) {
+        onNavigate?.call('/home/pending');
+      }
       return ManualIngestResult(
-        ok: false,
-        message: '文字识别失败: $e',
+        ok: true,
+        pendingId: id,
+        parseOk: amountMinor != null,
+        amountMinor: amountMinor,
+        currency: 'CNY',
+        merchant: filled.merchant,
+        navigateToPending: navigate,
       );
-    } finally {
-      await ocr.dispose();
+    } on LlmVisionException catch (e) {
+      return ManualIngestResult(ok: false, message: e.message);
+    } catch (e) {
+      return ManualIngestResult(ok: false, message: '截图识别失败: $e');
     }
   }
 

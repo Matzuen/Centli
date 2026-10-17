@@ -114,7 +114,7 @@ class _PendingPageBodyState extends ConsumerState<PendingPage> {
               onPressed: () => _clearIgnored(context),
             ),
           IconButton(
-            tooltip: '从截图识别',
+            tooltip: '截图识别',
             icon: const Icon(Icons.document_scanner_outlined),
             onPressed: () => _fromScreenshot(context),
           ),
@@ -330,14 +330,42 @@ class _PendingPageBodyState extends ConsumerState<PendingPage> {
     final picker = ImagePicker();
     final file = await picker.pickImage(source: source, imageQuality: 92);
     if (file == null || !context.mounted) return;
+    final db = ref.read(databaseProvider);
+    var consented = await PendingCaptureIntake.hasImageAiConsent(db);
+    if (!consented) {
+      if (!context.mounted) return;
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('截图识别说明'),
+          content: const Text(
+            '截图识别会把图片发送到 DeepSeek（或你配置的大模型服务），是否继续？',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('同意'),
+            ),
+          ],
+        ),
+      );
+      if (ok != true || !context.mounted) return;
+      await PendingCaptureIntake.setImageAiConsent(db, true);
+      consented = true;
+    }
+    if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('正在识别截图…')),
     );
-    final db = ref.read(databaseProvider);
     final result = await PendingCaptureIntake.ingestImagePath(
       db,
       file.path,
-      sourceKind: 'ocr',
+      sourceKind: 'screenshot',
+      consentAlreadyGranted: consented,
     );
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(

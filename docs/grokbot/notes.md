@@ -33,3 +33,10 @@ Stash kept: `stash@{0}: pre-r2-workdir-auto-accounting-wip`
 6. Primary amountRegex then kAmountRegexYuan; 10月/ISO null; 实付¥16.93，0.5元红包 → 1693
 7. repay confirm includeInStat=0 → expense unchanged; include=1 → +amount (repay_stats_test)
 
+
+## B4 T3 — OCR → DeepSeek vision (schema still v9)
+- Defaults: deepseek.com / deepseek-flash
+- Vision: image_url in user message, detail=original; prepareImageForLlm (long edge ≤1600, JPEG q80, ≤2MB)
+- Consent: image_ai_consent + first-use dialog; settings page notice
+- Removed google_mlkit_text_recognition + lib/platform/ocr/
+- Live DeepSeek vision call: NOT yet verified (mock unit tests only)

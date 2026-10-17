@@ -6,6 +6,7 @@ library;
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
@@ -18,8 +19,8 @@ const String kLlmBaseUrlSettingKey = 'smart_fill_llm_base_url';
 const String kLlmModelSettingKey = 'smart_fill_llm_model';
 const String kLlmApiKeyStorageKey = 'centli_smart_fill_llm_api_key';
 
-const String kDefaultLlmBaseUrl = 'https://api.openai.com/v1';
-const String kDefaultLlmModel = 'gpt-4o-mini';
+const String kDefaultLlmBaseUrl = 'https://api.deepseek.com';
+const String kDefaultLlmModel = 'deepseek-flash';
 
 class SmartFillLlmConfig {
   const SmartFillLlmConfig({
@@ -248,6 +249,180 @@ Future<AiTextFillResult?> parseBookkeepingTextWithLlm(
     if (owned) httpClient.close();
   }
 }
+
+
+/// Thrown when a vision (image) LLM request fails with a user-facing reason.
+class LlmVisionException implements Exception {
+  LlmVisionException(this.message);
+  final String message;
+  @override
+  String toString() => message;
+}
+
+/// Vision path: image must be in the **user** message; [detail] is `original`.
+Future<AiTextFillResult?> parseBookkeepingImageWithLlm(
+  Uint8List jpegBytes, {
+  required SmartFillLlmConfig config,
+  List<String> categoryNames = const [],
+  List<CategoryRef> categories = const [],
+  List<String> accountNames = const [],
+  http.Client? client,
+  Duration timeout = const Duration(seconds: 45),
+  String userText =
+      '请识别这张账单截图，返回与文本填单相同字段的 JSON。',
+}) async {
+  if (!config.isReady) {
+    throw LlmVisionException('请先在智能填单里启用大模型并填写 API Key');
+  }
+  final names = categories.isNotEmpty
+      ? categories.map((c) => c.name).toList()
+      : categoryNames;
+  final catList = names.take(80).join('、');
+  final accList = accountNames.take(40).join('、');
+  final system = '''
+你是记账助手。从账单截图中抽取结构化字段，只输出一个 JSON 对象，不要 markdown。
+字段：
+- amount: number|null
+- type: "out"|"in"|"transfer"|null
+- categoryHint: string|null
+- merchant: string|null
+- note: string|null
+- accountHint: string|null
+- toAccountHint: string|null
+用户分类：$catList
+用户账户：$accList
+''';
+
+  final dataUrl = 'data:image/jpeg;base64,${base64Encode(jpegBytes)}';
+  final uri = Uri.parse('${config.normalizedBaseUrl}/chat/completions');
+  final body = <String, dynamic>{
+    'model': config.model,
+    'temperature': 0,
+    'messages': [
+      {'role': 'system', 'content': system},
+      {
+        'role': 'user',
+        'content': [
+          {'type': 'text', 'text': userText},
+          {
+            'type': 'image_url',
+            'image_url': {'url': dataUrl, 'detail': 'original'},
+          },
+        ],
+      },
+    ],
+    'response_format': {'type': 'json_object'},
+  };
+
+  final httpClient = client ?? http.Client();
+  final owned = client == null;
+  try {
+    final resp = await httpClient
+        .post(
+          uri,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ${config.apiKey.trim()}',
+          },
+          body: jsonEncode(body),
+        )
+        .timeout(timeout);
+    if (resp.statusCode < 200 || resp.statusCode >= 300) {
+      final errBody = resp.body.toLowerCase();
+      if (resp.statusCode == 400 && errBody.contains('image')) {
+        throw LlmVisionException(
+          '当前模型可能不支持图片识别，请换用支持视觉的模型（如 deepseek-flash）',
+        );
+      }
+      throw LlmVisionException('图片识别请求失败（HTTP ${resp.statusCode}）');
+    }
+    final decoded = jsonDecode(resp.body);
+    if (decoded is! Map) {
+      throw LlmVisionException('图片识别返回格式异常');
+    }
+    final choices = decoded['choices'];
+    if (choices is! List || choices.isEmpty) {
+      throw LlmVisionException('图片识别无结果');
+    }
+    final msg = choices.first is Map ? choices.first['message'] : null;
+    final content = msg is Map ? msg['content'] : null;
+    if (content is! String || content.trim().isEmpty) {
+      throw LlmVisionException('图片识别内容为空');
+    }
+    var jsonStr = _extractJsonObject(content);
+    if (jsonStr == null) {
+      throw LlmVisionException('图片识别未返回有效 JSON');
+    }
+    var map = jsonDecode(jsonStr);
+    if (map is! Map) {
+      throw LlmVisionException('图片识别 JSON 无效');
+    }
+
+    final amountRaw = map['amount'];
+    double? amount;
+    if (amountRaw is num) {
+      amount = amountRaw.toDouble();
+    } else if (amountRaw is String) {
+      amount = double.tryParse(amountRaw);
+    }
+    if (amount != null && amount <= 0) amount = null;
+
+    String? type;
+    final typeRaw = map['type']?.toString();
+    if (typeRaw == 'out' || typeRaw == 'in' || typeRaw == 'transfer') {
+      type = typeRaw;
+    }
+    final categoryHint = map['categoryHint']?.toString();
+    final mappedCat = mapCategoryHintToLocal(
+      categoryHint,
+      categoryNames: names,
+      categories: categories,
+      preferKind: type == 'in'
+          ? 'in'
+          : type == 'out'
+              ? 'out'
+              : null,
+    );
+    final merchant = _nullIfBlank(map['merchant']?.toString());
+    final note = _nullIfBlank(map['note']?.toString());
+    final accountHint = _nullIfBlank(map['accountHint']?.toString());
+    final toAccountHint = _nullIfBlank(map['toAccountHint']?.toString());
+    String? accountName;
+    String? toAccountName;
+    if (accountHint != null) {
+      accountName = _fuzzyName(accountHint, accountNames);
+    }
+    if (toAccountHint != null) {
+      toAccountName = _fuzzyName(toAccountHint, accountNames);
+    }
+    final hits = <String>['来源:视觉大模型'];
+    if (amount != null) hits.add('金额:$amount');
+    if (mappedCat != null) hits.add('分类:$mappedCat');
+    if (merchant != null) hits.add('商家:$merchant');
+
+    return AiTextFillResult(
+      type: type,
+      amount: amount,
+      categoryName: mappedCat,
+      categoryConfidence: mappedCat == null ? null : 0.9,
+      accountName: accountName,
+      toAccountName: toAccountName,
+      merchant: merchant,
+      note: note,
+      hits: hits,
+      source: 'llm-vision',
+    );
+  } on LlmVisionException {
+    rethrow;
+  } on TimeoutException {
+    throw LlmVisionException('图片识别超时，请稍后重试');
+  } catch (e) {
+    throw LlmVisionException('图片识别失败: $e');
+  } finally {
+    if (owned) httpClient.close();
+  }
+}
+
 
 String? _extractJsonObject(String content) {
   final t = content.trim();

@@ -145,6 +145,16 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
           : ListView(
               padding: CentliSpacing.pagePadding,
               children: [
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(CentliSpacing.cardPad),
+              child: Text(
+                '默认使用 deepseek-flash（支持图片）。截图识别会把图片发送到已配置的大模型服务；也可改用其它 OpenAI 兼容接口。',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+          ),
+
                 CentliSoftCard(
                   child: SwitchListTile(
                     title: const Text('用大模型增强文字填单'),

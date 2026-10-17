@@ -29,9 +29,9 @@ dependencies:
   home_widget: 0.10.0
   speech_to_text: ^7.3.0
   image_picker: ^1.2.4
-  google_mlkit_text_recognition: ^0.17.1
   flutter_svg: ^2.0.17
   package_info_plus: ^10.2.2
+  image: ^4.3.0
 
 dev_dependencies:
   flutter_test:
