@@ -23,7 +23,7 @@ Future<void> showBookkeepingSheet(
     useSafeArea: true,
     backgroundColor: Theme.of(context).colorScheme.surface,
     shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
     ),
     builder: (context) => BookkeepingSheet(
       existing: existing,
@@ -58,7 +58,6 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
   final _merchantFocus = FocusNode();
   final _memberCtrl = TextEditingController();
   final _noteCtrl = TextEditingController();
-  List<String> _merchantSuggestions = [];
   List<String> _tags = [];
 List<Account> _accounts = [];
   List<Category> _categories = [];
@@ -109,10 +108,8 @@ List<Account> _accounts = [];
       ledgerId,
       _type == 'in' ? 'in' : 'out',
     );
-    final merchants = await db.listMerchantSuggestions(ledgerId);
     if (!mounted) return;
     setState(() {
-      _merchantSuggestions = merchants;
       _ledgerId = ledgerId;
       _accounts = accounts;
       if (existing != null) {
@@ -285,10 +282,20 @@ List<Account> _accounts = [];
     setState(() {
       if (key == 'AC') {
         _amountText = '0';
+      } else if (key == '=') {
+        final v = _evalAmount(_amountText);
+        if (v == null) return;
+        final decimals = _maxDecimals;
+        var collapsed = v.toStringAsFixed(decimals);
+        if (decimals > 0) {
+          collapsed = collapsed.replaceFirst(RegExp(r'\.?0+$'), '');
+          if (collapsed.isEmpty) collapsed = '0';
+        }
+        _amountText = collapsed;
       } else if (key == '+' ||
           key == '-' ||
-          key == '\u00d7' ||
-          key == '\u00f7' ||
+          key == '×' ||
+          key == '÷' ||
           key == '*' ||
           key == '/') {
         _amountText = applyAmountOperator(_amountText, key);
@@ -778,12 +785,107 @@ List<Account> _accounts = [];
     if (result != null) setState(() => _tags = result);
   }
 
+  String get _typeChipLabel {
+    switch (_type) {
+      case 'in':
+        return '收入';
+      case 'transfer':
+        return '转账';
+      case 'refund':
+        return '退款';
+      default:
+        return '支出';
+    }
+  }
+
+  Future<void> _pickType() async {
+    final scheme = Theme.of(context).colorScheme;
+    final chosen = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: scheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        final options = <(String, String)>[
+          ('out', '支出'),
+          ('in', '收入'),
+          ('transfer', '转账'),
+        ];
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final o in options)
+                ListTile(
+                  title: Text(
+                    o.$2,
+                    style: TextStyle(
+                      fontWeight:
+                          _type == o.$1 ? FontWeight.w700 : FontWeight.w500,
+                      color: _type == o.$1 ? scheme.primary : null,
+                    ),
+                  ),
+                  trailing: _type == o.$1
+                      ? Icon(Icons.check, color: scheme.primary)
+                      : null,
+                  onTap: () => Navigator.pop(ctx, o.$1),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+    if (chosen == null || !mounted) return;
+    setState(() => _type = chosen);
+    if (chosen == 'transfer') {
+      setState(() => _categoryId = null);
+    } else {
+      await _reloadCategories(resetSelection: true);
+    }
+  }
+
+  Future<void> _pickMember() async {
+    final ctrl = TextEditingController(text: _memberCtrl.text);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('成员'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: '成员（可选）',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true && mounted) {
+      setState(() => _memberCtrl.text = ctrl.text.trim());
+    }
+    ctrl.dispose();
+  }
+
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final maxHeight = MediaQuery.sizeOf(context).height * 0.92;
     final viewInsets = MediaQuery.viewInsetsOf(context).bottom;
     final safeBottom = MediaQuery.paddingOf(context).bottom;
+    final hide = ref.watch(hideAmountProvider).valueOrNull ?? false;
+    final chipBorder = CentliTheme.chipBorder(context);
 
     return PopScope(
       canPop: false,
@@ -811,90 +913,10 @@ List<Account> _accounts = [];
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const SizedBox(height: CentliSpacing.item),
-                          Container(
-                            width: 40,
-                            height: 4,
-                            decoration: BoxDecoration(
-                              color: scheme.outlineVariant,
-                              borderRadius: BorderRadius.circular(2),
-                            ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 12, 8, 0),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    '记一笔 · ${ref.watch(currentLedgerProvider).valueOrNull?.name ?? ''}',
-                                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                  ),
-                                ),
-                                if (widget.existing == null)
-                                  TextButton.icon(
-                                    onPressed: _pickTemplate,
-                                    icon: const Icon(Icons.bookmark_outline, size: 18),
-                                    label: const Text('模板'),
-                                  ),
-                              ],
-                            ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Row(
-                                    children: [
-                                      for (final entry in [
-                                        ('out', '支出'),
-                                        ('in', '收入'),
-                                        ('refund', '退款'),
-                                        ('transfer', '转账'),
-                                      ])
-                                        Expanded(
-                                          child: InkWell(
-                                            onTap: () {
-                                              setState(() => _type = entry.$1);
-                                              _reloadCategories(resetSelection: true);
-                                            },
-                                            child: Column(
-                                              children: [
-                                                Text(
-                                                  entry.$2,
-                                                  textAlign: TextAlign.center,
-                                                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                                        fontWeight: _type == entry.$1
-                                                            ? FontWeight.w700
-                                                            : FontWeight.w500,
-                                                        color: _type == entry.$1
-                                                            ? scheme.primary
-                                                            : scheme.onSurfaceVariant,
-                                                      ),
-                                                ),
-                                                const SizedBox(height: 6),
-                                                Container(
-                                                  height: 2,
-                                                  color: _type == entry.$1
-                                                      ? scheme.primary
-                                                      : Colors.transparent,
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-
+                          const SizedBox(height: 48),
                           // Finch rhythm: compact amount (right), chips flush under.
                           Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                            padding: const EdgeInsets.fromLTRB(16, 0, 18, 0),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
@@ -925,16 +947,17 @@ List<Account> _accounts = [];
                                           _currency,
                                           _evalAmount(_amountText) ?? 0,
                                         ),
+                                        hide: hide,
                                       ),
                                       textAlign: TextAlign.right,
                                       style: Theme.of(context)
                                           .textTheme
                                           .headlineMedium
                                           ?.copyWith(
-                                            fontWeight: FontWeight.w800,
+                                            fontWeight: FontWeight.w700,
                                             letterSpacing: -0.8,
                                             height: 1.0,
-                                            fontSize: 36,
+                                            fontSize: 32,
                                           ),
                                     ),
                                     const SizedBox(width: 8),
@@ -942,30 +965,69 @@ List<Account> _accounts = [];
                                       _currency,
                                       style: Theme.of(context)
                                           .textTheme
-                                          .titleMedium
+                                          .bodySmall
                                           ?.copyWith(
+                                            fontSize: 13,
                                             color: scheme.onSurfaceVariant,
-                                            fontWeight: FontWeight.w600,
                                           ),
                                     ),
                                   ],
                                 ),
-                                const SizedBox(height: CentliSpacing.dense),
-                                const Divider(height: 1, thickness: 0.5),
                               ],
                             ),
                           ),
+                          const SizedBox(height: 12),
+                          // Chip row 1: type / time / currency
                           Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 6, 0, 0),
-                            // Finch chip row: time + category + account (or transfer legs)
+                            key: const Key('bk_chip_row_1'),
+                            padding: const EdgeInsets.only(left: 16),
                             child: _ChipScrollRow(
                               children: [
                                 _MetaChip(
+                                  key: const Key('bk_type_chip'),
+                                  label: '$_typeChipLabel \u25BE',
+                                  emphasized: true,
+                                  onTap: _pickType,
+                                ),
+                                _MetaChip(
                                   icon: Icons.schedule_rounded,
-                                  label: _happenAtLabel,
+                                  label: hide ? '**:**' : _happenAtLabel,
                                   onTap: _pickHappenAt,
                                 ),
-                                if (_type != 'transfer') ...[
+                                _MetaChip(
+                                  icon: Icons.payments_outlined,
+                                  label: hide ? '***' : _currency,
+                                  onTap: () => _pickAccount(toAccount: false),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 5),
+                          // Chip row 2: tags / member / category / account
+                          Padding(
+                            key: const Key('bk_chip_row_2'),
+                            padding: const EdgeInsets.only(left: 16),
+                            child: _ChipScrollRow(
+                              children: [
+                                _MetaChip(
+                                  icon: Icons.sell_outlined,
+                                  label: _tags.isEmpty
+                                      ? '\u6807\u7b7e'
+                                      : (hide
+                                          ? '****'
+                                          : _tags.take(2).join(' \u00b7 ')),
+                                  onTap: _editSheetTags,
+                                ),
+                                _MetaChip(
+                                  icon: Icons.person_outline,
+                                  label: _memberCtrl.text.trim().isEmpty
+                                      ? '\u6210\u5458'
+                                      : (hide
+                                          ? '****'
+                                          : _memberCtrl.text.trim()),
+                                  onTap: _pickMember,
+                                ),
+                                if (_type != 'transfer')
                                   Builder(
                                     builder: (context) {
                                       final cat = _categoryById(_categoryId);
@@ -976,7 +1038,7 @@ List<Account> _accounts = [];
                                                 name: cat.name,
                                                 kind: cat.kind,
                                                 iconKey: cat.icon,
-                                                size: 22,
+                                                size: 16,
                                               ),
                                         icon: cat == null
                                             ? Icons.category_outlined
@@ -986,6 +1048,7 @@ List<Account> _accounts = [];
                                       );
                                     },
                                   ),
+                                if (_type != 'transfer')
                                   Builder(
                                     builder: (context) {
                                       final acc = _accountById(_accountId);
@@ -996,21 +1059,19 @@ List<Account> _accounts = [];
                                                 name: acc.name,
                                                 kind: 'account',
                                                 iconKey: acc.icon,
-                                                size: 22,
+                                                size: 16,
                                               ),
                                         icon: acc == null
                                             ? Icons
-                                                  .account_balance_wallet_outlined
+                                                .account_balance_wallet_outlined
                                             : null,
-                                        label: acc == null
-                                            ? '\u8d26\u6237'
-                                            : '${acc.name} \u00b7 ${acc.currency}',
+                                        label: acc?.name ?? '\u8d26\u6237',
                                         onTap: () =>
                                             _pickAccount(toAccount: false),
                                       );
                                     },
-                                  ),
-                                ] else ...[
+                                  )
+                                else ...[
                                   Builder(
                                     builder: (context) {
                                       final acc = _accountById(_accountId);
@@ -1021,7 +1082,7 @@ List<Account> _accounts = [];
                                                 name: acc.name,
                                                 kind: 'account',
                                                 iconKey: acc.icon,
-                                                size: 22,
+                                                size: 16,
                                               ),
                                         icon: Icons.south_west_rounded,
                                         label: acc == null
@@ -1042,7 +1103,7 @@ List<Account> _accounts = [];
                                                 name: acc.name,
                                                 kind: 'account',
                                                 iconKey: acc.icon,
-                                                size: 22,
+                                                size: 16,
                                               ),
                                         icon: Icons.north_east_rounded,
                                         label: acc == null
@@ -1059,192 +1120,75 @@ List<Account> _accounts = [];
                           ),
                           if (_type == 'transfer' && _isCrossCurrency)
                             Padding(
-                              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                              padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
                               child: Text(
                                 '\u8de8\u5e01\uff1a\u4fdd\u5b58\u65f6\u4f1a\u8be2\u95ee\u5bf9\u65b9\u91d1\u989d/\u6c47\u7387',
                                 style: Theme.of(context).textTheme.bodySmall
                                     ?.copyWith(color: scheme.onSurfaceVariant),
                               ),
                             ),
-                          if (_type != 'transfer')
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
-                              child: RawAutocomplete<String>(
-                                textEditingController: _merchantCtrl,
-                                focusNode: _merchantFocus,
-                                optionsBuilder: (TextEditingValue tev) {
-                                  final q = tev.text.trim().toLowerCase();
-                                  Iterable<String> src = _merchantSuggestions;
-                                  if (q.isNotEmpty) {
-                                    src = src.where(
-                                      (m) => m.toLowerCase().contains(q),
-                                    );
-                                  }
-                                  return src.take(8);
-                                },
-                                onSelected: (String s) {
-                                  _merchantCtrl.text = s;
-                                  _merchantCtrl.selection =
-                                      TextSelection.collapsed(offset: s.length);
-                                },
-                                fieldViewBuilder: (
-                                  context,
-                                  textController,
-                                  focusNode,
-                                  onFieldSubmitted,
-                                ) {
-                                  return TextField(
-                                    controller: textController,
-                                    focusNode: focusNode,
-                                    onSubmitted: (_) => onFieldSubmitted(),
-                                    decoration: InputDecoration(
-                                      hintText: '\u5546\u6237',
-                                      isDense: true,
-                                      prefixIcon: Icon(
-                                        Icons.storefront_outlined,
-                                        size: 20,
-                                        color: scheme.onSurfaceVariant,
-                                      ),
-                                      filled: true,
-                                      fillColor: scheme.surfaceContainerHighest,
-                                      border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(14),
-                                        borderSide: BorderSide(
-                                          color: scheme.outlineVariant,
-                                        ),
-                                      ),
-                                      enabledBorder: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(14),
-                                        borderSide: BorderSide(
-                                          color: scheme.outlineVariant,
-                                        ),
-                                      ),
-                                      contentPadding:
-                                          const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 10,
-                                      ),
-                                    ),
-                                  );
-                                },
-                                optionsViewBuilder:
-                                    (context, onSelected, options) {
-                                  final opts = options.toList();
-                                  if (opts.isEmpty) {
-                                    return const SizedBox.shrink();
-                                  }
-                                  return Align(
-                                    alignment: Alignment.topLeft,
-                                    child: Material(
-                                      elevation: 4,
-                                      borderRadius: BorderRadius.circular(12),
-                                      child: ConstrainedBox(
-                                        constraints: const BoxConstraints(
-                                          maxHeight: 200,
-                                          maxWidth: 320,
-                                        ),
-                                        child: ListView.builder(
-                                          padding: EdgeInsets.zero,
-                                          shrinkWrap: true,
-                                          itemCount: opts.length,
-                                          itemBuilder: (context, i) {
-                                            final opt = opts[i];
-                                            return ListTile(
-                                              dense: true,
-                                              title: Text(opt),
-                                              onTap: () => onSelected(opt),
-                                            );
-                                          },
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                          if (_type != 'transfer')
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
+                          const SizedBox(height: 6),
+                          Padding(
+                            key: const Key('bk_note'),
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: SizedBox(
+                              height: 46,
                               child: TextField(
-                                controller: _memberCtrl,
+                                controller: _noteCtrl,
+                                style: const TextStyle(fontSize: 13),
                                 decoration: InputDecoration(
-                                  hintText: '\u6210\u5458\uff08\u53ef\u9009\uff09',
-                                  isDense: true,
-                                  prefixIcon: Icon(
-                                    Icons.person_outline,
-                                    size: 20,
+                                  hintText: '\u5907\u6ce8',
+                                  hintStyle: TextStyle(
+                                    fontSize: 13,
                                     color: scheme.onSurfaceVariant,
                                   ),
+                                  isDense: true,
+                                  prefixIcon: Icon(
+                                    Icons.edit_outlined,
+                                    size: 16,
+                                    color: scheme.onSurfaceVariant,
+                                  ),
+                                  suffixIcon: IconButton(
+                                    tooltip: '模板',
+                                    icon: Icon(
+                                      Icons.list_alt_outlined,
+                                      size: 16,
+                                      color: scheme.onSurfaceVariant,
+                                    ),
+                                    onPressed: widget.existing == null
+                                        ? _pickTemplate
+                                        : null,
+                                  ),
                                   filled: true,
-                                  fillColor: scheme.surfaceContainerHighest,
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                    borderSide: BorderSide(
-                                      color: scheme.outlineVariant,
-                                    ),
-                                  ),
-                                  enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                    borderSide: BorderSide(
-                                      color: scheme.outlineVariant,
-                                    ),
-                                  ),
+                                  fillColor: scheme.surface,
                                   contentPadding: const EdgeInsets.symmetric(
                                     horizontal: 12,
-                                    vertical: 10,
+                                    vertical: 12,
                                   ),
-                                ),
-                              ),
-                            ),
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
-                            child: TextField(
-                              controller: _noteCtrl,
-                              decoration: InputDecoration(
-                                hintText: '\u5907\u6ce8',
-                                isDense: true,
-                                prefixIcon: Icon(
-                                  Icons.edit_outlined,
-                                  size: 20,
-                                  color: scheme.onSurfaceVariant,
-                                ),
-                                suffixIcon: IconButton(
-                                  tooltip: '\u6807\u7b7e',
-                                  icon: Icon(
-                                    _tags.isEmpty
-                                        ? Icons.sell_outlined
-                                        : Icons.sell,
-                                    size: 20,
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                    borderSide: BorderSide(color: chipBorder),
                                   ),
-                                  onPressed: _editSheetTags,
-                                ),
-                                filled: true,
-                                fillColor: scheme.surfaceContainerHighest,
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                  borderSide: BorderSide(
-                                    color: scheme.outlineVariant,
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                    borderSide: BorderSide(color: chipBorder),
                                   ),
-                                ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                  borderSide: BorderSide(
-                                    color: scheme.outlineVariant,
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                    borderSide:
+                                        BorderSide(color: scheme.primary),
                                   ),
-                                ),
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 10,
                                 ),
                               ),
                             ),
                           ),
+                          const SizedBox(height: 8),
                         ],
                       ),
                     ),
                   ),
-                  SizedBox(height: CentliSpacing.sheetGap),
                   _Keypad(
+                    key: const Key('bk_keypad'),
                     onKey: _onKey,
                     onSubmit: _saving ? null : () => _save(),
                     onLongSubmit: (_saving || widget.existing != null)
@@ -1252,7 +1196,7 @@ List<Account> _accounts = [];
                         : () => _save(keepOpen: true),
                   ),
                   SizedBox(
-                    height: safeBottom > 0 ? safeBottom : CentliSpacing.dense,
+                    height: safeBottom > 0 ? safeBottom : 10,
                   ),
                 ],
               ),
@@ -1262,9 +1206,7 @@ List<Account> _accounts = [];
   }
 }
 
-/// Two-column form select: label (labelMedium) + tappable value (bodyLarge) with ▾.
-
-/// One Finch-style chip row: left-aligned, horizontal drag when overflowing.
+/// Contract chip row: height 36, gap 8, horizontal scroll.
 class _ChipScrollRow extends StatelessWidget {
   const _ChipScrollRow({required this.children});
 
@@ -1274,7 +1216,7 @@ class _ChipScrollRow extends StatelessWidget {
   Widget build(BuildContext context) {
     if (children.isEmpty) return const SizedBox.shrink();
     return SizedBox(
-      height: 40,
+      height: 36,
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
@@ -1282,7 +1224,7 @@ class _ChipScrollRow extends StatelessWidget {
         child: Row(
           children: [
             for (var i = 0; i < children.length; i++) ...[
-              if (i > 0) const SizedBox(width: CentliSpacing.item),
+              if (i > 0) const SizedBox(width: 8),
               children[i],
             ],
           ],
@@ -1294,38 +1236,35 @@ class _ChipScrollRow extends StatelessWidget {
 
 class _MetaChip extends StatelessWidget {
   const _MetaChip({
+    super.key,
     required this.label,
     required this.onTap,
     this.icon,
     this.leading,
+    this.emphasized = false,
   });
 
   final String label;
   final VoidCallback onTap;
   final IconData? icon;
   final Widget? leading;
+  final bool emphasized;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final border = CentliTheme.chipBorder(context);
     return Material(
       color: scheme.surface,
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(10),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(10),
         child: Container(
           padding: const EdgeInsets.fromLTRB(10, 6, 12, 6),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: scheme.outlineVariant),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF6B7A99).withValues(alpha: 0.04),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: border, width: 1),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -1334,7 +1273,7 @@ class _MetaChip extends StatelessWidget {
                 leading!,
                 const SizedBox(width: 6),
               ] else if (icon != null) ...[
-                Icon(icon, size: 18, color: scheme.onSurfaceVariant),
+                Icon(icon, size: 16, color: scheme.onSurfaceVariant),
                 const SizedBox(width: 6),
               ],
               ConstrainedBox(
@@ -1343,8 +1282,12 @@ class _MetaChip extends StatelessWidget {
                   label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelLarge
-                      ?.copyWith(fontWeight: FontWeight.w600, fontSize: 13),
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight:
+                        emphasized ? FontWeight.w700 : FontWeight.w500,
+                    color: emphasized ? scheme.primary : scheme.onSurface,
+                  ),
                 ),
               ),
             ],
@@ -1439,6 +1382,7 @@ class _AccountPickerSheet extends StatelessWidget {
 
 class _Keypad extends StatelessWidget {
   const _Keypad({
+    super.key,
     required this.onKey,
     required this.onSubmit,
     this.onLongSubmit,
@@ -1446,89 +1390,126 @@ class _Keypad extends StatelessWidget {
 
   final void Function(String key) onKey;
   final VoidCallback? onSubmit;
-
-  /// Long-press on check: save and keep sheet open (再记一笔).
   final VoidCallback? onLongSubmit;
 
-    static const _keys = [
-    ['1', '2', '3', '+', '×'],
-    ['4', '5', '6', '-', '÷'],
-    ['7', '8', '9', '⌫', 'AC'],
-    ['.', '0', '00', '✓'],
+  static const _rows = <List<String>>[
+    ['AC', '\u232b', '/', '*'],
+    ['7', '8', '9', '-'],
+    ['4', '5', '6', '+'],
+    ['1', '2', '3', '='],
+    ['0', '.', '\u2713'],
   ];
+
+  static const _colFlex = [78, 78, 78, 86];
 
   Color _bg(BuildContext context, String k) {
     if (k == '\u2713') return CentliTheme.keypadConfirm(context);
     if (k == 'AC' || k == '\u232b') return CentliTheme.keypadAcBg(context);
-    if (k == '+' || k == '-' || k == '×' || k == '÷') {
+    if (k == '+' || k == '-' || k == '*' || k == '/' || k == '=') {
       return CentliTheme.keypadOpBg(context);
     }
     return CentliTheme.keypadNumBg(context);
   }
 
   Color _fg(BuildContext context, String k) {
-    final scheme = Theme.of(context).colorScheme;
     if (k == '\u2713') return Colors.white;
     if (k == 'AC' || k == '\u232b') return CentliTheme.keypadAcFg(context);
-    if (k == '+' || k == '-' || k == '×' || k == '÷') {
-      return CentliTheme.softBlue;
+    if (k == '+' || k == '-' || k == '*' || k == '/' || k == '=') {
+      return CentliTheme.keypadOpFg(context);
     }
-    return scheme.onSurface;
+    return CentliTheme.keypadNumFg(context);
+  }
+
+  String _label(String k) {
+    if (k == '-') return '\u2212';
+    return k;
   }
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 0, 10, 4),
+      padding: const EdgeInsets.fromLTRB(9, 0, 9, 0),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          for (final row in _keys)
-            Row(
-              children: [
-                for (final k in row)
-                  Expanded(
-                    flex: (row.length == 4 && k == '✓') ? 2 : 1,
-                    child: Padding(
-                      padding: const EdgeInsets.all(3),
-                      child: SizedBox(
-                        height: 52,
-                        child: Tooltip(
-                          message: k == '\u2713' ? '\u957f\u6309\u518d\u8bb0\u4e00\u7b14' : '',
-                          child: Material(
-                          color: _bg(context, k),
-                          borderRadius: BorderRadius.circular(14),
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(14),
-                            onTap: () {
-                              if (k == '\u2713') {
-                                onSubmit?.call();
-                              } else {
-                                onKey(k);
-                              }
-                            },
-                            onLongPress: k == '\u2713' ? onLongSubmit : null,
-                            child: Center(
-                              child: Text(
-                                k == '\u2713' ? '\u2713' : k,
-                                style: TextStyle(
-                                  fontSize: k == 'AC' ? 16 : 20,
-                                  fontWeight: FontWeight.w700,
-                                  color: _fg(context, k),
-                                ),
-                              ),
-                            ),
-                          ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
+          for (var r = 0; r < _rows.length; r++) ...[
+            if (r > 0) const SizedBox(height: 3.5),
+            _buildRow(context, _rows[r], isLast: r == _rows.length - 1),
+          ],
         ],
       ),
     );
   }
-}
 
+  Widget _buildRow(
+    BuildContext context,
+    List<String> row, {
+    required bool isLast,
+  }) {
+    if (isLast) {
+      return Row(
+        children: [
+          Expanded(
+            flex: _colFlex[0] + _colFlex[1],
+            child: _keyBtn(context, '0'),
+          ),
+          const SizedBox(width: 7),
+          Expanded(
+            flex: _colFlex[2],
+            child: _keyBtn(context, '.'),
+          ),
+          const SizedBox(width: 7),
+          Expanded(
+            flex: _colFlex[3],
+            child: _keyBtn(context, '\u2713'),
+          ),
+        ],
+      );
+    }
+    return Row(
+      children: [
+        for (var i = 0; i < row.length; i++) ...[
+          if (i > 0) const SizedBox(width: 7),
+          Expanded(
+            flex: _colFlex[i],
+            child: _keyBtn(context, row[i]),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _keyBtn(BuildContext context, String k) {
+    return SizedBox(
+      height: 54,
+      child: Tooltip(
+        message: k == '\u2713' ? '\u957f\u6309\u518d\u8bb0\u4e00\u7b14' : '',
+        child: Material(
+          color: _bg(context, k),
+          borderRadius: BorderRadius.circular(10),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(10),
+            onTap: () {
+              if (k == '\u2713') {
+                onSubmit?.call();
+              } else {
+                onKey(k);
+              }
+            },
+            onLongPress: k == '\u2713' ? onLongSubmit : null,
+            child: Center(
+              child: Text(
+                _label(k),
+                style: TextStyle(
+                  fontSize: k == 'AC' ? 16 : 20,
+                  fontWeight: FontWeight.w700,
+                  color: _fg(context, k),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

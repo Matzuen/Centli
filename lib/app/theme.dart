@@ -62,11 +62,15 @@ abstract final class CentliTheme {
   static const incomeGreen = Color(0xFF43A047);
   static const softBlue = Color(0xFF5B8DEF);
   static const coral = Color(0xFFFF8A80);
-  // Light keypad (unchanged values — light appearance must stay identical).
-  static const keypadNumBgLight = Color(0xFFF5F6F8);
-  static const keypadOpBgLight = Color(0xFFD6E4FF);
-  static const keypadAcBgLight = Color(0xFFFFE0DB);
-  static const keypadConfirmLight = Color(0xFF4C7DFF);
+  // Light keypad — B3/T6 contract measured hex.
+  static const keypadNumBgLight = Color(0xFFEAEDF4);
+  static const keypadOpBgLight = Color(0xFFD4E5F5);
+  static const keypadAcBgLight = Color(0xFFFEDBD7);
+  static const keypadConfirmLight = Color(0xFF1F98F5);
+  static const keypadOpFgLight = Color(0xFF2A7BD4);
+  static const keypadAcFgLight = Color(0xFFA45D61);
+  static const keypadNumFgLight = Color(0xFF1F2229);
+  static const chipBorderLight = Color(0xFFE5E7EB);
 
   // Dark keypad — deep tones coordinated with dark ColorScheme surfaces.
   static const keypadNumBgDark = Color(0xFF2A2F3A);
@@ -95,9 +99,26 @@ abstract final class CentliTheme {
           ? keypadConfirmDark
           : keypadConfirmLight;
 
-  /// AC / backspace foreground — scheme.error reads on both light pink & dark red-brown.
+  /// AC / backspace foreground.
   static Color keypadAcFg(BuildContext context) =>
-      Theme.of(context).colorScheme.error;
+      Theme.of(context).brightness == Brightness.dark
+          ? Theme.of(context).colorScheme.error
+          : keypadAcFgLight;
+
+  static Color keypadOpFg(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark
+          ? softBlue
+          : keypadOpFgLight;
+
+  static Color keypadNumFg(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark
+          ? Theme.of(context).colorScheme.onSurface
+          : keypadNumFgLight;
+
+  static Color chipBorder(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark
+          ? Theme.of(context).colorScheme.outlineVariant
+          : chipBorderLight;
 
   static List<Color> scaffoldGradientColors({bool dark = false}) {
     if (dark) {
