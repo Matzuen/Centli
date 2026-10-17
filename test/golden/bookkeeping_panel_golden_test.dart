@@ -11,7 +11,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Fallback after serial runs still showed ~0.01% antialias jitter (G1).
-/// Cap is 0.01% (1/5 of prior 0.05%). Guarded by golden_guard_test (G5).
+/// Cap is 0.01% (one-fifth of prior tolerance). Guarded by golden_guard_test (G5).
 const double kGoldenMaxDiffPercent = 0.01;
 
 class _TolerantGoldenComparator extends LocalFileComparator {
