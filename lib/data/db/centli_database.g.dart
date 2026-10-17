@@ -1685,6 +1685,15 @@ class $TransactionsTable extends Transactions
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _memberMeta = const VerificationMeta('member');
+  @override
+  late final GeneratedColumn<String> member = GeneratedColumn<String>(
+    'member',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _noteMeta = const VerificationMeta('note');
   @override
   late final GeneratedColumn<String> note = GeneratedColumn<String>(
@@ -1834,6 +1843,7 @@ class $TransactionsTable extends Transactions
     toAccountId,
     categoryId,
     merchant,
+    member,
     note,
     tags,
     happenAt,
@@ -1927,6 +1937,12 @@ class $TransactionsTable extends Transactions
       context.handle(
         _merchantMeta,
         merchant.isAcceptableOrUnknown(data['merchant']!, _merchantMeta),
+      );
+    }
+    if (data.containsKey('member')) {
+      context.handle(
+        _memberMeta,
+        member.isAcceptableOrUnknown(data['member']!, _memberMeta),
       );
     }
     if (data.containsKey('note')) {
@@ -2070,6 +2086,10 @@ class $TransactionsTable extends Transactions
         DriftSqlType.string,
         data['${effectivePrefix}merchant'],
       ),
+      member: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}member'],
+      ),
       note: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}note'],
@@ -2141,6 +2161,9 @@ class Transaction extends DataClass implements Insertable<Transaction> {
   final String? toAccountId;
   final String? categoryId;
   final String? merchant;
+
+  /// Optional household member label (free text; no member entity table).
+  final String? member;
   final String? note;
 
   /// JSON array string, e.g. `["报销","旅行"]`. Null/empty = no tags.
@@ -2166,6 +2189,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     this.toAccountId,
     this.categoryId,
     this.merchant,
+    this.member,
     this.note,
     this.tags,
     required this.happenAt,
@@ -2197,6 +2221,9 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     }
     if (!nullToAbsent || merchant != null) {
       map['merchant'] = Variable<String>(merchant);
+    }
+    if (!nullToAbsent || member != null) {
+      map['member'] = Variable<String>(member);
     }
     if (!nullToAbsent || note != null) {
       map['note'] = Variable<String>(note);
@@ -2245,6 +2272,9 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       merchant: merchant == null && nullToAbsent
           ? const Value.absent()
           : Value(merchant),
+      member: member == null && nullToAbsent
+          ? const Value.absent()
+          : Value(member),
       note: note == null && nullToAbsent ? const Value.absent() : Value(note),
       tags: tags == null && nullToAbsent ? const Value.absent() : Value(tags),
       happenAt: Value(happenAt),
@@ -2286,6 +2316,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       toAccountId: serializer.fromJson<String?>(json['toAccountId']),
       categoryId: serializer.fromJson<String?>(json['categoryId']),
       merchant: serializer.fromJson<String?>(json['merchant']),
+      member: serializer.fromJson<String?>(json['member']),
       note: serializer.fromJson<String?>(json['note']),
       tags: serializer.fromJson<String?>(json['tags']),
       happenAt: serializer.fromJson<int>(json['happenAt']),
@@ -2314,6 +2345,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       'toAccountId': serializer.toJson<String?>(toAccountId),
       'categoryId': serializer.toJson<String?>(categoryId),
       'merchant': serializer.toJson<String?>(merchant),
+      'member': serializer.toJson<String?>(member),
       'note': serializer.toJson<String?>(note),
       'tags': serializer.toJson<String?>(tags),
       'happenAt': serializer.toJson<int>(happenAt),
@@ -2340,6 +2372,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     Value<String?> toAccountId = const Value.absent(),
     Value<String?> categoryId = const Value.absent(),
     Value<String?> merchant = const Value.absent(),
+    Value<String?> member = const Value.absent(),
     Value<String?> note = const Value.absent(),
     Value<String?> tags = const Value.absent(),
     int? happenAt,
@@ -2363,6 +2396,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     toAccountId: toAccountId.present ? toAccountId.value : this.toAccountId,
     categoryId: categoryId.present ? categoryId.value : this.categoryId,
     merchant: merchant.present ? merchant.value : this.merchant,
+    member: member.present ? member.value : this.member,
     note: note.present ? note.value : this.note,
     tags: tags.present ? tags.value : this.tags,
     happenAt: happenAt ?? this.happenAt,
@@ -2398,6 +2432,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           ? data.categoryId.value
           : this.categoryId,
       merchant: data.merchant.present ? data.merchant.value : this.merchant,
+      member: data.member.present ? data.member.value : this.member,
       note: data.note.present ? data.note.value : this.note,
       tags: data.tags.present ? data.tags.value : this.tags,
       happenAt: data.happenAt.present ? data.happenAt.value : this.happenAt,
@@ -2434,6 +2469,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           ..write('toAccountId: $toAccountId, ')
           ..write('categoryId: $categoryId, ')
           ..write('merchant: $merchant, ')
+          ..write('member: $member, ')
           ..write('note: $note, ')
           ..write('tags: $tags, ')
           ..write('happenAt: $happenAt, ')
@@ -2462,6 +2498,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     toAccountId,
     categoryId,
     merchant,
+    member,
     note,
     tags,
     happenAt,
@@ -2489,6 +2526,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           other.toAccountId == this.toAccountId &&
           other.categoryId == this.categoryId &&
           other.merchant == this.merchant &&
+          other.member == this.member &&
           other.note == this.note &&
           other.tags == this.tags &&
           other.happenAt == this.happenAt &&
@@ -2514,6 +2552,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
   final Value<String?> toAccountId;
   final Value<String?> categoryId;
   final Value<String?> merchant;
+  final Value<String?> member;
   final Value<String?> note;
   final Value<String?> tags;
   final Value<int> happenAt;
@@ -2538,6 +2577,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     this.toAccountId = const Value.absent(),
     this.categoryId = const Value.absent(),
     this.merchant = const Value.absent(),
+    this.member = const Value.absent(),
     this.note = const Value.absent(),
     this.tags = const Value.absent(),
     this.happenAt = const Value.absent(),
@@ -2563,6 +2603,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     this.toAccountId = const Value.absent(),
     this.categoryId = const Value.absent(),
     this.merchant = const Value.absent(),
+    this.member = const Value.absent(),
     this.note = const Value.absent(),
     this.tags = const Value.absent(),
     required int happenAt,
@@ -2596,6 +2637,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     Expression<String>? toAccountId,
     Expression<String>? categoryId,
     Expression<String>? merchant,
+    Expression<String>? member,
     Expression<String>? note,
     Expression<String>? tags,
     Expression<int>? happenAt,
@@ -2621,6 +2663,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       if (toAccountId != null) 'to_account_id': toAccountId,
       if (categoryId != null) 'category_id': categoryId,
       if (merchant != null) 'merchant': merchant,
+      if (member != null) 'member': member,
       if (note != null) 'note': note,
       if (tags != null) 'tags': tags,
       if (happenAt != null) 'happen_at': happenAt,
@@ -2648,6 +2691,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     Value<String?>? toAccountId,
     Value<String?>? categoryId,
     Value<String?>? merchant,
+    Value<String?>? member,
     Value<String?>? note,
     Value<String?>? tags,
     Value<int>? happenAt,
@@ -2673,6 +2717,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       toAccountId: toAccountId ?? this.toAccountId,
       categoryId: categoryId ?? this.categoryId,
       merchant: merchant ?? this.merchant,
+      member: member ?? this.member,
       note: note ?? this.note,
       tags: tags ?? this.tags,
       happenAt: happenAt ?? this.happenAt,
@@ -2719,6 +2764,9 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     }
     if (merchant.present) {
       map['merchant'] = Variable<String>(merchant.value);
+    }
+    if (member.present) {
+      map['member'] = Variable<String>(member.value);
     }
     if (note.present) {
       map['note'] = Variable<String>(note.value);
@@ -2777,6 +2825,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
           ..write('toAccountId: $toAccountId, ')
           ..write('categoryId: $categoryId, ')
           ..write('merchant: $merchant, ')
+          ..write('member: $member, ')
           ..write('note: $note, ')
           ..write('tags: $tags, ')
           ..write('happenAt: $happenAt, ')
@@ -7040,6 +7089,7 @@ typedef $$TransactionsTableCreateCompanionBuilder =
       Value<String?> toAccountId,
       Value<String?> categoryId,
       Value<String?> merchant,
+      Value<String?> member,
       Value<String?> note,
       Value<String?> tags,
       required int happenAt,
@@ -7066,6 +7116,7 @@ typedef $$TransactionsTableUpdateCompanionBuilder =
       Value<String?> toAccountId,
       Value<String?> categoryId,
       Value<String?> merchant,
+      Value<String?> member,
       Value<String?> note,
       Value<String?> tags,
       Value<int> happenAt,
@@ -7186,6 +7237,11 @@ class $$TransactionsTableFilterComposer
 
   ColumnFilters<String> get merchant => $composableBuilder(
     column: $table.merchant,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get member => $composableBuilder(
+    column: $table.member,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -7381,6 +7437,11 @@ class $$TransactionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get member => $composableBuilder(
+    column: $table.member,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get note => $composableBuilder(
     column: $table.note,
     builder: (column) => ColumnOrderings(column),
@@ -7565,6 +7626,9 @@ class $$TransactionsTableAnnotationComposer
   GeneratedColumn<String> get merchant =>
       $composableBuilder(column: $table.merchant, builder: (column) => column);
 
+  GeneratedColumn<String> get member =>
+      $composableBuilder(column: $table.member, builder: (column) => column);
+
   GeneratedColumn<String> get note =>
       $composableBuilder(column: $table.note, builder: (column) => column);
 
@@ -7747,6 +7811,7 @@ class $$TransactionsTableTableManager
                 Value<String?> toAccountId = const Value.absent(),
                 Value<String?> categoryId = const Value.absent(),
                 Value<String?> merchant = const Value.absent(),
+                Value<String?> member = const Value.absent(),
                 Value<String?> note = const Value.absent(),
                 Value<String?> tags = const Value.absent(),
                 Value<int> happenAt = const Value.absent(),
@@ -7771,6 +7836,7 @@ class $$TransactionsTableTableManager
                 toAccountId: toAccountId,
                 categoryId: categoryId,
                 merchant: merchant,
+                member: member,
                 note: note,
                 tags: tags,
                 happenAt: happenAt,
@@ -7797,6 +7863,7 @@ class $$TransactionsTableTableManager
                 Value<String?> toAccountId = const Value.absent(),
                 Value<String?> categoryId = const Value.absent(),
                 Value<String?> merchant = const Value.absent(),
+                Value<String?> member = const Value.absent(),
                 Value<String?> note = const Value.absent(),
                 Value<String?> tags = const Value.absent(),
                 required int happenAt,
@@ -7821,6 +7888,7 @@ class $$TransactionsTableTableManager
                 toAccountId: toAccountId,
                 categoryId: categoryId,
                 merchant: merchant,
+                member: member,
                 note: note,
                 tags: tags,
                 happenAt: happenAt,

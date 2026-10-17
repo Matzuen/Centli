@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'package:centli/data/db/centli_database.dart';
 import 'package:centli/data/db/txn_tags.dart';
 import 'package:centli/data/export/import_service.dart';
@@ -23,7 +23,7 @@ void main() {
     expect(decodeTxnTags(long).single.length, 12);
   });
 
-  test('v4 onCreate: tags column, indexes (PRAGMA), soft-delete keeps tags', () async {
+  test('v5 onCreate: tags+member columns, indexes (PRAGMA), soft-delete keeps tags', () async {
     final db = CentliDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);
     await db.seedDefaults();
@@ -85,7 +85,14 @@ void main() {
     );
 
     final ver = await db.customSelect('PRAGMA user_version').getSingle();
-    expect(ver.read<int>('user_version'), 4);
+    expect(ver.read<int>('user_version'), 5);
+
+    final cols = {
+      for (final r in await db.customSelect('PRAGMA table_info(transactions)').get())
+        r.read<String>('name')
+    };
+    expect(cols.contains('tags'), isTrue);
+    expect(cols.contains('member'), isTrue);
 
     await db.softDeleteTransaction(rows.first.id);
     final deleted = await (db.select(db.transactions)

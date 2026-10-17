@@ -18,6 +18,8 @@ class Transactions extends Table {
   TextColumn get categoryId =>
       text().named('category_id').nullable().references(Categories, #id)();
   TextColumn get merchant => text().nullable()();
+  /// Optional household member label (free text; no member entity table).
+  TextColumn get member => text().nullable()();
   TextColumn get note => text().nullable()();
   /// JSON array string, e.g. `["报销","旅行"]`. Null/empty = no tags.
   TextColumn get tags => text().nullable()();

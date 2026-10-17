@@ -42,7 +42,7 @@ class CentliDatabase extends _$CentliDatabase {
   CentliDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -60,6 +60,9 @@ class CentliDatabase extends _$CentliDatabase {
           }
           if (from < 4) {
             await m.addColumn(transactions, transactions.tags);
+          }
+          if (from < 5) {
+            await m.addColumn(transactions, transactions.member);
           }
           await _ensureQueryIndexes();
         },
@@ -734,6 +737,7 @@ class CentliDatabase extends _$CentliDatabase {
     String? toAccountId,
     String? categoryId,
     String? merchant,
+    String? member,
     String? note,
     List<String>? tags,
     DateTime? happenAt,
@@ -755,6 +759,7 @@ class CentliDatabase extends _$CentliDatabase {
         toAccountId: Value(toAccountId),
         categoryId: Value(categoryId),
         merchant: Value(merchant),
+        member: Value(member),
         note: Value(note),
         tags: Value(encodeTxnTags(tags)),
         happenAt: happen,
@@ -1127,6 +1132,7 @@ class CentliDatabase extends _$CentliDatabase {
     String? toAccountId,
     String? categoryId,
     String? merchant,
+    String? member,
     String? note,
     List<String>? tags,
     DateTime? happenAt,
@@ -1144,6 +1150,7 @@ class CentliDatabase extends _$CentliDatabase {
         toAccountId: Value(toAccountId),
         categoryId: Value(categoryId),
         merchant: Value(merchant),
+        member: Value(member),
         note: Value(note),
         tags: Value(encodeTxnTags(tags)),
         happenAt: happen != null ? Value(happen) : const Value.absent(),

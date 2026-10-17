@@ -56,6 +56,7 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
   String? _categoryId;
   final _merchantCtrl = TextEditingController();
   final _merchantFocus = FocusNode();
+  final _memberCtrl = TextEditingController();
   final _noteCtrl = TextEditingController();
   List<String> _merchantSuggestions = [];
   List<String> _tags = [];
@@ -77,6 +78,7 @@ List<Account> _accounts = [];
   void dispose() {
     _merchantCtrl.dispose();
     _merchantFocus.dispose();
+    _memberCtrl.dispose();
     _noteCtrl.dispose();
     super.dispose();
   }
@@ -128,6 +130,7 @@ List<Account> _accounts = [];
         _toAccountId = existing.toAccountId;
         _categoryId = existing.categoryId;
         _merchantCtrl.text = existing.merchant ?? '';
+        _memberCtrl.text = existing.member ?? '';
         _noteCtrl.text = existing.note ?? '';
         _tags = List<String>.from(decodeTxnTags(existing.tags));
         _happenAt = DateTime.fromMillisecondsSinceEpoch(
@@ -492,6 +495,9 @@ List<Account> _accounts = [];
       final merchant = _merchantCtrl.text.trim().isEmpty
           ? null
           : _merchantCtrl.text.trim();
+      final member = _memberCtrl.text.trim().isEmpty
+          ? null
+          : _memberCtrl.text.trim();
       final toAcc = _type == 'transfer' ? _toAccountId : null;
       final cat = _type == 'transfer' ? null : _categoryId;
       if (widget.existing != null) {
@@ -504,6 +510,7 @@ List<Account> _accounts = [];
           toAccountId: toAcc,
           categoryId: cat,
           merchant: merchant,
+          member: member,
           note: note,
           tags: _tags,
           happenAt: _happenAt,
@@ -520,6 +527,7 @@ List<Account> _accounts = [];
           toAccountId: toAcc,
           categoryId: cat,
           merchant: merchant,
+          member: member,
           note: note,
           tags: _tags,
           happenAt: _happenAt,
@@ -536,6 +544,7 @@ List<Account> _accounts = [];
           _fxRateText = null;
           _noteCtrl.clear();
           _merchantCtrl.clear();
+          _memberCtrl.clear();
           _happenAt = DateTime.now();
         });
         ScaffoldMessenger.of(context)
@@ -1144,6 +1153,40 @@ List<Account> _accounts = [];
                                     ),
                                   );
                                 },
+                              ),
+                            ),
+                          if (_type != 'transfer')
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
+                              child: TextField(
+                                controller: _memberCtrl,
+                                decoration: InputDecoration(
+                                  hintText: '\u6210\u5458\uff08\u53ef\u9009\uff09',
+                                  isDense: true,
+                                  prefixIcon: Icon(
+                                    Icons.person_outline,
+                                    size: 20,
+                                    color: scheme.onSurfaceVariant,
+                                  ),
+                                  filled: true,
+                                  fillColor: scheme.surfaceContainerHighest,
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                    borderSide: BorderSide(
+                                      color: scheme.outlineVariant,
+                                    ),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                    borderSide: BorderSide(
+                                      color: scheme.outlineVariant,
+                                    ),
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 10,
+                                  ),
+                                ),
                               ),
                             ),
                           Padding(
