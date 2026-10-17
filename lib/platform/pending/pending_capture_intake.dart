@@ -293,6 +293,7 @@ abstract final class PendingCaptureIntake {
       final filled = await parseBookkeepingImageWithLlm(
         prepared.bytes,
         config: cfg,
+        settingsDb: db,
       );
       if (filled == null) {
         return const ManualIngestResult(

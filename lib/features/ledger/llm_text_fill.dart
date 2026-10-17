@@ -22,6 +22,20 @@ const String kLlmApiKeyStorageKey = 'centli_smart_fill_llm_api_key';
 const String kDefaultLlmBaseUrl = 'https://api.deepseek.com';
 const String kDefaultLlmModel = 'deepseek-flash';
 
+/// One-shot marker: stale OpenAI default model migrated to deepseek-flash.
+const String kLlmModelMigratedV1Key = 'smart_fill_llm_model_migrated_v1';
+
+/// Persisted when vision retry without `detail` succeeded.
+const String kLlmDetailCompatKey = 'smart_fill_llm_detail_compat';
+
+const Set<String> kStaleOpenAiDefaultModels = {
+  'gpt-4o-mini',
+  'gpt-4o',
+  'gpt-4-turbo',
+  'gpt-3.5-turbo',
+  'gpt-4',
+};
+
 class SmartFillLlmConfig {
   const SmartFillLlmConfig({
     required this.enabled,
@@ -52,15 +66,42 @@ class SmartFillLlmSettings {
 
   final FlutterSecureStorage _storage;
 
+  /// Set by [load] when a one-shot stale-model migration ran.
+  String? lastMigrationNotice;
+
+  /// Set by [load] when baseUrl is deepseek but model is a non-deepseek unknown.
+  String? lastModelWarning;
+
   Future<SmartFillLlmConfig> load(CentliDatabase db) async {
+    lastMigrationNotice = null;
+    lastModelWarning = null;
     final enabled = (await db.getSetting(kLlmEnabledSettingKey)) == 'true';
     final base = (await db.getSetting(kLlmBaseUrlSettingKey))?.trim();
-    final model = (await db.getSetting(kLlmModelSettingKey))?.trim();
+    var model = (await db.getSetting(kLlmModelSettingKey))?.trim();
     final key = (await _storage.read(key: kLlmApiKeyStorageKey)) ?? '';
+    final baseUrl = (base == null || base.isEmpty) ? kDefaultLlmBaseUrl : base;
+    if (model == null || model.isEmpty) {
+      model = kDefaultLlmModel;
+    }
+
+    final baseLower = baseUrl.toLowerCase();
+    if (baseLower.contains('deepseek')) {
+      final migrated = (await db.getSetting(kLlmModelMigratedV1Key)) == 'true';
+      if (!migrated && kStaleOpenAiDefaultModels.contains(model)) {
+        final before = model;
+        model = kDefaultLlmModel;
+        await db.setSetting(kLlmModelSettingKey, model);
+        await db.setSetting(kLlmModelMigratedV1Key, 'true');
+        lastMigrationNotice = '检测到旧的模型配置（$before），已改为 $kDefaultLlmModel';
+      } else if (!model.toLowerCase().startsWith('deepseek')) {
+        lastModelWarning = '该模型可能不支持图片识别';
+      }
+    }
+
     return SmartFillLlmConfig(
       enabled: enabled,
-      baseUrl: (base == null || base.isEmpty) ? kDefaultLlmBaseUrl : base,
-      model: (model == null || model.isEmpty) ? kDefaultLlmModel : model,
+      baseUrl: baseUrl,
+      model: model,
       apiKey: key,
     );
   }
@@ -251,6 +292,129 @@ Future<AiTextFillResult?> parseBookkeepingTextWithLlm(
 }
 
 
+
+/// Parse HTTP error body into a short user-facing status+detail string.
+/// Never includes API keys. Public so unit tests can assert / self-prove.
+String describeLlmHttpError(int code, String rawBody) {
+  var detail = '';
+  try {
+    final j = jsonDecode(rawBody);
+    if (j is Map) {
+      final e = j['error'];
+      if (e is Map && e['message'] is String) {
+        detail = (e['message'] as String).trim();
+      } else if (e is String) {
+        detail = e.trim();
+      } else if (j['message'] is String) {
+        detail = (j['message'] as String).trim();
+      }
+    }
+  } catch (_) {}
+  if (detail.length > 160) detail = '${detail.substring(0, 160)}…';
+  return detail.isEmpty ? 'HTTP $code' : 'HTTP $code · $detail';
+}
+
+bool _shouldRetryWithoutDetail(int code, String rawBody) {
+  if (code != 400) return false;
+  final lower = rawBody.toLowerCase();
+  return lower.contains('detail') ||
+      lower.contains('unknown') ||
+      lower.contains('unsupported');
+}
+
+/// Result of [testLlmConnection] (minimal text ping, no image).
+class LlmConnectionTestResult {
+  const LlmConnectionTestResult({
+    required this.ok,
+    required this.message,
+    this.statusCode,
+    this.elapsedMs,
+  });
+
+  final bool ok;
+  final String message;
+  final int? statusCode;
+  final int? elapsedMs;
+}
+
+/// Minimal text-only ping against the configured OpenAI-compatible endpoint.
+Future<LlmConnectionTestResult> testLlmConnection({
+  required SmartFillLlmConfig config,
+  http.Client? client,
+  Duration timeout = const Duration(seconds: 12),
+}) async {
+  if (config.apiKey.trim().isEmpty) {
+    return const LlmConnectionTestResult(
+      ok: false,
+      message: '请先配置 API Key',
+    );
+  }
+  final base = config.baseUrl.trim().isEmpty
+      ? kDefaultLlmBaseUrl
+      : config.normalizedBaseUrl;
+  final model =
+      config.model.trim().isEmpty ? kDefaultLlmModel : config.model.trim();
+  final uri = Uri.parse('$base/chat/completions');
+  final body = <String, dynamic>{
+    'model': model,
+    'temperature': 0,
+    'max_tokens': 8,
+    'messages': [
+      {'role': 'user', 'content': 'ping'},
+    ],
+  };
+  final httpClient = client ?? http.Client();
+  final owned = client == null;
+  final sw = Stopwatch()..start();
+  try {
+    final resp = await httpClient
+        .post(
+          uri,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ${config.apiKey.trim()}',
+          },
+          body: jsonEncode(body),
+        )
+        .timeout(timeout);
+    sw.stop();
+    if (resp.statusCode >= 200 && resp.statusCode < 300) {
+      return LlmConnectionTestResult(
+        ok: true,
+        message: '✅ 连接正常（模型 $model，耗时 ${sw.elapsedMilliseconds}ms）',
+        statusCode: resp.statusCode,
+        elapsedMs: sw.elapsedMilliseconds,
+      );
+    }
+    final desc = describeLlmHttpError(resp.statusCode, resp.body);
+    return LlmConnectionTestResult(
+      ok: false,
+      message: '❌ $desc',
+      statusCode: resp.statusCode,
+      elapsedMs: sw.elapsedMilliseconds,
+    );
+  } on TimeoutException {
+    sw.stop();
+    return LlmConnectionTestResult(
+      ok: false,
+      message: '❌ 网络失败：请求超时',
+      elapsedMs: sw.elapsedMilliseconds,
+    );
+  } catch (e) {
+    sw.stop();
+    final summary = e.toString();
+    final short =
+        summary.length > 120 ? '${summary.substring(0, 120)}…' : summary;
+    return LlmConnectionTestResult(
+      ok: false,
+      message: '❌ 网络失败：$short',
+      elapsedMs: sw.elapsedMilliseconds,
+    );
+  } finally {
+    if (owned) httpClient.close();
+  }
+}
+
 /// Thrown when a vision (image) LLM request fails with a user-facing reason.
 class LlmVisionException implements Exception {
   LlmVisionException(this.message);
@@ -268,6 +432,8 @@ Future<AiTextFillResult?> parseBookkeepingImageWithLlm(
   List<String> accountNames = const [],
   http.Client? client,
   Duration timeout = const Duration(seconds: 45),
+  CentliDatabase? settingsDb,
+  void Function(String message)? onCompatHint,
   String userText =
       '请识别这张账单截图，返回与文本填单相同字段的 JSON。',
 }) async {
@@ -295,46 +461,72 @@ Future<AiTextFillResult?> parseBookkeepingImageWithLlm(
 
   final dataUrl = 'data:image/jpeg;base64,${base64Encode(jpegBytes)}';
   final uri = Uri.parse('${config.normalizedBaseUrl}/chat/completions');
-  final body = <String, dynamic>{
-    'model': config.model,
-    'temperature': 0,
-    'messages': [
-      {'role': 'system', 'content': system},
-      {
-        'role': 'user',
-        'content': [
-          {'type': 'text', 'text': userText},
-          {
-            'type': 'image_url',
-            'image_url': {'url': dataUrl, 'detail': 'original'},
-          },
-        ],
-      },
-    ],
-    'response_format': {'type': 'json_object'},
-  };
+
+  Map<String, dynamic> buildBody({required bool includeDetail}) {
+    final imageUrl = <String, dynamic>{'url': dataUrl};
+    if (includeDetail) {
+      imageUrl['detail'] = 'original';
+    }
+    return <String, dynamic>{
+      'model': config.model,
+      'temperature': 0,
+      'messages': [
+        {'role': 'system', 'content': system},
+        {
+          'role': 'user',
+          'content': [
+            {'type': 'text', 'text': userText},
+            {
+              'type': 'image_url',
+              'image_url': imageUrl,
+            },
+          ],
+        },
+      ],
+      'response_format': {'type': 'json_object'},
+    };
+  }
 
   final httpClient = client ?? http.Client();
   final owned = client == null;
   try {
-    final resp = await httpClient
-        .post(
-          uri,
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ${config.apiKey.trim()}',
-          },
-          body: jsonEncode(body),
-        )
-        .timeout(timeout);
+    Future<http.Response> postOnce(bool includeDetail) {
+      return httpClient
+          .post(
+            uri,
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ${config.apiKey.trim()}',
+            },
+            body: jsonEncode(buildBody(includeDetail: includeDetail)),
+          )
+          .timeout(timeout);
+    }
+
+    var resp = await postOnce(true);
+    var strippedDetail = false;
     if (resp.statusCode < 200 || resp.statusCode >= 300) {
-      final errBody = resp.body.toLowerCase();
-      if (resp.statusCode == 400 && errBody.contains('image')) {
+      if (_shouldRetryWithoutDetail(resp.statusCode, resp.body)) {
+        resp = await postOnce(false);
+        strippedDetail = true;
+      }
+    }
+    if (resp.statusCode < 200 || resp.statusCode >= 300) {
+      final desc = describeLlmHttpError(resp.statusCode, resp.body);
+      final lower = resp.body.toLowerCase();
+      if (resp.statusCode == 400 && lower.contains('image')) {
         throw LlmVisionException(
-          '当前模型可能不支持图片识别，请换用支持视觉的模型（如 deepseek-flash）',
+          '图片识别失败：$desc。当前模型可能不支持图片识别，请换用支持视觉的模型（如 deepseek-flash）',
         );
       }
-      throw LlmVisionException('图片识别请求失败（HTTP ${resp.statusCode}）');
+      throw LlmVisionException('图片识别失败：$desc');
+    }
+    if (strippedDetail) {
+      const hint = '已自动兼容：服务端不接受 detail 字段';
+      onCompatHint?.call(hint);
+      if (settingsDb != null) {
+        await settingsDb.setSetting(kLlmDetailCompatKey, 'true');
+      }
     }
     final decoded = jsonDecode(resp.body);
     if (decoded is! Map) {

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/db/database_provider.dart';
@@ -25,6 +26,13 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
   bool _enabled = false;
   bool _hasKey = false;
   bool _obscureKey = true;
+  bool _testing = false;
+  String? _effectiveBase;
+  String? _effectiveModel;
+  String? _keyTail;
+  String? _modelWarning;
+  String? _testResult;
+  String? _detailCompat;
 
   @override
   void initState() {
@@ -44,6 +52,9 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
     final db = ref.read(databaseProvider);
     final cfg = await _settings.load(db);
     final hasKey = await _settings.hasApiKey();
+    final key = cfg.apiKey.trim();
+    final tail = key.length >= 4 ? key.substring(key.length - 4) : key;
+    final compat = await db.getSetting(kLlmDetailCompatKey);
     if (!mounted) return;
     setState(() {
       _enabled = cfg.enabled;
@@ -51,8 +62,19 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
       _modelCtrl.text = cfg.model;
       _hasKey = hasKey;
       _keyCtrl.text = '';
+      _effectiveBase = cfg.baseUrl;
+      _effectiveModel = cfg.model;
+      _keyTail = hasKey ? tail : null;
+      _modelWarning = _settings.lastModelWarning;
+      _detailCompat = compat;
       _loading = false;
     });
+    final notice = _settings.lastMigrationNotice;
+    if (notice != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(notice)),
+      );
+    }
   }
 
   Future<void> _save() async {
@@ -122,6 +144,42 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
     );
   }
 
+  Future<void> _testConnection() async {
+    if (_testing) return;
+    final keyText = _keyCtrl.text.trim();
+    final hasKeyNow = _hasKey || keyText.isNotEmpty;
+    if (!hasKeyNow) {
+      setState(() => _testResult = '❌ 请先配置 API Key');
+      return;
+    }
+    setState(() {
+      _testing = true;
+      _testResult = null;
+    });
+    try {
+      final db = ref.read(databaseProvider);
+      var cfg = await _settings.load(db);
+      final base = _baseCtrl.text.trim().isEmpty
+          ? kDefaultLlmBaseUrl
+          : _baseCtrl.text.trim();
+      final model = _modelCtrl.text.trim().isEmpty
+          ? kDefaultLlmModel
+          : _modelCtrl.text.trim();
+      final apiKey = keyText.isNotEmpty ? keyText : cfg.apiKey;
+      cfg = SmartFillLlmConfig(
+        enabled: true,
+        baseUrl: base,
+        model: model,
+        apiKey: apiKey,
+      );
+      final result = await testLlmConnection(config: cfg);
+      if (!mounted) return;
+      setState(() => _testResult = result.message);
+    } finally {
+      if (mounted) setState(() => _testing = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return CentliGradientScaffold(
@@ -155,6 +213,80 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
             ),
           ),
 
+                CentliSoftCard(
+                  key: const Key('bk_effective_llm_config'),
+                  padding: const EdgeInsets.all(CentliSpacing.cardPad),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '当前生效配置',
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                      const SizedBox(height: 8),
+                      SelectableText(
+                        '接口地址：${_effectiveBase ?? _baseCtrl.text}\n'
+                        '模型：${_effectiveModel ?? _modelCtrl.text}\n'
+                        'Key：${_hasKey ? "已保存（sk-…${_keyTail ?? ""}）" : "未配置"}',
+                      ),
+                      if (_modelWarning != null) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          _modelWarning!,
+                          style: TextStyle(
+                            color: Colors.amber.shade800,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                      if (_detailCompat == 'true') ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          '已自动兼容：服务端不接受 detail 字段',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                      const SizedBox(height: 12),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: FilledButton.tonalIcon(
+                          onPressed: _loading || _saving || _testing
+                              ? null
+                              : _testConnection,
+                          icon: _testing
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Icon(Icons.wifi_tethering),
+                          label: Text(_testing ? '测试中…' : '测试连接'),
+                        ),
+                      ),
+                      if (_testResult != null) ...[
+                        const SizedBox(height: 8),
+                        GestureDetector(
+                          onLongPress: () async {
+                            await Clipboard.setData(
+                              ClipboardData(text: _testResult!),
+                            );
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('已复制'),
+                              ),
+                            );
+                          },
+                          child: Text(
+                            '$_testResult\n(长按可复制)',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: CentliSpacing.section),
                 CentliSoftCard(
                   child: SwitchListTile(
                     title: const Text('用大模型增强文字填单'),
