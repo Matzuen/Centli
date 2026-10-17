@@ -347,6 +347,7 @@ class ExportService {
       TextCellValue('tags'),
       TextCellValue('source'),
       TextCellValue('include_in_stat'),
+      TextCellValue('include_in_budget'),
       TextCellValue('fx_rate'),
       TextCellValue('to_amount_minor'),
       TextCellValue('deleted_at'),
@@ -384,6 +385,7 @@ class ExportService {
         TextCellValue('${t['tags'] ?? ''}'),
         TextCellValue('${t['source'] ?? ''}'),
         IntCellValue(t['includeInStat'] as int? ?? 1),
+        IntCellValue(t['includeInBudget'] as int? ?? 1),
         fx == null ? TextCellValue('') : DoubleCellValue((fx as num).toDouble()),
         t['toAmountMinor'] == null
             ? TextCellValue('')

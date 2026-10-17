@@ -477,37 +477,59 @@ class ImportService {
       });
     }
 
+    final txnHeader = _headerIndex(excel, 'transactions');
+    _requireHeaders(
+      txnHeader,
+      sheet: 'transactions',
+      required: const [
+        'id',
+        'happen_at_iso',
+        'type',
+        'amount_minor',
+        'currency',
+        'account_id',
+      ],
+    );
     final transactions = <Map<String, dynamic>>[];
     for (final row in _dataRows(excel, 'transactions')) {
-      final id = _cellStr(row, 0);
-      if (id.isEmpty || id == 'id') continue;
-      final iso = _cellStr(row, 1);
+      final id = _cellBy(row, txnHeader, 'id');
+      if (id.isEmpty) continue;
+      final iso = _cellBy(row, txnHeader, 'happen_at_iso');
       final happenAt = _parseIsoToMs(iso) ?? ts;
-      final ccy = _cellStr(row, 5, fallback: baseCurrency);
-      final toAccount = _cellStr(row, 8);
-      final categoryId = _cellStr(row, 10);
-      final merchant = _cellStr(row, 12);
-      final note = _cellStr(row, 13);
-      final tags = _cellStr(row, 14);
-      final fxRaw = _cellStr(row, 17);
-      final toAmtRaw = _cellStr(row, 18);
-      final delRaw = _cellStr(row, 19);
+      final ccy = _cellBy(row, txnHeader, 'currency', fallback: baseCurrency);
+      final toAccount = _cellBy(row, txnHeader, 'to_account_id');
+      final categoryId = _cellBy(row, txnHeader, 'category_id');
+      final merchant = _cellBy(row, txnHeader, 'merchant');
+      final note = _cellBy(row, txnHeader, 'note');
+      final tags = _cellBy(row, txnHeader, 'tags');
+      final fxRaw = _cellBy(row, txnHeader, 'fx_rate');
+      final toAmtRaw = _cellBy(row, txnHeader, 'to_amount_minor');
+      final delRaw = _cellBy(row, txnHeader, 'deleted_at');
+      // Missing include_in_budget column (older exports) defaults to 1.
+      final hasBudgetCol = txnHeader.containsKey('include_in_budget');
       transactions.add({
         'id': id,
         'ledgerId': ledgerId,
         'happenAt': happenAt,
-        'type': _cellStr(row, 2, fallback: 'out'),
-        'amountMinor': _cellInt(row, 3),
+        'type': _cellBy(row, txnHeader, 'type', fallback: 'out'),
+        'amountMinor': _cellIntBy(row, txnHeader, 'amount_minor'),
         'currency': ccy,
-        'accountId': _cellStr(row, 6),
+        'accountId': _cellBy(row, txnHeader, 'account_id'),
         'toAccountId': toAccount.isEmpty ? null : toAccount,
         'categoryId': categoryId.isEmpty ? null : categoryId,
         'merchant': merchant.isEmpty ? null : merchant,
         'note': note.isEmpty ? null : note,
         'tags': tags.isEmpty ? null : tags,
-        'source': _cellStr(row, 15, fallback: 'manual'),
-        'includeInStat': _cellInt(row, 16, fallback: 1),
-        'includeInBudget': 1,
+        'source': _cellBy(row, txnHeader, 'source', fallback: 'manual'),
+        'includeInStat': _cellIntBy(
+          row,
+          txnHeader,
+          'include_in_stat',
+          fallback: 1,
+        ),
+        'includeInBudget': hasBudgetCol
+            ? _cellIntBy(row, txnHeader, 'include_in_budget', fallback: 1)
+            : 1,
         'fxRate': fxRaw.isEmpty ? null : double.tryParse(fxRaw),
         'toAmountMinor': toAmtRaw.isEmpty ? null : int.tryParse(toAmtRaw),
         'deletedAt': delRaw.isEmpty ? null : int.tryParse(delRaw),
@@ -595,6 +617,58 @@ class ImportService {
 
     final bundle = parseJsonString(jsonEncode(map));
     return (bundle: bundle, warnings: warnings);
+  }
+
+  /// Map header name -> column index for [sheet] (first row).
+  static Map<String, int> _headerIndex(Excel excel, String sheet) {
+    final rows = _sheetRows(excel, sheet);
+    if (rows.isEmpty) return const {};
+    final header = rows.first;
+    final out = <String, int>{};
+    for (var i = 0; i < header.length; i++) {
+      final name = _cellStr(header, i);
+      if (name.isEmpty) continue;
+      out.putIfAbsent(name, () => i);
+    }
+    return out;
+  }
+
+  static void _requireHeaders(
+    Map<String, int> header, {
+    required String sheet,
+    required List<String> required,
+  }) {
+    final missing = [
+      for (final h in required)
+        if (!header.containsKey(h)) h,
+    ];
+    if (missing.isNotEmpty) {
+      throw StateError(
+        'Excel「$sheet」缺少必需列：${missing.join('、')}。请使用 Centli 导出的表头，勿删改列名。',
+      );
+    }
+  }
+
+  static String _cellBy(
+    List<Data?> row,
+    Map<String, int> header,
+    String name, {
+    String fallback = '',
+  }) {
+    final i = header[name];
+    if (i == null) return fallback;
+    return _cellStr(row, i, fallback: fallback);
+  }
+
+  static int _cellIntBy(
+    List<Data?> row,
+    Map<String, int> header,
+    String name, {
+    int fallback = 0,
+  }) {
+    final i = header[name];
+    if (i == null) return fallback;
+    return _cellInt(row, i, fallback: fallback);
   }
 
   static List<List<Data?>> _sheetRows(Excel excel, String name) {
