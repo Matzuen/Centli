@@ -14,6 +14,19 @@ import '../../platform/notifications/noti_template_store.dart';
 import '../../platform/pending/pending_capture_intake.dart';
 import '../../app/theme.dart';
 
+
+/// Badge label for pending capture cards. Status takes priority over parseOk.
+@visibleForTesting
+String? pendingCaptureBadgeLabel({
+  required String status,
+  required int parseOk,
+}) {
+  if (status == 'confirmed') return '已入账';
+  if (status == 'ignored') return '已忽略';
+  if (status == 'pending' && parseOk == 0) return '解析失败';
+  return null;
+}
+
 final _pendingFilterProvider = StateProvider<String>((ref) => 'pending');
 
 final _pendingListProvider =
@@ -607,22 +620,22 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
                   ),
                 ),
                 // Badge by status first (not parseOk): confirmed stays 已入账.
-                if (c.status == 'confirmed')
-                  const Chip(
-                    label: Text('已入账'),
-                    visualDensity: VisualDensity.compact,
-                  )
-                else if (c.status == 'ignored')
-                  const Chip(
-                    label: Text('已忽略'),
-                    visualDensity: VisualDensity.compact,
-                  )
-                else if (c.status == 'pending' && c.parseOk == 0)
-                  Chip(
-                    label: const Text('解析失败'),
-                    visualDensity: VisualDensity.compact,
-                    backgroundColor: scheme.errorContainer,
-                  ),
+                Builder(
+                  builder: (context) {
+                    final label = pendingCaptureBadgeLabel(
+                      status: c.status,
+                      parseOk: c.parseOk,
+                    );
+                    if (label == null) return const SizedBox.shrink();
+                    return Chip(
+                      label: Text(label),
+                      visualDensity: VisualDensity.compact,
+                      backgroundColor: label == '解析失败'
+                          ? scheme.errorContainer
+                          : null,
+                    );
+                  },
+                ),
               ],
             ),
             if (isPending) ...[
