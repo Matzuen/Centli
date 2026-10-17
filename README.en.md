@@ -65,6 +65,7 @@ Prefer JSON (`format: centli-export`). Excel import is best-effort (no fx/settin
 - Unknown routes show a friendly page instead of raw GoException
 - Calendar tab drops the duplicate txn list; tap a day for a sheet with that days ledger and quick bookkeeping
 - Daily trend colors by sign (income green / expense red) with a zero baseline
+- Drop mistaken merchant row on ledger detail (note shown once); net-worth consistency guard across home and assets
 
 ### 1.4.1 (2026-10-17)
 - B4: custom asset types; DeepSeek vision for screenshot booking; hold-to-talk voice; pending tab split + repay notifications; drop subscriptions

@@ -205,14 +205,6 @@ class _DetailBody extends ConsumerWidget {
                   trailing: Text(_sourceLabel(txn.source)),
                 ),
                 const Divider(height: 1),
-                ListTile(
-                  title: const Text('\u5546\u6237'),
-                  trailing: Text(
-                    (txn.note == null || txn.note!.isEmpty)
-                        ? '\u2014'
-                        : txn.note!,
-                  ),
-                ),
                 _sectionHeader(context, '\u5176\u5b83'),
                 ListTile(
                   title: const Text('\u6807\u7b7e'),

@@ -43,6 +43,10 @@ final _assetTypesProvider =
 });
 
 
+/// Test-only public alias for assets net-worth provider (G22 consistency).
+@visibleForTesting
+final assetsNetWorthProvider = _netWorthBaseProvider;
+
 final _netWorthBaseProvider =
     FutureProvider.family<BaseNetWorth, ({String ledgerId, String base})>((
       ref,

@@ -665,12 +665,6 @@ class _StatsBudgetSection extends ConsumerWidget {
                           ],
                         ),
                       ),
-                    if (p.categories.length > 3)
-                      Text(
-                        '\u53e6\u6709 ${p.categories.length - 3} \u4e2a\u5206\u7c7b\u9884\u7b97\u2026',
-                        style: Theme.of(context).textTheme.bodySmall
-                            ?.copyWith(color: scheme.onSurfaceVariant),
-                      ),
                   ],
                 ],
               ),
