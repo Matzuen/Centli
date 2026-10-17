@@ -67,6 +67,21 @@ void main() {
       expect(src.contains('Icons.payments_outlined'), isFalse);
     });
 
+    test('member chip removed; order time category account tags', () {
+      expect(src.contains('_pickMember'), isFalse);
+      expect(src.contains('_memberCtrl'), isFalse);
+      expect(src.contains('Icons.person_outline'), isFalse);
+      expect(src.contains("? '成员'"), isFalse);
+      final chipsIdx = src.indexOf("Key('bk_chips_row')");
+      final noteIdx = src.indexOf("Key('bk_note')");
+      final chips = src.substring(chipsIdx, noteIdx);
+      expect(chips.contains("_happenAtLabel"), isTrue);
+      expect(chips.contains("'分类'"), isTrue);
+      expect(chips.contains("'账户'") || chips.contains("'转出'"), isTrue);
+      expect(chips.contains("'标签'"), isTrue);
+      expect(chips.contains("'成员'"), isFalse);
+    });
+
     test('txn template suffix gone', () {
       expect(src.contains('list_alt_outlined'), isFalse);
       expect(src.contains("tooltip: '模板'"), isFalse);
@@ -121,6 +136,14 @@ void main() {
           tester.getSize(find.byKey(const Key('bk_chips_row'))).height;
       expect(chipsH, lessThan(50));
 
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 50));
+    });
+
+    testWidgets('member chip not shown', (tester) async {
+      await pumpPanel(tester);
+      expect(find.text('成员'), findsNothing);
+      expect(find.text('标签'), findsOneWidget);
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump(const Duration(milliseconds: 50));
     });

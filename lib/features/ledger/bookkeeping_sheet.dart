@@ -53,7 +53,6 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
   String? _accountId;
   String? _toAccountId;
   String? _categoryId;
-  final _memberCtrl = TextEditingController();
   final _noteCtrl = TextEditingController();
   List<String> _tags = [];
 List<Account> _accounts = [];
@@ -72,7 +71,6 @@ List<Account> _accounts = [];
 
   @override
   void dispose() {
-    _memberCtrl.dispose();
     _noteCtrl.dispose();
     super.dispose();
   }
@@ -121,8 +119,7 @@ List<Account> _accounts = [];
         _accountId = existing.accountId;
         _toAccountId = existing.toAccountId;
         _categoryId = existing.categoryId;
-            _memberCtrl.text = existing.member ?? '';
-        _noteCtrl.text = existing.note ?? '';
+            _noteCtrl.text = existing.note ?? '';
         _tags = List<String>.from(decodeTxnTags(existing.tags));
         _happenAt = DateTime.fromMillisecondsSinceEpoch(
           existing.happenAt,
@@ -424,9 +421,8 @@ List<Account> _accounts = [];
       }
 
       final note = _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim();
-      final member = _memberCtrl.text.trim().isEmpty
-          ? null
-          : _memberCtrl.text.trim();
+      // Panel no longer edits member; preserve existing value on update.
+      final member = widget.existing?.member;
       final toAcc = _type == 'transfer' ? _toAccountId : null;
       final cat = _type == 'transfer' ? null : _categoryId;
       if (widget.existing != null) {
@@ -470,8 +466,7 @@ List<Account> _accounts = [];
           _toAmountText = '0';
           _fxRateText = null;
           _noteCtrl.clear();
-              _memberCtrl.clear();
-          _happenAt = DateTime.now();
+              _happenAt = DateTime.now();
         });
         ScaffoldMessenger.of(context)
             .showSnackBar(const SnackBar(content: Text('已保存，可继续记账')));
@@ -705,38 +700,6 @@ List<Account> _accounts = [];
   }
 
 
-  Future<void> _pickMember() async {
-    final ctrl = TextEditingController(text: _memberCtrl.text);
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('成员'),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          decoration: const InputDecoration(
-            hintText: '成员（可选）',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('确定'),
-          ),
-        ],
-      ),
-    );
-    if (ok == true && mounted) {
-      setState(() => _memberCtrl.text = ctrl.text.trim());
-    }
-    ctrl.dispose();
-  }
-
 
   @override
   Widget build(BuildContext context) {
@@ -897,7 +860,7 @@ List<Account> _accounts = [];
                             ),
                           ),
                           const SizedBox(height: 12),
-                          // Chips: time / category / account / tags / member (single scroll row)
+                          // Chips: time / category / account / tags (single scroll row)
                           Padding(
                             key: const Key('bk_chips_row'),
                             padding: const EdgeInsets.only(left: 16),
@@ -1004,15 +967,6 @@ List<Account> _accounts = [];
                                           ? '****'
                                           : _tags.take(2).join(' · ')),
                                   onTap: _editSheetTags,
-                                ),
-                                _MetaChip(
-                                  icon: Icons.person_outline,
-                                  label: _memberCtrl.text.trim().isEmpty
-                                      ? '成员'
-                                      : (hide
-                                          ? '****'
-                                          : _memberCtrl.text.trim()),
-                                  onTap: _pickMember,
                                 ),
                               ],
                             ),
