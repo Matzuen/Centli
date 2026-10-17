@@ -40,4 +40,4 @@ Got dependencies!
 36 packages have newer versions incompatible with dependency constraints.
 Try `flutter pub outdated` for more information.
 Analyzing Centli...                                             
-No issues found! (ran in 4.4s)
+No issues found! (ran in 4.2s)

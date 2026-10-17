@@ -45,22 +45,23 @@ Try `flutter pub outdated` for more information.
 00:00 +2: D:/Resource/Codebase/studyProject/Centli/test/ai_text_fill_test.dart: parseBookkeepingText salary income
 00:00 +3: D:/Resource/Codebase/studyProject/Centli/test/ai_text_fill_test.dart: parseBookkeepingText transfer between accounts
 00:00 +4: D:/Resource/Codebase/studyProject/Centli/test/ai_text_fill_test.dart: parseBookkeepingText yesterday + alipay account
-00:00 +5: D:/Resource/Codebase/studyProject/Centli/test/ai_text_fill_test.dart: parseBookkeepingText merchant via 鍦?00:00 +6: D:/Resource/Codebase/studyProject/Centli/test/ai_text_fill_test.dart: parseBookkeepingText empty input
+00:00 +5: D:/Resource/Codebase/studyProject/Centli/test/ai_text_fill_test.dart: parseBookkeepingText merchant via 在
+00:00 +6: D:/Resource/Codebase/studyProject/Centli/test/ai_text_fill_test.dart: parseBookkeepingText empty input
 00:00 +7: D:/Resource/Codebase/studyProject/Centli/test/ai_text_fill_test.dart: parseBookkeepingText currency symbol amount
 00:00 +8: D:/Resource/Codebase/studyProject/Centli/test/ai_text_fill_test.dart: parseBookkeepingText amount-only leaves category unset
 00:00 +9: D:/Resource/Codebase/studyProject/Centli/test/ai_text_fill_test.dart: parseBookkeepingText waimai maps to dining
 00:00 +10: D:/Resource/Codebase/studyProject/Centli/test/ai_text_fill_test.dart: parseBookkeepingText rent maps to housing
 00:00 +11: D:/Resource/Codebase/studyProject/Centli/test/ai_text_fill_test.dart: parseBookkeepingText prefers leaf category when tree provided
 00:00 +12: D:/Resource/Codebase/studyProject/Centli/test/ai_text_fill_test.dart: parseBookkeepingText leftover remark kept as note
-00:00 +13: D:/Resource/Codebase/studyProject/Centli/test/amount_expr_test.dart: evalAmountExpr precedence add subtract left to right
+00:00 +13: D:/Resource/Codebase/studyProject/Centli/test/ai_text_fill_test.dart: parseBookkeepingText mapCategoryHintToLocal fuzzy
 00:00 +14: D:/Resource/Codebase/studyProject/Centli/test/amount_expr_test.dart: evalAmountExpr precedence add subtract left to right
 00:00 +15: D:/Resource/Codebase/studyProject/Centli/test/amount_expr_test.dart: evalAmountExpr precedence multiply divide before add
 00:00 +16: D:/Resource/Codebase/studyProject/Centli/test/amount_expr_test.dart: evalAmountExpr precedence same-level multiply divide left to right
 00:00 +17: D:/Resource/Codebase/studyProject/Centli/test/amount_expr_test.dart: evalAmountExpr precedence star slash aliases
 00:00 +18: D:/Resource/Codebase/studyProject/Centli/test/amount_expr_test.dart: evalAmountExpr precedence trailing operator ignored
-00:00 +19: D:/Resource/Codebase/studyProject/Centli/test/amount_expr_test.dart: evalAmountExpr precedence divide by zero null
-00:00 +20: D:/Resource/Codebase/studyProject/Centli/test/amount_expr_test.dart: applyAmountOperator and keys replace trailing op
-00:00 +21: D:/Resource/Codebase/studyProject/Centli/test/amount_expr_test.dart: applyAmountOperator and keys append digit after op
+00:00 +19: D:/Resource/Codebase/studyProject/Centli/test/app_version_test.dart: kAppVersionFallback matches pubspec.yaml version
+00:00 +20: D:/Resource/Codebase/studyProject/Centli/test/app_version_test.dart: kAppVersionFallback matches pubspec.yaml version
+00:00 +21: D:/Resource/Codebase/studyProject/Centli/test/app_version_test.dart: kAppVersionFallback matches pubspec.yaml version
 00:00 +22: D:/Resource/Codebase/studyProject/Centli/test/app_version_test.dart: kAppVersionFallback matches pubspec.yaml version
 00:00 +23: D:/Resource/Codebase/studyProject/Centli/test/bookkeeping_panel_structure_test.dart: bookkeeping panel structure (source contract) (setUpAll)
 00:00 +23: D:/Resource/Codebase/studyProject/Centli/test/bookkeeping_panel_structure_test.dart: bookkeeping panel structure (source contract) no title Text in build UI
@@ -73,7 +74,7 @@ Try `flutter pub outdated` for more information.
 00:00 +30: D:/Resource/Codebase/studyProject/Centli/test/bookkeeping_panel_structure_test.dart: bookkeeping panel structure (source contract) member chip removed; order time category account tags
 00:00 +31: D:/Resource/Codebase/studyProject/Centli/test/bookkeeping_panel_structure_test.dart: bookkeeping panel structure (source contract) txn template suffix gone
 00:00 +32: D:/Resource/Codebase/studyProject/Centli/test/bookkeeping_panel_structure_test.dart: bookkeeping panel structure (source contract) (tearDownAll)
-00:00 +32: D:/Resource/Codebase/studyProject/Centli/test/bookkeeping_panel_structure_test.dart: bookkeeping panel structure (behavior) type switcher has 3 segs above amount; switches category kind
+00:00 +32: D:/Resource/Codebase/studyProject/Centli/test/budget_test.dart: budgetYearMonth formats yyyy-MM
 00:00 +33: D:/Resource/Codebase/studyProject/Centli/test/bookkeeping_panel_structure_test.dart: bookkeeping panel structure (behavior) type switcher has 3 segs above amount; switches category kind
 00:00 +34: D:/Resource/Codebase/studyProject/Centli/test/bookkeeping_panel_structure_test.dart: bookkeeping panel structure (behavior) type switcher has 3 segs above amount; switches category kind
 00:00 +35: D:/Resource/Codebase/studyProject/Centli/test/bookkeeping_panel_structure_test.dart: bookkeeping panel structure (behavior) type switcher has 3 segs above amount; switches category kind
@@ -85,173 +86,190 @@ Try `flutter pub outdated` for more information.
 00:00 +41: D:/Resource/Codebase/studyProject/Centli/test/bookkeeping_panel_structure_test.dart: bookkeeping panel structure (behavior) type switcher has 3 segs above amount; switches category kind
 00:00 +42: D:/Resource/Codebase/studyProject/Centli/test/bookkeeping_panel_structure_test.dart: bookkeeping panel structure (behavior) type switcher has 3 segs above amount; switches category kind
 00:00 +43: D:/Resource/Codebase/studyProject/Centli/test/bookkeeping_panel_structure_test.dart: bookkeeping panel structure (behavior) type switcher has 3 segs above amount; switches category kind
-00:01 +44: D:/Resource/Codebase/studyProject/Centli/test/bookkeeping_panel_structure_test.dart: bookkeeping panel structure (behavior) member chip not shown
-00:01 +45: D:/Resource/Codebase/studyProject/Centli/test/bookkeeping_panel_structure_test.dart: bookkeeping panel structure (behavior) transfer hides category chip
-00:02 +46: D:/Resource/Codebase/studyProject/Centli/test/excel_asset_types_test.dart: excel export type names round-trip; legacy codes & unknown map
-00:03 +47: D:/Resource/Codebase/studyProject/Centli/test/excel_import_test.dart: excel best-effort parse from Centli export workbook
-00:03 +48: D:/Resource/Codebase/studyProject/Centli/test/excel_include_budget_test.dart: excel round-trip preserves include_in_budget and include_in_stat
-00:03 +49: D:/Resource/Codebase/studyProject/Centli/test/excel_include_budget_test.dart: excel round-trip preserves include_in_budget and include_in_stat
-00:03 +50: D:/Resource/Codebase/studyProject/Centli/test/excel_include_budget_test.dart: excel round-trip preserves include_in_budget and include_in_stat
-00:03 +51: D:/Resource/Codebase/studyProject/Centli/test/excel_include_budget_test.dart: excel round-trip preserves include_in_budget and include_in_stat
-00:03 +52: D:/Resource/Codebase/studyProject/Centli/test/excel_include_budget_test.dart: excel round-trip preserves include_in_budget and include_in_stat
-00:03 +53: D:/Resource/Codebase/studyProject/Centli/test/excel_include_budget_test.dart: excel round-trip preserves include_in_budget and include_in_stat
-00:03 +54: D:/Resource/Codebase/studyProject/Centli/test/excel_include_budget_test.dart: excel round-trip preserves include_in_budget and include_in_stat
-00:03 +55: D:/Resource/Codebase/studyProject/Centli/test/excel_include_budget_test.dart: excel round-trip preserves include_in_budget and include_in_stat
-00:03 +56: D:/Resource/Codebase/studyProject/Centli/test/excel_include_budget_test.dart: excel round-trip preserves include_in_budget and include_in_stat
-00:03 +57: D:/Resource/Codebase/studyProject/Centli/test/excel_include_budget_test.dart: excel round-trip preserves include_in_budget and include_in_stat
-00:03 +58: D:/Resource/Codebase/studyProject/Centli/test/excel_include_budget_test.dart: excel import errors on missing required headers
-00:03 +58: loading D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart
+00:00 +44: D:/Resource/Codebase/studyProject/Centli/test/bookkeeping_panel_structure_test.dart: bookkeeping panel structure (behavior) type switcher has 3 segs above amount; switches category kind
+00:00 +45: D:/Resource/Codebase/studyProject/Centli/test/bookkeeping_panel_structure_test.dart: bookkeeping panel structure (behavior) type switcher has 3 segs above amount; switches category kind
+00:00 +46: D:/Resource/Codebase/studyProject/Centli/test/bookkeeping_panel_structure_test.dart: bookkeeping panel structure (behavior) type switcher has 3 segs above amount; switches category kind
+00:00 +47: D:/Resource/Codebase/studyProject/Centli/test/bookkeeping_panel_structure_test.dart: bookkeeping panel structure (behavior) type switcher has 3 segs above amount; switches category kind
+00:00 +48: D:/Resource/Codebase/studyProject/Centli/test/bookkeeping_panel_structure_test.dart: bookkeeping panel structure (behavior) type switcher has 3 segs above amount; switches category kind
+00:00 +49: D:/Resource/Codebase/studyProject/Centli/test/bookkeeping_panel_structure_test.dart: bookkeeping panel structure (behavior) type switcher has 3 segs above amount; switches category kind
+00:00 +50: D:/Resource/Codebase/studyProject/Centli/test/bookkeeping_panel_structure_test.dart: bookkeeping panel structure (behavior) type switcher has 3 segs above amount; switches category kind
+00:00 +51: D:/Resource/Codebase/studyProject/Centli/test/bookkeeping_panel_structure_test.dart: bookkeeping panel structure (behavior) type switcher has 3 segs above amount; switches category kind
+00:00 +52: D:/Resource/Codebase/studyProject/Centli/test/bookkeeping_panel_structure_test.dart: bookkeeping panel structure (behavior) type switcher has 3 segs above amount; switches category kind
+00:00 +53: D:/Resource/Codebase/studyProject/Centli/test/bookkeeping_panel_structure_test.dart: bookkeeping panel structure (behavior) type switcher has 3 segs above amount; switches category kind
+00:00 +54: D:/Resource/Codebase/studyProject/Centli/test/bookkeeping_panel_structure_test.dart: bookkeeping panel structure (behavior) type switcher has 3 segs above amount; switches category kind
+00:00 +55: D:/Resource/Codebase/studyProject/Centli/test/bookkeeping_panel_structure_test.dart: bookkeeping panel structure (behavior) type switcher has 3 segs above amount; switches category kind
+00:00 +56: D:/Resource/Codebase/studyProject/Centli/test/bookkeeping_panel_structure_test.dart: bookkeeping panel structure (behavior) type switcher has 3 segs above amount; switches category kind
+00:00 +57: D:/Resource/Codebase/studyProject/Centli/test/bookkeeping_panel_structure_test.dart: bookkeeping panel structure (behavior) type switcher has 3 segs above amount; switches category kind
+00:01 +58: D:/Resource/Codebase/studyProject/Centli/test/bookkeeping_panel_structure_test.dart: bookkeeping panel structure (behavior) type switcher has 3 segs above amount; switches category kind
+00:01 +59: D:/Resource/Codebase/studyProject/Centli/test/bookkeeping_panel_structure_test.dart: bookkeeping panel structure (behavior) type switcher has 3 segs above amount; switches category kind
+00:01 +60: D:/Resource/Codebase/studyProject/Centli/test/bookkeeping_panel_structure_test.dart: bookkeeping panel structure (behavior) type switcher has 3 segs above amount; switches category kind
+00:01 +61: D:/Resource/Codebase/studyProject/Centli/test/bookkeeping_panel_structure_test.dart: bookkeeping panel structure (behavior) type switcher has 3 segs above amount; switches category kind
+00:01 +62: D:/Resource/Codebase/studyProject/Centli/test/excel_include_budget_test.dart: excel round-trip preserves include_in_budget and include_in_stat
+00:01 +63: D:/Resource/Codebase/studyProject/Centli/test/excel_include_budget_test.dart: excel round-trip preserves include_in_budget and include_in_stat
+00:01 +64: D:/Resource/Codebase/studyProject/Centli/test/excel_include_budget_test.dart: excel round-trip preserves include_in_budget and include_in_stat
+00:01 +65: D:/Resource/Codebase/studyProject/Centli/test/excel_include_budget_test.dart: excel round-trip preserves include_in_budget and include_in_stat
+00:01 +66: D:/Resource/Codebase/studyProject/Centli/test/excel_include_budget_test.dart: excel round-trip preserves include_in_budget and include_in_stat
+00:01 +67: D:/Resource/Codebase/studyProject/Centli/test/excel_include_budget_test.dart: excel round-trip preserves include_in_budget and include_in_stat
+00:01 +68: D:/Resource/Codebase/studyProject/Centli/test/excel_include_budget_test.dart: excel round-trip preserves include_in_budget and include_in_stat
+00:01 +69: D:/Resource/Codebase/studyProject/Centli/test/excel_include_budget_test.dart: excel round-trip preserves include_in_budget and include_in_stat
+00:01 +70: D:/Resource/Codebase/studyProject/Centli/test/excel_include_budget_test.dart: excel round-trip preserves include_in_budget and include_in_stat
+00:01 +71: D:/Resource/Codebase/studyProject/Centli/test/excel_include_budget_test.dart: excel round-trip preserves include_in_budget and include_in_stat
+00:02 +71: loading D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart
 Warning: A tag was used that wasn't specified in dart_test.yaml.
   golden was used in:
     the test "bookkeeping panel golden light"
     the test "bookkeeping panel golden dark"
 
-00:03 +59: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: (setUpAll)
-00:03 +60: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: (setUpAll)
-00:03 +61: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: (setUpAll)
-00:03 +62: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: (setUpAll)
-00:03 +62: D:/Resource/Codebase/studyProject/Centli/test/golden/golden_guard_test.dart: source must not reintroduce 0.05pct tolerance
-00:03 +63: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
-00:04 +64: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
-00:05 +65: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
-00:05 +66: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
-00:05 +67: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
-00:05 +68: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
-00:05 +69: D:/Resource/Codebase/studyProject/Centli/test/llm_vision_error_test.dart: 400 Model Not Exist surfaces in exception
-00:05 +70: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden dark
-00:05 +71: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden dark
-00:05 +72: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden dark
-00:05 +73: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden dark
-00:05 +74: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden dark
-00:05 +75: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden dark
-00:05 +76: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden dark
-00:05 +77: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden dark
-00:05 +78: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden dark
-00:05 +79: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden dark
-00:05 +80: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden dark
-00:05 +81: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden dark
-00:05 +82: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden dark
-00:05 +83: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden dark
-00:05 +84: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden dark
-00:05 +85: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden dark
-00:05 +86: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden dark
-00:05 +87: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden dark
-00:06 +88: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden dark
-00:06 +89: D:/Resource/Codebase/studyProject/Centli/test/llm_vision_test.dart: prepareImageForLlm shrinks long edge and stays jpeg under 2MB
-00:06 +90: D:/Resource/Codebase/studyProject/Centli/test/llm_vision_test.dart: prepareImageForLlm shrinks long edge and stays jpeg under 2MB
-00:06 +91: D:/Resource/Codebase/studyProject/Centli/test/llm_vision_test.dart: prepareImageForLlm shrinks long edge and stays jpeg under 2MB
-00:06 +92: D:/Resource/Codebase/studyProject/Centli/test/llm_vision_test.dart: prepareImageForLlm shrinks long edge and stays jpeg under 2MB
-00:06 +93: D:/Resource/Codebase/studyProject/Centli/test/llm_vision_test.dart: prepareImageForLlm shrinks long edge and stays jpeg under 2MB
-00:06 +94: D:/Resource/Codebase/studyProject/Centli/test/llm_vision_test.dart: prepareImageForLlm shrinks long edge and stays jpeg under 2MB
-00:06 +95: D:/Resource/Codebase/studyProject/Centli/test/llm_vision_test.dart: prepareImageForLlm shrinks long edge and stays jpeg under 2MB
-00:06 +96: D:/Resource/Codebase/studyProject/Centli/test/llm_vision_test.dart: prepareImageForLlm shrinks long edge and stays jpeg under 2MB
-00:06 +97: D:/Resource/Codebase/studyProject/Centli/test/llm_vision_test.dart: prepareImageForLlm shrinks long edge and stays jpeg under 2MB
-00:06 +98: D:/Resource/Codebase/studyProject/Centli/test/llm_vision_test.dart: prepareImageForLlm shrinks long edge and stays jpeg under 2MB
-00:06 +99: D:/Resource/Codebase/studyProject/Centli/test/llm_vision_test.dart: prepareImageForLlm shrinks long edge and stays jpeg under 2MB
-00:06 +100: D:/Resource/Codebase/studyProject/Centli/test/llm_vision_test.dart: prepareImageForLlm shrinks long edge and stays jpeg under 2MB
-00:06 +101: D:/Resource/Codebase/studyProject/Centli/test/llm_vision_test.dart: prepareImageForLlm shrinks long edge and stays jpeg under 2MB
-00:06 +102: D:/Resource/Codebase/studyProject/Centli/test/llm_vision_test.dart: prepareImageForLlm shrinks long edge and stays jpeg under 2MB
-00:06 +103: D:/Resource/Codebase/studyProject/Centli/test/llm_vision_test.dart: prepareImageForLlm shrinks long edge and stays jpeg under 2MB
-00:06 +104: D:/Resource/Codebase/studyProject/Centli/test/llm_vision_test.dart: prepareImageForLlm shrinks long edge and stays jpeg under 2MB
-00:06 +105: D:/Resource/Codebase/studyProject/Centli/test/notification_parse_test.dart: payment filter drops chat / non-pay wechat 鍟嗘埛娑堣垂 matches
-00:06 +106: D:/Resource/Codebase/studyProject/Centli/test/notification_parse_test.dart: payment filter drops chat / non-pay wechat 浠樻鎴愬姛 matches
-00:06 +107: D:/Resource/Codebase/studyProject/Centli/test/llm_vision_test.dart: vision request puts image_url in user message with detail original
-00:06 +108: D:/Resource/Codebase/studyProject/Centli/test/llm_vision_test.dart: vision request puts image_url in user message with detail original
-00:06 +109: D:/Resource/Codebase/studyProject/Centli/test/llm_vision_test.dart: vision request puts image_url in user message with detail original
-00:06 +110: D:/Resource/Codebase/studyProject/Centli/test/llm_vision_test.dart: vision request puts image_url in user message with detail original
-00:06 +111: D:/Resource/Codebase/studyProject/Centli/test/llm_vision_test.dart: vision request puts image_url in user message with detail original
-00:06 +112: D:/Resource/Codebase/studyProject/Centli/test/llm_vision_test.dart: vision request puts image_url in user message with detail original
-00:06 +113: D:/Resource/Codebase/studyProject/Centli/test/llm_vision_test.dart: vision request puts image_url in user message with detail original
-00:06 +114: D:/Resource/Codebase/studyProject/Centli/test/llm_vision_test.dart: vision request puts image_url in user message with detail original
-00:06 +115: D:/Resource/Codebase/studyProject/Centli/test/llm_vision_test.dart: vision request puts image_url in user message with detail original
-00:06 +116: D:/Resource/Codebase/studyProject/Centli/test/llm_vision_test.dart: vision 400 with image keyword 鈫?readable model error
-00:06 +117: D:/Resource/Codebase/studyProject/Centli/test/llm_vision_test.dart: vision 400 with image keyword 鈫?readable model error
-00:06 +118: D:/Resource/Codebase/studyProject/Centli/test/llm_vision_test.dart: vision 400 with image keyword 鈫?readable model error
-00:06 +119: D:/Resource/Codebase/studyProject/Centli/test/llm_vision_test.dart: vision 400 with image keyword 鈫?readable model error
-00:06 +120: D:/Resource/Codebase/studyProject/Centli/test/llm_vision_test.dart: vision 400 with image keyword 鈫?readable model error
-00:06 +121: D:/Resource/Codebase/studyProject/Centli/test/notification_parse_test.dart: T1-3 income and refund templates wechat receive 鏀舵鍒拌处 is in
-00:06 +122: D:/Resource/Codebase/studyProject/Centli/test/llm_vision_test.dart: defaults are DeepSeek
-00:06 +123: D:/Resource/Codebase/studyProject/Centli/test/notification_parse_test.dart: T1-3 income and refund templates wechat peer-claimed red packet still not income
-00:06 +124: D:/Resource/Codebase/studyProject/Centli/test/notification_parse_test.dart: 寰俊绾㈠寘 income phrasing (T0) 浣犻鍙栦簡寮犱笁鐨勭孩鍖?is in
-00:06 +125: D:/Resource/Codebase/studyProject/Centli/test/notification_parse_test.dart: 寰俊绾㈠寘 income phrasing (T0) 浣犻鍙栦簡涓€涓孩鍖?is in
-00:06 +126: D:/Resource/Codebase/studyProject/Centli/test/notification_parse_test.dart: 寰俊绾㈠寘 income phrasing (T0) 浣犻鍙栦簡浣犵殑绾㈠寘 is in (T0-1)
-00:06 +127: D:/Resource/Codebase/studyProject/Centli/test/notification_parse_test.dart: 寰俊绾㈠寘 income phrasing (T0) 浣犳敹鍒颁竴涓孩鍖?is in (T0-2)
-00:06 +128: D:/Resource/Codebase/studyProject/Centli/test/notification_parse_test.dart: 寰俊绾㈠寘 income phrasing (T0) 浣犳敹鍒扮孩鍖?adjacent still in
-00:06 +129: D:/Resource/Codebase/studyProject/Centli/test/notification_parse_test.dart: 寰俊绾㈠寘 income phrasing (T0) 绾㈠寘鍒拌处 is in
-00:06 +130: D:/Resource/Codebase/studyProject/Centli/test/official_rules_import_test.dart: higher version official import accepted
-00:06 +131: D:/Resource/Codebase/studyProject/Centli/test/official_rules_import_test.dart: higher version official import accepted
-00:06 +132: D:/Resource/Codebase/studyProject/Centli/test/official_rules_import_test.dart: higher version official import accepted
-00:06 +133: D:/Resource/Codebase/studyProject/Centli/test/official_rules_import_test.dart: higher version official import accepted
-00:06 +134: D:/Resource/Codebase/studyProject/Centli/test/official_rules_import_test.dart: higher version official import accepted
-00:06 +135: D:/Resource/Codebase/studyProject/Centli/test/official_rules_import_test.dart: higher version official import accepted
-00:06 +136: D:/Resource/Codebase/studyProject/Centli/test/official_rules_import_test.dart: higher version official import accepted
-00:06 +137: D:/Resource/Codebase/studyProject/Centli/test/official_rules_import_test.dart: higher version official import accepted
-00:06 +138: D:/Resource/Codebase/studyProject/Centli/test/official_rules_import_test.dart: higher version official import accepted
-00:06 +139: D:/Resource/Codebase/studyProject/Centli/test/official_rules_import_test.dart: higher version official import accepted
-00:06 +140: D:/Resource/Codebase/studyProject/Centli/test/official_rules_import_test.dart: higher version official import accepted
-00:06 +141: D:/Resource/Codebase/studyProject/Centli/test/official_rules_import_test.dart: higher version official import accepted
-00:06 +142: D:/Resource/Codebase/studyProject/Centli/test/official_rules_import_test.dart: higher version official import accepted
-00:06 +143: D:/Resource/Codebase/studyProject/Centli/test/official_rules_import_test.dart: same version official import is no-op
-00:06 +144: D:/Resource/Codebase/studyProject/Centli/test/official_rules_import_test.dart: lower version rejected
-00:06 +145: D:/Resource/Codebase/studyProject/Centli/test/official_rules_import_test.dart: bad rules rejected and file unchanged
-00:06 +146: D:/Resource/Codebase/studyProject/Centli/test/pending_confirm_type_test.dart: confirmPendingCapture with income category stores type in
-00:06 +147: D:/Resource/Codebase/studyProject/Centli/test/pending_tabs_test.dart: pending tabs partition invariant four tabs disjoint and union equals all rows
-00:06 +148: D:/Resource/Codebase/studyProject/Centli/test/pending_tabs_test.dart: pending badge status priority confirmed + parseOk=0 shows 宸插叆璐?00:06 +149: D:/Resource/Codebase/studyProject/Centli/test/pending_tabs_test.dart: pending badge status priority pending + parseOk=0 shows 瑙ｆ瀽澶辫触
-00:06 +150: D:/Resource/Codebase/studyProject/Centli/test/pending_tabs_test.dart: pending badge status priority ignored shows 宸插拷鐣?even if parseOk=0
-00:06 +151: D:/Resource/Codebase/studyProject/Centli/test/pending_tabs_test.dart: pending badge status priority pending + parseOk=1 has no badge
-00:06 +152: D:/Resource/Codebase/studyProject/Centli/test/pending_tabs_test.dart: pending segmented control 320dp four labels fit without overflow; width stable across tabs
-00:06 +153: D:/Resource/Codebase/studyProject/Centli/test/pending_tabs_test.dart: pending segmented control 320dp four labels fit without overflow; width stable across tabs
-00:06 +154: D:/Resource/Codebase/studyProject/Centli/test/pending_tabs_test.dart: pending segmented control 320dp four labels fit without overflow; width stable across tabs
-00:06 +155: D:/Resource/Codebase/studyProject/Centli/test/pending_tabs_test.dart: pending segmented control 320dp four labels fit without overflow; width stable across tabs
-00:06 +156: D:/Resource/Codebase/studyProject/Centli/test/pending_tabs_test.dart: pending segmented control 320dp four labels fit without overflow; width stable across tabs
-00:06 +157: D:/Resource/Codebase/studyProject/Centli/test/pending_tabs_test.dart: pending segmented control 320dp four labels fit without overflow; width stable across tabs
-00:06 +158: D:/Resource/Codebase/studyProject/Centli/test/pending_tabs_test.dart: pending segmented control 320dp four labels fit without overflow; width stable across tabs
-00:07 +159: D:/Resource/Codebase/studyProject/Centli/test/pending_tabs_test.dart: pending segmented control 320dp four labels fit without overflow; width stable across tabs
-00:07 +160: D:/Resource/Codebase/studyProject/Centli/test/pending_tabs_test.dart: pending segmented control 320dp four labels fit without overflow; width stable across tabs
-00:07 +161: D:/Resource/Codebase/studyProject/Centli/test/pending_tabs_test.dart: pending segmented control 320dp four labels fit without overflow; width stable across tabs
-00:07 +162: D:/Resource/Codebase/studyProject/Centli/test/pending_tabs_test.dart: pending segmented control 320dp four labels fit without overflow; width stable across tabs
-00:07 +163: D:/Resource/Codebase/studyProject/Centli/test/pending_tabs_test.dart: pending segmented control 320dp four labels fit without overflow; width stable across tabs
-00:07 +164: D:/Resource/Codebase/studyProject/Centli/test/pending_tabs_test.dart: pending segmented control 320dp four labels fit without overflow; width stable across tabs
-00:07 +165: D:/Resource/Codebase/studyProject/Centli/test/pending_tabs_test.dart: pending segmented control 320dp four labels fit without overflow; width stable across tabs
-00:07 +166: D:/Resource/Codebase/studyProject/Centli/test/quick_bookkeeping_test.dart: title is 蹇€熻璐?00:07 +167: D:/Resource/Codebase/studyProject/Centli/test/quick_bookkeeping_test.dart: title is 蹇€熻璐?00:07 +168: D:/Resource/Codebase/studyProject/Centli/test/restore_ledger_scope_test.dart: multi-ledger: restore A does not touch B
-00:07 +169: D:/Resource/Codebase/studyProject/Centli/test/quick_bookkeeping_test.dart: hold then release fills text; cancel discards
-00:07 +170: D:/Resource/Codebase/studyProject/Centli/test/quick_bookkeeping_test.dart: hold then release fills text; cancel discards
-00:07 +171: D:/Resource/Codebase/studyProject/Centli/test/quick_bookkeeping_test.dart: hold then release fills text; cancel discards
-00:07 +172: D:/Resource/Codebase/studyProject/Centli/test/quick_bookkeeping_test.dart: hold then release fills text; cancel discards
-00:07 +173: D:/Resource/Codebase/studyProject/Centli/test/quick_bookkeeping_test.dart: hold then release fills text; cancel discards
-00:07 +174: D:/Resource/Codebase/studyProject/Centli/test/quick_bookkeeping_test.dart: hold then release fills text; cancel discards
-00:07 +175: D:/Resource/Codebase/studyProject/Centli/test/schema_v11_member_merge_test.dart: v11 onCreate has no member column
-00:08 +176: D:/Resource/Codebase/studyProject/Centli/test/quick_bookkeeping_test.dart: too-short hold shows tip and cancels
-00:08 +177: D:/Resource/Codebase/studyProject/Centli/test/quick_bookkeeping_test.dart: too-short hold shows tip and cancels
-00:08 +178: D:/Resource/Codebase/studyProject/Centli/test/schema_v11_member_merge_test.dart: v4鈫抳11 cross-version ends without member
-00:08 +179: D:/Resource/Codebase/studyProject/Centli/test/schema_v11_member_merge_test.dart: v4鈫抳11 cross-version ends without member
-00:08 +180: D:/Resource/Codebase/studyProject/Centli/test/schema_v11_member_merge_test.dart: v4鈫抳11 cross-version ends without member
-00:08 +181: D:/Resource/Codebase/studyProject/Centli/test/schema_v4_tags_migration_test.dart: v11 onCreate: tags+occurrence_key, no member, indexes (PRAGMA), soft-delete keeps tags
-00:08 +182: D:/Resource/Codebase/studyProject/Centli/test/quick_bookkeeping_test.dart: type text shows submit actions
-00:08 +183: D:/Resource/Codebase/studyProject/Centli/test/quick_bookkeeping_test.dart: type text shows submit actions
-00:08 +184: D:/Resource/Codebase/studyProject/Centli/test/schema_v8_merchant_note_test.dart: confirm with merchantForRule still learns auto-categorize
-00:08 +185: D:/Resource/Codebase/studyProject/Centli/test/schema_v8_merchant_note_test.dart: confirm with merchantForRule still learns auto-categorize
-00:08 +186: D:/Resource/Codebase/studyProject/Centli/test/quick_bookkeeping_test.dart: recognize then edit text field
-00:08 +187: D:/Resource/Codebase/studyProject/Centli/test/quick_bookkeeping_test.dart: recognize then edit text field
-00:08 +188: D:/Resource/Codebase/studyProject/Centli/test/schema_v9_drop_subscriptions_test.dart: v9 onCreate has no subscriptions table
-00:08 +189: D:/Resource/Codebase/studyProject/Centli/test/quick_bookkeeping_test.dart: direct typed text submits transaction
-00:08 +190: D:/Resource/Codebase/studyProject/Centli/test/search_enhancements_test.dart: search by category name and account name
-00:08 +191: D:/Resource/Codebase/studyProject/Centli/test/search_enhancements_test.dart: search by category name and account name
-00:08 +192: D:/Resource/Codebase/studyProject/Centli/test/txn_list_lookups_test.dart: loadTxnListLookups returns maps keyed by id
-00:08 +193: D:/Resource/Codebase/studyProject/Centli/test/txn_list_lookups_test.dart: loadTxnListLookups returns maps keyed by id
-00:08 +194: D:/Resource/Codebase/studyProject/Centli/test/txn_list_lookups_test.dart: loadTxnListLookups returns maps keyed by id
-00:08 +195: D:/Resource/Codebase/studyProject/Centli/test/user_rules_resilience_test.dart: NotiTemplate.tryParse bad entries do not affect good ones
-00:08 +196: D:/Resource/Codebase/studyProject/Centli/test/user_rules_resilience_test.dart: NotiTemplate.tryParse invalid amountRegex "(" returns null
-00:08 +197: D:/Resource/Codebase/studyProject/Centli/test/user_rules_resilience_test.dart: NotiTemplate.direction missing direction defaults to out
-00:08 +198: D:/Resource/Codebase/studyProject/Centli/test/user_rules_resilience_test.dart: NotiTemplate.direction illegal direction falls back to out
-00:08 +199: D:/Resource/Codebase/studyProject/Centli/test/user_rules_resilience_test.dart: NotiTemplate.direction in / out / refund round-trip via toJson
-00:08 +200: D:/Resource/Codebase/studyProject/Centli/test/user_rules_resilience_test.dart: NotiTemplate.direction normalizeDirection helper
-00:08 +201: D:/Resource/Codebase/studyProject/Centli/test/user_rules_resilience_test.dart: parseNotification resilience bad rule does not drop notification or throw
-00:08 +202: D:/Resource/Codebase/studyProject/Centli/test/user_rules_resilience_test.dart: merge order user first then non-disabled official
-00:08 +203: D:/Resource/Codebase/studyProject/Centli/test/user_rules_resilience_test.dart: field-level merge user over official same id keeps user mustContain and fills null title from official
-00:09 +204: D:/Resource/Codebase/studyProject/Centli/test/widget_test.dart: money CNY minor round-trip
-00:09 +205: D:/Resource/Codebase/studyProject/Centli/test/widget_test.dart: money JPY has 0 decimals
-00:09 +206: D:/Resource/Codebase/studyProject/Centli/test/widget_test.dart: money hide amount
-00:09 +207: D:/Resource/Codebase/studyProject/Centli/test/widget_test.dart: DateRangeWindow last 30 days covers through today
-00:09 +208: D:/Resource/Codebase/studyProject/Centli/test/widget_test.dart: DateRangeWindow prev shifts window back
-00:09 +209: All tests passed!
+00:02 +72: D:/Resource/Codebase/studyProject/Centli/test/bookkeeping_panel_structure_test.dart: bookkeeping panel structure (behavior) transfer hides category chip
+00:02 +73: D:/Resource/Codebase/studyProject/Centli/test/bookkeeping_panel_structure_test.dart: bookkeeping panel structure (behavior) transfer hides category chip
+00:02 +74: D:/Resource/Codebase/studyProject/Centli/test/bookkeeping_panel_structure_test.dart: bookkeeping panel structure (behavior) transfer hides category chip
+00:02 +75: D:/Resource/Codebase/studyProject/Centli/test/bookkeeping_panel_structure_test.dart: bookkeeping panel structure (behavior) transfer hides category chip
+00:02 +76: D:/Resource/Codebase/studyProject/Centli/test/bookkeeping_panel_structure_test.dart: bookkeeping panel structure (behavior) transfer hides category chip
+00:02 +77: D:/Resource/Codebase/studyProject/Centli/test/bookkeeping_panel_structure_test.dart: bookkeeping panel structure (behavior) transfer hides category chip
+00:02 +78: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:02 +79: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:02 +80: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:02 +81: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:02 +82: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:02 +83: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:02 +84: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:02 +85: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:02 +86: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:02 +87: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:02 +88: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:02 +89: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:02 +90: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:02 +91: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:02 +92: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:02 +93: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:02 +94: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:02 +95: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +96: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +97: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +98: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +99: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +100: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +101: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +102: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +103: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +104: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +105: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +106: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +107: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +108: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +109: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +110: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +111: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +112: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +113: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +114: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +115: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +116: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +117: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +118: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +119: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +120: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +121: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +122: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +123: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +124: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +125: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +126: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +127: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +128: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +129: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +130: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +131: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +132: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +133: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +134: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +135: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +136: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +137: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +138: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +139: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +140: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +141: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +142: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +143: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +144: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +145: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +146: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +147: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +148: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +149: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +150: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +151: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +152: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +153: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +154: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +155: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +156: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +157: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +158: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +159: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +160: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+00:03 +161: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden dark
+00:04 +162: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden dark
+00:04 +163: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden dark
+00:04 +164: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden dark
+00:04 +165: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden dark
+00:04 +166: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden dark
+00:04 +167: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden dark
+00:04 +168: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden dark
+00:04 +169: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden dark
+00:04 +170: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden dark
+00:04 +171: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden dark
+00:04 +172: D:/Resource/Codebase/studyProject/Centli/test/golden/bookkeeping_panel_golden_test.dart: bookkeeping panel golden dark
+00:04 +173: D:/Resource/Codebase/studyProject/Centli/test/pending_tabs_test.dart: pending segmented control 320dp four labels fit without overflow; width stable across tabs
+00:04 +174: D:/Resource/Codebase/studyProject/Centli/test/pending_tabs_test.dart: pending segmented control 320dp four labels fit without overflow; width stable across tabs
+00:04 +175: D:/Resource/Codebase/studyProject/Centli/test/pending_tabs_test.dart: pending segmented control 320dp four labels fit without overflow; width stable across tabs
+00:04 +176: D:/Resource/Codebase/studyProject/Centli/test/pending_tabs_test.dart: pending segmented control 320dp four labels fit without overflow; width stable across tabs
+00:04 +177: D:/Resource/Codebase/studyProject/Centli/test/pending_tabs_test.dart: pending segmented control 320dp four labels fit without overflow; width stable across tabs
+00:04 +178: D:/Resource/Codebase/studyProject/Centli/test/pending_tabs_test.dart: pending segmented control 320dp four labels fit without overflow; width stable across tabs
+00:05 +179: D:/Resource/Codebase/studyProject/Centli/test/quick_bookkeeping_test.dart: title is 快速记账
+00:05 +180: D:/Resource/Codebase/studyProject/Centli/test/quick_bookkeeping_test.dart: title is 快速记账
+00:05 +181: D:/Resource/Codebase/studyProject/Centli/test/quick_bookkeeping_test.dart: title is 快速记账
+00:05 +182: D:/Resource/Codebase/studyProject/Centli/test/quick_bookkeeping_test.dart: title is 快速记账
+00:05 +183: D:/Resource/Codebase/studyProject/Centli/test/restore_ledger_scope_test.dart: multi-ledger: restore A does not touch B
+00:05 +184: D:/Resource/Codebase/studyProject/Centli/test/quick_bookkeeping_test.dart: hold then release fills text; cancel discards
+00:05 +185: D:/Resource/Codebase/studyProject/Centli/test/quick_bookkeeping_test.dart: hold then release fills text; cancel discards
+00:05 +186: D:/Resource/Codebase/studyProject/Centli/test/quick_bookkeeping_test.dart: hold then release fills text; cancel discards
+00:05 +187: D:/Resource/Codebase/studyProject/Centli/test/quick_bookkeeping_test.dart: hold then release fills text; cancel discards
+00:05 +188: D:/Resource/Codebase/studyProject/Centli/test/quick_bookkeeping_test.dart: hold then release fills text; cancel discards
+00:05 +189: D:/Resource/Codebase/studyProject/Centli/test/quick_bookkeeping_test.dart: hold then release fills text; cancel discards
+00:05 +190: D:/Resource/Codebase/studyProject/Centli/test/quick_bookkeeping_test.dart: hold then release fills text; cancel discards
+00:05 +191: D:/Resource/Codebase/studyProject/Centli/test/schema_v11_member_merge_test.dart: v10→v11 merges 4 member rows into note and drops column
+00:05 +192: D:/Resource/Codebase/studyProject/Centli/test/quick_bookkeeping_test.dart: too-short hold shows tip and cancels
+00:05 +193: D:/Resource/Codebase/studyProject/Centli/test/quick_bookkeeping_test.dart: too-short hold shows tip and cancels
+00:05 +194: D:/Resource/Codebase/studyProject/Centli/test/schema_v11_member_merge_test.dart: v4→v11 cross-version ends without member
+00:05 +195: D:/Resource/Codebase/studyProject/Centli/test/schema_v4_tags_migration_test.dart: v11 onCreate: tags+occurrence_key, no member, indexes (PRAGMA), soft-delete keeps tags
+00:05 +196: D:/Resource/Codebase/studyProject/Centli/test/quick_bookkeeping_test.dart: dispose cancels speech
+00:05 +197: D:/Resource/Codebase/studyProject/Centli/test/schema_v8_merchant_note_test.dart: confirm with merchantForRule still learns auto-categorize
+00:05 +198: D:/Resource/Codebase/studyProject/Centli/test/schema_v8_merchant_note_test.dart: confirm with merchantForRule still learns auto-categorize
+00:05 +199: D:/Resource/Codebase/studyProject/Centli/test/schema_v8_merchant_note_test.dart: confirm with merchantForRule still learns auto-categorize
+00:05 +200: D:/Resource/Codebase/studyProject/Centli/test/quick_bookkeeping_test.dart: type text shows submit actions
+00:05 +201: D:/Resource/Codebase/studyProject/Centli/test/quick_bookkeeping_test.dart: type text shows submit actions
+00:05 +202: D:/Resource/Codebase/studyProject/Centli/test/schema_v9_drop_subscriptions_test.dart: v9 onCreate has no subscriptions table
+00:05 +203: D:/Resource/Codebase/studyProject/Centli/test/quick_bookkeeping_test.dart: recognize then edit text field
+00:06 +204: D:/Resource/Codebase/studyProject/Centli/test/search_enhancements_test.dart: search by category name and account name
+00:06 +205: D:/Resource/Codebase/studyProject/Centli/test/quick_bookkeeping_test.dart: direct typed text submits transaction
+00:06 +206: D:/Resource/Codebase/studyProject/Centli/test/quick_bookkeeping_test.dart: direct typed text submits transaction
+00:06 +207: D:/Resource/Codebase/studyProject/Centli/test/quick_bookkeeping_test.dart: direct typed text submits transaction
+00:06 +208: D:/Resource/Codebase/studyProject/Centli/test/txn_list_lookups_test.dart: loadTxnListLookups returns maps keyed by id
+00:06 +209: D:/Resource/Codebase/studyProject/Centli/test/txn_list_lookups_test.dart: loadTxnListLookups returns maps keyed by id
+00:06 +210: D:/Resource/Codebase/studyProject/Centli/test/user_rules_resilience_test.dart: NotiTemplate.tryParse bad entries do not affect good ones
+00:06 +211: D:/Resource/Codebase/studyProject/Centli/test/user_rules_resilience_test.dart: NotiTemplate.tryParse invalid amountRegex "(" returns null
+00:06 +212: D:/Resource/Codebase/studyProject/Centli/test/user_rules_resilience_test.dart: NotiTemplate.direction missing direction defaults to out
+00:06 +213: D:/Resource/Codebase/studyProject/Centli/test/user_rules_resilience_test.dart: NotiTemplate.direction illegal direction falls back to out
+00:06 +214: D:/Resource/Codebase/studyProject/Centli/test/user_rules_resilience_test.dart: NotiTemplate.direction in / out / refund round-trip via toJson
+00:06 +215: D:/Resource/Codebase/studyProject/Centli/test/user_rules_resilience_test.dart: NotiTemplate.direction normalizeDirection helper
+00:06 +216: D:/Resource/Codebase/studyProject/Centli/test/user_rules_resilience_test.dart: parseNotification resilience bad rule does not drop notification or throw
+00:06 +217: D:/Resource/Codebase/studyProject/Centli/test/user_rules_resilience_test.dart: merge order user first then non-disabled official
+00:06 +218: D:/Resource/Codebase/studyProject/Centli/test/user_rules_resilience_test.dart: field-level merge user over official same id keeps user mustContain and fills null title from official
+00:06 +219: D:/Resource/Codebase/studyProject/Centli/test/widget_test.dart: money CNY minor round-trip
+00:06 +220: D:/Resource/Codebase/studyProject/Centli/test/widget_test.dart: money JPY has 0 decimals
+00:06 +221: D:/Resource/Codebase/studyProject/Centli/test/widget_test.dart: money hide amount
+00:06 +222: D:/Resource/Codebase/studyProject/Centli/test/widget_test.dart: DateRangeWindow last 30 days covers through today
+00:06 +223: D:/Resource/Codebase/studyProject/Centli/test/widget_test.dart: DateRangeWindow prev shifts window back
+00:06 +224: All tests passed!

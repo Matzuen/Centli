@@ -1,67 +1,63 @@
-# B4-PATCH remaining notes (G16–G19)
+# Centli B4-PATCH G20–G23 notes
 
-Generated: 2026-10-17 (Asia/Shanghai)
-HEAD: `5e37f87235f70efc46f3bb1a3dc91d017d35e891`
-Version: `1.4.2+8`
-schemaVersion: `11`
+Baseline HEAD (before this batch): `30f9fd3` · version `1.4.2+8` · schema **11** · tests **209**
 
-## Gate (raw verify outputs only)
-
-### analyze (`docs/grokbot/audit_input/analyze.txt`)
-
-```
-Analyzing Centli...
-No issues found! (ran in 4.4s)
-```
-
-exit code: `0` (verify analyze_rc=0)
-
-### test (`docs/grokbot/audit_input/test.txt`)
-
-```
-00:09 +205: D:/Resource/Codebase/studyProject/Centli/test/widget_test.dart: money JPY has 0 decimals
-00:09 +206: D:/Resource/Codebase/studyProject/Centli/test/widget_test.dart: money hide amount
-00:09 +207: D:/Resource/Codebase/studyProject/Centli/test/widget_test.dart: DateRangeWindow last 30 days covers through today
-00:09 +208: D:/Resource/Codebase/studyProject/Centli/test/widget_test.dart: DateRangeWindow prev shifts window back
-00:09 +209: All tests passed!
-```
-
-exit code: `0` (verify test_rc=0) -> **209 passed / 0 failed**, VERIFY: OK
-
-## Subtask -> commit
+## Subtask → commit
 
 | Task | hash | Notes |
 |---|---|---|
-| G16 | `69d55bc` | model name typo hint (Levenshtein≤2) + /v1 helperText; self-proof threshold 0 → 3 failed |
-| G17 | `833bd86` | drop member column, merge into note; schema v10→v11; v5 raw SQL; fixtures later |
-| G18 | `6f8f74f` | QuickBookkeepingSheet; delete text sheet; long-press opens quick directly |
-| G19 | `29207ee` | capture_intake_actions; home AppBar + quick sheet screenshot/clipboard; consent one place |
-| bump | `22e53a8` | 1.4.2+8 + README x3 |
-| analyze fix | `eacf161` | schema_v11 test fixtures (no sqlite3 dep); drop unused import |
-| cleanup | `a82554d` | audit_input + notes; orphans/failures deleted |
+| G20 | `a14a465` | overridePlatformDefaultLocation + PendingDeepLink + `/` redirect + errorBuilder; E Android EXTRA skipped (A–D sufficient) |
+| G21 | `de8040f` | calendar day sheet + bookkeeping initialHappenAt; trend colorBySign + zero baseline; dailyNetMajor tests |
+| G22 | `8c12769` | drop ledger-detail 「商户」; net_worth_consistency_test; intentional-dupes table; deleted low-value stats budget hint |
+| G23 | `7129c2d` | verify.sh/ps1 write HEAD/status/commits/diff_stat + STALE assert; untrack audit_input; fix duplicate version bullet |
 
-## G16 self-prove
+## G20 self-prove
 
-- Temp `kDeepSeekTypoMaxDistance = 0` → 3 tests failed (typo / one-tap / connection hint); restored → 6 passed
+- `test/deep_link_test.dart`: centli://home → /home; pending → /home/pending; `/` → null; createRouter RIP path == `/splash`
+- Did **not** change Android MainActivity EXTRA path (E optional); Flutter override + PendingDeepLink cover cold-start data URI
 
-## G17
+## G21 self-prove
 
-- Member merge separator ` · ` (U+00B7), order note · member
-- v8 alterTable would drop member on long jumps → pre-merge when column exists before v8 alter; v11 guarded by `_hasTableColumn`
-- schema_v11 tests use `test/fixtures/schema_v10_member.db` + `schema_v4.db`
+- `dailyNetMajor('CNY', 10000, 3000) == 70`; swapped `out-in` disagrees (test locks polarity)
+- `niceTrendYInterval` snaps to 1/2/5×10^n
+- Calendar tab: only `_CalendarCard` + `_DailyTrendCard` (third SoftCard removed)
 
-## G18
+## G22 self-prove
 
-- Title 快速记账; long-press → showQuickBookkeepingSheet; short-press manual unchanged
-- Tests: 9 in quick_bookkeeping_test.dart (physics + hold + title + type/edit + submit units)
+- `ledger_detail_page.dart` 「商户」/ `\u5546\u6237` count = 0; note only under 「备注」
+- `homeNetWorthProvider` and `assetsNetWorthProvider` agree on fixture (100000-20000-2500+800)
+- G22.3: deleted 「另有 N 个分类预算」; **skipped** adding stats 「净额」 third tab (calendar already owns net trend; expanding stats UX not required)
 
-## G19
+## G23 self-prove
 
-- Consent dialog title only in capture_intake_actions.dart
-- Self-prove: rename consent title → privacy test failed; restored
+- Corrupted `HEAD.txt` to `deadbeef…` → assert prints `AUDIT INPUT STALE: HEAD.txt != git HEAD` and exits 1
+- Full verify run regenerates all audit_input; HEAD.txt == `git rev-parse HEAD`
+- `git rm --cached` all previously tracked `audit_input/*` (keep on disk) to match README「该目录不进版本库」
+- Version: stay **`1.4.2+8`** (G23.7: no bump for tooling)
 
-## Cleanup
+## Gate
 
-- Deleted untracked orphans: `account_identity.dart`, `account_mark.dart` (zero refs)
-- Deleted `test/golden/failures/`
-- Did not touch `docs/grokbot/audit_report_*.md`
+### analyze
+`
+Analyzing Centli...
+No issues found! (ran in 4.2s)
+`
+exit 0
+
+### test (tail)
+`
+00:06 +224: All tests passed!
+`
+exit 0 -> **224 passed / 0 failed**, VERIFY: OK
+
+### HEAD
+HEAD.txt matches \git rev-parse HEAD\ after verify.
+
+
+
+## Risks / scope
+
+- Version **not** bumped (same batch as G16–G19)
+- No APK / no push
+- G22.3 net-tab on stats: skipped (documented)
+- fixtures README (G23.5): degraded / skipped

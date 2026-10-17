@@ -1,12 +1,20 @@
-﻿d22f5cf fix(tools): restore verify.sh/ps1 shell variables stripped by PowerShell (G3 repair)
+7129c2d chore(G23): verify scripts rewrite HEAD/status/commits/diff_stat + STALE assert
+8c12769 fix(G22): drop duplicate merchant row; net-worth consistency guard
+de8040f feat(G21): calendar day sheet + trend sign colors + bookkeeping date seed
+a14a465 fix(G20): widget cold-start deep link + friendly unknown route
+30f9fd3 docs(grokbot): point notes HEAD at cleanup commit
+5e37f87 docs(grokbot): audit_input + notes for G16-G19 batch
+eacf161 fix: schema_v11 fixtures without sqlite3 dep; drop unused import
+22e53a8 chore: bump 1.4.2+8 + README
+29207ee feat(G19): screenshot entry on home + quick sheet
+6f8f74f feat(G18): merge text+voice into QuickBookkeepingSheet
+833bd86 fix(G17): drop member column, merge into note (schema v11)
+69d55bc fix(G16): model name typo hint + fix /v1 helper
+fa82eda docs: RELEASE_NOTES for 1.4.1+7
+dea0b0b chore(version): bump to 1.4.1+7; sync README changelogs (B4 + B4-PATCH)
+f318f65 fix(ledger): remove member chip from bookkeeping panel
+40785f0 fix(tools): write verify.ps1 audit_input as UTF-8 (avoid Tee-Object UTF-16)
+d22f5cf fix(tools): restore verify.sh/ps1 shell variables stripped by PowerShell (G3 repair)
 65a8f52 docs(grokbot): add verification discipline section (G8)
 f799ae9 feat(ledger): type switcher + single chip row; drop currency chip and txn templates (G13+G14+G15)
 9015452 fix(home): tighten calendar cell aspect 0.82 and clamp text scale (G12)
-642a625 chore(version): bump to 1.1.2+5; single-source kAppVersionFallback + guard (G10)
-411319a chore: remove one-shot tools/_*.py and stale subscription comment (G6)
-3efcf54 test(golden): add guard that tolerance cap stays <= 0.01 (G5)
-6b7930c test(golden): load MaterialIcons from FLUTTER_ROOT; hide debug banner (G4)
-49e83a2 chore(tools): add verify.sh / verify.ps1 as sole audit_input generator (G3)
-0b8f54f fix(settings): avoid use_build_context_synchronously after clipboard (G2)
-7c52b86 test(golden): remove 0.05% tolerance; serial verify; 0.01% fallback (G1)
-b746438 fix(llm): surface vision HTTP errors, migrate stale gpt models, test connection (G11)

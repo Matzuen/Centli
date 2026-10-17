@@ -1,0 +1,14 @@
+git.exe : warning: in the working copy of 'docs/grokbot/README.md', LF will be replaced by CRLF the next time Git touch
+es it
+At D:\Resource\Codebase\studyProject\Centli\tools\verify.ps1:34 char:13
++ $diffStat = & git diff --stat 2>&1 | Out-String
++             ~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (warning: in the... Git touches it:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+warning: in the working copy of 'tools/verify.ps1', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'tools/verify.sh', LF will be replaced by CRLF the next time Git touches it
+ docs/grokbot/README.md |  2 +-
+ tools/verify.ps1       | 47 ++++++++++++++++++++++++++++++++++++-----------
+ tools/verify.sh        | 25 ++++++++++++++++++++++++-
+ 3 files changed, 61 insertions(+), 13 deletions(-)
