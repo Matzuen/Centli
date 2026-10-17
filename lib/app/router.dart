@@ -25,6 +25,8 @@ import '../features/settings/privacy_policy_page.dart';
 import '../features/settings/security_page.dart';
 import '../features/settings/fx_rates_page.dart';
 import '../features/settings/budget_page.dart';
+import '../features/recurring/recurring_list_page.dart';
+import '../features/recurring/recurring_wizard_page.dart';
 import '../features/settings/recycle_bin_page.dart';
 import '../features/settings/ledgers_page.dart';
 import '../features/stats/stats_page.dart';
@@ -132,6 +134,23 @@ GoRouter createRouter({
                     path: 'budget',
                     parentNavigatorKey: rootNavigatorKey,
                     builder: (context, state) => const BudgetPage(),
+                  ),
+                  GoRoute(
+                    path: 'recurring',
+                    parentNavigatorKey: rootNavigatorKey,
+                    builder: (context, state) => const RecurringListPage(),
+                    routes: [
+                      GoRoute(
+                        path: 'new',
+                        parentNavigatorKey: rootNavigatorKey,
+                        builder: (context, state) {
+                          final extra = state.extra;
+                          return RecurringWizardPage(
+                            args: extra is RecurringWizardArgs ? extra : null,
+                          );
+                        },
+                      ),
+                    ],
                   ),
                   GoRoute(
                     path: 'ledgers',
