@@ -267,11 +267,12 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
                         const SizedBox(height: 8),
                         GestureDetector(
                           onLongPress: () async {
+                            final messenger = ScaffoldMessenger.of(context);
                             await Clipboard.setData(
                               ClipboardData(text: _testResult!),
                             );
                             if (!mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
+                            messenger.showSnackBar(
                               const SnackBar(
                                 content: Text('已复制'),
                               ),
