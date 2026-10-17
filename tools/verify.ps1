@@ -1,15 +1,24 @@
 # Windows PowerShell equivalent of tools/verify.sh
 # Usage: powershell -File tools/verify.ps1
+# G25: delete artifacts first, then generate, then assert non-empty / exist.
 $ErrorActionPreference = "Continue"
 $OUT = "docs/grokbot/audit_input"
 New-Item -ItemType Directory -Force -Path $OUT | Out-Null
 $utf8 = New-Object System.Text.UTF8Encoding $false
 $root = (Get-Location).Path
-$startedUtc = [DateTime]::UtcNow.AddSeconds(-1)
 
 function Write-Utf8([string]$RelPath, [string]$Text) {
   $full = Join-Path $root $RelPath
   [System.IO.File]::WriteAllText($full, $Text, $utf8)
+}
+
+# 1) Delete generated artifacts first (keep notes.md).
+@(
+  "analyze.txt", "test.txt", "HEAD.txt",
+  "status.txt", "commits.txt", "diff_stat.txt"
+) | ForEach-Object {
+  $p = Join-Path $OUT $_
+  if (Test-Path $p) { Remove-Item -Force $p }
 }
 
 Write-Host "== analyze =="
@@ -34,18 +43,25 @@ Write-Utf8 (Join-Path $OUT "commits.txt") $commits
 $diffStat = & git diff --stat 2>&1 | Out-String
 Write-Utf8 (Join-Path $OUT "diff_stat.txt") $diffStat
 
-# Freshness self-assert
+# 3) Existence / non-empty asserts (fail if generation skipped).
+foreach ($f in @("analyze.txt", "test.txt", "HEAD.txt", "commits.txt")) {
+  $full = Join-Path $root (Join-Path $OUT $f)
+  if (-not (Test-Path $full) -or (Get-Item $full).Length -le 0) {
+    Write-Host "AUDIT INPUT MISSING/EMPTY: $f"
+    exit 1
+  }
+}
+foreach ($f in @("status.txt", "diff_stat.txt")) {
+  $full = Join-Path $root (Join-Path $OUT $f)
+  if (-not (Test-Path $full)) {
+    Write-Host "AUDIT INPUT MISSING: $f"
+    exit 1
+  }
+}
 $headFile = ([System.IO.File]::ReadAllText((Join-Path $root (Join-Path $OUT "HEAD.txt")))).Trim()
 $headLive = (& git rev-parse HEAD).Trim()
-if ($headFile -ne $headLive) {
-  Write-Host "AUDIT INPUT STALE: HEAD.txt != git HEAD"
-  exit 1
-}
-
-$analyzeTime = (Get-Item (Join-Path $OUT "analyze.txt")).LastWriteTimeUtc
-$testTime = (Get-Item (Join-Path $OUT "test.txt")).LastWriteTimeUtc
-if ($analyzeTime -lt $startedUtc -or $testTime -lt $startedUtc) {
-  Write-Host "AUDIT INPUT STALE: analyze.txt/test.txt older than this verify run"
+if ([string]::IsNullOrWhiteSpace($headFile) -or ($headFile -ne $headLive)) {
+  Write-Host "AUDIT INPUT HEAD MISMATCH"
   exit 1
 }
 

@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
 # Unique verify entry. Outputs are written to docs/grokbot/audit_input/ by redirect — never hand-write them.
+# G25: delete artifacts first, then generate, then assert non-empty / exist.
 set -o pipefail
 OUT=docs/grokbot/audit_input
 mkdir -p "$OUT"
-START_EPOCH=$(date +%s)
+
+# 1) Delete generated artifacts first (keep notes.md).
+rm -f "$OUT"/analyze.txt "$OUT"/test.txt "$OUT"/HEAD.txt \
+      "$OUT"/status.txt "$OUT"/commits.txt "$OUT"/diff_stat.txt
 
 echo "== analyze =="
 flutter analyze > "$OUT/analyze.txt" 2>&1
@@ -21,19 +25,16 @@ git status --short > "$OUT/status.txt"
 git log --oneline -20 > "$OUT/commits.txt"
 git diff --stat > "$OUT/diff_stat.txt"
 
-# Freshness self-assert: HEAD.txt must match live HEAD.
-HEAD_FILE=$(tr -d '\r\n' < "$OUT/HEAD.txt")
-HEAD_LIVE=$(git rev-parse HEAD)
-if [ "$HEAD_FILE" != "$HEAD_LIVE" ]; then
-  echo "AUDIT INPUT STALE: HEAD.txt != git HEAD"
-  exit 1
-fi
-
-# analyze/test must have been written during this run (mtime >= start).
-analyze_mtime=$(stat -c %Y "$OUT/analyze.txt" 2>/dev/null || stat -f %m "$OUT/analyze.txt")
-test_mtime=$(stat -c %Y "$OUT/test.txt" 2>/dev/null || stat -f %m "$OUT/test.txt")
-if [ "$analyze_mtime" -lt "$START_EPOCH" ] || [ "$test_mtime" -lt "$START_EPOCH" ]; then
-  echo "AUDIT INPUT STALE: analyze.txt/test.txt older than this verify run"
+# 3) Existence / non-empty asserts (fail if generation skipped).
+for f in analyze.txt test.txt HEAD.txt commits.txt; do
+  [ -s "$OUT/$f" ] || { echo "AUDIT INPUT MISSING/EMPTY: $f"; exit 1; }
+done
+# status/diff_stat may legitimately be empty — only require file exists.
+for f in status.txt diff_stat.txt; do
+  [ -f "$OUT/$f" ] || { echo "AUDIT INPUT MISSING: $f"; exit 1; }
+done
+if [ ! -s "$OUT/HEAD.txt" ] || [ "$(tr -d '\r\n' < "$OUT/HEAD.txt")" != "$(git rev-parse HEAD)" ]; then
+  echo "AUDIT INPUT HEAD MISMATCH"
   exit 1
 fi
 
