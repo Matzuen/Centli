@@ -180,3 +180,12 @@ Grok Bot 按新工单继续
 每批必须同步 `README.md` / `README.en.md` / 本节当前版本。
 
 ### 6.3
+
+## 验证纪律（防复发）
+
+1. **收尾必须跑 `tools/verify.sh`**（Windows 可用 `tools/verify.ps1`），`docs/grokbot/audit_input/analyze.txt` / `test.txt` **只能由脚本重定向生成**。
+2. **禁止**手写、复制、转述上一轮的 analyze / test 结论填进 `notes.md`。
+3. **每次改完代码（尤其是用脚本批量改）必须重跑 analyze** —— 本批教训：`5b7e604` 之后未重跑，导致报告写绿而 HEAD 实际 analyze 红。
+4. golden 测试用 **`flutter test test/golden --concurrency=1`** 串行跑，避免并行渲染抖动。
+5. 报告「完成门槛」时，必须贴 **命令原文 + 原始输出 + 退出码**。
+
