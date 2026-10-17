@@ -27,6 +27,8 @@ import '../features/settings/fx_rates_page.dart';
 import '../features/settings/budget_page.dart';
 import '../features/recurring/recurring_list_page.dart';
 import '../features/recurring/recurring_wizard_page.dart';
+import '../features/subscriptions/subscription_pages.dart';
+import '../data/db/centli_database.dart';
 import '../features/settings/recycle_bin_page.dart';
 import '../features/settings/ledgers_page.dart';
 import '../features/stats/stats_page.dart';
@@ -147,6 +149,23 @@ GoRouter createRouter({
                           final extra = state.extra;
                           return RecurringWizardPage(
                             args: extra is RecurringWizardArgs ? extra : null,
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                  GoRoute(
+                    path: 'subscriptions',
+                    parentNavigatorKey: rootNavigatorKey,
+                    builder: (context, state) => const SubscriptionListPage(),
+                    routes: [
+                      GoRoute(
+                        path: 'edit',
+                        parentNavigatorKey: rootNavigatorKey,
+                        builder: (context, state) {
+                          final extra = state.extra;
+                          return SubscriptionEditPage(
+                            existing: extra is Subscription ? extra : null,
                           );
                         },
                       ),
