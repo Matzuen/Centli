@@ -1,5 +1,5 @@
 {
-  "version": 6,
+  "version": 7,
   "updated_at": "2026-10-17",
   "templates": [
     {
@@ -81,6 +81,22 @@
       "merchantFromTitle": false,
       "defaultAccountHint": "alipay",
       "direction": "out"
+    },
+    {
+      "id": "alipay_repay_zh",
+      "name": "支付宝还款",
+      "packages": [
+        "com.eg.android.AlipayGphone"
+      ],
+      "defaultCurrency": "CNY",
+      "titleRegex": null,
+      "mustContainRegex": "还款|还清|已还清|账单还清",
+      "excludeTextRegex": "验证码|登录|服务通知|生活号|待还|应还|请于|即将到期|还款提醒|账单提醒",
+      "amountRegex": "(?:(?:USD|EUR|CNY|HKD|TWD|JPY)\\s*|(?:¥|￥|\\$|€))?\\s*([0-9]+(?:,[0-9]{3})*(?:\\.[0-9]{1,2})?)",
+      "merchantRegex": null,
+      "merchantFromTitle": false,
+      "defaultAccountHint": "alipay",
+      "direction": "repay"
     },
     {
       "id": "wechat_pay_success_zh",

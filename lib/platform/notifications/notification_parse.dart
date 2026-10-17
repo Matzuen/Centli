@@ -153,6 +153,7 @@ class NotiTemplate {
 /// Friendly names for builtin / official template ids.
 const Map<String, String> kBuiltinTemplateNames = {
   'alipay_pay_success_zh': '支付宝交易/支付成功',
+  'alipay_repay_zh': '支付宝还款',
   'wechat_pay_success_zh': '微信支付成功',
   'alipay_receive_zh': '支付宝收款到账',
   'wechat_receive_zh': '微信收款到账',
@@ -215,6 +216,10 @@ class ParseResult {
 /// Shared amount pattern: ¥/￥/$/€ + optional currency code, capture group 1 = number.
 const kAmountRegex =
     r'(?:(?:USD|EUR|CNY|HKD|TWD|JPY)\s*|(?:\u00a5|\uffe5|\$|\u20ac))\s*([0-9]+(?:,[0-9]{3})*(?:\.[0-9]{1,2})?)';
+
+/// Fallback when no currency symbol: number + 元 (e.g. 还款12.54元).
+const kAmountRegexYuan =
+    r'([0-9]+(?:,[0-9]{3})*(?:\.[0-9]{1,2})?)\s*元';
 
 /// Built-in templates (also mirrored in assets/noti_templates.json).
 List<NotiTemplate> builtinNotiTemplates() => const [
@@ -282,6 +287,18 @@ List<NotiTemplate> builtinNotiTemplates() => const [
         merchantRegex: r'(?:向|给|商户)\s*(.+?)(?:\s|$)',
         defaultAccountHint: 'alipay',
         direction: 'out',
+      ),
+      // T0B-2/T0B-3: Huabei/credit repay; exclude 待还/应还 reminders.
+      NotiTemplate(
+        id: 'alipay_repay_zh',
+        name: '支付宝还款',
+        packages: ['com.eg.android.AlipayGphone'],
+        mustContainRegex: r'还款|还清|已还清|账单还清',
+        excludeTextRegex:
+            r'验证码|登录|服务通知|生活号|待还|应还|请于|即将到期|还款提醒|账单提醒',
+        amountRegex: kAmountRegex,
+        defaultAccountHint: 'alipay',
+        direction: 'repay',
       ),
       NotiTemplate(
         id: 'wechat_pay_success_zh',
@@ -509,21 +526,26 @@ _ExtractedAmount? _extractAmount(
   String amountRegex,
   String defaultCcy,
 ) {
-  final re = RegExp(amountRegex);
-  for (final m in re.allMatches(body)) {
-    // Skip date fragments like 10月 / 15日 even if somehow matched.
-    final end = m.end;
-    final after = end < body.length ? body.substring(end, end + 1) : '';
-    if (after.isNotEmpty && RegExp(r'[月日号时分秒]').hasMatch(after)) {
-      continue;
+  _ExtractedAmount? fromRegex(String pattern) {
+    final re = RegExp(pattern);
+    for (final m in re.allMatches(body)) {
+      // Skip date fragments like 10月 / 15日 even if somehow matched.
+      final end = m.end;
+      final after = end < body.length ? body.substring(end, end + 1) : '';
+      if (after.isNotEmpty && RegExp(r'[月日号时分秒]').hasMatch(after)) {
+        continue;
+      }
+      final raw = (m.group(1) ?? '').replaceAll(',', '');
+      final major = double.tryParse(raw);
+      if (major == null) continue;
+      final ccy = detectCurrencyNearMatch(body, m, defaultCcy);
+      return _ExtractedAmount(minor: toMinor(ccy, major), currency: ccy);
     }
-    final raw = (m.group(1) ?? '').replaceAll(',', '');
-    final major = double.tryParse(raw);
-    if (major == null) continue;
-    final ccy = detectCurrencyNearMatch(body, m, defaultCcy);
-    return _ExtractedAmount(minor: toMinor(ccy, major), currency: ccy);
+    return null;
   }
-  return null;
+
+  // Primary template regex first; yuan-suffix only as fallback (T0B-4).
+  return fromRegex(amountRegex) ?? fromRegex(kAmountRegexYuan);
 }
 
 String dedupeKey(RawNotification raw, ParseResult r) {
