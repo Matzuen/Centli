@@ -20,20 +20,27 @@ final _pendingListProvider =
     StreamProvider.family<List<PendingCapture>, ({String ledgerId, String status})>(
   (ref, args) {
     final db = ref.watch(databaseProvider);
-    if (args.status == 'all') {
-      return db.watchAllCaptures(args.ledgerId);
+    // Strict partition: pending(ok) / parse_failed / ignored / confirmed.
+    // Legacy route tab=all maps to confirmed (see initState).
+    final status = args.status == 'all' ? 'confirmed' : args.status;
+    if (status == 'confirmed') {
+      return db.watchConfirmedCaptures(args.ledgerId);
     }
-    if (args.status == 'parse_failed') {
+    if (status == 'parse_failed') {
       return db.watchParseFailedCaptures(args.ledgerId);
     }
-    return db.watchPendingCaptures(args.ledgerId, status: args.status);
+    if (status == 'pending') {
+      return db.watchPendingOkCaptures(args.ledgerId);
+    }
+    return db.watchPendingCaptures(args.ledgerId, status: status);
   },
 );
 
 class PendingPage extends ConsumerStatefulWidget {
   const PendingPage({super.key, this.initialFilter});
 
-  /// Optional tab: pending | parse_failed | ignored | all
+  /// Optional tab: pending | parse_failed | ignored | confirmed
+  /// (`all` accepted as legacy alias for confirmed).
   final String? initialFilter;
 
   @override
@@ -60,10 +67,13 @@ class _PendingPageBodyState extends ConsumerState<PendingPage> {
     super.initState();
     final f = widget.initialFilter;
     if (f != null &&
-        {'pending', 'parse_failed', 'ignored', 'all'}.contains(f)) {
+        {'pending', 'parse_failed', 'ignored', 'confirmed', 'all'}
+            .contains(f)) {
+      // Legacy route ?tab=all → confirmed (partition replaced "全部").
+      final mapped = f == 'all' ? 'confirmed' : f;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        ref.read(_pendingFilterProvider.notifier).state = f;
+        ref.read(_pendingFilterProvider.notifier).state = mapped;
       });
     }
   }
@@ -145,23 +155,20 @@ class _PendingPageBodyState extends ConsumerState<PendingPage> {
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(CentliSpacing.pageH, CentliSpacing.item, CentliSpacing.pageH, 0),
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: SegmentedButton<String>(
-                    segments: const [
-                      ButtonSegment(value: 'pending', label: Text('待确认')),
-                      ButtonSegment(
-                        value: 'parse_failed',
-                        label: Text('解析失败'),
-                      ),
-                      ButtonSegment(value: 'ignored', label: Text('已忽略')),
-                      ButtonSegment(value: 'all', label: Text('全部')),
-                    ],
-                    selected: {filter},
-                    onSelectionChanged: (s) {
-                      ref.read(_pendingFilterProvider.notifier).state = s.first;
-                    },
-                  ),
+                child: SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(value: 'pending', label: Text('待确认')),
+                    ButtonSegment(
+                      value: 'parse_failed',
+                      label: Text('解析失败'),
+                    ),
+                    ButtonSegment(value: 'ignored', label: Text('已忽略')),
+                    ButtonSegment(value: 'confirmed', label: Text('已入账')),
+                  ],
+                  selected: {filter},
+                  onSelectionChanged: (s) {
+                    ref.read(_pendingFilterProvider.notifier).state = s.first;
+                  },
                 ),
               ),
               Expanded(
@@ -177,7 +184,9 @@ class _PendingPageBodyState extends ConsumerState<PendingPage> {
                               ? '暂无解析失败项'
                               : filter == 'ignored'
                                   ? '暂无已忽略记录'
-                                  : '暂无记录';
+                                  : filter == 'confirmed'
+                                      ? '暂无已入账记录'
+                                      : '暂无记录';
                       final msg = filter == 'pending'
                           ? '开启自动记账后，支付成功通知会集中在此确认入账。'
                               '发出去的红包/转账往往没有通知，可用截图识别或剪贴板导入。'
@@ -185,7 +194,9 @@ class _PendingPageBodyState extends ConsumerState<PendingPage> {
                               ? '解析失败的通知会出现在这里，可对照「识别规则 · 试一试」调整模板。'
                               : filter == 'ignored'
                                   ? '忽略的待确认会出现在这里；可清空以释放空间。'
-                                  : '切换上方筛选查看不同状态的捕获记录。';
+                                  : filter == 'confirmed'
+                                      ? '已确认入账的捕获会出现在这里。'
+                                      : '切换上方筛选查看不同状态的捕获记录。';
                       return CentliEmptyState(
                         icon: Icons.pending_actions_outlined,
                         title: title,

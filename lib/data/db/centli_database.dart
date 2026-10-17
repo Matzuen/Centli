@@ -1342,10 +1342,16 @@ class CentliDatabase extends _$CentliDatabase {
         .watch();
   }
 
-  Stream<List<PendingCapture>> watchAllCaptures(String ledgerId) {
+  /// Pending rows that parsed ok (parse_ok = 1) — "待确认" tab.
+  Stream<List<PendingCapture>> watchPendingOkCaptures(String ledgerId) {
     return (select(pendingCaptures)
-          ..where((t) => t.ledgerId.equals(ledgerId))
-          ..orderBy([(t) => OrderingTerm.desc(t.createdAt)]))
+          ..where(
+            (t) =>
+                t.ledgerId.equals(ledgerId) &
+                t.status.equals('pending') &
+                t.parseOk.equals(1),
+          )
+          ..orderBy([(t) => OrderingTerm.desc(t.happenAt)]))
         .watch();
   }
 
@@ -1357,6 +1363,19 @@ class CentliDatabase extends _$CentliDatabase {
                 t.ledgerId.equals(ledgerId) &
                 t.status.equals('pending') &
                 t.parseOk.equals(0),
+          )
+          ..orderBy([(t) => OrderingTerm.desc(t.happenAt)]))
+        .watch();
+  }
+
+  /// Confirmed / unknown statuses — "已入账" tab (partition complement).
+  /// status NOT IN ('pending','ignored') so unknown statuses are not lost.
+  Stream<List<PendingCapture>> watchConfirmedCaptures(String ledgerId) {
+    return (select(pendingCaptures)
+          ..where(
+            (t) =>
+                t.ledgerId.equals(ledgerId) &
+                t.status.isNotIn(['pending', 'ignored']),
           )
           ..orderBy([(t) => OrderingTerm.desc(t.happenAt)]))
         .watch();
