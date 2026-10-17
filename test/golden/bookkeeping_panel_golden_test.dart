@@ -8,15 +8,14 @@ import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'dart:typed_data';
-
 import 'package:flutter_test/flutter_test.dart';
 
-/// Accept tiny antialias / scheduling diffs when the full suite runs in parallel.
-class _TolerantGoldenComparator extends LocalFileComparator {
-  _TolerantGoldenComparator(super.testFile, {this.maxDiffPercent = 0.05});
+/// Fallback after serial runs still showed ~0.01% antialias jitter (G1).
+/// Cap is 0.01% (1/5 of prior 0.05%). Guarded by golden_guard_test (G5).
+const double kGoldenMaxDiffPercent = 0.01;
 
-  final double maxDiffPercent;
+class _TolerantGoldenComparator extends LocalFileComparator {
+  _TolerantGoldenComparator(super.testFile);
 
   @override
   Future<bool> compare(Uint8List imageBytes, Uri golden) async {
@@ -25,15 +24,7 @@ class _TolerantGoldenComparator extends LocalFileComparator {
       await getGoldenBytes(golden),
     );
     if (result.passed) return true;
-    if (result.diffPercent <= maxDiffPercent) {
-      return true;
-    }
-    // ignore: avoid_print
-    print(
-      'Golden $golden: ${result.diffPercent.toStringAsFixed(3)}% > '
-      '$maxDiffPercent% threshold',
-    );
-    return false;
+    return result.diffPercent <= kGoldenMaxDiffPercent;
   }
 }
 
