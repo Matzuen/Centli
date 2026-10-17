@@ -37,11 +37,32 @@ Future<void> loadGoldenFont() async {
   await loader.load();
 }
 
+Future<void> loadIconFont() async {
+  final root = Platform.environment['FLUTTER_ROOT'];
+  if (root == null || root.isEmpty) {
+    fail('未设置，无法加载 MaterialIcons；'
+        '请在 flutter test 环境下运行，或显式设置 FLUTTER_ROOT');
+  }
+  var file = File('$root/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf');
+  if (!file.existsSync()) {
+    file = File('$root/bin/cache/artifacts/material_fonts/materialicons-regular.otf');
+  }
+  if (!file.existsSync()) {
+    fail('找不到 MaterialIcons 字体：${file.path}');
+  }
+  final bytes = await file.readAsBytes();
+  final loader = FontLoader('MaterialIcons')
+    ..addFont(Future.value(ByteData.view(bytes.buffer)));
+  await loader.load();
+}
+
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUpAll(() async {
     await loadGoldenFont();
+    await loadIconFont();
     goldenFileComparator = _TolerantGoldenComparator(
       Uri.parse('test/golden/bookkeeping_panel_golden_test.dart'),
     );
@@ -74,6 +95,7 @@ void main() {
       ProviderScope(
         overrides: [databaseProvider.overrideWithValue(db)],
         child: MaterialApp(
+          debugShowCheckedModeBanner: false,
           theme: withGoldenFont(theme),
           home: Scaffold(
             body: Align(
