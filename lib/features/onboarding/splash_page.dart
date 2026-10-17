@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
 import '../../data/fx/fx_remote_service.dart';
+import '../recurring/recurring_runner.dart';
 import '../security/app_lock_controller.dart';
 
 /// Cold-start splash: brand mark + open DB / read settings, then route.
@@ -37,6 +38,7 @@ class _SplashPageState extends ConsumerState<SplashPage> {
 
     // FX + ledger lookup are not needed to choose the first route — defer.
     unawaited(_scheduleFxDeferred(db));
+    unawaited(_scheduleRecurringDeferred(db));
 
     final elapsed = DateTime.now().difference(started);
     // Keep a short brand beat without padding slow boots further.
@@ -71,6 +73,15 @@ class _SplashPageState extends ConsumerState<SplashPage> {
       scheduleFxAutoRefresh(db, 'CNY');
     }
   }
+  Future<void> _scheduleRecurringDeferred(CentliDatabase db) async {
+    try {
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+      await runDueRecurring(db);
+    } catch (_) {
+      // Never block splash / crash on recurring catch-up.
+    }
+  }
+
 
   @override
   Widget build(BuildContext context) {
