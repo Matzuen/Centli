@@ -16,6 +16,7 @@ class ImportBundle {
     required this.appVersion,
     required this.ledger,
     required this.accounts,
+    this.assetTypes = const [],
     required this.categories,
     required this.transactions,
     required this.merchantRules,
@@ -32,6 +33,7 @@ class ImportBundle {
   final String? appVersion;
   final Map<String, dynamic> ledger;
   final List<Map<String, dynamic>> accounts;
+  final List<Map<String, dynamic>> assetTypes;
   final List<Map<String, dynamic>> categories;
   final List<Map<String, dynamic>> transactions;
   final List<Map<String, dynamic>> merchantRules;
@@ -148,6 +150,10 @@ class ImportService {
     final accounts = _asMapList(map['accounts'], 'accounts')
         .map(_normalizeAccount)
         .toList();
+    final assetTypeMaps = _asMapList(
+      map['asset_types'] ?? const <dynamic>[],
+      'asset_types',
+    );
     final categories = _asMapList(map['categories'], 'categories')
         .map(_normalizeCategory)
         .toList();
@@ -212,6 +218,7 @@ class ImportService {
       appVersion: map['app_version']?.toString(),
       ledger: ledger,
       accounts: accounts,
+      assetTypes: assetTypeMaps,
       categories: categories,
       transactions: transactions,
       merchantRules: rules,
@@ -244,6 +251,7 @@ class ImportService {
     final stats = await db.restoreFromImportBundle(
       ledgerMap: bundle.ledger,
       accountMaps: bundle.accounts,
+      assetTypeMaps: bundle.assetTypes,
       categoryMaps: bundle.categories,
       transactionMaps: bundle.transactions,
       merchantRuleMaps: bundle.merchantRules,
@@ -461,6 +469,22 @@ class ImportService {
       });
     }
 
+    final assetTypes = <Map<String, dynamic>>[];
+    for (final row in _dataRows(excel, 'asset_types')) {
+      final id = _cellStr(row, 0);
+      if (id.isEmpty || id == 'id') continue;
+      assetTypes.add({
+        'id': id,
+        'ledgerId': ledgerId,
+        'name': _cellStr(row, 1, fallback: id),
+        'icon': _cellStr(row, 2).isEmpty ? null : _cellStr(row, 2),
+        'sortOrder': _cellInt(row, 3),
+        'archived': _cellInt(row, 4),
+        'createdAt': ts,
+        'updatedAt': ts,
+      });
+    }
+
     final categories = <Map<String, dynamic>>[];
     for (final row in _dataRows(excel, 'categories')) {
       final id = _cellStr(row, 0);
@@ -609,6 +633,7 @@ class ImportService {
       'app_version': summaryMap['app_version'],
       'ledger': ledger,
       'accounts': accounts,
+      'asset_types': assetTypes,
       'categories': categories,
       'transactions': transactions,
       'merchant_rules': rules,

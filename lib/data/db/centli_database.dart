@@ -2667,6 +2667,7 @@ END
   Future<RestoreImportStats> restoreFromImportBundle({
     required Map<String, dynamic> ledgerMap,
     required List<Map<String, dynamic>> accountMaps,
+    List<Map<String, dynamic>> assetTypeMaps = const [],
     required List<Map<String, dynamic>> categoryMaps,
     required List<Map<String, dynamic>> transactionMaps,
     required List<Map<String, dynamic>> merchantRuleMaps,
@@ -2715,14 +2716,55 @@ END
       await (delete(budgets)..where((t) => t.ledgerId.equals(lid))).go();
       await (delete(categories)..where((t) => t.ledgerId.equals(lid))).go();
       await (delete(accounts)..where((t) => t.ledgerId.equals(lid))).go();
+      await (delete(assetTypes)..where((t) => t.ledgerId.equals(lid))).go();
       await (delete(ledgers)..where((t) => t.id.equals(lid))).go();
       if (replaceFxRates) {
         await delete(fxRates).go();
       }
 
       await into(ledgers).insert(ledgerRow.toCompanion(true));
+      await seedDefaultAssetTypes(lid);
+      // Recreate custom asset types from backup (by name; keep exported ids when possible).
+      for (final m in assetTypeMaps) {
+        final name = '${m['name'] ?? ''}'.trim();
+        if (name.isEmpty) continue;
+        final existing = await (select(assetTypes)
+              ..where((t) => t.ledgerId.equals(lid) & t.name.equals(name)))
+            .get();
+        if (existing.isNotEmpty) continue;
+        final id = '${m['id'] ?? ''}'.trim().isEmpty ? newId() : '${m['id']}';
+        final ts = nowMs();
+        await into(assetTypes).insert(
+          AssetTypesCompanion.insert(
+            id: id,
+            ledgerId: lid,
+            name: name,
+            icon: Value(m['icon']?.toString()),
+            sortOrder: Value(m['sortOrder'] as int? ?? m['sort_order'] as int? ?? 99),
+            archived: Value(m['archived'] as int? ?? 0),
+            createdAt: m['createdAt'] as int? ?? ts,
+            updatedAt: m['updatedAt'] as int? ?? ts,
+          ),
+        );
+      }
       for (final a in accountRows) {
-        await into(accounts).insert(a.toCompanion(true));
+        final typeId = await resolveAssetTypeId(ledgerId: lid, raw: a.type);
+        await into(accounts).insert(
+          a.copyWith(type: typeId).toCompanion(true),
+        );
+      }
+      final typeIds = {
+        for (final t in await loadAssetTypes(lid, includeArchived: true)) t.id
+      };
+      final other = await resolveAssetTypeId(ledgerId: lid, raw: '其他');
+      for (final a in await (select(accounts)
+            ..where((t) => t.ledgerId.equals(lid)))
+          .get()) {
+        if (!typeIds.contains(a.type)) {
+          await (update(accounts)..where((t) => t.id.equals(a.id))).write(
+            AccountsCompanion(type: Value(other)),
+          );
+        }
       }
       for (final c in categoryRows) {
         await into(categories).insert(c.toCompanion(true));

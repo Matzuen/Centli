@@ -70,6 +70,8 @@ class ExportService {
     }
 
     final accounts = await db.loadAllAccounts(ledgerId);
+    final assetTypeRows =
+        await db.loadAssetTypes(ledgerId, includeArchived: true);
     final categories = await db.loadAllCategories(ledgerId);
     final txns = await db.loadTransactionsForExport(
       ledgerId,
@@ -91,6 +93,7 @@ class ExportService {
       'app_version': await currentAppVersion(),
       'ledger': ledger.toJson(),
       'accounts': accounts.map((e) => e.toJson()).toList(),
+      'asset_types': assetTypeRows.map((e) => e.toJson()).toList(),
       'categories': categories.map((e) => e.toJson()).toList(),
       'transactions': txns.map((e) => e.toJson()).toList(),
       'merchant_rules': rules.map((e) => e.toJson()).toList(),
@@ -286,18 +289,54 @@ class ExportService {
       TextCellValue('archived'),
       TextCellValue('sort_order'),
     ]);
+    final assetTypes = (bundle['asset_types'] as List? ?? const []).cast<Map>();
+    final typeNameById = <String, String>{
+      for (final t in assetTypes) '${t['id']}': '${t['name']}',
+    };
+    // Legacy code → Chinese name (old Excel / pre-v10).
+    const legacyTypeName = <String, String>{
+      'cash': '现金',
+      'bank': '银行卡',
+      'ewallet': '电子钱包',
+      'credit': '信用卡',
+      'other': '其他',
+    };
+
     for (final a in accounts) {
       final ccy = '${a['currency']}';
       final minor = a['openingBalanceMinor'] as int? ?? 0;
+      final rawType = '${a['type']}';
+      final typeLabel = typeNameById[rawType] ??
+          legacyTypeName[rawType] ??
+          (rawType.isEmpty ? '其他' : rawType);
       row(accSheet, [
         TextCellValue('${a['id']}'),
         TextCellValue('${a['name']}'),
-        TextCellValue('${a['type']}'),
+        TextCellValue(typeLabel),
         TextCellValue(ccy),
         IntCellValue(minor),
         DoubleCellValue(fromMinor(ccy, minor)),
         IntCellValue(a['archived'] as int? ?? 0),
         IntCellValue(a['sortOrder'] as int? ?? 0),
+      ]);
+    }
+
+    // asset_types
+    final atSheet = excel['asset_types'];
+    row(atSheet, [
+      TextCellValue('id'),
+      TextCellValue('name'),
+      TextCellValue('icon'),
+      TextCellValue('sort_order'),
+      TextCellValue('archived'),
+    ]);
+    for (final t in assetTypes) {
+      row(atSheet, [
+        TextCellValue('${t['id']}'),
+        TextCellValue('${t['name']}'),
+        TextCellValue('${t['icon'] ?? ''}'),
+        IntCellValue(t['sortOrder'] as int? ?? 0),
+        IntCellValue(t['archived'] as int? ?? 0),
       ]);
     }
 
