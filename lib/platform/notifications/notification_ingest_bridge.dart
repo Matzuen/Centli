@@ -67,6 +67,7 @@ abstract final class NotificationIngestBridge {
         happenAt: parsed.happenAt?.millisecondsSinceEpoch ?? notification.whenMs,
         parseOk: parsed.ok,
         accountHint: parsed.accountHint,
+        direction: parsed.direction,
       );
     } catch (e) {
       // Native path may have inserted the same dedupe_key already.

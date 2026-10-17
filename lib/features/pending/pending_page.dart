@@ -459,6 +459,8 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
   bool _expanded = false;
   bool _categoryFallback = false;
   bool _accountFallback = false;
+  /// Repay default: exclude from stats/budget (T0B-5).
+  bool _includeRepayInStat = false;
 
   PendingCapture get c => widget.capture;
 
@@ -553,8 +555,12 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
     return '未选账户';
   }
 
-  /// Re-parse capture text for direction (no DB column yet).
+  /// Prefer persisted direction; fall back to re-parse.
   String get _direction {
+    final stored = c.direction?.trim();
+    if (stored != null && stored.isNotEmpty) {
+      return NotiTemplate.normalizeDirection(stored);
+    }
     final templates = NotiTemplateStore.peek();
     final raw = RawNotification(
       pkg: c.sourcePkg,
@@ -575,6 +581,8 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
         return '收入';
       case 'refund':
         return '退款';
+      case 'repay':
+        return '还款';
       default:
         return '支出';
     }
@@ -650,6 +658,24 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
                         fontWeight: FontWeight.w600,
                       ),
                 ),
+                if (_direction == 'repay') ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    '还款不计入收支统计，避免与花呗消费重复计算',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    title: const Text('计入统计'),
+                    value: _includeRepayInStat,
+                    onChanged: _busy
+                        ? null
+                        : (v) => setState(() => _includeRepayInStat = v),
+                  ),
+                ],
                 if (_categoryFallback || _accountFallback)
                   Padding(
                     padding: const EdgeInsets.only(top: 4),
@@ -885,6 +911,8 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
       } else {
         txnType = inCats.any((x) => x.id == _categoryId) ? 'in' : 'out';
       }
+      final isRepay = _direction == 'repay';
+      final include = isRepay ? (_includeRepayInStat ? 1 : 0) : 1;
       await ref.read(databaseProvider).confirmPendingCapture(
             pendingId: c.id,
             amountMinor: toMinor(ccy, major),
@@ -894,7 +922,9 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
             merchant: _merchantCtrl.text.trim().isEmpty
                 ? null
                 : _merchantCtrl.text.trim(),
-            type: txnType,
+            type: isRepay ? 'out' : txnType,
+            includeInStat: include,
+            includeInBudget: include,
           );
       await NotificationCaptureStub.cancelPendingConfirm(c.id);
       if (mounted) {

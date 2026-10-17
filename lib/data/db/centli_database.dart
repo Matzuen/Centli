@@ -1601,6 +1601,7 @@ class CentliDatabase extends _$CentliDatabase {
     int? happenAt,
     bool parseOk = false,
     String? accountHint,
+    String? direction,
   }) async {
     if (rawText.trim().isEmpty && (rawTitle ?? '').trim().isEmpty) {
       return null;
@@ -1638,6 +1639,7 @@ class CentliDatabase extends _$CentliDatabase {
         status: 'pending',
         dedupeKey: dedupeKey,
         parseOk: Value(parseOk ? 1 : 0),
+        direction: Value(direction),
         createdAt: ts,
         updatedAt: ts,
       ),
@@ -1666,6 +1668,8 @@ class CentliDatabase extends _$CentliDatabase {
     String? merchant,
     String type = 'out',
     List<String>? tags,
+    int includeInStat = 1,
+    int includeInBudget = 1,
   }) async {
     final pending = await (select(pendingCaptures)
           ..where((t) => t.id.equals(pendingId)))
@@ -1693,6 +1697,8 @@ class CentliDatabase extends _$CentliDatabase {
           source: Value(source),
           tags: Value(encodeTxnTags(tags)),
           pendingId: Value(pending.id),
+          includeInStat: Value(includeInStat),
+          includeInBudget: Value(includeInBudget),
           createdAt: ts,
           updatedAt: ts,
         ),

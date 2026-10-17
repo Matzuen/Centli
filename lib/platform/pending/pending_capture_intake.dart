@@ -172,6 +172,7 @@ abstract final class PendingCaptureIntake {
         happenAt: whenMs,
         parseOk: parsed.ok,
         accountHint: parsed.accountHint,
+        direction: parsed.direction,
       );
     } catch (e) {
       return ManualIngestResult(
