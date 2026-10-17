@@ -1,4 +1,4 @@
-7129c2d chore(G23): verify scripts rewrite HEAD/status/commits/diff_stat + STALE assert
+10d1e0a chore(G23): verify scripts rewrite HEAD/status/commits/diff_stat + STALE assert
 8c12769 fix(G22): drop duplicate merchant row; net-worth consistency guard
 de8040f feat(G21): calendar day sheet + trend sign colors + bookkeeping date seed
 a14a465 fix(G20): widget cold-start deep link + friendly unknown route

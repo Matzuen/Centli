@@ -9,7 +9,7 @@ Baseline HEAD (before this batch): `30f9fd3` · version `1.4.2+8` · schema **11
 | G20 | `a14a465` | overridePlatformDefaultLocation + PendingDeepLink + `/` redirect + errorBuilder; E Android EXTRA skipped (A–D sufficient) |
 | G21 | `de8040f` | calendar day sheet + bookkeeping initialHappenAt; trend colorBySign + zero baseline; dailyNetMajor tests |
 | G22 | `8c12769` | drop ledger-detail 「商户」; net_worth_consistency_test; intentional-dupes table; deleted low-value stats budget hint |
-| G23 | `7129c2d` | verify.sh/ps1 write HEAD/status/commits/diff_stat + STALE assert; untrack audit_input; fix duplicate version bullet |
+| G23 | `10d1e0a` | verify.sh/ps1 write HEAD/status/commits/diff_stat + STALE assert; untrack audit_input; fix duplicate version bullet |
 
 ## G20 self-prove
 
