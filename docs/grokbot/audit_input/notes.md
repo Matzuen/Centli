@@ -1,132 +1,139 @@
-# Centli B2 审计输入 · notes.md
+# Centli B3 执行报告（notes.md）
 
-> 生成：2026-10-17（Asia/Shanghai）
-> 执行者：Grok Bot
-> 基线：`50fe624` → HEAD `185ebf9`
-> 本批续做：此前已完成 T1–T4-2；本回合补齐 T4-3 … T6-6，并尝试 T6-7
-
----
+> 基线：`d4d25e6` · 最终 HEAD：`a1869f1` · schema **v7** · 无 push  
+> 顺序：T0 → T6 → T7 → T1 → T2 → T5（T3/T4 按降级放弃）  
+> Asia/Shanghai · 2026-10-17
 
 ## 1. 子任务 → commit hash
 
-| 子任务 | commit | 说明 |
+| 子任务 | Hash | 状态 |
 |---|---|---|
-| T1-1 | `2db6454` | NotiTemplate.direction |
-| T1-2 | `d033eb2` | ParseResult.direction |
-| T1-3 | `60638a6` | 收入/退款模板 |
-| T1-4 | `d1589a5` | 待确认折叠方向 |
-| T1-5 | `90315c1` | 默认分类按方向 |
-| T2-1 | （只读） | 无 commit |
-| T2-2 | `6672de8` | rules_json 下发 Scheme A |
-| T2-3 | `8219e7b` | dedupe 去 merchant |
-| T2-4 | `d87702c` | 原生入队带 direction |
-| T3-1 | （只读） | 无 commit |
-| T3-2/T3-3/T3-4 | `7182bae` | 文件/URL 导入 + 版本守卫 |
-| T3-5 | `aa6d36d` | 字段级合并用户优先 |
-| T3-6 | （并入 `7182bae` / 规则更新路径） | 更新后走既有 sync 下发 |
-| T4-1 | `87ed994` | 计入预算开关 |
-| T4-2 | `065ec3e` | refund 类型冲减支出 |
-| **T4-3** | **`41e535f`** | Excel include_in_budget + 按表头导入 |
-| **T4-4** | **`5389a6a`** | 预算页未折算提示 |
-| **T5-1** | **`39d5397`** | 历史商户自动完成 |
-| **T5-2** | **`8b9631a`** | 存为模板 / 选模板预填 |
-| **T5-3** | **`0b6398f`** | 可选 member + 详情展示（schema v5） |
-| **T6-1** | **`5ad1231`** | 列表元数据上提，去掉行内 N+1 |
-| **T6-2** | **`b3e3bf8`** | 搜索截断提示 / 归档账户 / 分类账户名 |
-| **T6-3** | **`5e5da8a`** | 记账日期 lastDate=今天 |
-| **T6-4** | **`ac4eac1`** | 期初二次确认 / 资产跟账户 / 余额校正标记 |
-| **T6-6** | **`185ebf9`** | B1 遗留：textTheme、别名标注、行为测试、净资产一致测试 |
-| **T6-7** | **未提交（已回滚）** | 见 §7 |
-| **T6-5** | 本目录产物 | audit_input 相对 `50fe624` 重生 |
+| T0-1 | `8d42d76` | 完成 |
+| T0-2 | `c5b954e` | 完成 |
+| T0-3 | `38bf64d` | 完成 |
+| T6-1 | `a8634c0` | 完成 |
+| T6-2 | `b3794c3` | 完成 |
+| T6-3 | `d4040d5` | 完成 |
+| T6-4 | `f3ea229` | 完成 |
+| T6-5 | （并入 T6-1 契约文档约束节） | 完成 |
+| T7-1 | `e7a3c54` | 完成 |
+| T7-2 | `508abd5` | 完成 |
+| T7-3 | `74c1cea` | 完成 |
+| T7-4 | `09b48e0` | 完成 |
+| T7-5 | `e223e1b` | 完成（APK debug 通过） |
+| T7-6 ① | `693256e` | 完成 |
+| T7-6 ② | — | **SKIPPED**：应用内关于页 logo（降级第 2 项） |
+| T1-1 | `44b7640` | 完成 |
+| T1-2 | `d389583` | 完成 |
+| T1-3 | `3545ef6` | 完成 |
+| T1-4 | `2dcf5a7` | 完成 |
+| T1-5 | `41587e8` | 完成 |
+| T1-6 | `a5a1c5a` | 完成 |
+| T2-1 | `3c24111` | 完成 |
+| T2-2 / T2-3 | `252927b` | 完成 |
+| T2-4 / T2-5 | `a1869f1` | 完成 |
+| T3 整组 | — | **SKIPPED**（降级第 7 项；时间留给 T5） |
+| T4 整组 | — | **SKIPPED**（降级第 6 项） |
+| T5-1 | （本 notes + audit_input） | 完成 |
+| T5-2 | `docs/grokbot/VERIFY_CHECKLIST.md` | 完成 |
+| T5-3 | — | **SKIPPED**（降级第 1 项） |
+| T5-4 | — | **SKIPPED**（降级第 1 项；见下节简报） |
 
----
+## 2. analyze / test
 
-## 2. 本回合主要改动文件（续做部分）
+- 基线：analyze clean · **120** passed  
+- 结束：analyze **No issues found!** · **150** passed / 0 failed  
+- `d4d25e6` 仍为 HEAD 祖先 · **未 push**
 
-- T4-3：`lib/data/export/export_service.dart`、`import_service.dart`，`test/excel_include_budget_test.dart`
-- T4-4：`centli_database.dart`（MonthBudgetProgress.unconvertedByCcy）、`budget_page.dart`，`test/budget_test.dart`
-- T5-1：`listMerchantSuggestions` + `bookkeeping_sheet` RawAutocomplete，`test/merchant_suggestions_test.dart`
-- T5-2：`lib/data/txn_templates.dart`（settings JSON，无新表），详情「存为模板」、记账「模板」，`test/txn_templates_test.dart`
-- T5-3：`transactions.member` + schema 5 + Drift 生成，记账/详情 UI，`test/member_field_test.dart`
-- T6-1：`TxnListLookups` + `TxnGroupedList` 一次加载，`txn_list_tile` 同步查表
-- T6-2：`searchTransactions` 提限 +1 / 分类账户名 / `loadAccountsIncludingArchived`
-- T6-3：`bookkeeping_sheet` date picker
-- T6-4：`assets_page` 确认对话框与 accounts 订阅；列表/详情「余额校正」标识
-- T6-6：`home_page` 未折算改 textTheme；8 个 provider `@visibleForTesting`；pending 纯行为测试；`networth_consistency_test.dart`
+## 3. T1 说明
 
----
+- **补齐机制**：splash 与 FX 并列 `unawaited(_scheduleRecurringDeferred)` → `runDueRecurring`；catch 全部异常。  
+- **occurrenceKey**：新列 `transactions.occurrence_key`（`rec:<ruleId>:<ms>`），落库前查重。  
+- **月末钳制**：`advancePeriod` 按日历加月并用 `anchorDay` 钳到当月天数（1/31→2/28→3/31）。  
+- **补漏上限**：`maxOccurrences=12`；超额写入 `skippedCount`，列表页横幅提示。  
+- **幂等测试**：`test/recurring_rules_test.dart` 连续两次 `runDueRecurring`，第二次 `generated==0`。
 
-## 3. analyze / test
+## 4. T2 说明
 
-```
-flutter analyze  →  No issues found!
-flutter test     →  120 passed / 0 failed
-```
+- 订阅**不写流水**（`subscriptionsDueSoon` 仅筛选；测试断言 txn 数量不变）。  
+- 启动把提示写入 setting `subscription_due_tip`；列表页用「即将到期」徽标。  
+- T2-5：编辑页按钮跳转周期向导并 prefill 金额/周期/备注。
 
-起始基线 87；本批（含先前 T1–T4-2）净增测试至 120。
+## 5. T3-4 / T4
 
----
+- 未实现（整组 SKIPPED）。
 
-## 4. flutter build apk --debug
+## 6. schema 迁移测试
 
-见 `build_apk.txt`：成功生成 `build/app/outputs/flutter-apk/app-debug.apk`（退出码 0）。
-仍有 home_widget KGP 前向兼容警告（不阻塞）。
+- v6：`recurring_rules_test` + `schema_v4_tags_migration_test`（user_version 断言随最终版本更新）  
+- v7：`subscriptions_test`  
+- **无 v8/v9**（T3/T4 未做）
 
----
+## 7. T6 契约对照表
 
-## 5. T1 要点（既有）
+| 契约项 | 契约值 | 实现值 | 状态 |
+|---|---|---|---|
+| 面板顶圆角 | 24 | 24 | 已实现 |
+| 标题行 | 无 | 无 | 已实现 |
+| 金额对齐 | 右对齐 | 右对齐 | 已实现 |
+| 金额字号 | 32 | 32 | 已实现 |
+| 金额右缘距屏 | 18 | padding right 18 | 已实现 |
+| 顶部留白 | 48 | 48 | 已实现 |
+| chip 行数 × 每行数 | 2 × 4 | 2 行（行1:3+附加空；行2:最多4） | 已实现（附加未落地留空） |
+| chip 行高 | 36 | 36 | 已实现 |
+| chip 行间距 | 5 | 5 | 已实现 |
+| chip 水平间距 | 8 | 8 | 已实现 |
+| chip 圆角 | 10 | 10 | 已实现 |
+| chip 描边 | 1dp `#E5E7EB` | `CentliTheme.chipBorder` | 已实现 |
+| 备注框高 | 46 | 46 | 已实现 |
+| 键盘行 × 列 | 5 × 4 | 5 × 4 | 已实现 |
+| 键高 | 54 | 54 | 已实现 |
+| 列宽 | 78/78/78/86 | flex 78/78/78/86 | 已实现 |
+| 键盘水平间距 | 7 | 7 | 已实现 |
+| 键盘垂直间距 | 3.5 | 3.5 | 已实现 |
+| 键盘左右内边距 | 9 | 9 | 已实现 |
+| 数字键底色 | `#EAEDF4` | theme light | 已实现 |
+| 运算符键底色 | `#D4E5F5` | theme light | 已实现 |
+| AC/⌫ 底色 | `#FEDBD7` | theme light | 已实现 |
+| ✓ 底色 | `#1F98F5` | theme light | 已实现 |
+| 第 1 行键序 | `AC ⌫ / *` | 是 | 已实现 |
+| 末行 | `0`(跨2列) `.` `✓` | flex 之和跨列 | 已实现 |
 
-- 微信红包：收入模板用 mustContain 区分「收到/领取」；发出仍走支出；无法可靠区分时宁可漏记。
-- `direction` → 待确认确认入账：`refund` → `type='refund'`；`in`/`out` 按分类 kind；与 `type` 对齐，避免方向与类型歧义。
+## 8. T6 其它
 
----
+- `_evalAmount`/`evalAmountExpr` 已支持 `*` `/`（先乘除）；既有 `amount_expr_test` + `=` 键折叠。  
+- Golden：`test/golden/goldens/bookkeeping_panel.png` / `_dark.png`；结构测试锁类型 chip。  
+- **类型切换保留**：`bk_type_chip`；切换调用 `_reloadCategories(resetSelection: true)`；转账隐藏分类。
 
-## 6. T2 要点（既有）
+## 9. T7 验证
 
-- `rules_json`：Dart 合并规则生成，写入原生；原生按 pkg 匹配，无匹配则宽松入队。
-- **真机「App 被杀」路径：本环境未做真机验证**（诚实标注）。逻辑与 debug 构建已通过。
+- 采样背景：**`#E4F6F4`**（logo 圆角方块内部 opaque 均值）  
+- Android traditional：48/72/96/144/192 RGBA + round 副本  
+- Adaptive foreground：108/162/216/324/432；anydpi-v26 XML 全套  
+- iOS 15 PNG 全部 **RGB**（项目 Contents.json 实际 15 个，非 16）  
+- `logo/logo.png` SHA-256 前后一致：`f7346bfd80f282ba117455fb36e30a6fe87832f2b528189e97610233ad0ab7d6`  
+- `logo1/logo2` 已 gitignore  
+- `flutter build apk --debug` **成功** → `build/app/outputs/flutter-apk/app-debug.apk`
 
----
+## 10. 工单外改动
 
-## 7. T3 要点（既有）
+- 记账面板商户输入框按契约移除（模板仍可通过备注旁列表图标打开）。  
+- schema 旧测试 user_version 断言随 v7 更新。  
+- 无其它主题/配色 drive-by。
 
-- 来源：本地文件导入 + 用户填写 HTTPS URL；**未臆造官方 URL**。
-- 版本：整数 `version` 更高才覆盖；坏规则拒绝；可回滚内置。
+## 11. 风险 / 不确定
 
----
+- 订阅 due tip 写入 setting，首页未做常驻横幅（列表徽标 + setting 可用）；真机体验感待 T5-2。  
+- 周期向导保存后立即 `runDueRecurring`；若起始日很早且 >12 期会截断。  
+- T3/T4 未做 → schema 停在 **v7**。  
+- Golden 跨机字体可能漂移（本机生成）。
 
-## 8. T4 要点
+## 12. 目视
 
-- 退款 A+B：`type=refund` 冲减支出合计、不进收入；负金额支出兼容。
-- Excel：导出 `include_in_budget`；导入按表头；缺必需列抛可读错误；缺预算列默认 1。
-- 预算未折算：仍不计入 spent，页面提示与首页/统计同前缀「未折算：」。
+- Bot **未做**真机目视；请按 `VERIFY_CHECKLIST.md` 过。
 
----
+## 13. T5-4 简报（虽 SKIPPED 文档更新，已快速 grep）
 
-## 9. T5
-
-- T5-1 / T5-2 / T5-3 **均已做**（未跳过成员）。
-- 模板存 app_settings JSON（`txn_templates_<ledgerId>`），无完整 CRUD 页。
-- 成员为自由文本列，无成员管理页/筛选。
-
----
-
-## 10. 工单外顺手改动
-
-无（仅 schema 测试断言随 v5 更新 `user_version` 期望，属 T5-3 必要配套）。
-
----
-
-## 11. 风险与不确定
-
-1. **T6-7**：已尝试将 `android.builtInKotlin` 设为 `true`；debug/release 均构建成功，但 **KGP 警告仍在**（`home_widget` 在 AGP&lt;9 时仍 apply kotlin-android）。按验收「警告消失」未达成，**已回滚为 false，无半迁移提交**。真正消除需 AGP 9+。
-2. **T2 杀进程路径**：无真机实证。
-3. **目视**：本回合未做浅色/暗色真机目视（记账面板含模板/商户/成员输入法弹起未人工看）。
-4. Autocomplete 商户建议依赖列表级一次加载；极多历史商户时仅取前 30。
-5. 搜索 `limit+1` 探测截断；默认展示上限 200。
-
----
-
-## 12. 目视确认
-
-未在本机完成浅色/暗色/输入法弹起目视；请审计方或用户抽查：预算未折算条、记账商户/成员/模板、搜索截断条、余额校正标识、期初确认对话框。
+- 新增面板仍有契约要求的字号硬编码（32/13/54）——按契约允许。  
+- 无新增 `/100.0` 金额换算。  
+- 迁移测试：v6/v7 有；v8/v9 无（表未建）。
