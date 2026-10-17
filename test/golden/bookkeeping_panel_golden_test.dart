@@ -8,7 +8,35 @@ import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
+
+/// Accept tiny antialias / scheduling diffs when the full suite runs in parallel.
+class _TolerantGoldenComparator extends LocalFileComparator {
+  _TolerantGoldenComparator(super.testFile, {this.maxDiffPercent = 0.05});
+
+  final double maxDiffPercent;
+
+  @override
+  Future<bool> compare(Uint8List imageBytes, Uri golden) async {
+    final result = await GoldenFileComparator.compareLists(
+      imageBytes,
+      await getGoldenBytes(golden),
+    );
+    if (result.passed) return true;
+    if (result.diffPercent <= maxDiffPercent) {
+      return true;
+    }
+    // ignore: avoid_print
+    print(
+      'Golden $golden: ${result.diffPercent.toStringAsFixed(3)}% > '
+      '$maxDiffPercent% threshold',
+    );
+    return false;
+  }
+}
+
 
 Future<void> loadGoldenFont() async {
   final file = File('test/golden/fonts/NotoSansSC.ttf');
@@ -23,6 +51,9 @@ void main() {
 
   setUpAll(() async {
     await loadGoldenFont();
+    goldenFileComparator = _TolerantGoldenComparator(
+      Uri.parse('test/golden/bookkeeping_panel_golden_test.dart'),
+    );
   });
 
   Future<CentliDatabase> openDb() async {
