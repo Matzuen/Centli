@@ -13,6 +13,7 @@ import 'package:http/http.dart' as http;
 
 import '../../data/db/centli_database.dart';
 import 'ai_text_fill.dart';
+import '../settings/model_name_validation.dart';
 
 const String kLlmEnabledSettingKey = 'smart_fill_llm_enabled';
 const String kLlmBaseUrlSettingKey = 'smart_fill_llm_base_url';
@@ -69,7 +70,7 @@ class SmartFillLlmSettings {
   /// Set by [load] when a one-shot stale-model migration ran.
   String? lastMigrationNotice;
 
-  /// Set by [load] when baseUrl is deepseek but model is a non-deepseek unknown.
+  /// Set by [load] when baseUrl is deepseek and model is unknown / typo.
   String? lastModelWarning;
 
   Future<SmartFillLlmConfig> load(CentliDatabase db) async {
@@ -93,8 +94,9 @@ class SmartFillLlmSettings {
         await db.setSetting(kLlmModelSettingKey, model);
         await db.setSetting(kLlmModelMigratedV1Key, 'true');
         lastMigrationNotice = '检测到旧的模型配置（$before），已改为 $kDefaultLlmModel';
-      } else if (!model.toLowerCase().startsWith('deepseek')) {
-        lastModelWarning = '该模型可能不支持图片识别';
+      } else {
+        final hint = evaluateDeepSeekModelHint(model, baseUrl: baseUrl);
+        lastModelWarning = hint.message;
       }
     }
 

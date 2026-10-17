@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/db/database_provider.dart';
 import '../ledger/llm_text_fill.dart';
+import 'model_name_validation.dart';
 import '../../app/theme.dart';
 
 /// 智能填单 / 大模型增强配置（OpenAI 兼容接口）。
@@ -37,11 +38,19 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
   @override
   void initState() {
     super.initState();
+    _baseCtrl.addListener(_onModelInputsChanged);
+    _modelCtrl.addListener(_onModelInputsChanged);
     _load();
+  }
+
+  void _onModelInputsChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    _baseCtrl.removeListener(_onModelInputsChanged);
+    _modelCtrl.removeListener(_onModelInputsChanged);
     _baseCtrl.dispose();
     _modelCtrl.dispose();
     _keyCtrl.dispose();
@@ -174,7 +183,14 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
       );
       final result = await testLlmConnection(config: cfg);
       if (!mounted) return;
-      setState(() => _testResult = result.message);
+      var msg = result.message;
+      if (!result.ok) {
+        final tip = connectionTestTypoHintLine(model, baseUrl: base);
+        if (tip != null) {
+          msg = '$msg\n$tip';
+        }
+      }
+      setState(() => _testResult = msg);
     } finally {
       if (mounted) setState(() => _testing = false);
     }
@@ -316,22 +332,82 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
                   decoration: const InputDecoration(
                     labelText: '接口基础地址',
                     hintText: kDefaultLlmBaseUrl,
-                    helperText: '需包含 /v1；实际请求为「基础地址/chat/completions」',
+                    helperText: '通常无需 /v1，例如 https://api.deepseek.com。实际请求为「基础地址/chat/completions」',
                     border: OutlineInputBorder(),
                   ),
                   keyboardType: TextInputType.url,
                   autocorrect: false,
                 ),
                 const SizedBox(height: 12),
-                TextField(
-                  controller: _modelCtrl,
-                  enabled: !_saving,
-                  decoration: const InputDecoration(
-                    labelText: '模型名',
-                    hintText: kDefaultLlmModel,
-                    border: OutlineInputBorder(),
-                  ),
-                  autocorrect: false,
+                Builder(
+                  builder: (context) {
+                    final baseForHint = _baseCtrl.text.trim().isEmpty
+                        ? kDefaultLlmBaseUrl
+                        : _baseCtrl.text.trim();
+                    final modelForHint = _modelCtrl.text.trim().isEmpty
+                        ? kDefaultLlmModel
+                        : _modelCtrl.text.trim();
+                    final hint = evaluateDeepSeekModelHint(
+                      modelForHint,
+                      baseUrl: baseForHint,
+                    );
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        TextField(
+                          controller: _modelCtrl,
+                          enabled: !_saving,
+                          decoration: const InputDecoration(
+                            labelText: '模型名',
+                            hintText: kDefaultLlmModel,
+                            border: OutlineInputBorder(),
+                          ),
+                          autocorrect: false,
+                        ),
+                        if (hint.kind == DeepSeekModelHintKind.typo &&
+                            hint.suggestion != null) ...[
+                          const SizedBox(height: 8),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  hint.message ?? '',
+                                  style: TextStyle(
+                                    color: Colors.orange.shade800,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: _saving
+                                    ? null
+                                    : () {
+                                        _modelCtrl.text = hint.suggestion!;
+                                        _modelCtrl.selection =
+                                            TextSelection.collapsed(
+                                          offset: _modelCtrl.text.length,
+                                        );
+                                        setState(() {});
+                                      },
+                                child: const Text('一键修正'),
+                              ),
+                            ],
+                          ),
+                        ] else if (hint.kind ==
+                            DeepSeekModelHintKind.unsupportedVision) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            hint.message ?? '',
+                            style: TextStyle(
+                              color: Colors.amber.shade800,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ],
+                    );
+                  },
                 ),
                 const SizedBox(height: 12),
                 TextField(
