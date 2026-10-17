@@ -7,8 +7,6 @@ import '../../core/utils/money.dart';
 import '../../data/db/centli_database.dart';
 import '../../data/db/txn_tags.dart';
 import '../../data/db/database_provider.dart';
-import '../../data/txn_templates.dart';
-import '../../core/utils/id_gen.dart';
 import 'bookkeeping_sheet.dart' deferred as bookkeeping;
 import '../../app/theme.dart';
 
@@ -79,12 +77,6 @@ class _DetailBody extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('\u8d26\u5355'),
         actions: [
-          if (txn.type != 'transfer')
-            IconButton(
-              tooltip: '\u5b58\u4e3a\u6a21\u677f',
-              icon: const Icon(Icons.bookmark_add_outlined),
-              onPressed: () => _saveAsTemplate(context, ref, txn),
-            ),
           IconButton(
             tooltip: '\u5220\u9664',
             icon: const Icon(Icons.delete_outline),
@@ -432,65 +424,6 @@ class _DetailBody extends ConsumerWidget {
     ctrl.dispose();
     if (result == null || !context.mounted) return;
     await ref.read(databaseProvider).updateTransactionTags(txn.id, result);
-  }
-
-
-  Future<void> _saveAsTemplate(
-    BuildContext context,
-    WidgetRef ref,
-    Transaction txn,
-  ) async {
-    final nameCtrl = TextEditingController(
-      text: (txn.note ?? '').trim().isEmpty
-          ? '\u5e38\u7528\u6d41\u6c34'
-          : txn.note!.trim(),
-    );
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('\u5b58\u4e3a\u6a21\u677f'),
-        content: TextField(
-          controller: nameCtrl,
-          decoration: const InputDecoration(
-            labelText: '\u6a21\u677f\u540d\u79f0',
-          ),
-          autofocus: true,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('\u53d6\u6d88'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('\u4fdd\u5b58'),
-          ),
-        ],
-      ),
-    );
-    if (ok != true) return;
-    final name = nameCtrl.text.trim();
-    nameCtrl.dispose();
-    if (name.isEmpty) return;
-    final db = ref.read(databaseProvider);
-    await db.saveTxnTemplate(
-      txn.ledgerId,
-      TxnTemplate(
-        id: newId(),
-        name: name,
-        type: txn.type,
-        amountMinor: txn.amountMinor.abs(),
-        currency: txn.currency,
-        accountId: txn.accountId,
-        categoryId: txn.categoryId,
-        note: txn.note,
-        tags: decodeTxnTags(txn.tags),
-      ),
-    );
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('\u5df2\u5b58\u4e3a\u6a21\u677f')),
-    );
   }
 
   Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {

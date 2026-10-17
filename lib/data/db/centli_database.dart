@@ -23,7 +23,6 @@ import 'tables/budgets.dart';
 import 'tables/recurring_rules.dart';
 import 'tables/transactions.dart';
 import 'txn_tags.dart';
-import '../txn_templates.dart';
 
 part 'centli_database.g.dart';
 
@@ -1694,31 +1693,6 @@ END
           ..limit(1))
         .getSingleOrNull();
     return row != null;
-  }
-
-  static String _txnTemplatesKey(String ledgerId) => 'txn_templates_$ledgerId';
-
-  Future<List<TxnTemplate>> loadTxnTemplates(String ledgerId) async {
-    final raw = await getSetting(_txnTemplatesKey(ledgerId));
-    return TxnTemplate.decodeList(raw);
-  }
-
-  Future<void> saveTxnTemplate(String ledgerId, TxnTemplate template) async {
-    final list = await loadTxnTemplates(ledgerId);
-    final next = [
-      template,
-      for (final t in list)
-        if (t.id != template.id) t,
-    ];
-    // Cap to keep settings payload small.
-    final capped = next.take(50).toList();
-    await setSetting(_txnTemplatesKey(ledgerId), TxnTemplate.encodeList(capped));
-  }
-
-  Future<void> deleteTxnTemplate(String ledgerId, String templateId) async {
-    final list = await loadTxnTemplates(ledgerId);
-    final next = [for (final t in list) if (t.id != templateId) t];
-    await setSetting(_txnTemplatesKey(ledgerId), TxnTemplate.encodeList(next));
   }
 
   Future<MerchantRule?> findMerchantRule(

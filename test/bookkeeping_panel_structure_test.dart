@@ -19,8 +19,7 @@ void main() {
       src = File('lib/features/ledger/bookkeeping_sheet.dart').readAsStringSync();
     });
 
-    test('no title 记一笔 Text in build UI', () {
-      // Snackbar/comments may mention 再记一笔; the title string must not appear as UI Text.
+    test('no title Text in build UI', () {
       expect(
         RegExp(r"Text\(\s*'记一笔").hasMatch(src),
         isFalse,
@@ -29,7 +28,6 @@ void main() {
     });
 
     test('no close IconButton in panel sheet body', () {
-      // Account picker may have close; main sheet build must not.
       final buildIdx = src.indexOf('Widget build(BuildContext context)');
       final chipIdx = src.indexOf('class _ChipScrollRow');
       final build = src.substring(buildIdx, chipIdx);
@@ -51,21 +49,32 @@ void main() {
       expect(src.contains('_colFlex[0] + _colFlex[1]'), isTrue);
     });
 
-    test('type chip key present', () {
-      expect(src.contains("Key('bk_type_chip')"), isTrue);
+    test('type switcher key present; type chip removed', () {
+      expect(src.contains("Key('bk_type_switcher')"), isTrue);
+      expect(src.contains("Key('bk_type_chip')"), isFalse);
+      expect(src.contains("bk_type_seg_"), isTrue);
     });
 
-    test('chip rows and note and keypad keys present', () {
-      expect(src.contains("Key('bk_chip_row_1')"), isTrue);
-      expect(src.contains("Key('bk_chip_row_2')"), isTrue);
+    test('single chips row; old dual rows gone', () {
+      expect(src.contains("Key('bk_chips_row')"), isTrue);
+      expect(src.contains("Key('bk_chip_row_1')"), isFalse);
+      expect(src.contains("Key('bk_chip_row_2')"), isFalse);
       expect(src.contains("Key('bk_note')"), isTrue);
       expect(src.contains("Key('bk_keypad')"), isTrue);
+    });
+
+    test('currency MetaChip removed', () {
+      expect(src.contains('Icons.payments_outlined'), isFalse);
+    });
+
+    test('txn template suffix gone', () {
+      expect(src.contains('list_alt_outlined'), isFalse);
+      expect(src.contains("tooltip: '模板'"), isFalse);
     });
   });
 
   group('bookkeeping panel structure (behavior)', () {
-    testWidgets('type chip visible and switches with category kind filter',
-        (tester) async {
+    Future<void> pumpPanel(WidgetTester tester) async {
       final db = CentliDatabase.forTesting(NativeDatabase.memory());
       addTearDown(db.close);
       await db.seedDefaults();
@@ -85,52 +94,41 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+    }
 
-      expect(find.byKey(const Key('bk_type_chip')), findsOneWidget);
-      expect(find.textContaining('支出'), findsWidgets);
+    testWidgets('type switcher has 3 segs above amount; switches category kind',
+        (tester) async {
+      await pumpPanel(tester);
 
-      await tester.tap(find.byKey(const Key('bk_type_chip')));
+      expect(find.byKey(const Key('bk_type_switcher')), findsOneWidget);
+      expect(find.byKey(const Key('bk_type_seg_out')), findsOneWidget);
+      expect(find.byKey(const Key('bk_type_seg_in')), findsOneWidget);
+      expect(find.byKey(const Key('bk_type_seg_transfer')), findsOneWidget);
+      expect(find.byKey(const Key('bk_type_seg_refund')), findsNothing);
+
+      final switcherTop =
+          tester.getTopLeft(find.byKey(const Key('bk_type_switcher'))).dy;
+      final amountTop = tester.getTopLeft(find.textContaining('CNY')).dy;
+      expect(switcherTop < amountTop, isTrue);
+
+      expect(find.text('CNY'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('bk_type_seg_in')));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('收入'));
-      await tester.pumpAndSettle();
-
       expect(find.textContaining('收入'), findsWidgets);
 
-      final ledger = await (db.select(db.ledgers)..limit(1)).getSingle();
-      final inCats = await db.loadCategories(ledger.id, 'in');
-      final outCats = await db.loadCategories(ledger.id, 'out');
-      expect(inCats, isNotEmpty);
-      expect(outCats, isNotEmpty);
-      expect(find.byKey(const Key('bk_type_chip')), findsOneWidget);
+      final chipsH =
+          tester.getSize(find.byKey(const Key('bk_chips_row'))).height;
+      expect(chipsH, lessThan(50));
 
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump(const Duration(milliseconds: 50));
     });
 
     testWidgets('transfer hides category chip', (tester) async {
-      final db = CentliDatabase.forTesting(NativeDatabase.memory());
-      addTearDown(db.close);
-      await db.seedDefaults();
+      await pumpPanel(tester);
 
-      tester.view.physicalSize = const Size(360 * 3, 800 * 3);
-      tester.view.devicePixelRatio = 3;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [databaseProvider.overrideWithValue(db)],
-          child: MaterialApp(
-            theme: CentliTheme.light(),
-            home: const Scaffold(body: BookkeepingSheet()),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.byKey(const Key('bk_type_chip')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('转账'));
+      await tester.tap(find.byKey(const Key('bk_type_seg_transfer')));
       await tester.pumpAndSettle();
 
       expect(find.text('分类'), findsNothing);

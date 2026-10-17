@@ -10,7 +10,6 @@ import '../../core/widgets/centli_icon.dart';
 import '../../data/db/centli_database.dart';
 import '../../data/db/txn_tags.dart';
 import '../../data/db/database_provider.dart';
-import '../../data/txn_templates.dart';
 import 'category_picker_sheet.dart';
 
 Future<void> showBookkeepingSheet(
@@ -203,74 +202,6 @@ List<Account> _accounts = [];
   int get _maxDecimals => currencyDecimals[_currency] ?? 2;
 
 
-  Future<void> _pickTemplate() async {
-    final ledgerId = _ledgerId;
-    if (ledgerId == null) return;
-    final db = ref.read(databaseProvider);
-    final templates = await db.loadTxnTemplates(ledgerId);
-    if (!mounted) return;
-    if (templates.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            '\u6682\u65e0\u6a21\u677f\uff0c\u53ef\u5728\u6d41\u6c34\u8be6\u60c5\u4e2d\u300c\u5b58\u4e3a\u6a21\u677f\u300d',
-          ),
-        ),
-      );
-      return;
-    }
-    final picked = await showModalBottomSheet<TxnTemplate>(
-      context: context,
-      showDragHandle: true,
-      builder: (ctx) {
-        return ListView.builder(
-          shrinkWrap: true,
-          itemCount: templates.length,
-          itemBuilder: (ctx, i) {
-            final t = templates[i];
-            final typeLabel = switch (t.type) {
-              'in' => '\u6536\u5165',
-              'refund' => '\u9000\u6b3e',
-              'transfer' => '\u8f6c\u8d26',
-              _ => '\u652f\u51fa',
-            };
-            return ListTile(
-              title: Text(t.name),
-              subtitle: Text(
-                '$typeLabel · ${formatMinor(t.currency, t.amountMinor)}',
-              ),
-              onTap: () => Navigator.pop(ctx, t),
-            );
-          },
-        );
-      },
-    );
-    if (picked == null || !mounted) return;
-    await _applyTemplate(picked);
-  }
-
-  Future<void> _applyTemplate(TxnTemplate t) async {
-    setState(() {
-      _type = t.type == 'transfer' ? 'out' : t.type;
-      _amountText = fromMinor(t.currency, t.amountMinor).toStringAsFixed(
-        currencyDecimals[t.currency] ?? 2,
-      );
-      if (_amountText.contains('.')) {
-        _amountText = _amountText.replaceFirst(RegExp(r'\.?0+$'), '');
-        if (_amountText.isEmpty) _amountText = '0';
-      }
-      _accountId = t.accountId;
-      _categoryId = t.categoryId;
-        _noteCtrl.text = t.note ?? '';
-      _tags = List<String>.from(t.tags);
-    });
-    await _reloadCategories(resetSelection: false);
-    if (!mounted) return;
-    if (t.categoryId != null &&
-        _categories.any((c) => c.id == t.categoryId)) {
-      setState(() => _categoryId = t.categoryId);
-    }
-  }
 
   void _onKey(String key) {
     setState(() {
@@ -773,65 +704,6 @@ List<Account> _accounts = [];
     if (result != null) setState(() => _tags = result);
   }
 
-  String get _typeChipLabel {
-    switch (_type) {
-      case 'in':
-        return '收入';
-      case 'transfer':
-        return '转账';
-      case 'refund':
-        return '退款';
-      default:
-        return '支出';
-    }
-  }
-
-  Future<void> _pickType() async {
-    final scheme = Theme.of(context).colorScheme;
-    final chosen = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: scheme.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) {
-        final options = <(String, String)>[
-          ('out', '支出'),
-          ('in', '收入'),
-          ('transfer', '转账'),
-        ];
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (final o in options)
-                ListTile(
-                  title: Text(
-                    o.$2,
-                    style: TextStyle(
-                      fontWeight:
-                          _type == o.$1 ? FontWeight.w700 : FontWeight.w500,
-                      color: _type == o.$1 ? scheme.primary : null,
-                    ),
-                  ),
-                  trailing: _type == o.$1
-                      ? Icon(Icons.check, color: scheme.primary)
-                      : null,
-                  onTap: () => Navigator.pop(ctx, o.$1),
-                ),
-            ],
-          ),
-        );
-      },
-    );
-    if (chosen == null || !mounted) return;
-    setState(() => _type = chosen);
-    if (chosen == 'transfer') {
-      setState(() => _categoryId = null);
-    } else {
-      await _reloadCategories(resetSelection: true);
-    }
-  }
 
   Future<void> _pickMember() async {
     final ctrl = TextEditingController(text: _memberCtrl.text);
@@ -901,7 +773,67 @@ List<Account> _accounts = [];
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const SizedBox(height: 48),
+                          const SizedBox(height: 8),
+                          Builder(
+                            builder: (context) {
+                              final segs = <(String, String)>[
+                                ('out', '支出'),
+                                ('in', '收入'),
+                                if (_type == 'refund') ('refund', '退款'),
+                                ('transfer', '转账'),
+                              ];
+                              return Padding(
+                                key: const Key('bk_type_switcher'),
+                                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                                child: Row(
+                                  children: [
+                                    for (final entry in segs)
+                                      Expanded(
+                                        child: InkWell(
+                                          key: Key('bk_type_seg_${entry.$1}'),
+                                          onTap: () async {
+                                            setState(() => _type = entry.$1);
+                                            if (entry.$1 == 'transfer') {
+                                              setState(() => _categoryId = null);
+                                            } else {
+                                              await _reloadCategories(
+                                                resetSelection: true,
+                                              );
+                                            }
+                                          },
+                                          child: Column(
+                                            children: [
+                                              Text(
+                                                entry.$2,
+                                                textAlign: TextAlign.center,
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .titleSmall
+                                                    ?.copyWith(
+                                                      fontWeight: _type == entry.$1
+                                                          ? FontWeight.w700
+                                                          : FontWeight.w500,
+                                                      color: _type == entry.$1
+                                                          ? scheme.primary
+                                                          : scheme.onSurfaceVariant,
+                                                    ),
+                                              ),
+                                              const SizedBox(height: 6),
+                                              Container(
+                                                height: 2,
+                                                color: _type == entry.$1
+                                                    ? scheme.primary
+                                                    : Colors.transparent,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
                           // Finch rhythm: compact amount (right), chips flush under.
                           Padding(
                             padding: const EdgeInsets.fromLTRB(16, 0, 18, 0),
@@ -965,55 +897,16 @@ List<Account> _accounts = [];
                             ),
                           ),
                           const SizedBox(height: 12),
-                          // Chip row 1: type / time / currency
+                          // Chips: time / category / account / tags / member (single scroll row)
                           Padding(
-                            key: const Key('bk_chip_row_1'),
+                            key: const Key('bk_chips_row'),
                             padding: const EdgeInsets.only(left: 16),
                             child: _ChipScrollRow(
                               children: [
-                                _MetaChip(
-                                  key: const Key('bk_type_chip'),
-                                  label: '$_typeChipLabel \u25BE',
-                                  emphasized: true,
-                                  onTap: _pickType,
-                                ),
                                 _MetaChip(
                                   icon: Icons.schedule_rounded,
                                   label: hide ? '**:**' : _happenAtLabel,
                                   onTap: _pickHappenAt,
-                                ),
-                                _MetaChip(
-                                  icon: Icons.payments_outlined,
-                                  label: hide ? '***' : _currency,
-                                  onTap: () => _pickAccount(toAccount: false),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 5),
-                          // Chip row 2: tags / member / category / account
-                          Padding(
-                            key: const Key('bk_chip_row_2'),
-                            padding: const EdgeInsets.only(left: 16),
-                            child: _ChipScrollRow(
-                              children: [
-                                _MetaChip(
-                                  icon: Icons.sell_outlined,
-                                  label: _tags.isEmpty
-                                      ? '\u6807\u7b7e'
-                                      : (hide
-                                          ? '****'
-                                          : _tags.take(2).join(' \u00b7 ')),
-                                  onTap: _editSheetTags,
-                                ),
-                                _MetaChip(
-                                  icon: Icons.person_outline,
-                                  label: _memberCtrl.text.trim().isEmpty
-                                      ? '\u6210\u5458'
-                                      : (hide
-                                          ? '****'
-                                          : _memberCtrl.text.trim()),
-                                  onTap: _pickMember,
                                 ),
                                 if (_type != 'transfer')
                                   Builder(
@@ -1031,7 +924,7 @@ List<Account> _accounts = [];
                                         icon: cat == null
                                             ? Icons.category_outlined
                                             : null,
-                                        label: cat?.name ?? '\u5206\u7c7b',
+                                        label: cat?.name ?? '分类',
                                         onTap: _pickCategory,
                                       );
                                     },
@@ -1053,7 +946,7 @@ List<Account> _accounts = [];
                                             ? Icons
                                                 .account_balance_wallet_outlined
                                             : null,
-                                        label: acc?.name ?? '\u8d26\u6237',
+                                        label: acc?.name ?? '账户',
                                         onTap: () =>
                                             _pickAccount(toAccount: false),
                                       );
@@ -1074,8 +967,8 @@ List<Account> _accounts = [];
                                               ),
                                         icon: Icons.south_west_rounded,
                                         label: acc == null
-                                            ? '\u8f6c\u51fa'
-                                            : '\u8f6c\u51fa \u00b7 ${acc.name}',
+                                            ? '转出'
+                                            : '转出 · ${acc.name}',
                                         onTap: () =>
                                             _pickAccount(toAccount: false),
                                       );
@@ -1095,14 +988,32 @@ List<Account> _accounts = [];
                                               ),
                                         icon: Icons.north_east_rounded,
                                         label: acc == null
-                                            ? '\u8f6c\u5165'
-                                            : '\u8f6c\u5165 \u00b7 ${acc.name}',
+                                            ? '转入'
+                                            : '转入 · ${acc.name}',
                                         onTap: () =>
                                             _pickAccount(toAccount: true),
                                       );
                                     },
                                   ),
                                 ],
+                                _MetaChip(
+                                  icon: Icons.sell_outlined,
+                                  label: _tags.isEmpty
+                                      ? '标签'
+                                      : (hide
+                                          ? '****'
+                                          : _tags.take(2).join(' · ')),
+                                  onTap: _editSheetTags,
+                                ),
+                                _MetaChip(
+                                  icon: Icons.person_outline,
+                                  label: _memberCtrl.text.trim().isEmpty
+                                      ? '成员'
+                                      : (hide
+                                          ? '****'
+                                          : _memberCtrl.text.trim()),
+                                  onTap: _pickMember,
+                                ),
                               ],
                             ),
                           ),
@@ -1135,17 +1046,6 @@ List<Account> _accounts = [];
                                     Icons.edit_outlined,
                                     size: 16,
                                     color: scheme.onSurfaceVariant,
-                                  ),
-                                  suffixIcon: IconButton(
-                                    tooltip: '模板',
-                                    icon: Icon(
-                                      Icons.list_alt_outlined,
-                                      size: 16,
-                                      color: scheme.onSurfaceVariant,
-                                    ),
-                                    onPressed: widget.existing == null
-                                        ? _pickTemplate
-                                        : null,
                                   ),
                                   filled: true,
                                   fillColor: scheme.surface,
@@ -1224,19 +1124,16 @@ class _ChipScrollRow extends StatelessWidget {
 
 class _MetaChip extends StatelessWidget {
   const _MetaChip({
-    super.key,
     required this.label,
     required this.onTap,
     this.icon,
     this.leading,
-    this.emphasized = false,
   });
 
   final String label;
   final VoidCallback onTap;
   final IconData? icon;
   final Widget? leading;
-  final bool emphasized;
 
   @override
   Widget build(BuildContext context) {
@@ -1272,9 +1169,8 @@ class _MetaChip extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 13,
-                    fontWeight:
-                        emphasized ? FontWeight.w700 : FontWeight.w500,
-                    color: emphasized ? scheme.primary : scheme.onSurface,
+                    fontWeight: FontWeight.w500,
+                    color: scheme.onSurface,
                   ),
                 ),
               ),
