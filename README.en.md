@@ -5,7 +5,7 @@ Local-first personal bookkeeping (**Chinese UI only**): **clear every bill**.
 > Canonical docs are in Chinese: see [`README.md`](README.md) and [`docs/RELEASE_NOTES.md`](docs/RELEASE_NOTES.md).
 
 - Flutter · Drift (SQLite) · Riverpod · go_router
-- Version: `1.4.1+7`
+- Version: `1.4.2+8`
 - Currency display: `CNY · 人民币`
 - Bottom nav (5 tabs): 首页 / 统计 / 记账 / 资产 / 我的
 
@@ -49,6 +49,18 @@ Prefer JSON (`format: centli-export`). Excel import is best-effort (no fx/settin
 - `docs/RELEASE_NOTES.md` (Chinese release notes for stores / GitHub Releases)
 
 ## Changelog
+
+> **Versioning** (since 2026-10-17): the minor digit is the **batch number**, so work order
+> batch 4 ships as `1.4.x`. There is no `1.2` / `1.3` because those batches were never
+> released under this scheme. Fixes within a batch bump the patch digit
+> (`1.4.1` → `1.4.2`); the build number increments by 1 on every release.
+
+### 1.4.2 (2026-10-17)
+- Fix misleading smart-fill API base URL hint (DeepSeek usually needs no /v1)
+- Near-miss DeepSeek model names get a one-tap typo fix hint
+- Drop the member field (legacy values merged into note)
+- Merge text + voice bookkeeping into Quick Bookkeeping (long-press bottom 「记一笔」)
+- Screenshot bookkeeping entry on home (scanner icon) and inside the quick sheet
 
 ### 1.4.1 (2026-10-17)
 - B4: custom asset types; DeepSeek vision for screenshot booking; hold-to-talk voice; pending tab split + repay notifications; drop subscriptions
