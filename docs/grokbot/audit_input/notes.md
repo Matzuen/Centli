@@ -1,7 +1,7 @@
 # Centli B4-PATCH G25 notes
 
 Generated: 2026-10-17 (Asia/Shanghai)
-HEAD: `962ef9a638a202c1f40369faaece448464d76927`
+HEAD: `b2ba38c4b586a2deb04e7bfa0493b4d01f8b1936`
 Version: `1.4.2+8`
 schemaVersion: `11`
 
@@ -81,5 +81,5 @@ Last verify: `00:06 +224: All tests passed!` full run **225 passed / 0 failed**
 - G23 Corrupted-HEAD.txt STALE self-proof marked **无效** (not deleted)
 
 ## Final
-- Final HEAD: `6aa5c64a768293d828a60dd30ed7ac525f3b9253` (`6aa5c64`)
+- Final HEAD: `b2ba38c4b586a2deb04e7bfa0493b4d01f8b1936` (`b2ba38c`)
 - version: **1.4.2+8** · schema **11** · tests **225**
