@@ -10,6 +10,7 @@ import '../../core/widgets/centli_icon.dart';
 import '../../data/db/centli_database.dart';
 import '../../data/db/txn_tags.dart';
 import '../../data/db/database_provider.dart';
+import '../../data/txn_templates.dart';
 import 'category_picker_sheet.dart';
 
 Future<void> showBookkeepingSheet(
@@ -205,6 +206,77 @@ List<Account> _accounts = [];
   }
 
   int get _maxDecimals => currencyDecimals[_currency] ?? 2;
+
+
+  Future<void> _pickTemplate() async {
+    final ledgerId = _ledgerId;
+    if (ledgerId == null) return;
+    final db = ref.read(databaseProvider);
+    final templates = await db.loadTxnTemplates(ledgerId);
+    if (!mounted) return;
+    if (templates.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            '\u6682\u65e0\u6a21\u677f\uff0c\u53ef\u5728\u6d41\u6c34\u8be6\u60c5\u4e2d\u300c\u5b58\u4e3a\u6a21\u677f\u300d',
+          ),
+        ),
+      );
+      return;
+    }
+    final picked = await showModalBottomSheet<TxnTemplate>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) {
+        return ListView.builder(
+          shrinkWrap: true,
+          itemCount: templates.length,
+          itemBuilder: (ctx, i) {
+            final t = templates[i];
+            final typeLabel = switch (t.type) {
+              'in' => '\u6536\u5165',
+              'refund' => '\u9000\u6b3e',
+              'transfer' => '\u8f6c\u8d26',
+              _ => '\u652f\u51fa',
+            };
+            return ListTile(
+              title: Text(t.name),
+              subtitle: Text(
+                '$typeLabel · ${formatMinor(t.currency, t.amountMinor)}',
+              ),
+              onTap: () => Navigator.pop(ctx, t),
+            );
+          },
+        );
+      },
+    );
+    if (picked == null || !mounted) return;
+    await _applyTemplate(picked);
+  }
+
+  Future<void> _applyTemplate(TxnTemplate t) async {
+    setState(() {
+      _type = t.type == 'transfer' ? 'out' : t.type;
+      _amountText = fromMinor(t.currency, t.amountMinor).toStringAsFixed(
+        currencyDecimals[t.currency] ?? 2,
+      );
+      if (_amountText.contains('.')) {
+        _amountText = _amountText.replaceFirst(RegExp(r'\.?0+$'), '');
+        if (_amountText.isEmpty) _amountText = '0';
+      }
+      _accountId = t.accountId;
+      _categoryId = t.categoryId;
+      _merchantCtrl.text = t.merchant ?? '';
+      _noteCtrl.text = t.note ?? '';
+      _tags = List<String>.from(t.tags);
+    });
+    await _reloadCategories(resetSelection: false);
+    if (!mounted) return;
+    if (t.categoryId != null &&
+        _categories.any((c) => c.id == t.categoryId)) {
+      setState(() => _categoryId = t.categoryId);
+    }
+  }
 
   void _onKey(String key) {
     setState(() {
@@ -733,15 +805,24 @@ List<Account> _accounts = [];
                             ),
                           ),
                           Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                            child: Align(
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                '记一笔 · ${ref.watch(currentLedgerProvider).valueOrNull?.name ?? ''}',
-                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                              ),
+                            padding: const EdgeInsets.fromLTRB(16, 12, 8, 0),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    '记一笔 · ${ref.watch(currentLedgerProvider).valueOrNull?.name ?? ''}',
+                                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                  ),
+                                ),
+                                if (widget.existing == null)
+                                  TextButton.icon(
+                                    onPressed: _pickTemplate,
+                                    icon: const Icon(Icons.bookmark_outline, size: 18),
+                                    label: const Text('模板'),
+                                  ),
+                              ],
                             ),
                           ),
                           Padding(
