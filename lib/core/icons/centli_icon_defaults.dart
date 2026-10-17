@@ -32,9 +32,17 @@ String? defaultIconKeyForCategoryName(String name) {
   }
 }
 
-String? defaultIconKeyForAccount({required String name, required String type}) {
+String? defaultIconKeyForAccount({
+  required String name,
+  required String type,
+  String? typeName,
+  String? typeIcon,
+}) {
+  final custom = (typeIcon ?? '').trim();
+  if (custom.isNotEmpty) return custom;
   final n = name.trim();
   final lower = n.toLowerCase();
+  final tn = (typeName ?? '').trim();
   if (n.contains('微信') || lower.contains('wechat') || lower.contains('weixin')) {
     return 'wechat';
   }
@@ -43,8 +51,10 @@ String? defaultIconKeyForAccount({required String name, required String type}) {
   if (n.contains('花呗')) return 'huabei';
   if (n.contains('京东')) return 'jd_pay';
   if (n.contains('美团')) return 'meituan';
-  if (n.contains('现金') || type == 'cash') return 'cash';
-  if (type == 'credit' || n.contains('信用')) return 'credit_card';
+  if (n.contains('现金') || type == 'cash' || tn.contains('现金')) return 'cash';
+  if (type == 'credit' || n.contains('信用') || tn.contains('信用')) {
+    return 'credit_card';
+  }
   if (n.contains('工商') || n.contains('工行')) return 'bank_icbc';
   if (n.contains('建设') || n.contains('建行')) return 'bank_ccb';
   if (n.contains('农业') || n.contains('农行')) return 'bank_abc';
@@ -60,6 +70,12 @@ String? defaultIconKeyForAccount({required String name, required String type}) {
   if (n.contains('兴业')) return 'bank_cib';
   if (n.contains('广发')) return 'bank_cgb';
   if (n.contains('华夏')) return 'bank_hxb';
-  if (type == 'bank' || n.contains('银行') || n.contains('卡')) return 'bank_card';
+  if (type == 'bank' ||
+      tn.contains('银行') ||
+      n.contains('银行') ||
+      n.contains('卡')) {
+    return 'bank_card';
+  }
+  if (tn.contains('电子钱包') || type == 'ewallet') return 'wallet';
   return 'wallet';
 }

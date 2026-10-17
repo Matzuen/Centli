@@ -1120,13 +1120,19 @@ END
   }) async {
     final ts = nowMs();
     final typeId = await resolveAssetTypeId(ledgerId: ledgerId, raw: type);
+    final assetType = await getAssetType(typeId);
     final existing = await loadActiveAccounts(ledgerId);
     final order = existing.isEmpty
         ? 0
         : existing.map((a) => a.sortOrder).reduce((a, b) => a > b ? a : b) + 1;
     final iconKey = (icon ?? '').trim().isNotEmpty
         ? icon!.trim()
-        : defaultIconKeyForAccount(name: name, type: type);
+        : defaultIconKeyForAccount(
+            name: name,
+            type: typeId,
+            typeName: assetType?.name,
+            typeIcon: assetType?.icon,
+          );
     await into(accounts).insert(
       AccountsCompanion.insert(
         id: newId(),

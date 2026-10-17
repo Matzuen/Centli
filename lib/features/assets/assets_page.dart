@@ -35,6 +35,14 @@ final _balancesProvider = StreamProvider.family<Map<String, int>, String>((
   return ref.watch(databaseProvider).watchAccountBalances(ledgerId);
 });
 
+final _assetTypesProvider =
+    StreamProvider.family<List<AssetType>, String>((ref, ledgerId) {
+  return ref
+      .watch(databaseProvider)
+      .watchAssetTypes(ledgerId, includeArchived: true);
+});
+
+
 final _netWorthBaseProvider =
     FutureProvider.family<BaseNetWorth, ({String ledgerId, String base})>((
       ref,
@@ -96,6 +104,7 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                   ? ref.watch(_archivedAccountsProvider(ledgerId))
                   : activeAccountsAsync;
               final balancesAsync = ref.watch(_balancesProvider(ledgerId));
+              final typesAsync = ref.watch(_assetTypesProvider(ledgerId));
               return accountsAsync.when(
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (e, _) => Center(child: Text('$e')),
@@ -118,7 +127,12 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                                 ?.copyWith(fontWeight: FontWeight.w800),
                           ),
                           const Spacer(),
-                          if (!_showArchived)
+                          if (!_showArchived) ...[
+                            IconButton(
+                              tooltip: '资产分类',
+                              onPressed: () => context.push('/assets/types'),
+                              icon: const Icon(Icons.category_outlined),
+                            ),
                             IconButton(
                               tooltip: '添加账户',
                               onPressed: () async {
@@ -130,6 +144,7 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                               },
                               icon: const Icon(Icons.add_rounded),
                             ),
+                          ],
                         ],
                       ),
                       const SizedBox(height: CentliSpacing.item),
@@ -465,6 +480,7 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                         ..._groupedCards(
                           context,
                           accounts: accounts,
+                          types: typesAsync.valueOrNull ?? const <AssetType>[],
                           balances: balances,
                           hide: hide,
                           base: base,
@@ -490,39 +506,55 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
   List<Widget> _groupedCards(
     BuildContext context, {
     required List<Account> accounts,
+    required List<AssetType> types,
     required Map<String, int> balances,
     required bool hide,
     required String base,
     required FxBook? book,
   }) {
     final day = FxBook.todayLocal();
-    final groups = <String, List<Account>>{
-      '电子钱包': [],
-      '银行卡': [],
-      '现金': [],
-      '其他': [],
-    };
-    for (final a in accounts) {
-      switch (a.type) {
-        case 'ewallet':
-          groups['电子钱包']!.add(a);
-          break;
-        case 'bank':
-          groups['银行卡']!.add(a);
-          break;
-        case 'cash':
-          groups['现金']!.add(a);
-          break;
-        default:
-          groups['其他']!.add(a);
+    final typeById = {for (final t in types) t.id: t};
+    AssetType? otherType;
+    for (final t in types) {
+      if (t.name == '其他') {
+        otherType = t;
+        break;
       }
     }
+    // Ordered buckets by sortOrder; virtual 其他 for orphans if needed.
+    final orderedIds = [for (final t in types) t.id];
+    final groups = <String, List<Account>>{for (final id in orderedIds) id: []};
+    const virtualOther = '__virtual_other__';
+    var needVirtual = false;
+
+    for (final a in accounts) {
+      if (groups.containsKey(a.type)) {
+        groups[a.type]!.add(a);
+      } else if (otherType != null) {
+        groups[otherType.id]!.add(a);
+      } else {
+        needVirtual = true;
+        groups.putIfAbsent(virtualOther, () => []).add(a);
+      }
+    }
+
+    String labelFor(String key) {
+      if (key == virtualOther) return '其他';
+      return typeById[key]?.name ?? '其他';
+    }
+
     final out = <Widget>[];
-    for (final entry in groups.entries) {
-      if (entry.value.isEmpty) continue;
+    final keys = [
+      ...orderedIds,
+      if (needVirtual) virtualOther,
+    ];
+    for (final key in keys) {
+      final list = groups[key];
+      if (list == null || list.isEmpty) continue;
+      // Skip archived types with no accounts (already empty-skipped).
       var sumBase = 0;
       final groupUnconverted = <String, int>{};
-      for (final a in entry.value) {
+      for (final a in list) {
         final bal = balances[a.id] ?? a.openingBalanceMinor;
         final asBase = book == null
             ? (a.currency == base ? bal : null)
@@ -556,7 +588,7 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                   child: Row(
                     children: [
                       Text(
-                        entry.key,
+                        labelFor(key),
                         style: Theme.of(context).textTheme.titleSmall
                             ?.copyWith(fontWeight: FontWeight.w800),
                       ),
@@ -571,12 +603,13 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                     ],
                   ),
                 ),
-                for (var i = 0; i < entry.value.length; i++) ...[
+                for (var i = 0; i < list.length; i++) ...[
                   if (i > 0) const Divider(height: 1),
                   Builder(
                     builder: (context) {
-                      final a = entry.value[i];
+                      final a = list[i];
                       final bal = balances[a.id] ?? a.openingBalanceMinor;
+                      final typeName = labelFor(a.type);
                       return ListTile(
                         leading: CentliIconChip(
                           name: a.name,
@@ -587,8 +620,8 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                         title: Text(a.name),
                         subtitle: Text(
                           _showArchived
-                              ? '${_typeLabel(a.type)} · 已归档'
-                              : _typeLabel(a.type),
+                              ? '$typeName · 已归档'
+                              : typeName,
                         ),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -599,8 +632,8 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                                 fontWeight: FontWeight.w600,
                                 color: _showArchived
                                     ? Theme.of(context)
-                                          .colorScheme
-                                          .onSurfaceVariant
+                                        .colorScheme
+                                        .onSurfaceVariant
                                     : null,
                               ),
                             ),
@@ -619,19 +652,6 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
       );
     }
     return out;
-  }
-
-  String _typeLabel(String type) {
-    switch (type) {
-      case 'cash':
-        return '现金';
-      case 'ewallet':
-        return '电子钱包';
-      case 'bank':
-        return '银行卡';
-      default:
-        return '其他';
-    }
   }
 }
 
@@ -694,9 +714,29 @@ Future<void> showAccountEditor(
           ).toStringAsFixed(currencyDecimals[existing.currency] ?? 2),
   );
   var currency = existing?.currency ?? 'CNY';
-  var type = existing?.type ?? 'cash';
+  final db = ref.read(databaseProvider);
+  final allTypes = await db.loadAssetTypes(ledgerId, includeArchived: true);
+  final activeTypes = [for (final t in allTypes) if (t.archived == 0) t];
+  String type;
+  if (existing != null) {
+    type = existing.type;
+  } else if (activeTypes.isNotEmpty) {
+    type = activeTypes.first.id;
+  } else if (allTypes.isNotEmpty) {
+    type = allTypes.first.id;
+  } else {
+    type = await db.resolveAssetTypeId(ledgerId: ledgerId, raw: 'cash');
+  }
+  // Dropdown: active types + current value if archived
+  final dropdownTypes = <AssetType>[
+    ...activeTypes,
+    if (existing != null &&
+        !activeTypes.any((t) => t.id == existing.type))
+      ...allTypes.where((t) => t.id == existing.type),
+  ];
   String? iconKey = existing?.icon;
 
+  if (!context.mounted) return;
   final saved = await showDialog<bool>(
     context: context,
     builder: (ctx) {
@@ -773,18 +813,26 @@ Future<void> showAccountEditor(
                   ),
                   const SizedBox(height: CentliSpacing.section),
                   DropdownButtonFormField<String>(
-                    initialValue: type,
-                    items: const [
-                      DropdownMenuItem(value: 'cash', child: Text('现金')),
-                      DropdownMenuItem(value: 'bank', child: Text('银行卡')),
-                      DropdownMenuItem(value: 'ewallet', child: Text('电子钱包')),
-                      DropdownMenuItem(value: 'other', child: Text('其他')),
+                    initialValue: dropdownTypes.any((t) => t.id == type)
+                        ? type
+                        : (dropdownTypes.isNotEmpty
+                            ? dropdownTypes.first.id
+                            : null),
+                    items: [
+                      for (final t in dropdownTypes)
+                        DropdownMenuItem(
+                          value: t.id,
+                          enabled: t.archived == 0 || t.id == type,
+                          child: Text(
+                            t.archived != 0 ? '${t.name}（已归档）' : t.name,
+                          ),
+                        ),
                     ],
                     onChanged: (v) {
                       if (v != null) setLocal(() => type = v);
                     },
                     decoration: const InputDecoration(
-                      labelText: '类型',
+                      labelText: '分类',
                       border: OutlineInputBorder(),
                     ),
                   ),
@@ -840,7 +888,6 @@ Future<void> showAccountEditor(
     return;
   }
 
-  final db = ref.read(databaseProvider);
   final openingMinor = toMinor(currency, openingMajor);
   if (existing == null) {
     await db.createAccount(

@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../features/assets/account_detail_page.dart';
 import '../features/assets/assets_page.dart';
+import '../features/assets/asset_types_page.dart';
 import '../features/home/home_page.dart';
 import '../features/onboarding/onboarding_page.dart';
 import '../features/onboarding/splash_page.dart';
@@ -107,6 +108,10 @@ GoRouter createRouter({
                 path: '/assets',
                 builder: (context, state) => const AssetsPage(),
                 routes: [
+                  GoRoute(
+                    path: 'types',
+                    builder: (context, state) => const AssetTypesPage(),
+                  ),
                   GoRoute(
                     path: ':id',
                     parentNavigatorKey: rootNavigatorKey,

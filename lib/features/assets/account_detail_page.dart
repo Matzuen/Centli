@@ -37,6 +37,11 @@ final _accountTxProvider = StreamProvider.family<
       );
 });
 
+final _assetTypeByIdProvider =
+    FutureProvider.family<AssetType?, String>((ref, id) {
+  return ref.watch(databaseProvider).getAssetType(id);
+});
+
 /// P0 account detail `/assets/:id`:
 /// balance / currency / opening + monthly (range)流水; edit / adjust / archive / unarchive.
 class AccountDetailPage extends ConsumerWidget {
@@ -204,7 +209,7 @@ class _AccountDetailBody extends ConsumerWidget {
                     children: [
                       _chip(context, '\u5e01\u79cd', account.currency),
                       const SizedBox(width: 8),
-                      _chip(context, '\u7c7b\u578b', _typeLabel(account.type)),
+                      _chip(context, '\u7c7b\u578b', ref.watch(_assetTypeByIdProvider(account.type)).valueOrNull?.name ?? '其他'),
                     ],
                   ),
                   const SizedBox(height: 8),
@@ -307,18 +312,6 @@ class _AccountDetailBody extends ConsumerWidget {
     );
   }
 
-  String _typeLabel(String type) {
-    switch (type) {
-      case 'cash':
-        return '\u73b0\u91d1';
-      case 'ewallet':
-        return '\u7535\u5b50\u94b1\u5305';
-      case 'bank':
-        return '\u94f6\u884c\u5361';
-      default:
-        return '\u5176\u4ed6';
-    }
-  }
 }
 
 final _balancesForLedgerProvider =
