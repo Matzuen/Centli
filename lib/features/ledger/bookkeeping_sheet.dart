@@ -421,8 +421,6 @@ List<Account> _accounts = [];
       }
 
       final note = _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim();
-      // Panel no longer edits member; preserve existing value on update.
-      final member = widget.existing?.member;
       final toAcc = _type == 'transfer' ? _toAccountId : null;
       final cat = _type == 'transfer' ? null : _categoryId;
       if (widget.existing != null) {
@@ -434,7 +432,6 @@ List<Account> _accounts = [];
           accountId: _accountId!,
           toAccountId: toAcc,
           categoryId: cat,
-            member: member,
           note: note,
           tags: _tags,
           happenAt: _happenAt,
@@ -450,7 +447,6 @@ List<Account> _accounts = [];
           accountId: _accountId!,
           toAccountId: toAcc,
           categoryId: cat,
-            member: member,
           note: note,
           tags: _tags,
           happenAt: _happenAt,

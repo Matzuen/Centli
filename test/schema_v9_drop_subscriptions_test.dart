@@ -8,7 +8,7 @@ void main() {
     addTearDown(db.close);
     await db.seedDefaults();
     final ver = await db.customSelect('PRAGMA user_version').getSingle();
-    expect(ver.read<int>('user_version'), 10);
+    expect(ver.read<int>('user_version'), 11);
     final tables = {
       for (final r in await db
           .customSelect("SELECT name FROM sqlite_master WHERE type='table'")

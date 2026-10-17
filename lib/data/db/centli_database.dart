@@ -47,7 +47,7 @@ class CentliDatabase extends _$CentliDatabase {
   CentliDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 10;
+  int get schemaVersion => 11;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -67,7 +67,10 @@ class CentliDatabase extends _$CentliDatabase {
             await m.addColumn(transactions, transactions.tags);
           }
           if (from < 5) {
-            await m.addColumn(transactions, transactions.member);
+            // Historical v5 column; kept as raw SQL so v11 can drop it after merge.
+            await customStatement(
+              'ALTER TABLE transactions ADD COLUMN member TEXT',
+            );
           }
           if (from < 6) {
             await m.createTable(recurringRules);
@@ -121,6 +124,23 @@ UPDATE pending_captures SET note = CASE
   ELSE NULL
 END
 ''');
+            // Jumping across versions with current schema would drop member
+            // without merging — fold into note first when the column exists.
+            if (await _hasTableColumn('transactions', 'member')) {
+              await customStatement('''
+UPDATE transactions SET note = CASE
+  WHEN member IS NOT NULL AND length(trim(member)) > 0
+       AND note IS NOT NULL AND length(trim(note)) > 0
+    THEN trim(note) || ' · ' || trim(member)
+  WHEN member IS NOT NULL AND length(trim(member)) > 0
+    THEN trim(member)
+  WHEN note IS NOT NULL AND length(trim(note)) > 0
+    THEN trim(note)
+  ELSE NULL
+END
+WHERE member IS NOT NULL AND length(trim(member)) > 0
+''');
+            }
             await m.alterTable(TableMigration(transactions));
             await m.alterTable(TableMigration(pendingCaptures));
           }
@@ -134,6 +154,25 @@ END
             await m.createTable(assetTypes);
             await _migrateAccountsToAssetTypes();
           }
+          if (from < 11) {
+            // Merge non-empty member into note (note · member), then drop column.
+            if (await _hasTableColumn('transactions', 'member')) {
+              await customStatement('''
+UPDATE transactions SET note = CASE
+  WHEN member IS NOT NULL AND length(trim(member)) > 0
+       AND note IS NOT NULL AND length(trim(note)) > 0
+    THEN trim(note) || ' · ' || trim(member)
+  WHEN member IS NOT NULL AND length(trim(member)) > 0
+    THEN trim(member)
+  WHEN note IS NOT NULL AND length(trim(note)) > 0
+    THEN trim(note)
+  ELSE NULL
+END
+WHERE member IS NOT NULL AND length(trim(member)) > 0
+''');
+              await m.alterTable(TableMigration(transactions));
+            }
+          }
           await _ensureQueryIndexes();
         },
         beforeOpen: (details) async {
@@ -142,6 +181,11 @@ END
         },
       );
 
+
+  Future<bool> _hasTableColumn(String table, String column) async {
+    final rows = await customSelect('PRAGMA table_info($table)').get();
+    return rows.any((r) => r.read<String>('name') == column);
+  }
 
   /// Hot-path indexes (idempotent). Called from onUpgrade + beforeOpen.
   Future<void> _ensureQueryIndexes() async {
@@ -1072,7 +1116,6 @@ END
     String? toAccountId,
     String? categoryId,
     String? merchant,
-    String? member,
     String? note,
     List<String>? tags,
     DateTime? happenAt,
@@ -1094,7 +1137,6 @@ END
         accountId: accountId,
         toAccountId: Value(toAccountId),
         categoryId: Value(categoryId),
-        member: Value(member),
         note: Value(composeNote(merchant: merchant, note: note)),
         tags: Value(encodeTxnTags(tags)),
         happenAt: happen,
@@ -1506,7 +1548,6 @@ END
     String? toAccountId,
     String? categoryId,
     String? merchant,
-    String? member,
     String? note,
     List<String>? tags,
     DateTime? happenAt,
@@ -1523,7 +1564,6 @@ END
         accountId: Value(accountId),
         toAccountId: Value(toAccountId),
         categoryId: Value(categoryId),
-        member: Value(member),
         note: Value(composeNote(merchant: merchant, note: note)),
         tags: Value(encodeTxnTags(tags)),
         happenAt: happen != null ? Value(happen) : const Value.absent(),

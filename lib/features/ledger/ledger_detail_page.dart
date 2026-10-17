@@ -213,15 +213,6 @@ class _DetailBody extends ConsumerWidget {
                         : txn.note!,
                   ),
                 ),
-                const Divider(height: 1),
-                ListTile(
-                  title: const Text('\u6210\u5458'),
-                  trailing: Text(
-                    (txn.member == null || txn.member!.isEmpty)
-                        ? '\u2014'
-                        : txn.member!,
-                  ),
-                ),
                 _sectionHeader(context, '\u5176\u5b83'),
                 ListTile(
                   title: const Text('\u6807\u7b7e'),
