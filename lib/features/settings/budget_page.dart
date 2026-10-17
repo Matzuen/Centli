@@ -107,6 +107,15 @@ class BudgetPage extends ConsumerWidget {
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      if (p.hasUnconverted) ...[
+                        Text(
+                          '\u672a\u6298\u7b97\uff1a${p.unconvertedByCcy.entries.map((e) => '${e.key} ${formatMinor(e.key, e.value, hide: hide)}').join('\u3001')}',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: scheme.onSurfaceVariant,
+                              ),
+                        ),
+                        const SizedBox(height: 8),
+                      ],
                       _BudgetProgressCard(
                         title: '\u6708\u5ea6\u603b\u9884\u7b97',
                         limitMinor: p.totalLimitMinor,

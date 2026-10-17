@@ -2145,6 +2145,7 @@ class CentliDatabase extends _$CentliDatabase {
     final book = await loadFxBook();
     var spentTotal = 0;
     final spentByCat = <String, int>{};
+    final leftover = <String, int>{};
 
     for (final r in rows) {
       final day = FxBook.dayFromHappenAtMs(r.happenAt);
@@ -2154,7 +2155,12 @@ class CentliDatabase extends _$CentliDatabase {
         amountMinor: r.amountMinor,
         onDay: day,
       );
-      if (asBase == null) continue;
+      if (asBase == null) {
+        // Still exclude from spent (do not invent FX); surface for UI tip.
+        final signedRaw = r.type == 'refund' ? -r.amountMinor : r.amountMinor;
+        leftover[r.currency] = (leftover[r.currency] ?? 0) + signedRaw;
+        continue;
+      }
       final signed = r.type == 'refund' ? -asBase : asBase;
       spentTotal += signed;
       final cid = r.categoryId;
@@ -2190,6 +2196,7 @@ class CentliDatabase extends _$CentliDatabase {
       totalLimitMinor: totalLimit,
       spentTotalMinor: spentTotal,
       categories: catProgress,
+      unconvertedByCcy: leftover,
     );
   }
 
@@ -2373,6 +2380,7 @@ class MonthBudgetProgress {
     required this.totalLimitMinor,
     required this.spentTotalMinor,
     required this.categories,
+    this.unconvertedByCcy = const {},
   });
 
   final String yearMonth;
@@ -2381,8 +2389,13 @@ class MonthBudgetProgress {
   final int spentTotalMinor;
   final List<CategoryBudgetProgress> categories;
 
+  /// Foreign amounts that could not be converted into [baseCurrency] (excluded from spent).
+  final Map<String, int> unconvertedByCcy;
+
   bool get hasAnyBudget =>
       totalLimitMinor != null || categories.isNotEmpty;
+
+  bool get hasUnconverted => unconvertedByCcy.isNotEmpty;
 }
 
 
