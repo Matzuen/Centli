@@ -51,7 +51,7 @@ Grok Bot 按新工单继续
 
 ## 3. 审计输入清单（每轮结束时产出）
 
-写入 `docs/grokbot/audit_input/`（该目录**不进版本库**，已在 `.gitignore` 中）。
+写入 `docs/grokbot/audit_input/`（由脚本生成的文件不入库：analyze/test/HEAD/status/commits/diff_stat；只有 `notes.md`（交付报告）入库；已在 `.gitignore` 中）。
 
 ### 3.1 必产出（缺一不可）
 
