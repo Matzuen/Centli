@@ -63,6 +63,8 @@ Prefer JSON (`format: centli-export`). Excel import is best-effort (no fx/settin
 - Screenshot bookkeeping entry on home (scanner icon) and inside the quick sheet
 - Fix home-widget cold start 「Page Not Found」 by overriding platform default route and handing off after splash
 - Unknown routes show a friendly page instead of raw GoException
+- Calendar tab drops the duplicate txn list; tap a day for a sheet with that days ledger and quick bookkeeping
+- Daily trend colors by sign (income green / expense red) with a zero baseline
 
 ### 1.4.1 (2026-10-17)
 - B4: custom asset types; DeepSeek vision for screenshot booking; hold-to-talk voice; pending tab split + repay notifications; drop subscriptions

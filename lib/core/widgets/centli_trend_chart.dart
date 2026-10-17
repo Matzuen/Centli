@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
@@ -40,6 +42,29 @@ List<int> pickTrendChartXLabelIndices(int n, {int maxLabels = 5}) {
   return result;
 }
 
+
+/// Nice Y-axis step: smallest 1/2/5×10^n that is >= [raw].
+@visibleForTesting
+double niceTrendYInterval(double raw) {
+  if (raw <= 0 || raw.isNaN || raw.isInfinite) return 1;
+  final exp = (math.log(raw) / math.ln10).floor();
+  final pow10 = math.pow(10, exp).toDouble();
+  final frac = raw / pow10;
+  final niceFrac = frac <= 1
+      ? 1.0
+      : frac <= 2
+          ? 2.0
+          : frac <= 5
+              ? 5.0
+              : 10.0;
+  return niceFrac * pow10;
+}
+
+/// Daily net major units: income − expense (locks the calendar trend polarity).
+double dailyNetMajor(String base, int incomeMinor, int expenseMinor) {
+  return fromMinor(base, incomeMinor - expenseMinor);
+}
+
 /// Shared readable area line chart (home overview + calendar daily trend).
 class CentliTrendChart extends StatelessWidget {
   const CentliTrendChart({
@@ -52,6 +77,7 @@ class CentliTrendChart extends StatelessWidget {
     this.height = 120,
     this.lineColor,
     this.sparseMessage,
+    this.colorBySign = false,
   });
 
   final String title;
@@ -62,6 +88,9 @@ class CentliTrendChart extends StatelessWidget {
   final double height;
   final Color? lineColor;
   final String? sparseMessage;
+
+  /// When true, positive segments use incomeGreen and negative expenseRed.
+  final bool colorBySign;
 
   String _fmtMajor(double major) {
     if (hide) return '****';
@@ -77,6 +106,7 @@ class CentliTrendChart extends StatelessWidget {
     if (abs >= 1000) {
       return '${(value / 1000).toStringAsFixed(1)}\u5343';
     }
+    if (abs < 1e-9) return '0';
     if (abs >= 10) return value.toStringAsFixed(0);
     return value.toStringAsFixed(1);
   }
@@ -118,17 +148,20 @@ class CentliTrendChart extends StatelessWidget {
         );
       } else {
         final span = (yMaxRaw - yMinRaw).abs();
-        final pad = span < 1 ? 1.0 : span * 0.18;
-        var minY = yMinRaw - pad;
-        var maxY = yMaxRaw + pad;
+        final rawInterval = span < 1e-9 ? 1.0 : span / 2;
+        final yInterval = niceTrendYInterval(rawInterval);
+        var minY = (yMinRaw / yInterval).floor() * yInterval;
+        var maxY = (yMaxRaw / yInterval).ceil() * yInterval;
         if (yMinRaw >= 0) minY = 0;
         if (yMaxRaw <= 0) maxY = 0;
-        if ((maxY - minY).abs() < 1) {
-          minY -= 1;
-          maxY += 1;
+        if ((maxY - minY).abs() < yInterval) {
+          minY -= yInterval;
+          maxY += yInterval;
         }
-        final yInterval = (maxY - minY) / 2;
+        if (minY > 0) minY = 0;
+        if (maxY < 0) maxY = 0;
         final useCurve = changeDays >= 4;
+        final compactTicks = height < 140;
 
         body = LayoutBuilder(
           builder: (context, constraints) {
@@ -152,10 +185,24 @@ class CentliTrendChart extends StatelessWidget {
                   show: true,
                   drawVerticalLine: false,
                   horizontalInterval: yInterval,
-                  getDrawingHorizontalLine: (v) => FlLine(
-                    color: scheme.outlineVariant.withValues(alpha: 0.45),
-                    strokeWidth: 1,
-                  ),
+                  getDrawingHorizontalLine: (v) {
+                    final isZero = v.abs() < yInterval * 0.01;
+                    return FlLine(
+                      color: isZero
+                          ? scheme.outline.withValues(alpha: 0.85)
+                          : scheme.outlineVariant.withValues(alpha: 0.45),
+                      strokeWidth: isZero ? 1.6 : 1,
+                    );
+                  },
+                ),
+                extraLinesData: ExtraLinesData(
+                  horizontalLines: [
+                    HorizontalLine(
+                      y: 0,
+                      color: scheme.outline.withValues(alpha: 0.9),
+                      strokeWidth: 1.6,
+                    ),
+                  ],
                 ),
                 borderData: FlBorderData(show: false),
                 titlesData: FlTitlesData(
@@ -178,9 +225,12 @@ class CentliTrendChart extends StatelessWidget {
                             (value - maxY).abs() <= yInterval * 0.15;
                         final nearBot =
                             (value - minY).abs() <= yInterval * 0.15;
-                        final nearMid = (value - (minY + maxY) / 2).abs() <=
-                            yInterval * 0.15;
-                        if (!nearTop && !nearBot && !nearMid) {
+                        final nearZero = value.abs() <= yInterval * 0.15;
+                        if (compactTicks) {
+                          if (!nearTop && !nearBot && !nearZero) {
+                            return const SizedBox.shrink();
+                          }
+                        } else if (!nearTop && !nearBot && !nearZero) {
                           return const SizedBox.shrink();
                         }
                         return Padding(
@@ -262,33 +312,98 @@ class CentliTrendChart extends StatelessWidget {
                   ),
                 ),
                 lineBarsData: [
-                  LineChartBarData(
-                    spots: spots,
-                    isCurved: useCurve,
-                    curveSmoothness: 0.2,
-                    color: color,
-                    barWidth: 2.2,
-                    isStrokeCapRound: true,
-                    dotData: FlDotData(
-                      show: true,
-                      checkToShowDot: (spot, bar) {
-                        if (spot.x == spots.last.x) return true;
-                        final i = spot.x.round();
-                        if (i <= 0) return spot.y != 0;
-                        return (spot.y - spots[i - 1].y).abs() > 0.001;
-                      },
-                      getDotPainter: (spot, pct, bar, index) =>
-                          FlDotCirclePainter(
-                        radius: spot.x == spots.last.x ? 3.5 : 2.5,
-                        color: color,
-                        strokeWidth: 0,
+                  if (!colorBySign)
+                    LineChartBarData(
+                      spots: spots,
+                      isCurved: useCurve,
+                      curveSmoothness: 0.2,
+                      color: color,
+                      barWidth: 2.2,
+                      isStrokeCapRound: true,
+                      dotData: FlDotData(
+                        show: true,
+                        checkToShowDot: (spot, bar) {
+                          if (spot.x == spots.last.x) return true;
+                          final i = spot.x.round();
+                          if (i <= 0) return spot.y != 0;
+                          return (spot.y - spots[i - 1].y).abs() > 0.001;
+                        },
+                        getDotPainter: (spot, pct, bar, index) =>
+                            FlDotCirclePainter(
+                          radius: spot.x == spots.last.x ? 3.5 : 2.5,
+                          color: color,
+                          strokeWidth: 0,
+                        ),
+                      ),
+                      belowBarData: BarAreaData(
+                        show: true,
+                        color: color.withValues(alpha: 0.12),
                       ),
                     ),
-                    belowBarData: BarAreaData(
-                      show: true,
-                      color: color.withValues(alpha: 0.12),
+                  if (colorBySign) ...[
+                    LineChartBarData(
+                      spots: [
+                        for (final s in spots)
+                          s.y > 0 || s.y.abs() < 1e-9 ? s : FlSpot.nullSpot,
+                      ],
+                      isCurved: useCurve,
+                      curveSmoothness: 0.2,
+                      color: CentliTheme.incomeGreen,
+                      barWidth: 2.2,
+                      isStrokeCapRound: true,
+                      dotData: FlDotData(
+                        show: true,
+                        checkToShowDot: (spot, bar) {
+                          if (spot.isNull()) return false;
+                          if (spot.x == spots.last.x) return true;
+                          final i = spot.x.round();
+                          if (i <= 0) return spot.y != 0;
+                          return (spot.y - spots[i - 1].y).abs() > 0.001;
+                        },
+                        getDotPainter: (spot, pct, bar, index) =>
+                            FlDotCirclePainter(
+                          radius: spot.x == spots.last.x ? 3.5 : 2.5,
+                          color: CentliTheme.incomeGreen,
+                          strokeWidth: 0,
+                        ),
+                      ),
+                      belowBarData: BarAreaData(
+                        show: true,
+                        color: CentliTheme.incomeGreen.withValues(alpha: 0.12),
+                      ),
                     ),
-                  ),
+                    LineChartBarData(
+                      spots: [
+                        for (final s in spots)
+                          s.y < 0 || s.y.abs() < 1e-9 ? s : FlSpot.nullSpot,
+                      ],
+                      isCurved: useCurve,
+                      curveSmoothness: 0.2,
+                      color: CentliTheme.expenseRed,
+                      barWidth: 2.2,
+                      isStrokeCapRound: true,
+                      dotData: FlDotData(
+                        show: true,
+                        checkToShowDot: (spot, bar) {
+                          if (spot.isNull()) return false;
+                          if (spot.x == spots.last.x) return true;
+                          final i = spot.x.round();
+                          if (i <= 0) return spot.y != 0;
+                          return (spot.y - spots[i - 1].y).abs() > 0.001;
+                        },
+                        getDotPainter: (spot, pct, bar, index) =>
+                            FlDotCirclePainter(
+                          radius: spot.x == spots.last.x ? 3.5 : 2.5,
+                          color: CentliTheme.expenseRed,
+                          strokeWidth: 0,
+                        ),
+                      ),
+                      belowBarData: BarAreaData(
+                        show: true,
+                        color: CentliTheme.expenseRed.withValues(alpha: 0.12),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             );

@@ -12,11 +12,12 @@ import '../../data/db/txn_tags.dart';
 import '../../data/db/database_provider.dart';
 import 'category_picker_sheet.dart';
 
-Future<void> showBookkeepingSheet(
+Future<bool?> showBookkeepingSheet(
   BuildContext context, {
   Transaction? existing,
+  DateTime? initialHappenAt,
 }) {
-  return showModalBottomSheet<void>(
+  return showModalBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
@@ -26,6 +27,7 @@ Future<void> showBookkeepingSheet(
     ),
     builder: (context) => BookkeepingSheet(
       existing: existing,
+      initialHappenAt: initialHappenAt,
     ),
   );
 }
@@ -34,9 +36,11 @@ class BookkeepingSheet extends ConsumerStatefulWidget {
   const BookkeepingSheet({
     super.key,
     this.existing,
+    this.initialHappenAt,
   });
 
   final Transaction? existing;
+  final DateTime? initialHappenAt;
 
 @override
   ConsumerState<BookkeepingSheet> createState() => _BookkeepingSheetState();
@@ -60,11 +64,28 @@ List<Account> _accounts = [];
   String? _ledgerId;
   bool _loading = true;
   bool _saving = false;
-  DateTime _happenAt = DateTime.now();
+  late DateTime _happenAt;
 
   @override
   void initState() {
     super.initState();
+    final existing = widget.existing;
+    final seed = widget.initialHappenAt;
+    if (existing != null) {
+      // Filled in _load from existing.happenAt; placeholder until then.
+      _happenAt = DateTime.now();
+    } else if (seed != null) {
+      final now = DateTime.now();
+      _happenAt = DateTime(
+        seed.year,
+        seed.month,
+        seed.day,
+        now.hour,
+        now.minute,
+      );
+    } else {
+      _happenAt = DateTime.now();
+    }
     _load();
   }
 
@@ -467,7 +488,7 @@ List<Account> _accounts = [];
         ScaffoldMessenger.of(context)
             .showSnackBar(const SnackBar(content: Text('已保存，可继续记账')));
       } else {
-        Navigator.of(context).pop();
+        Navigator.of(context).pop(true);
       }
     } finally {
       if (mounted) setState(() => _saving = false);

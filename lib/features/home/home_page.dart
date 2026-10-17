@@ -13,6 +13,7 @@ import '../../core/utils/fx.dart';
 import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
 import '../capture/capture_intake_actions.dart';
+import '../ledger/bookkeeping_sheet.dart';
 import '../../platform/notifications/notification_listener_stub.dart';
 
 final _homePendingListProvider =
@@ -448,8 +449,15 @@ class _HomePageState extends ConsumerState<HomePage> {
                                   _calendarDay = null;
                                 });
                               },
-                              onSelectDay: (d) =>
-                                  setState(() => _calendarDay = d),
+                              onSelectDay: (d) {
+                                setState(() => _calendarDay = d);
+                                _openCalendarDaySheet(
+                                  day: d,
+                                  hide: hide,
+                                  base: base,
+                                  monthTxns: calRecent,
+                                );
+                              },
                             ),
                             const SizedBox(height: CentliSpacing.section),
                             _DailyTrendCard(
@@ -457,51 +465,6 @@ class _HomePageState extends ConsumerState<HomePage> {
                               hide: hide,
                               expenseSeries: calExpenseSeries,
                               incomeSeries: calIncomeSeries,
-                            ),
-                            const SizedBox(height: CentliSpacing.section),
-                            CentliSoftCard(
-                              padding: const EdgeInsets.all(CentliSpacing.cardPad),
-                              child: calRecent.when(
-                                loading: () => const Padding(
-                                  padding: EdgeInsets.all(24),
-                                  child: Center(
-                                    child: CircularProgressIndicator(),
-                                  ),
-                                ),
-                                error: (e, _) => Text('加载失败，下拉重试'),
-                                data: (txns) {
-                                  var list = txns;
-                                  final day = _calendarDay;
-                                  if (day != null) {
-                                    list = txns.where((t) {
-                                      final local =
-                                          DateTime.fromMillisecondsSinceEpoch(
-                                            t.happenAt,
-                                            isUtc: true,
-                                          ).toLocal();
-                                      return local.year == day.year &&
-                                          local.month == day.month &&
-                                          local.day == day.day;
-                                    }).toList();
-                                  }
-                                  if (list.isEmpty) {
-                                    return CentliEmptyState(
-                                      icon: Icons.event_busy_outlined,
-                                      title: day == null ? '本区间暂无账单' : '当日暂无账单',
-                                      message: day == null
-                                          ? '点底部「记账」记下第一笔'
-                                          : '换一天查看，或点底部「记账」记下这一天的账单。',
-                                      padding: const EdgeInsets.all(
-                                        CentliSpacing.cardPad,
-                                      ),
-                                    );
-                                  }
-                                  return TxnGroupedSection(
-                                    txns: list,
-                                    hide: hide,
-                                  );
-                                },
-                              ),
                             ),
                           ],
                         ],
@@ -516,7 +479,150 @@ class _HomePageState extends ConsumerState<HomePage> {
       ),
     );
   }
+
+  Future<void> _openCalendarDaySheet({
+    required DateTime day,
+    required bool hide,
+    required String base,
+    required AsyncValue<List<Transaction>> monthTxns,
+  }) async {
+    final dayTxns = _txnsOnLocalDay(monthTxns.valueOrNull ?? const [], day);
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      useSafeArea: true,
+      builder: (sheetContext) {
+        final maxH = MediaQuery.sizeOf(sheetContext).height * 0.6;
+        final scheme = Theme.of(sheetContext).colorScheme;
+        var incomeMinor = 0;
+        var expenseMinor = 0;
+        for (final txn in dayTxns) {
+          if (txn.type == 'in') {
+            incomeMinor += txn.amountMinor;
+          } else if (txn.type == 'out') {
+            expenseMinor += txn.amountMinor;
+          }
+        }
+        return SizedBox(
+          height: maxH,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 8, 0),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '${day.month}月${day.day}日 · ${_weekdayCn(day)}',
+                        style: Theme.of(sheetContext)
+                            .textTheme
+                            .titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: '补记',
+                      onPressed: () async {
+                        Navigator.pop(sheetContext);
+                        final saved = await showBookkeepingSheet(
+                          context,
+                          initialHappenAt: day,
+                        );
+                        if (!mounted) return;
+                        if (saved == true) {
+                          await Future<void>.delayed(
+                            const Duration(milliseconds: 80),
+                          );
+                          if (!mounted) return;
+                          final ledger =
+                              ref.read(currentLedgerProvider).valueOrNull;
+                          if (ledger == null) return;
+                          final nowLocal = DateTime.now();
+                          final calMonth = _calendarMonth ??
+                              DateTime(nowLocal.year, nowLocal.month);
+                          final calRange = DateRangeWindow.forMonth(
+                            calMonth.year,
+                            calMonth.month,
+                          );
+                          final fresh = await ref.read(
+                            _rangeTxProvider((
+                              ledgerId: ledger.id,
+                              key: calRange.key,
+                              startMs: calRange.startMs,
+                              endMs: calRange.endMs,
+                            )).future,
+                          );
+                          if (!mounted) return;
+                          setState(() => _calendarDay = day);
+                          await _openCalendarDaySheet(
+                            day: day,
+                            hide: hide,
+                            base: base,
+                            monthTxns: AsyncValue.data(fresh),
+                          );
+                        }
+                      },
+                      icon: Icon(Icons.add_circle, color: scheme.primary),
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Text(
+                  '支出 ${formatMinor(base, expenseMinor, hide: hide)}'
+                  ' · 收入 ${formatMinor(base, incomeMinor, hide: hide)}',
+                  style: Theme.of(sheetContext).textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                ),
+              ),
+              const Divider(height: 1),
+              Expanded(
+                child: dayTxns.isEmpty
+                    ? CentliEmptyState(
+                        icon: Icons.event_busy_outlined,
+                        title: '这天没有记录',
+                        message: '点右上角 + 补记这一天',
+                        padding: const EdgeInsets.all(CentliSpacing.cardPad),
+                      )
+                    : SingleChildScrollView(
+                        child: TxnGroupedSection(txns: dayTxns, hide: hide),
+                      ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    if (mounted) setState(() => _calendarDay = null);
+  }
 }
+
+String _weekdayCn(DateTime d) {
+  const names = ['一', '二', '三', '四', '五', '六', '日'];
+  return '周${names[d.weekday - 1]}';
+}
+
+List<Transaction> _txnsOnLocalDay(List<Transaction> txns, DateTime day) {
+  return [
+    for (final txn in txns)
+      if (_isSameLocalDay(txn, day)) txn,
+  ];
+}
+
+bool _isSameLocalDay(Transaction txn, DateTime day) {
+  final local = DateTime.fromMillisecondsSinceEpoch(
+    txn.happenAt,
+    isUtc: true,
+  ).toLocal();
+  return local.year == day.year &&
+      local.month == day.month &&
+      local.day == day.day;
+}
+
 
 class _ModeTab extends StatelessWidget {
   const _ModeTab({
@@ -1131,7 +1237,7 @@ class _DailyTrendCard extends StatelessWidget {
       final outV = i < expense.length ? expense[i].totalMinor : 0;
       final inV = i < income.length ? income[i].totalMinor : 0;
       // Daily net inflow (same polarity as overview chart day component).
-      spots.add(FlSpot(i.toDouble(), fromMinor(base, inV - outV)));
+      spots.add(FlSpot(i.toDouble(), dailyNetMajor(base, inV, outV)));
       final day = i < income.length
           ? income[i].dayLocal
           : (i < expense.length
@@ -1147,7 +1253,7 @@ class _DailyTrendCard extends StatelessWidget {
       base: base,
       hide: hide,
       height: 120,
-      lineColor: CentliTheme.softBlue,
+      colorBySign: true,
       sparseMessage: '\u672c\u6708\u53d8\u52a8\u8f83\u5c11',
     );
   }
