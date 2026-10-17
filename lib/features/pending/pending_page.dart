@@ -600,16 +600,22 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
                     style: Theme.of(context).textTheme.labelLarge,
                   ),
                 ),
-                if (c.parseOk == 0)
+                // Badge by status first (not parseOk): confirmed stays 已入账.
+                if (c.status == 'confirmed')
+                  const Chip(
+                    label: Text('已入账'),
+                    visualDensity: VisualDensity.compact,
+                  )
+                else if (c.status == 'ignored')
+                  const Chip(
+                    label: Text('已忽略'),
+                    visualDensity: VisualDensity.compact,
+                  )
+                else if (c.status == 'pending' && c.parseOk == 0)
                   Chip(
                     label: const Text('解析失败'),
                     visualDensity: VisualDensity.compact,
                     backgroundColor: scheme.errorContainer,
-                  )
-                else if (!isPending)
-                  Chip(
-                    label: Text(c.status == 'confirmed' ? '已入账' : '已忽略'),
-                    visualDensity: VisualDensity.compact,
                   ),
               ],
             ),
