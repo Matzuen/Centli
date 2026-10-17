@@ -394,4 +394,77 @@ group('manual capture parser (share/OCR/clipboard)', () {
     });
   });
 
+  group('微信红包 income phrasing (T0)', () {
+    RawNotification wx(String text) => RawNotification(
+          pkg: 'com.tencent.mm',
+          title: '微信',
+          text: text,
+          whenMs: 1,
+        );
+
+    test('你领取了张三的红包 is in', () {
+      final r = parseNotification(wx('你领取了张三的红包 ¥8.88'));
+      expect(r.ok, isTrue);
+      expect(r.direction, 'in');
+      expect(r.templateId, 'wechat_receive_zh');
+      expect(r.amountMinor, 888);
+    });
+
+    test('你领取了一个红包 is in', () {
+      final r = parseNotification(wx('你领取了一个红包 ¥8.88'));
+      expect(r.ok, isTrue);
+      expect(r.direction, 'in');
+      expect(r.amountMinor, 888);
+    });
+
+    test('你领取了你的红包 is in (T0-1)', () {
+      final r = parseNotification(wx('你领取了你的红包 ¥8.88'));
+      expect(r.ok, isTrue);
+      expect(r.direction, 'in');
+      expect(r.templateId, 'wechat_receive_zh');
+      expect(r.amountMinor, 888);
+    });
+
+    test('你收到一个红包 is in (T0-2)', () {
+      final r = parseNotification(wx('你收到一个红包 ¥6.66'));
+      expect(r.ok, isTrue);
+      expect(r.direction, 'in');
+      expect(r.templateId, 'wechat_receive_zh');
+      expect(r.amountMinor, 666);
+    });
+
+    test('你收到红包 adjacent still in', () {
+      final r = parseNotification(wx('你收到红包 ¥1.23'));
+      expect(r.ok, isTrue);
+      expect(r.direction, 'in');
+    });
+
+    test('红包到账 is in', () {
+      final r = parseNotification(wx('红包到账 ¥10.00'));
+      expect(r.ok, isTrue);
+      expect(r.direction, 'in');
+    });
+
+    test('你收到了红包 is in', () {
+      final r = parseNotification(wx('你收到了红包 ¥2.00'));
+      expect(r.ok, isTrue);
+      expect(r.direction, 'in');
+    });
+
+    test('发来一个红包 not captured (anti-regression)', () {
+      final r = parseNotification(wx('张三发来一个红包 ¥1.00'));
+      expect(r.templateId, isNull);
+      expect(r.ok, isFalse);
+    });
+
+    test('朋友圈 noise not captured', () {
+      final r = parseNotification(wx('朋友圈 ¥9.99 红包'));
+      expect(r.templateId, isNull);
+    });
+
+    test('拍了拍 noise not captured', () {
+      final r = parseNotification(wx('张三拍了拍你的头 ¥1.00 红包'));
+      expect(r.templateId, isNull);
+    });
+  });
 }
