@@ -8,7 +8,6 @@ import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
 import '../../data/fx/fx_remote_service.dart';
 import '../recurring/recurring_runner.dart';
-import '../subscriptions/subscription_pages.dart';
 import '../security/app_lock_controller.dart';
 
 /// Cold-start splash: brand mark + open DB / read settings, then route.
@@ -78,14 +77,6 @@ class _SplashPageState extends ConsumerState<SplashPage> {
     try {
       await Future<void>.delayed(const Duration(milliseconds: 400));
       await runDueRecurring(db);
-      final subs = await db.select(db.subscriptions).get();
-      final due = subscriptionsDueSoon(subs);
-      final tip = due.isEmpty
-          ? ''
-          : (due.length == 1
-              ? '1 个订阅即将到期'
-              : '${due.length} 个订阅即将到期');
-      await db.setSetting('subscription_due_tip', tip);
     } catch (_) {
       // Never block splash / crash on recurring catch-up.
     }

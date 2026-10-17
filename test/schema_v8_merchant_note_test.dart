@@ -1,7 +1,6 @@
 ﻿import 'package:centli/data/db/centli_database.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:sqlite3/sqlite3.dart' as raw;
 
 void main() {
   test('confirm with merchantForRule still learns auto-categorize', () async {
@@ -54,7 +53,7 @@ void main() {
     addTearDown(db.close);
     await db.seedDefaults();
     final ver = await db.customSelect('PRAGMA user_version').getSingle();
-    expect(ver.read<int>('user_version'), 8);
+    expect(ver.read<int>('user_version'), 9);
 
     final txnCols = {
       for (final r

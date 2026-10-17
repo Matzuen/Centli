@@ -129,13 +129,6 @@ class MePage extends ConsumerWidget {
                       onTap: () => context.push('/me/recurring'),
                     ),
                     const Divider(height: 1),
-                    _tile(
-                      context,
-                      icon: Icons.subscriptions_outlined,
-                      title: '订阅',
-                      subtitle: '到期提醒 · 花费统计（不写流水）',
-                      onTap: () => context.push('/me/subscriptions'),
-                    ),
                   ],
                 ),
               ),

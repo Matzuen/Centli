@@ -20,7 +20,6 @@ import 'tables/merchant_rules.dart';
 import 'tables/pending_captures.dart';
 import 'tables/budgets.dart';
 import 'tables/recurring_rules.dart';
-import 'tables/subscriptions.dart';
 import 'tables/transactions.dart';
 import 'txn_tags.dart';
 import '../txn_templates.dart';
@@ -39,7 +38,6 @@ part 'centli_database.g.dart';
     Budgets,
     AppSettings,
     RecurringRules,
-    Subscriptions,
   ],
 )
 class CentliDatabase extends _$CentliDatabase {
@@ -48,7 +46,7 @@ class CentliDatabase extends _$CentliDatabase {
   CentliDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -76,7 +74,25 @@ class CentliDatabase extends _$CentliDatabase {
             await m.addColumn(transactions, transactions.occurrenceKey);
           }
           if (from < 7) {
-            await m.createTable(subscriptions);
+            await customStatement("""
+CREATE TABLE IF NOT EXISTS subscriptions (
+  id TEXT NOT NULL PRIMARY KEY,
+  ledger_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  icon TEXT,
+  category_id TEXT,
+  price_minor INTEGER NOT NULL,
+  currency TEXT NOT NULL,
+  period_kind TEXT NOT NULL,
+  status TEXT NOT NULL,
+  started_at INTEGER NOT NULL,
+  next_due_at INTEGER,
+  remind_days_before INTEGER NOT NULL DEFAULT 3,
+  note TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+""");
           }
           if (from < 8) {
             await customStatement('''
@@ -106,6 +122,12 @@ END
 ''');
             await m.alterTable(TableMigration(transactions));
             await m.alterTable(TableMigration(pendingCaptures));
+          }
+          if (from < 9) {
+            await m.deleteTable('subscriptions');
+            await customStatement(
+              "DELETE FROM app_settings WHERE key LIKE 'subscription_%'",
+            );
           }
           await _ensureQueryIndexes();
         },
