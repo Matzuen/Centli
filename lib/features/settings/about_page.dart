@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../core/app_version.dart';
 import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
@@ -15,7 +17,7 @@ class AboutPage extends StatefulWidget {
 
 class _AboutPageState extends State<AboutPage> {
   /// Fallback when [PackageInfo] is unavailable (tests / early frame).
-  static const String _fallbackVersion = '1.1.1+4';
+  static const String _fallbackVersion = kAppVersionFallback;
 
   late final Future<String> _versionFuture = _loadVersion();
 

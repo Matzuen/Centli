@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
+import '../../core/app_version.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -256,10 +258,10 @@ class MePage extends ConsumerWidget {
                       future: PackageInfo.fromPlatform().then((info) {
                         final name = info.version.trim();
                         final build = info.buildNumber.trim();
-                        if (name.isEmpty) return '1.1.1+4';
+                        if (name.isEmpty) return kAppVersionFallback;
                         if (build.isEmpty) return name;
                         return '$name+$build';
-                      }).catchError((_) => '1.1.1+4'),
+                      }).catchError((_) => kAppVersionFallback),
                       builder: (context, snap) {
                         final v = snap.data ?? '…';
                         return _tile(

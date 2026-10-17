@@ -6,6 +6,8 @@ import 'package:excel/excel.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+
+import '../../core/app_version.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../core/utils/money.dart';
@@ -52,11 +54,11 @@ class ExportService {
       final info = await PackageInfo.fromPlatform();
       final name = info.version.trim();
       final build = info.buildNumber.trim();
-      if (name.isEmpty) return '1.1.1+4';
+      if (name.isEmpty) return kAppVersionFallback;
       if (build.isEmpty) return name;
       return '$name+$build';
     } catch (_) {
-      return '1.1.1+4';
+      return kAppVersionFallback;
     }
   }
 

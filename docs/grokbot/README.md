@@ -157,7 +157,7 @@ Grok Bot 按新工单继续
 
 ### 6.2 版本与文档
 
-- `pubspec.yaml` 版本为 **`1.1.1+4`**（`about_page.dart:18`、`export_service.dart:55,59`、
+- `pubspec.yaml` 版本为 **`1.1.2+5`**（`about_page.dart:18`、`export_service.dart:55,59`、
   `me_page.dart:250,253` 的硬编码兜底值也已同步为 `1.1.1+4`）
 - 审计文档（**已跟踪**）：
   - 基线（52 项）：`docs/issue_audit.md`
@@ -166,26 +166,17 @@ Grok Bot 按新工单继续
 - 工单归档（**不进库**）：`docs/grokbot/archive_*_tasks.md`
 - 逆向对照资料（**不进库**）：`_re_finch/`
 
-### 6.3 版本库卫生（2026-10-17 已处理）
 
-- `.gitignore` 已覆盖 `_re_finch/`、一次性脚本与临时工作区、本地备份、bot 交接文档
-- 已从版本库移除 118 个历史遗留的临时文件（磁盘保留）
-- **`BOT_TASKS*.md` 不进库**（每批都会变化，属过程产物）
+**版本号规则**（每批必遵）：
 
----
+| 触发 | 动作 |
+|---|---|
+| 小修 / 补丁工单 | 第三位 +1，build +1 |
+| 大工单（整批功能） | 第二位 +1、第三位归零，build +1 |
+| 首位 | 仅在数据不兼容或重写时动；正常工单不动 |
 
-## 7. 给 Grok Bot 的一句话总结
+同一个字面量只允许出现在两处：`pubspec.yaml` 与 `lib/core/app_version.dart`
+（后者由 `test/app_version_test.dart` 守住）。
+每批必须同步 `README.md` / `README.en.md` / 本节当前版本。
 
-> 按仓库根目录 `BOT_TASKS_B1.md` 的工单改代码；**一个工单一次 commit 并在 `notes.md` 贴出 hash**；
-> 每单跑 `flutter analyze` + `flutter test`；
-> 把 `git diff`、`git status`、analyze 与 test 的**真实输出**、以及一份说明写入 `docs/grokbot/audit_input/`；
-> 有不符、有风险、有工单外改动，都在说明里讲清楚。
-
-
----
-
-## 基线快照（B4 收尾）
-
-- schema **v10**（asset_types）
-- `flutter test` **182 passed / 0 failed**（基线曾为 150）
-- HEAD 见 `audit_input/commits.txt`
+### 6.3

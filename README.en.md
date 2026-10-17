@@ -5,7 +5,7 @@ Local-first personal bookkeeping (**Chinese UI only**): **clear every bill**.
 > Canonical docs are in Chinese: see [`README.md`](README.md) and [`docs/RELEASE_NOTES.md`](docs/RELEASE_NOTES.md).
 
 - Flutter · Drift (SQLite) · Riverpod · go_router
-- Version: `1.1.0+3`
+- Version: `1.1.2+5`
 - Currency display: `CNY · 人民币`
 - Bottom nav (5 tabs): 首页 / 统计 / 记账 / 资产 / 我的
 
@@ -47,3 +47,11 @@ Prefer JSON (`format: centli-export`). Excel import is best-effort (no fx/settin
 - `docs/recognition_rules.md`
 - `docs/remaining_features_gap.md`
 - `docs/RELEASE_NOTES.md` (Chinese release notes for stores / GitHub Releases)
+
+## Changelog
+
+### 1.1.2 (2026-10-17)
+- Fix pending-page tab data loss; capture credit/Huabei repayment notifications
+- Golden tests: strict compare + MaterialIcons; remove one-shot scripts
+- Surface LLM vision HTTP error details; smart-fill test connection; migrate stale gpt models
+- Tighter calendar cell row height; remove txn templates; panel type switcher + chip row (layout)
