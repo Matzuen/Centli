@@ -18,7 +18,7 @@ class PendingCaptures extends Table {
   TextColumn get dedupeKey => text().named('dedupe_key')();
   IntColumn get parseOk =>
       integer().named('parse_ok').withDefault(const Constant(0))();
-  /// Persisted parse direction: in / out / refund. Null = legacy, treat as out.
+  /// Persisted parse direction: in / out / refund / repay. Null = legacy, treat as out.
   TextColumn get direction => text().nullable()();
   IntColumn get createdAt => integer().named('created_at')();
   IntColumn get updatedAt => integer().named('updated_at')();

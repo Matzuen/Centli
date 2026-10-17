@@ -16,8 +16,8 @@ class NotiTemplate {
     this.direction = 'out',
   });
 
-  /// Allowed values: `in` | `out` | `refund`. Use [normalizeDirection].
-  static const Set<String> kDirections = {'in', 'out', 'refund'};
+  /// Allowed values: `in` | `out` | `refund` | `repay`. Use [normalizeDirection].
+  static const Set<String> kDirections = {'in', 'out', 'refund', 'repay'};
 
   /// Illegal / missing → `'out'` (preserves pre-direction behavior).
   static String normalizeDirection(String? raw) {
@@ -38,7 +38,7 @@ class NotiTemplate {
   final String? merchantRegex;
   final bool merchantFromTitle;
   final String? defaultAccountHint;
-  /// Flow direction: `in` (income), `out` (expense), `refund`.
+  /// Flow direction: `in` (income), `out` (expense), `refund`, `repay`.
   final String direction;
 
   String get displayName {
