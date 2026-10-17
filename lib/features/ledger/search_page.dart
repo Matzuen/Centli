@@ -27,6 +27,8 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   List<Transaction>? _results;
   Object? _error;
   var _loading = false;
+  var _truncated = false;
+  static const _searchLimit = 200;
 
   /// `out` | `in` | `transfer` | null (any)
   String? _type;
@@ -74,7 +76,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     final ledger = await ref.read(currentLedgerProvider.future);
     if (!mounted || ledger == null) return;
     final db = ref.read(databaseProvider);
-    final accounts = await db.loadActiveAccounts(ledger.id);
+    final accounts = await db.loadAccountsIncludingArchived(ledger.id);
     final outCats = await db.loadCategories(ledger.id, 'out');
     final inCats = await db.loadCategories(ledger.id, 'in');
     if (!mounted) return;
@@ -105,6 +107,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
         _results = null;
         _error = null;
         _loading = false;
+        _truncated = false;
       });
       return;
     }
@@ -136,10 +139,15 @@ class _SearchPageState extends ConsumerState<SearchPage> {
             accountId: _accountId,
             startMs: _range?.startMs,
             endMs: _range?.endMs,
+            limit: _searchLimit,
           );
       if (!mounted || seq != _seq) return;
+      final truncated = rows.length > _searchLimit;
+      final shown =
+          truncated ? rows.take(_searchLimit).toList() : rows;
       setState(() {
-        _results = rows;
+        _results = shown;
+        _truncated = truncated;
         _loading = false;
       });
     } catch (e) {
@@ -214,7 +222,11 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   String? _accountName(String? id) {
     if (id == null) return null;
     for (final a in _accounts) {
-      if (a.id == id) return a.name;
+      if (a.id == id) {
+        return a.archived == 1
+            ? '${a.name}（已归档）'
+            : a.name;
+      }
     }
     return id;
   }
@@ -233,7 +245,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
           textInputAction: TextInputAction.search,
           decoration: const InputDecoration(
             hintText:
-                '\u5907\u6ce8 / \u5546\u6237 / \u91d1\u989d',
+                '\u5907\u6ce8 / \u5546\u6237 / \u5206\u7c7b / \u8d26\u6237 / \u91d1\u989d',
             border: InputBorder.none,
           ),
           onChanged: _onChanged,
@@ -377,10 +389,29 @@ class _SearchPageState extends ConsumerState<SearchPage> {
             : null,
       );
     }
-    return TxnGroupedList(
-      txns: rows,
-      hide: hide,
-      padding: const EdgeInsets.only(bottom: 24),
+    return Column(
+      children: [
+        if (_truncated)
+          Material(
+            color: scheme.surfaceContainerHighest,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Text(
+                '\u7ed3\u679c\u5df2\u622a\u65ad\uff08\u4ec5\u663e\u793a\u6700\u65b0 $_searchLimit \u6761\uff09\uff0c\u8bf7\u7f29\u5c0f\u5173\u952e\u8bcd\u6216\u52a0\u7b5b\u9009\u3002',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+              ),
+            ),
+          ),
+        Expanded(
+          child: TxnGroupedList(
+            txns: rows,
+            hide: hide,
+            padding: const EdgeInsets.only(bottom: 24),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -527,7 +558,11 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
                   for (final a in widget.accounts)
                     DropdownMenuItem<String?>(
                       value: a.id,
-                      child: Text('${a.name} (${a.currency})'),
+                      child: Text(
+                        a.archived == 1
+                            ? '${a.name} (${a.currency}) · \u5df2\u5f52\u6863'
+                            : '${a.name} (${a.currency})',
+                      ),
                     ),
                 ],
                 onChanged: (v) => setState(() => _accountId = v),

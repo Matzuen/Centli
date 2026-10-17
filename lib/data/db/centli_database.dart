@@ -511,7 +511,7 @@ class CentliDatabase extends _$CentliDatabase {
     String? accountId,
     int? startMs,
     int? endMs,
-    int limit = 100,
+    int limit = 200,
   }) async {
     final q = query.trim();
     final hasFilter = type != null ||
@@ -524,6 +524,31 @@ class CentliDatabase extends _$CentliDatabase {
     final pattern = q.isEmpty ? null : '%${q.toLowerCase()}%';
     final amountMinors =
         q.isEmpty ? const <int>[] : _amountMinorCandidates(q);
+
+    // Resolve category / account name hits (and 转账 keyword → transfer type).
+    var nameCatIds = const <String>[];
+    var nameAccIds = const <String>[];
+    var matchTransferByName = false;
+    if (pattern != null) {
+      final cats = await (select(categories)
+            ..where((t) => t.ledgerId.equals(ledgerId)))
+          .get();
+      nameCatIds = [
+        for (final c in cats)
+          if (c.name.toLowerCase().contains(q.toLowerCase())) c.id,
+      ];
+      final accs = await (select(accounts)
+            ..where((t) => t.ledgerId.equals(ledgerId)))
+          .get();
+      nameAccIds = [
+        for (final a in accs)
+          if (a.name.toLowerCase().contains(q.toLowerCase())) a.id,
+      ];
+      matchTransferByName = '\u8f6c\u8d26'.contains(q) || q.contains('\u8f6c\u8d26');
+    }
+
+    // Fetch one extra row to detect truncation for UI notice.
+    final fetchLimit = limit < 0 ? 200 : limit + 1;
 
     final rows = await (select(transactions)
           ..where((t) {
@@ -552,6 +577,17 @@ class CentliDatabase extends _$CentliDatabase {
               Expression<bool> textHit = t.merchant.lower().like(pattern) |
                   t.note.lower().like(pattern) |
                   t.tags.lower().like(pattern);
+              if (nameCatIds.isNotEmpty) {
+                textHit = textHit | t.categoryId.isIn(nameCatIds);
+              }
+              if (nameAccIds.isNotEmpty) {
+                textHit = textHit |
+                    t.accountId.isIn(nameAccIds) |
+                    t.toAccountId.isIn(nameAccIds);
+              }
+              if (matchTransferByName) {
+                textHit = textHit | t.type.equals('transfer');
+              }
               if (amountMinors.isEmpty) {
                 pred = pred & textHit;
               } else {
@@ -561,7 +597,7 @@ class CentliDatabase extends _$CentliDatabase {
             return pred;
           })
           ..orderBy([(t) => OrderingTerm.desc(t.happenAt)])
-          ..limit(limit))
+          ..limit(fetchLimit))
         .get();
     return rows;
   }
@@ -830,6 +866,17 @@ class CentliDatabase extends _$CentliDatabase {
     return (select(accounts)
           ..where((t) => t.ledgerId.equals(ledgerId) & t.archived.equals(0))
           ..orderBy([(t) => OrderingTerm.asc(t.sortOrder)]))
+        .get();
+  }
+
+  /// Active + archived accounts (search filters / historical txns).
+  Future<List<Account>> loadAccountsIncludingArchived(String ledgerId) {
+    return (select(accounts)
+          ..where((t) => t.ledgerId.equals(ledgerId))
+          ..orderBy([
+            (t) => OrderingTerm.asc(t.archived),
+            (t) => OrderingTerm.asc(t.sortOrder),
+          ]))
         .get();
   }
 
