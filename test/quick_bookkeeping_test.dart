@@ -1,5 +1,4 @@
 import 'package:centli/data/db/centli_database.dart';
-import 'package:centli/data/db/database_provider.dart';
 import 'package:centli/features/ledger/local_speech.dart';
 import 'package:centli/features/ledger/quick_bookkeeping_sheet.dart';
 import 'package:centli/features/ledger/smart_bookkeeping_submit.dart';
