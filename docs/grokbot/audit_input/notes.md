@@ -68,7 +68,7 @@ EXITCODE=0
 Deferred to verify script (No issues found! on last verify run)
 
 ### test
-Last verify: `00:06 +224: All tests passed!` then +1 freshness test → **225** expected on next full run
+Last verify: `00:06 +224: All tests passed!` full run **225 passed / 0 failed**
 
 ### verify
 `VERIFY: OK` (G25.1 self-prove B)
@@ -81,5 +81,5 @@ Last verify: `00:06 +224: All tests passed!` then +1 freshness test → **225** 
 - G23 Corrupted-HEAD.txt STALE self-proof marked **无效** (not deleted)
 
 ## Final
-- Final HEAD: `962ef9a638a202c1f40369faaece448464d76927` (`962ef9a`)
+- Final HEAD: `6aa5c64a768293d828a60dd30ed7ac525f3b9253` (`6aa5c64`)
 - version: **1.4.2+8** · schema **11** · tests **225**
