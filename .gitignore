@@ -85,3 +85,8 @@ docs/grokbot/archive_*_tasks.md
 docs/grokbot/p0_tasks.md
 docs/grokbot/audit_input*/
 
+
+# Brand source: keep only adopted logo.png
+logo/logo1.png
+logo/logo2.png
+
