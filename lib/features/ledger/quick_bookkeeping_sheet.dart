@@ -7,7 +7,7 @@ import '../../data/db/database_provider.dart';
 import 'local_speech.dart';
 import 'smart_bookkeeping_submit.dart';
 
-Future<void> showVoiceBookkeepingSheet(BuildContext context) {
+Future<void> showQuickBookkeepingSheet(BuildContext context) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
@@ -16,13 +16,13 @@ Future<void> showVoiceBookkeepingSheet(BuildContext context) {
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
     ),
-    builder: (context) => const VoiceBookkeepingSheet(),
+    builder: (context) => const QuickBookkeepingSheet(),
   );
 }
 
 /// WeChat-style hold-to-talk voice bookkeeping panel.
-class VoiceBookkeepingSheet extends ConsumerStatefulWidget {
-  const VoiceBookkeepingSheet({super.key, this.speech, this.now});
+class QuickBookkeepingSheet extends ConsumerStatefulWidget {
+  const QuickBookkeepingSheet({super.key, this.speech, this.now});
 
   /// Injected for tests; production uses [LocalSpeechService].
   final VoiceSpeechBackend? speech;
@@ -31,8 +31,8 @@ class VoiceBookkeepingSheet extends ConsumerStatefulWidget {
   final DateTime Function()? now;
 
   @override
-  ConsumerState<VoiceBookkeepingSheet> createState() =>
-      _VoiceBookkeepingSheetState();
+  ConsumerState<QuickBookkeepingSheet> createState() =>
+      _QuickBookkeepingSheetState();
 }
 
 /// Pure helpers for hold-to-talk (unit-tested).
@@ -51,7 +51,7 @@ class HoldTalkPhysics {
       end.difference(start) < minHold;
 }
 
-class _VoiceBookkeepingSheetState extends ConsumerState<VoiceBookkeepingSheet> {
+class _QuickBookkeepingSheetState extends ConsumerState<QuickBookkeepingSheet> {
   late final VoiceSpeechBackend _speech =
       widget.speech ?? LocalSpeechService();
   DateTime _now() => widget.now?.call() ?? DateTime.now();
@@ -136,7 +136,7 @@ class _VoiceBookkeepingSheetState extends ConsumerState<VoiceBookkeepingSheet> {
         setState(() {
           _holding = false;
           _phase = 'error';
-          _error = _speech.friendlyError ?? '当前设备不支持语音识别，请改用文字记账';
+          _error = _speech.friendlyError ?? '当前设备不支持语音识别，请或直接输入文字';
         });
         return;
       }
@@ -233,7 +233,7 @@ class _VoiceBookkeepingSheetState extends ConsumerState<VoiceBookkeepingSheet> {
       setState(() {
         _textCtrl.text = before;
         _phase = 'error';
-        _error = '没有听清，请靠近麦克风再说，或改用文字记账';
+        _error = '没有听清，请靠近麦克风再说，或直接输入文字';
       });
       return;
     }
@@ -247,7 +247,7 @@ class _VoiceBookkeepingSheetState extends ConsumerState<VoiceBookkeepingSheet> {
       }
       _phase = _textCtrl.text.trim().isEmpty ? 'error' : 'done';
       if (_textCtrl.text.trim().isEmpty) {
-        _error = '没有听清，请靠近麦克风再说，或改用文字记账';
+        _error = '没有听清，请靠近麦克风再说，或直接输入文字';
       } else {
         _error = null;
       }
@@ -376,7 +376,7 @@ class _VoiceBookkeepingSheetState extends ConsumerState<VoiceBookkeepingSheet> {
                 children: [
                   Expanded(
                     child: Text(
-                      '语音记账',
+                      '快速记账',
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
                             fontWeight: FontWeight.w700,
                           ),
@@ -424,7 +424,7 @@ class _VoiceBookkeepingSheetState extends ConsumerState<VoiceBookkeepingSheet> {
                 maxLines: 3,
                 enabled: !_holding && !_submitting,
                 decoration: InputDecoration(
-                  hintText: '按住下方按钮说话，识别结果可在此修改',
+                  hintText: '说一句或打一句，如「午餐20元 支付宝」',
                   filled: true,
                   fillColor: scheme.surfaceContainerHighest.withValues(
                     alpha: 0.55,

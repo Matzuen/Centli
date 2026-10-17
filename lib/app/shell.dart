@@ -4,8 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../data/db/database_provider.dart';
 import '../features/ledger/bookkeeping_sheet.dart' deferred as bookkeeping;
-import '../features/ledger/text_bookkeeping_sheet.dart' deferred as text_bk;
-import '../features/ledger/voice_bookkeeping_sheet.dart' deferred as voice_bk;
+import '../features/ledger/quick_bookkeeping_sheet.dart' deferred as quick_bk;
 import 'theme.dart';
 
 /// Flat 5-tab shell: \u9996\u9875 / \u7edf\u8ba1 / \u8bb0\u8d26(+) / \u8d44\u4ea7 / \u6211\u7684
@@ -69,7 +68,7 @@ class AppShell extends ConsumerWidget {
                   : i == 2
                   ? GestureDetector(
                       behavior: HitTestBehavior.opaque,
-                      onLongPress: () => _openBookkeepingMenu(context),
+                      onLongPress: () => _openQuickBookkeeping(context),
                       child: Icon(_tabs[i].icon),
                     )
                   : Icon(_tabs[i].icon),
@@ -81,7 +80,7 @@ class AppShell extends ConsumerWidget {
                   : i == 2
                   ? GestureDetector(
                       behavior: HitTestBehavior.opaque,
-                      onLongPress: () => _openBookkeepingMenu(context),
+                      onLongPress: () => _openQuickBookkeeping(context),
                       child: Icon(_tabs[i].selected),
                     )
                   : Icon(_tabs[i].selected),
@@ -99,41 +98,10 @@ class AppShell extends ConsumerWidget {
     await bookkeeping.showBookkeepingSheet(context);
   }
 
-  static Future<void> _openBookkeepingMenu(BuildContext context) async {
-    final choice = await showModalBottomSheet<String>(
-      context: context,
-      showDragHandle: true,
-      builder: (ctx) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.edit_note_outlined),
-                title: const Text('\u6587\u5b57\u8bb0\u8d26'),
-                onTap: () => Navigator.pop(ctx, 'text'),
-              ),
-              ListTile(
-                leading: const Icon(Icons.mic_none_rounded),
-                title: const Text('\u8bed\u97f3\u8bb0\u8d26'),
-                onTap: () => Navigator.pop(ctx, 'voice'),
-              ),
-              const SizedBox(height: 8),
-            ],
-          ),
-        );
-      },
-    );
-    if (!context.mounted || choice == null) return;
-    if (choice == 'text') {
-      await text_bk.loadLibrary();
-      if (!context.mounted) return;
-      await text_bk.showTextBookkeepingSheet(context);
-    } else if (choice == 'voice') {
-      await voice_bk.loadLibrary();
-      if (!context.mounted) return;
-      await voice_bk.showVoiceBookkeepingSheet(context);
-    }
+  static Future<void> _openQuickBookkeeping(BuildContext context) async {
+    await quick_bk.loadLibrary();
+    if (!context.mounted) return;
+    await quick_bk.showQuickBookkeepingSheet(context);
   }
 }
 

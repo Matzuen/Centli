@@ -19,7 +19,7 @@ class LocalSpeechResult {
   final bool finalResult;
 }
 
-/// Injectable speech backend used by VoiceBookkeepingSheet (tests can fake it).
+/// Injectable speech backend used by QuickBookkeepingSheet (tests can fake it).
 abstract class VoiceSpeechBackend {
   Future<bool> ensureReady({String localeId = 'zh_CN'});
   String? get friendlyError;

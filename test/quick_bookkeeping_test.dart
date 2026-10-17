@@ -1,5 +1,9 @@
+import 'package:centli/data/db/centli_database.dart';
+import 'package:centli/data/db/database_provider.dart';
 import 'package:centli/features/ledger/local_speech.dart';
-import 'package:centli/features/ledger/voice_bookkeeping_sheet.dart';
+import 'package:centli/features/ledger/quick_bookkeeping_sheet.dart';
+import 'package:centli/features/ledger/smart_bookkeeping_submit.dart';
+import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -80,6 +84,22 @@ void main() {
     );
   });
 
+  testWidgets('title is 快速记账', (tester) async {
+    final fake = FakeSpeech();
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          home: Scaffold(
+            body: QuickBookkeepingSheet(speech: fake),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('快速记账'), findsOneWidget);
+    expect(find.text('语音记账'), findsNothing);
+  });
+
   testWidgets('hold then release fills text; cancel discards', (tester) async {
     final fake = FakeSpeech()..emitOnStart = '午饭三十元';
     var clock = DateTime(2026, 6, 1, 12, 0, 0);
@@ -87,7 +107,7 @@ void main() {
       ProviderScope(
         child: MaterialApp(
           home: Scaffold(
-            body: VoiceBookkeepingSheet(
+            body: QuickBookkeepingSheet(
               speech: fake,
               now: () => clock,
             ),
@@ -134,7 +154,7 @@ void main() {
       ProviderScope(
         child: MaterialApp(
           home: Scaffold(
-            body: VoiceBookkeepingSheet(
+            body: QuickBookkeepingSheet(
               speech: fake,
               now: () => clock,
             ),
@@ -146,7 +166,6 @@ void main() {
     final bar = find.byKey(const ValueKey('hold_talk_bar'));
     final gesture = await tester.startGesture(tester.getCenter(bar));
     await tester.pump();
-    // clock unchanged -> too short
     await gesture.up();
     await tester.pumpAndSettle();
     expect(find.textContaining('太短'), findsOneWidget);
@@ -159,7 +178,7 @@ void main() {
       ProviderScope(
         child: MaterialApp(
           home: Scaffold(
-            body: VoiceBookkeepingSheet(speech: fake),
+            body: QuickBookkeepingSheet(speech: fake),
           ),
         ),
       ),
@@ -171,5 +190,92 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpAndSettle();
     expect(fake.cancels, isNotEmpty);
+  });
+
+  testWidgets('type text shows submit actions', (tester) async {
+    final fake = FakeSpeech();
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          home: Scaffold(
+            body: QuickBookkeepingSheet(speech: fake),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('快速记账'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField), '午餐28.5');
+    await tester.pump();
+    expect(find.text('记账并关闭'), findsOneWidget);
+    expect(find.text('记账并继续'), findsOneWidget);
+  });
+
+  testWidgets('recognize then edit text field', (tester) async {
+    final fake = FakeSpeech()..emitOnStart = '咖啡15';
+    var clock = DateTime(2026, 6, 1, 12, 0, 0);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          home: Scaffold(
+            body: QuickBookkeepingSheet(
+              speech: fake,
+              now: () => clock,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final bar = find.byKey(const ValueKey('hold_talk_bar'));
+    final gesture = await tester.startGesture(tester.getCenter(bar));
+    await tester.pump();
+    clock = clock.add(const Duration(milliseconds: 800));
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(find.text('咖啡15'), findsWidgets);
+
+    await tester.enterText(find.byType(TextField), '咖啡25元');
+    await tester.pump();
+    expect(find.text('咖啡25元'), findsWidgets);
+    expect(find.text('记账并继续'), findsOneWidget);
+  });
+
+  test('direct typed text submits transaction', () async {
+    final db = CentliDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    await db.seedDefaults();
+    final ledger = await (db.select(db.ledgers)..limit(1)).getSingle();
+    final accounts = await db.loadActiveAccounts(ledger.id);
+    final outcome = await submitSmartBookkeepingText(
+      db: db,
+      rawText: '午餐28.5',
+      ledgerId: ledger.id,
+      accounts: accounts,
+    );
+    expect(outcome.ok, isTrue, reason: outcome.errorMessage);
+    final rows = await db.loadTransactionsForExport(ledger.id);
+    expect(rows.any((txn) => txn.amountMinor == 2850), isTrue);
+  });
+
+  test('edited recognized text submits transaction', () async {
+    final db = CentliDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    await db.seedDefaults();
+    final ledger = await (db.select(db.ledgers)..limit(1)).getSingle();
+    final accounts = await db.loadActiveAccounts(ledger.id);
+    // Simulate: recognized '咖啡15', user edits to '咖啡25.0' then submits.
+    final outcome = await submitSmartBookkeepingText(
+      db: db,
+      rawText: '咖啡25.0',
+      ledgerId: ledger.id,
+      accounts: accounts,
+    );
+    expect(outcome.ok, isTrue, reason: outcome.errorMessage);
+    final rows = await db.loadTransactionsForExport(ledger.id);
+    expect(rows.any((txn) => txn.amountMinor == 2500), isTrue);
   });
 }
