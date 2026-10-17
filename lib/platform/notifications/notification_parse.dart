@@ -249,7 +249,7 @@ List<NotiTemplate> builtinNotiTemplates() => const [
         mustContainRegex:
             r'收款到账|收款成功|已收款|收到转账|零钱转入|微信收款|红包到账|你领取了.+红包|收到红包',
         excludeTextRegex:
-            r'验证码|登录|朋友圈|发来一条|会话|拍了拍|互动消息|新的朋友|群聊|语音通话|视频通话|发来一个红包|领取了你的红包|退款',
+            r'验证码|登录|朋友圈|发来一条|会话|拍了拍|互动消息|新的朋友|群聊|语音通话|视频通话|发来一个红包|退款',
         amountRegex: kAmountRegex,
         merchantRegex: r'(?:来自|从)\s*(.+?)(?:\s|$)',
         defaultAccountHint: 'wechat',
@@ -675,7 +675,7 @@ const kManualPayKeywords =
 
 /// Chat / OTP noise to reject even on manual paths.
 const kManualExcludeKeywords =
-    r'验证码|登录验证|朋友圈|发来一条|拍了拍|互动消息|新的朋友|语音通话|视频通话|收到一条|发来一个红包|领取了你的红包|会话消息';
+    r'验证码|登录验证|朋友圈|发来一条|拍了拍|互动消息|新的朋友|语音通话|视频通话|收到一条|发来一个红包|会话消息';
 
 /// Guess source package from bill text (微信 / 支付宝).
 String guessPkgFromText(String text) {
