@@ -157,7 +157,7 @@ Grok Bot 按新工单继续
 
 ### 6.2 版本与文档
 
-- `pubspec.yaml` 版本为 **`1.1.3+6`**（`about_page.dart:18`、`export_service.dart:55,59`、
+- `pubspec.yaml` 版本为 **`1.4.1+7`**（`about_page.dart:18`、`export_service.dart:55,59`、
   `me_page.dart:250,253` 的硬编码兜底值也已同步为 `1.1.1+4`）
 - 审计文档（**已跟踪**）：
   - 基线（52 项）：`docs/issue_audit.md`
