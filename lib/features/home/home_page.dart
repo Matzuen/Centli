@@ -417,7 +417,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                                               ),
                                               const SizedBox(height: 4),
                                               Text(
-                                                '点底部「记账」记下第一笔',
+                                                '点底部「记一笔」记下第一笔',
                                                 style: Theme.of(context)
                                                     .textTheme
                                                     .bodySmall,

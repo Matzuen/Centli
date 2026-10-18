@@ -34,7 +34,7 @@ class AppShell extends ConsumerWidget {
         : (ref.watch(pendingCountProvider(ledgerId)).valueOrNull ?? 0);
     final dark = Theme.of(context).brightness == Brightness.dark;
 
-    // Branch 2 is the placeholder for \u8bb0\u8d26; keep prior tab highlighted while sheet is open.
+    // Branch 2 is the placeholder for \u8bb0\u4e00\u7b14; keep prior tab highlighted while sheet is open.
     final selectedIndex = navigationShell.currentIndex == 2
         ? 0
         : navigationShell.currentIndex;
