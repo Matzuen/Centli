@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+
 /// Soft pastel theme: Centli chrome + Finch polish (cards/gradient/radii).
 /// Shared layout density tokens — prefer these over one-off magic numbers.
 abstract final class CentliSpacing {
@@ -14,6 +15,24 @@ abstract final class CentliSpacing {
 
   /// Bottom inset on tab roots (clears bottom nav).
   static const double pageBottomNav = 120;
+
+  /// Unified page padding for every scrolling root: 16 / 12 / 16 / bottom.
+  /// (Home / stats / settings pages all use this via [pagePadding] /
+  /// [pagePaddingNav].)
+  static const EdgeInsets pagePadding = EdgeInsets.fromLTRB(
+    pageH,
+    pageTop,
+    pageH,
+    pageBottom,
+  );
+
+  /// Same as [pagePadding] but leaves room for the bottom navigation bar.
+  static const EdgeInsets pagePaddingNav = EdgeInsets.fromLTRB(
+    pageH,
+    pageTop,
+    pageH,
+    pageBottomNav,
+  );
 
   /// Gap between soft cards / major blocks.
   static const double section = 12;
@@ -32,20 +51,6 @@ abstract final class CentliSpacing {
 
   /// Bookkeeping: note field → keypad.
   static const double sheetGap = 12;
-
-  static const EdgeInsets pagePadding = EdgeInsets.fromLTRB(
-    pageH,
-    pageTop,
-    pageH,
-    pageBottom,
-  );
-
-  static const EdgeInsets pagePaddingNav = EdgeInsets.fromLTRB(
-    pageH,
-    pageTop,
-    pageH,
-    pageBottomNav,
-  );
 }
 
 abstract final class CentliTheme {
@@ -428,7 +433,7 @@ class CentliSoftCard extends StatelessWidget {
   const CentliSoftCard({
     super.key,
     required this.child,
-    this.padding,
+    this.padding = const EdgeInsets.all(CentliSpacing.cardPad),
     this.margin,
     this.onTap,
     this.color,
@@ -463,9 +468,11 @@ class CentliSoftCard extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(CentliTheme.cardRadius),
-          child: padding == null
-              ? child
-              : Padding(padding: padding!, child: child),
+          // 统一的内边距：所有卡片默认 16，避免 12/14/18/20/24 混用。
+          child: Padding(
+            padding: padding ?? const EdgeInsets.all(CentliSpacing.cardPad),
+            child: child,
+          ),
         ),
       ),
     );
