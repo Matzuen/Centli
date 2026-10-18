@@ -1,13 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import 'bookkeeping_sheet.dart' deferred as bookkeeping;
+
+import '../../core/constants/currencies.dart';
+import '../../core/utils/amount_expr.dart';
 import '../../core/utils/money.dart';
+import '../../core/widgets/centli_icon.dart';
 import '../../data/db/centli_database.dart';
 import '../../data/db/txn_tags.dart';
 import '../../data/db/database_provider.dart';
-import 'bookkeeping_sheet.dart' deferred as bookkeeping;
+import 'category_picker_sheet.dart';
 import '../../app/theme.dart';
 
 final _txnProvider =
@@ -15,8 +21,11 @@ final _txnProvider =
   return ref.watch(databaseProvider).watchTransaction(id);
 });
 
-/// P0 bill detail: view fields, soft-delete, edit via bookkeeping sheet,
-/// toggle include-in-stat.
+/// P0 bill detail: view fields, soft-delete, edit, toggle include-in-stat.
+///
+/// The top-right action is **保存** (enabled once a row was edited); the whole
+/// amount / account / category / time / tags / note rows are each tappable and
+/// persist on selection (commit-on-change).
 class LedgerDetailPage extends ConsumerWidget {
   const LedgerDetailPage({super.key, required this.transactionId});
 
@@ -30,28 +39,34 @@ class LedgerDetailPage extends ConsumerWidget {
 
     return async.when(
       loading: () => Scaffold(
-        appBar: AppBar(title: const Text('\u8d26\u5355')),
+        appBar: AppBar(title: const Text('账单')),
         body: const Center(child: CircularProgressIndicator()),
       ),
       error: (e, _) => Scaffold(
-        appBar: AppBar(title: const Text('\u8d26\u5355')),
-        body: Center(child: Text('\u52a0\u8f7d\u5931\u8d25: $e')),
+        appBar: AppBar(title: const Text('账单')),
+        body: Center(child: Text('加载失败: $e')),
       ),
       data: (txn) {
         if (txn == null || txn.deletedAt != null) {
           return Scaffold(
-            appBar: AppBar(title: const Text('\u8d26\u5355')),
-            body: const Center(child: Text('\u8d26\u5355\u4e0d\u5b58\u5728\u6216\u5df2\u5220\u9664')),
+            appBar: AppBar(title: const Text('账单')),
+            body: const Center(child: Text('账单不存在或已删除')),
           );
         }
-        return _DetailBody(txn: txn, hide: hide, scheme: scheme);
+        return _DetailBody(
+          key: ValueKey(txn.id),
+          txn: txn,
+          hide: hide,
+          scheme: scheme,
+        );
       },
     );
   }
 }
 
-class _DetailBody extends ConsumerWidget {
+class _DetailBody extends ConsumerStatefulWidget {
   const _DetailBody({
+    super.key,
     required this.txn,
     required this.hide,
     required this.scheme,
@@ -62,231 +77,292 @@ class _DetailBody extends ConsumerWidget {
   final ColorScheme scheme;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_DetailBody> createState() => _DetailBodyState();
+}
+
+class _DetailBodyState extends ConsumerState<_DetailBody> {
+  /// Fields edited through rows and not yet written (an edited amount is only
+  /// persisted by 保存; picks are auto-committed and remembered so a failed
+  /// write can be retried from 保存).
+  int? _pendingAmountMinor;
+  String? _pendingAccountId;
+  String? _pendingToAccountId;
+  String? _pendingCategoryId;
+  DateTime? _pendingHappenAt;
+  List<String>? _pendingTags;
+  String? _pendingNote;
+  String? _pendingType;
+  int? _pendingIncludeInStat;
+  int? _pendingIncludeInBudget;
+
+  bool _saving = false;
+
+  /// Picker sources, loaded once (include archived / historical ids).
+  Future<_EditSources>? _sources;
+  _EditSources? _sourceCache;
+
+  Transaction get txn => widget.txn;
+
+  @override
+  void initState() {
+    super.initState();
+    // Warm the cache so account / category names (and the subtitle) resolve
+    // without a per-build FutureBuilder; rows stay tappable meanwhile.
+    _loadSources().then((s) {
+      if (mounted) setState(() => _sourceCache = s);
+    }).catchError((Object _) {});
+  }
+
+  bool get _isPendingEdit =>
+      _pendingAmountMinor != null ||
+      _pendingAccountId != null ||
+      _pendingToAccountId != null ||
+      _pendingCategoryId != null ||
+      _pendingHappenAt != null ||
+      _pendingTags != null ||
+      _pendingNote != null ||
+      _pendingType != null ||
+      _pendingIncludeInStat != null ||
+      _pendingIncludeInBudget != null;
+
+  String get _type =>
+      _pendingType ?? (txn.type == 'refund' ? 'out' : txn.type);
+
+  bool get _isTransfer => _type == 'transfer';
+
+  int get _amountMinor => _pendingAmountMinor ?? txn.amountMinor;
+
+  String? get _accountId => _pendingAccountId ?? txn.accountId;
+
+  String? get _toAccountId => _pendingToAccountId ?? txn.toAccountId;
+
+  String? get _categoryId => _pendingCategoryId ?? txn.categoryId;
+
+  DateTime get _happenAt =>
+      _pendingHappenAt ??
+      DateTime.fromMillisecondsSinceEpoch(txn.happenAt, isUtc: true).toLocal();
+
+  List<String> get _tags => _pendingTags ?? decodeTxnTags(txn.tags);
+
+  String? get _note {
+    final raw = (_pendingNote ?? txn.note ?? '').trim();
+    return raw.isEmpty ? null : raw;
+  }
+
+  int get _includeInStat => _pendingIncludeInStat ?? txn.includeInStat;
+
+  int get _includeInBudget => _pendingIncludeInBudget ?? txn.includeInBudget;
+
+  // ---------------------------------------------------------------- styles
+
+  ListTileThemeData _rowTheme(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return ListTileThemeData(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+      dense: true,
+      minLeadingWidth: 0,
+      tileColor: Colors.transparent,
+      textColor: scheme.onSurface,
+      titleTextStyle: Theme.of(context).textTheme.bodyLarge,
+      subtitleTextStyle: Theme.of(context)
+          .textTheme
+          .bodySmall
+          ?.copyWith(color: scheme.onSurfaceVariant),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      iconColor: scheme.onSurfaceVariant,
+    );
+  }
+
+  // ---------------------------------------------------------------- build
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = widget.scheme;
+    final hide = widget.hide;
     final isOut = txn.type == 'out';
     final isTransfer = txn.type == 'transfer';
     final prefix = isTransfer ? '' : (isOut ? '-' : '+'); // refund → +
     final amountColor = isTransfer
         ? scheme.onSurface
         : (isOut ? scheme.error : scheme.primary);
-    final time = DateTime.fromMillisecondsSinceEpoch(txn.happenAt, isUtc: true)
-        .toLocal();
-    final timeLabel = DateFormat('yyyy-MM-dd HH:mm').format(time);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('\u8d26\u5355'),
+        title: const Text('账单'),
         actions: [
           IconButton(
-            tooltip: '\u5220\u9664',
-            icon: const Icon(Icons.delete_outline),
-            onPressed: () => _confirmDelete(context, ref),
+            tooltip: '再记一笔',
+            key: const Key('ledger_detail_again'),
+            icon: const Icon(Icons.add_circle_outline),
+            onPressed: _saving ? null : () => _again(context),
           ),
           IconButton(
-            tooltip: '\u7f16\u8f91',
-            icon: const Icon(Icons.edit_outlined),
-            onPressed: () => _editTxn(context, txn),
+            tooltip: '删除',
+            icon: const Icon(Icons.delete_outline),
+            onPressed: _saving ? null : () => _confirmDelete(context, ref),
+          ),
+          TextButton(
+            key: const Key('ledger_detail_save'),
+            onPressed: _isPendingEdit && !_saving ? () => _save() : null,
+            child: _saving
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text('保存'),
           ),
         ],
       ),
-      body: ListView(
+      body: PopScope(
+        // Picks are only written by 保存; warn before throwing them away.
+        canPop: !_isPendingEdit || _saving,
+        onPopInvokedWithResult: (didPop, _) async {
+          if (didPop || _saving) return;
+          final ok = await _confirmDiscard(context);
+          if (ok && context.mounted) Navigator.of(context).pop();
+        },
+        child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
-          const SizedBox(height: 16),
+          const SizedBox(height: CentliSpacing.sectionLoose),
           Center(
-            child: Text(
-              '$prefix${formatMinor(txn.currency, txn.amountMinor, hide: hide)}',
-              style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                    color: amountColor,
-                    fontWeight: FontWeight.w600,
-                  ),
+            child: InkWell(
+              key: const Key('ledger_detail_amount'),
+              borderRadius: BorderRadius.circular(12),
+              onTap: () => _editAmount(context),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                child: Text(
+                  '$prefix${formatMinor(txn.currency, _amountMinor, hide: hide)}',
+                  style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                        color: amountColor,
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+              ),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: CentliSpacing.item),
           Center(
-            child: FutureBuilder<(String?, String?, String?)>(
-              future: _labels(ref),
-              builder: (context, snap) {
-                final (cat, acc, toAcc) = snap.data ?? (null, null, null);
-                final typeLabel = _typeLabel(txn.type);
-                final subtitle = isTransfer
-                    ? '$typeLabel  ·  ${acc ?? "?"} \u2192 ${toAcc ?? "?"}'
-                    : '$typeLabel${cat != null ? "  ·  $cat" : ""}';
-                return Text(
-                  subtitle,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
-                );
+            child: _Subtitle(
+              type: txn.type,
+              isTransfer: isTransfer,
+              categoryName: _categoryNameOf(_categoryId),
+              fromAccountName: _accountNameOf(_accountId) ?? '?',
+              sourceFuture: _sourceCache == null ? _ensureSources() : null,
+              toAccountName:
+                  isTransfer ? _accountNameOf(_toAccountId) : null,
+              onResolved: (s) {
+                if (!mounted || _sourceCache == s) return;
+                // First paint races initState's load; repaint once.
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted && _sourceCache != s) {
+                    setState(() => _sourceCache = s);
+                  }
+                });
               },
             ),
           ),
-          if ((txn.note ?? '').trim() == '\u4f59\u989d\u6821\u6b63') ...[
-            const SizedBox(height: 8),
+          // Type (支出 / 收入 / 转账)
+          Center(
+            child: TextButton.icon(
+              key: const Key('ledger_detail_type'),
+              icon: const Icon(Icons.swap_horiz, size: 16),
+              label: Text('改类型'),
+              onPressed: () => _editType(context),
+            ),
+          ),
+          if ((txn.note ?? '').trim() == '余额校正') ...[
+            const SizedBox(height: CentliSpacing.item),
             Center(
               child: Chip(
                 avatar: Icon(Icons.tune, size: 16, color: scheme.primary),
-                label: const Text('\u4f59\u989d\u6821\u6b63\uff08\u4e0d\u8ba1\u5165\u7edf\u8ba1\uff09'),
+                label: const Text('余额校正（不计入统计）'),
               ),
             ),
           ],
-          const SizedBox(height: 24),
+          const SizedBox(height: CentliSpacing.sectionLoose + CentliSpacing.item),
           CentliSoftCard(
+            clipBehavior: Clip.none,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _sectionHeader(context, '\u57fa\u672c\u4fe1\u606f'),
-                _row(
+                _sectionHeader(context, '基本信息'),
+                _accountRows(context),
+                if (isTransfer) ..._transferAmountRows(context),
+                _sectionHeader(context, '来源与时间'),
+                _EditRow(
+                  key: const Key('ledger_detail_time'),
+                  theme: _rowTheme(context),
+                  icon: Icons.schedule,
+                  title: '时间',
+                  value: DateFormat('yyyy-MM-dd HH:mm').format(_happenAt),
+                  onTap: () => _editHappenAt(context),
+                ),
+                const Divider(height: 1, indent: 16, endIndent: 16),
+                _infoRow(
                   context,
-                  label: isTransfer ? '\u8f6c\u51fa\u8d26\u6237' : '\u8d26\u6237',
-                  future: ref
-                      .read(databaseProvider)
-                      .getAccount(txn.accountId)
-                      .then((a) => a?.name ?? txn.accountId),
+                  icon: Icons.input,
+                  title: '来源',
+                  value: _sourceLabel(txn.source),
                 ),
-                if (isTransfer) ...[
-                  const Divider(height: 1),
-                  _row(
-                    context,
-                    label: '\u8f6c\u5165\u8d26\u6237',
-                    future: () async {
-                      final id = txn.toAccountId;
-                      if (id == null) return '\u2014';
-                      final a = await ref.read(databaseProvider).getAccount(id);
-                      return a?.name ?? id;
-                    }(),
-                  ),
-                  if (txn.toAmountMinor != null) ...[
-                    const Divider(height: 1),
-                    FutureBuilder<String>(
-                      future: () async {
-                        final id = txn.toAccountId;
-                        if (id == null) {
-                          return formatMinor(
-                            txn.currency,
-                            txn.toAmountMinor!,
-                            hide: hide,
-                          );
-                        }
-                        final a =
-                            await ref.read(databaseProvider).getAccount(id);
-                        final ccy = a?.currency ?? txn.currency;
-                        return formatMinor(
-                          ccy,
-                          txn.toAmountMinor!,
-                          hide: hide,
-                        );
-                      }(),
-                      builder: (context, snap) => ListTile(
-                        title: const Text('\u5bf9\u65b9\u91d1\u989d'),
-                        trailing: Text(
-                          snap.data ?? '\u2026',
-                          style: const TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                    ),
-                  ],
-                  if (txn.fxRate != null) ...[
-                    const Divider(height: 1),
-                    ListTile(
-                      title: const Text('\u6c47\u7387'),
-                      trailing: Text(txn.fxRate!.toStringAsFixed(6)),
-                    ),
-                  ],
-                ],
-                _sectionHeader(context, '\u6765\u6e90\u4e0e\u65f6\u95f4'),
-                ListTile(
-                  title: const Text('\u65f6\u95f4'),
-                  trailing: Text(timeLabel),
+                _sectionHeader(context, '其它'),
+                _EditRow(
+                  key: const Key('ledger_detail_tags'),
+                  theme: _rowTheme(context),
+                  icon: Icons.sell_outlined,
+                  title: '标签',
+                  value: _tags.isEmpty ? null : _tags.join('  '),
+                  emptyText: '—',
+                  onTap: () => _editTags(context),
                 ),
-                const Divider(height: 1),
-                ListTile(
-                  title: const Text('\u6765\u6e90'),
-                  trailing: Text(_sourceLabel(txn.source)),
+                const Divider(height: 1, indent: 16, endIndent: 16),
+                _EditRow(
+                  key: const Key('ledger_detail_note'),
+                  theme: _rowTheme(context),
+                  icon: Icons.edit_note,
+                  title: '备注',
+                  value: _note,
+                  emptyText: '—',
+                  onTap: () => _editNote(context),
                 ),
-                const Divider(height: 1),
-                _sectionHeader(context, '\u5176\u5b83'),
-                ListTile(
-                  title: const Text('\u6807\u7b7e'),
-                  subtitle: decodeTxnTags(txn.tags).isEmpty
-                      ? const Text('\\u2014')
-                      : Wrap(
-                          spacing: 6,
-                          runSpacing: 4,
-                          children: [
-                            for (final t in decodeTxnTags(txn.tags))
-                              Chip(
-                                label: Text(t),
-                                visualDensity: VisualDensity.compact,
-                                materialTapTargetSize:
-                                    MaterialTapTargetSize.shrinkWrap,
-                              ),
-                          ],
-                        ),
-                  trailing: IconButton(
-                    tooltip: '\\u7f16\\u8f91\\u6807\\u7b7e',
-                    icon: const Icon(Icons.sell_outlined),
-                    onPressed: () => _editTags(context, ref),
-                  ),
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  title: const Text('\u5907\u6ce8'),
-                  subtitle: Text(
-                    (txn.note == null || txn.note!.isEmpty)
-                        ? '\u2014'
-                        : txn.note!,
-                  ),
-                ),
-                const Divider(height: 1),
+                const Divider(height: 1, indent: 16, endIndent: 16),
                 SwitchListTile(
-                  title: const Text('\u8ba1\u5165\u7edf\u8ba1'),
-                  subtitle: const Text('\u5f71\u54cd\u6536\u652f\u7edf\u8ba1\u4e0e\u8d8b\u52bf'),
-                  value: txn.includeInStat == 1,
-                  onChanged: isTransfer
+                  key: const Key('ledger_detail_include_stat'),
+                  contentPadding: const EdgeInsets.only(left: 16, right: 8),
+                  secondary: const Icon(Icons.bar_chart_outlined),
+                  title: const Text('计入统计'),
+                  subtitle: const Text('影响收支统计与趋势'),
+                  value: _includeInStat == 1,
+                  onChanged: isTransfer || _saving
                       ? null
-                      : (v) async {
-                          await ref
-                              .read(databaseProvider)
-                              .setIncludeInStat(txn.id, v);
+                      : (v) {
+                          setState(() => _pendingIncludeInStat = v ? 1 : 0);
                         },
                 ),
                 SwitchListTile(
-                  title: const Text('\u8ba1\u5165\u9884\u7b97'),
-                  subtitle: const Text('\u5f71\u54cd\u6708\u5ea6\u9884\u7b97\u8fdb\u5ea6'),
-                  value: txn.includeInBudget == 1,
-                  onChanged: isTransfer
+                  key: const Key('ledger_detail_include_budget'),
+                  contentPadding: const EdgeInsets.only(left: 16, right: 8),
+                  secondary: const Icon(Icons.savings_outlined),
+                  title: const Text('计入预算'),
+                  subtitle: const Text('影响月度预算进度'),
+                  value: _includeInBudget == 1,
+                  onChanged: isTransfer || _saving
                       ? null
-                      : (v) async {
-                          await ref
-                              .read(databaseProvider)
-                              .setIncludeInBudget(txn.id, v);
+                      : (v) {
+                          setState(() => _pendingIncludeInBudget = v ? 1 : 0);
                         },
                 ),
               ],
             ),
           ),
         ],
+        ),
       ),
     );
   }
-
-  Future<(String?, String?, String?)> _labels(WidgetRef ref) async {
-    final db = ref.read(databaseProvider);
-    String? cat;
-    if (txn.categoryId != null) {
-      final c = await db.getCategory(txn.categoryId!);
-      cat = c?.name;
-    }
-    final acc = await db.getAccount(txn.accountId);
-    String? toAcc;
-    if (txn.toAccountId != null) {
-      final t = await db.getAccount(txn.toAccountId!);
-      toAcc = t?.name;
-    }
-    return (cat, acc?.name, toAcc);
-  }
-
 
   Widget _sectionHeader(BuildContext context, String title) {
     return Padding(
@@ -301,128 +377,507 @@ class _DetailBody extends ConsumerWidget {
     );
   }
 
-  Widget _row(
-    BuildContext context, {
-    required String label,
-    required Future<String> future,
-  }) {
-    return FutureBuilder<String>(
-      future: future,
-      builder: (context, snap) {
-        return ListTile(
-          title: Text(label),
-          trailing: Text(snap.data ?? '\u2026'),
-        );
-      },
+  Widget _accountRows(BuildContext context) {
+    final theme = _rowTheme(context);
+    if (!_isTransfer) {
+      return _EditRow(
+        key: const Key('ledger_detail_account'),
+        theme: theme,
+        icon: Icons.account_balance_wallet_outlined,
+        title: '账户',
+        value: _accountNameOf(_accountId),
+        emptyText: '—',
+        onTap: () => _editAccount(context),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _EditRow(
+          key: const Key('ledger_detail_account'),
+          theme: theme,
+          icon: Icons.south_west_rounded,
+          title: '转出账户',
+          value: _accountNameOf(_accountId),
+          emptyText: '—',
+          onTap: () => _editAccount(context),
+        ),
+        const Divider(height: 1, indent: 16, endIndent: 16),
+        _EditRow(
+          key: const Key('ledger_detail_to_account'),
+          theme: theme,
+          icon: Icons.north_east_rounded,
+          title: '转入账户',
+          value: _accountNameOf(_toAccountId),
+          emptyText: '—',
+          onTap: () => _editToAccount(context),
+        ),
+        const Divider(height: 1, indent: 16, endIndent: 16),
+        _EditRow(
+          key: const Key('ledger_detail_category'),
+          theme: theme,
+          icon: Icons.local_offer_outlined,
+          title: '分类',
+          value: _categoryNameOf(_categoryId),
+          emptyText: '—',
+          onTap: () => _switchToTransferOrCategory(context),
+        ),
+      ],
     );
   }
 
-  Future<void> _editTxn(BuildContext context, Transaction txn) async {
+  List<Widget> _transferAmountRows(BuildContext context) {
+    final fx = txn.fxRate;
+    if (txn.toAmountMinor == null && fx == null) return const [];
+    final toCcy = _currencyOfAccount(_toAccountId) ?? txn.currency;
+    return [
+      const Divider(height: 1, indent: 16, endIndent: 16),
+      _infoRow(
+        context,
+        icon: Icons.swap_vert,
+        title: '对方金额',
+        value: txn.toAmountMinor == null
+            ? '—'
+            : formatMinor(toCcy, txn.toAmountMinor!, hide: widget.hide),
+      ),
+      if (fx != null) ...[
+        const Divider(height: 1, indent: 16, endIndent: 16),
+        _infoRow(
+          context,
+          icon: Icons.currency_exchange,
+          title: '汇率',
+          value: fx.toStringAsFixed(6),
+        ),
+      ],
+    ];
+  }
+
+  Widget _infoRow(
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required String value,
+  }) {
+    return ListTile(
+      contentPadding: const EdgeInsets.only(left: 16, right: 16),
+      dense: true,
+      leading: Icon(icon, size: 20),
+      title: Text(title),
+      trailing: Text(
+        value,
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+      ),
+    );
+  }
+
+  // ------------------------------------------------------- name lookups
+
+  String? _accountNameOf(String? id) {
+    if (id == null) return null;
+    final s = _sourceCache;
+    if (s != null) {
+      for (final a in s.accounts) {
+        if (a.id == id) return a.name;
+      }
+    }
+    return id;
+  }
+
+  String? _currencyOfAccount(String? id) {
+    if (id == null) return null;
+    final s = _sourceCache;
+    if (s != null) {
+      for (final a in s.accounts) {
+        if (a.id == id) return a.currency;
+      }
+    }
+    return null;
+  }
+
+  String? _categoryNameOf(String? id) {
+    if (id == null) return null;
+    final s = _sourceCache;
+    if (s != null) {
+      for (final c in s.categories) {
+        if (c.id == id) return c.name;
+      }
+    }
+    return id;
+  }
+
+  Future<_EditSources> _loadSources() {
+    return _sources ??= () async {
+      final db = ref.read(databaseProvider);
+      final accounts = await db.loadAccountsIncludingArchived(txn.ledgerId);
+      final outCats = await db.loadCategories(txn.ledgerId, 'out');
+      final inCats = await db.loadCategories(txn.ledgerId, 'in');
+      final tags = await db.listDistinctTags(txn.ledgerId);
+      // Keep archived current category selectable / displayable.
+      var cats = [...outCats, ...inCats];
+      final cur = _categoryId;
+      if (cur != null && !cats.any((c) => c.id == cur)) {
+        final c = await db.getCategory(cur);
+        if (c != null) cats = [...cats, c];
+      }
+      return _EditSources(
+        accounts: accounts,
+        outCats: outCats,
+        inCats: inCats,
+        categories: cats,
+        tagSuggestions: tags,
+      );
+    }();
+  }
+
+  Future<_EditSources?> _ensureSources() async {
+    try {
+      final s = await _loadSources();
+      if (mounted) {
+        // Repaint labels with resolved names.
+        setState(() => _sourceCache = s);
+      }
+      return s;
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('加载选项失败: $e')),
+        );
+      }
+      return null;
+    }
+  }
+
+  // --------------------------------------------------------- persistence
+
+  /// Writes every pending field at once. Nothing is written until the user
+  /// taps 保存 (explicit request: no auto-save).
+  Future<bool> _commit() async {
+    if (!_isPendingEdit) return true;
+
+    final snapshot = (
+      amount: _pendingAmountMinor,
+      account: _pendingAccountId,
+      toAccount: _pendingToAccountId,
+      category: _pendingCategoryId,
+      happen: _pendingHappenAt,
+      tags: _pendingTags,
+      note: _pendingNote,
+      type: _pendingType,
+      stat: _pendingIncludeInStat,
+      budget: _pendingIncludeInBudget,
+    );
+    setState(() => _saving = true);
+    try {
+      final int? amount = snapshot.amount;
+      final String? type = snapshot.type;
+      // Category follows the (possibly new) direction for amount edits.
+      var category = snapshot.category;
+      final String direction = type ?? _type;
+      if (category != null) {
+        final s = await _loadSources();
+        final pool = direction == 'in' ? s.inCats : s.outCats;
+        if (pool.isNotEmpty && !pool.any((c) => c.id == category)) {
+          category = pool.first.id;
+        }
+      }
+      final toAccount = direction == 'transfer'
+          ? snapshot.toAccount
+          : (snapshot.toAccount ?? txn.toAccountId);
+      await ref.read(databaseProvider).updateTransactionFields(
+            id: txn.id,
+            type: type,
+            amountMinor: amount,
+            accountId: snapshot.account,
+            toAccountId: toAccount,
+            categoryId: category,
+            happenAt: snapshot.happen,
+            tags: snapshot.tags,
+            note: snapshot.note,
+            includeInStat: snapshot.stat,
+            includeInBudget: snapshot.budget,
+          );
+      if (!mounted) return true;
+      setState(() {
+        _pendingAmountMinor = null;
+        _pendingAccountId = null;
+        _pendingToAccountId = null;
+        _pendingCategoryId = null;
+        _pendingHappenAt = null;
+        _pendingTags = null;
+        _pendingNote = null;
+        _pendingType = null;
+        _pendingIncludeInStat = null;
+        _pendingIncludeInBudget = null;
+      });
+      return true;
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('保存失败: $e。可再点「保存」重试')),
+        );
+        setState(() {});
+      }
+      return false;
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _save() async {
+    final ok = await _commit();
+    if (ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('已保存')),
+      );
+    }
+  }
+
+  /// 「照着这笔再记一笔」: open the panel as a new bill prefilled from this one.
+  Future<void> _again(BuildContext context) async {
+    if (_isPendingEdit) {
+      final ok = await _confirmDiscard(context);
+      if (ok != true || !context.mounted) return;
+    }
     await bookkeeping.loadLibrary();
     if (!context.mounted) return;
-    await bookkeeping.showBookkeepingSheet(context, existing: txn);
+    await bookkeeping.showBookkeepingSheet(context, template: txn);
   }
 
-
-  Future<void> _editTags(BuildContext context, WidgetRef ref) async {
-    final current = List<String>.from(decodeTxnTags(txn.tags));
-    final ctrl = TextEditingController();
-    final suggestions =
-        await ref.read(databaseProvider).listDistinctTags(txn.ledgerId);
-    if (!context.mounted) return;
-    final result = await showDialog<List<String>>(
+  Future<bool> _confirmDiscard(BuildContext context) async {
+    final leave = await showDialog<bool>(
       context: context,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx, setLocal) {
-            void addTag(String raw) {
-              var t = raw.trim();
-              if (t.isEmpty) return;
-              if (t.length > 12) t = t.substring(0, 12);
-              if (current.contains(t) || current.length >= 5) return;
-              setLocal(() => current.add(t));
-              ctrl.clear();
-            }
+      builder: (ctx) => AlertDialog(
+        title: const Text('放弃修改？'),
+        content: const Text('这笔账单还有未保存的修改，离开后会丢失。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('继续编辑'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('放弃'),
+          ),
+        ],
+      ),
+    );
+    return leave == true;
+  }
 
-            return AlertDialog(
-              title: const Text('\u7f16\u8f91\u6807\u7b7e'),
-              content: SizedBox(
-                width: 360,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 4,
-                      children: [
-                        for (final t in current)
-                          InputChip(
-                            label: Text(t),
-                            onDeleted: () => setLocal(() => current.remove(t)),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: ctrl,
-                      decoration: const InputDecoration(
-                        labelText: '\u65b0\u6807\u7b7e',
-                        hintText: '\u56de\u8f66\u786e\u8ba4\uff0c\u6700\u591a 5 \u4e2a',
-                        border: OutlineInputBorder(),
-                      ),
-                      onSubmitted: addTag,
-                    ),
-                    if (suggestions.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 6,
-                        children: [
-                          for (final s in suggestions.take(12))
-                            ActionChip(
-                              label: Text(s),
-                              onPressed: () => addTag(s),
-                            ),
-                        ],
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('\u53d6\u6d88'),
-                ),
-                FilledButton(
-                  onPressed: () => Navigator.pop(ctx, List<String>.from(current)),
-                  child: const Text('\u4fdd\u5b58'),
-                ),
-              ],
-            );
-          },
+  // ------------------------------------------------------------- editors
+
+  Future<void> _editType(BuildContext context) async {
+    final picked = await _pickTransactionType(context, initial: _type);
+    if (picked == null || picked == _type) return;
+    setState(() {
+      _pendingType = picked;
+      if (picked == 'transfer') {
+        _pendingCategoryId = null;
+        var to = _toAccountId;
+        if (to == null || to == _accountId) {
+          final others = _sourceCache?.accounts
+                  .where((a) => a.id != _accountId)
+                  .toList() ??
+              const <Account>[];
+          to = others.isEmpty ? null : others.first.id;
+        }
+        _pendingToAccountId = to;
+      } else {
+        _pendingToAccountId = null;
+      }
+    });
+    if (picked != 'transfer') {
+      // New direction: keep the category only when it belongs to that side,
+      // otherwise fall back to the first category of the new direction.
+      final s = await _ensureSources();
+      final pool = picked == 'in' ? s?.inCats ?? const [] : s?.outCats ?? const [];
+      if (mounted) {
+        setState(() {
+          _pendingCategoryId =
+              _categoryId ?? (pool.isEmpty ? null : pool.first.id);
+        });
+      }
+    }
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _editAccount(BuildContext context) async {
+    final s = await _ensureSources();
+    if (s == null || !context.mounted) return;
+    final id = await _pickAccountSheet(
+      context,
+      accounts: s.accounts,
+      selectedId: _accountId,
+      title: _isTransfer ? '选择转出账户' : '选择账户',
+    );
+    if (id == null || id == _accountId) return;
+    setState(() {
+      _pendingCategoryId = _categoryId; // re-validate category direction
+      _pendingAccountId = id;
+      if (_isTransfer && _toAccountId == id) {
+        final others = s.accounts.where((a) => a.id != id);
+        _pendingToAccountId = others.isEmpty ? null : others.first.id;
+      }
+    });
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _editToAccount(BuildContext context) async {
+    final s = await _ensureSources();
+    if (s == null || !context.mounted) return;
+    final id = await _pickAccountSheet(
+      context,
+      accounts: s.accounts.where((a) => a.id != _accountId).toList(),
+      selectedId: _toAccountId,
+      title: '选择转入账户',
+    );
+    if (id == null || id == _toAccountId) return;
+    setState(() => _pendingToAccountId = id);
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _switchToTransferOrCategory(BuildContext context) async {
+    if (_isTransfer) {
+      final picked = await _pickTransactionType(context, initial: 'transfer');
+      if (picked == null || picked == 'transfer') return;
+      setState(() {
+        _pendingType = picked;
+        _pendingToAccountId = null;
+      });
+      if (mounted) setState(() {});
+      return;
+    }
+    await _editCategory(context);
+  }
+
+  Future<void> _editCategory(BuildContext context) async {
+    final s = await _ensureSources();
+    if (s == null || !context.mounted) return;
+    final pool = _type == 'in' ? s.inCats : s.outCats;
+    final categories = pool.isEmpty ? s.categories : pool;
+    final id = await showCategoryPickerSheet(
+      context,
+      categories: categories,
+      selectedId: _categoryId,
+    );
+    if (id == null || id == _categoryId || !context.mounted) return;
+    setState(() => _pendingCategoryId = id);
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _editHappenAt(BuildContext context) async {
+    final today = DateTime.now();
+    final last = DateTime(today.year, today.month, today.day);
+    var initial = _happenAt;
+    if (initial.isAfter(last)) initial = last;
+    if (initial.isBefore(DateTime(2020, 1, 1))) {
+      initial = DateTime(2020, 1, 1);
+    }
+    final date = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(2020, 1, 1),
+      lastDate: last,
+      locale: const Locale('zh', 'CN'),
+      helpText: '选择日期',
+    );
+    if (date == null || !context.mounted) return;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(_happenAt),
+      helpText: '选择时间',
+      builder: (context, child) {
+        return Localizations.override(
+          context: context,
+          locale: const Locale('zh', 'CN'),
+          child: child ?? const SizedBox.shrink(),
         );
       },
     );
-    ctrl.dispose();
+    if (time == null || !mounted) return;
+    final next = DateTime(
+      date.year,
+      date.month,
+      date.day,
+      time.hour,
+      time.minute,
+    );
+    if (next.millisecondsSinceEpoch == _happenAt.millisecondsSinceEpoch) {
+      return; // no change
+    }
+    setState(() => _pendingHappenAt = next);
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _editTags(BuildContext context) async {
+    final s = await _ensureSources();
+    if (s == null || !context.mounted) return;
+    final result = await showTagEditorDialog(
+      context,
+      initial: _tags,
+      suggestions: s.tagSuggestions,
+      title: '编辑标签',
+    );
     if (result == null || !context.mounted) return;
-    await ref.read(databaseProvider).updateTransactionTags(txn.id, result);
+    setState(() => _pendingTags = result);
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _editNote(BuildContext context) async {
+    final ctrl = TextEditingController(text: _note ?? '');
+    final ok = await _promptText(
+      context,
+      title: '备注',
+      controller: ctrl,
+      hint: '例如：和同事午餐',
+      maxLength: 200,
+    );
+    if (ok != true || !mounted) return;
+    final next = ctrl.text.trim();
+    if (next == (_note ?? '')) return;
+    setState(() => _pendingNote = next);
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _editAmount(BuildContext context) async {
+    final ccy = _currencyOfAccount(_accountId) ?? txn.currency;
+    // Amt is stored in txn.currency (same ccy the amount row renders with).
+    var text = fromMinor(txn.currency, _amountMinor)
+        .toStringAsFixed(currencyDecimals[txn.currency] ?? 2);
+    if (text.contains('.')) {
+      text = text.replaceFirst(RegExp(r'\.?0+$'), '');
+    }
+    final newText = await _promptAmount(context, initial: text, currency: ccy);
+    if (newText == null || !context.mounted) return;
+    final major = evalAmountExpr(newText);
+    if (major == null || major <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请输入有效金额')),
+      );
+      return;
+    }
+    final minor = toMinor(ccy, major);
+    if (minor == txn.amountMinor && _pendingAmountMinor == null) return;
+    setState(() => _pendingAmountMinor = minor);
+    if (mounted) setState(() {});
   }
 
   Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('\u5220\u9664\u8d26\u5355'),
-        content: const Text('\u786e\u5b9a\u5220\u9664\u8fd9\u7b14\u8d26\u5355\uff1f\u53ef\u5728\u300c\u56de\u6536\u7ad9\u300d\u6062\u590d\u3002'),
+        title: const Text('删除账单'),
+        content: const Text('确定删除这笔账单？可在「回收站」恢复。'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('\u53d6\u6d88'),
+            child: const Text('取消'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('\u5220\u9664'),
+            child: const Text('删除'),
           ),
         ],
       ),
@@ -431,43 +886,508 @@ class _DetailBody extends ConsumerWidget {
     await ref.read(databaseProvider).softDeleteTransaction(txn.id);
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('\u5df2\u5220\u9664')),
+        const SnackBar(content: Text('已删除')),
       );
       context.pop();
-    }
-  }
-
-  String _typeLabel(String type) {
-    switch (type) {
-      case 'in':
-        return '\u6536\u5165';
-      case 'transfer':
-        return '\u8f6c\u8d26';
-      case 'refund':
-        return '\u9000\u6b3e';
-      default:
-        return '\u652f\u51fa';
     }
   }
 
   String _sourceLabel(String source) {
     switch (source) {
       case 'notification':
-        return '\u901a\u77e5\u81ea\u52a8';
+        return '通知自动';
       case 'ocr':
-        return '\u622a\u56fe\u5bfc\u5165';
+        return '截图导入';
       case 'clipboard':
-        return '\u526a\u8d34\u677f\u5bfc\u5165';
+        return '剪贴板导入';
       case 'share':
-        return '\u5206\u4eab\u5bfc\u5165';
+        return '分享导入';
       case 'share_image':
-        return '\u5206\u4eab\u56fe\u7247';
+        return '分享图片';
       case 'url':
-        return '\u94fe\u63a5\u5bfc\u5165';
+        return '链接导入';
       case 'manual':
-        return '\u624b\u52a8';
+        return '手动';
       default:
-        return '\u624b\u52a8';
+        return '手动';
+    }
+  }
+}
+
+
+// ---------------------------------------------------------------------------
+// Dialogs / sheets (also used by the bookkeeping sheet for consistent editing)
+// ---------------------------------------------------------------------------
+
+/// Type picker for 支出 / 收入 / 转账. Refund keeps its own type when untouched.
+Future<String?> _pickTransactionType(
+  BuildContext context, {
+  required String initial,
+}) {
+  const options = <(String, String, IconData)>[
+    ('out', '支出', Icons.south_west_rounded),
+    ('in', '收入', Icons.north_east_rounded),
+    ('transfer', '转账', Icons.swap_horiz_rounded),
+  ];
+  return showModalBottomSheet<String>(
+    context: context,
+    showDragHandle: true,
+    builder: (ctx) {
+      final scheme = Theme.of(ctx).colorScheme;
+      return SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Text(
+                '修改类型',
+                style: Theme.of(ctx)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w700),
+              ),
+            ),
+            for (final o in options)
+              ListTile(
+                leading: Icon(o.$3, color: scheme.onSurfaceVariant),
+                title: Text(o.$2),
+                trailing: initial == o.$1
+                    ? Icon(Icons.check_circle, color: CentliTheme.softBlue)
+                    : null,
+                onTap: () => Navigator.pop(ctx, o.$1),
+              ),
+            const SizedBox(height: CentliSpacing.item),
+          ],
+        ),
+      );
+    },
+  );
+}
+
+/// Account picker; keeps archived accounts visible when part of history.
+Future<String?> _pickAccountSheet(
+  BuildContext context, {
+  required List<Account> accounts,
+  String? selectedId,
+  required String title,
+}) {
+  return showModalBottomSheet<String>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    showDragHandle: true,
+    backgroundColor: Theme.of(context).colorScheme.surface,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    ),
+    builder: (ctx) {
+      final scheme = Theme.of(ctx).colorScheme;
+      return SizedBox(
+        height: MediaQuery.sizeOf(ctx).height * 0.55,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 8, 0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: Theme.of(ctx)
+                          .textTheme
+                          .titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: accounts.isEmpty
+                  ? Center(
+                      child: Text(
+                        '暂无账户',
+                        style: TextStyle(color: scheme.onSurfaceVariant),
+                      ),
+                    )
+                  : ListView.separated(
+                      key: const Key('ledger_detail_account_sheet'),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      itemCount: accounts.length,
+                      separatorBuilder: (_, _) =>
+                          const Divider(height: 1, indent: 72),
+                      itemBuilder: (context, i) {
+                        final a = accounts[i];
+                        final selected = a.id == selectedId;
+                        return ListTile(
+                          leading: CentliIconChip(
+                            name: a.name,
+                            kind: 'account',
+                            iconKey: a.icon,
+                            size: 40,
+                          ),
+                          title: Text(
+                            a.name,
+                            style: TextStyle(
+                              fontWeight: selected
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                            ),
+                          ),
+                          subtitle: Text(
+                            a.archived == 1
+                                ? '${currencyLabel(a.currency)} · 已归档'
+                                : currencyLabel(a.currency),
+                          ),
+                          trailing: selected
+                              ? Icon(
+                                  Icons.check_circle,
+                                  color: CentliTheme.softBlue,
+                                )
+                              : null,
+                          onTap: () => Navigator.pop(ctx, a.id),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      );
+    },
+  );
+}
+
+/// Small numeric prompt (evaluates + - × ÷ expressions like the keypad).
+Future<String?> _promptAmount(
+  BuildContext context, {
+  required String initial,
+  required String currency,
+}) {
+  final ctrl = TextEditingController(text: initial)
+    ..selection = TextSelection(
+      baseOffset: 0,
+      extentOffset: initial.length,
+    );
+  final formKey = GlobalKey<FormState>();
+  final done = showDialog<String>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text('修改金额 ($currency)'),
+      content: Form(
+        key: formKey,
+        child: TextFormField(
+          key: const Key('ledger_detail_amount_field'),
+          controller: ctrl,
+          autofocus: true,
+          keyboardType:
+              const TextInputType.numberWithOptions(decimal: true),
+          inputFormatters: [
+            FilteringTextInputFormatter.allow(RegExp(r'[0-9.,+\-×÷*/ ]')),
+          ],
+          decoration: const InputDecoration(
+            prefixText: '¥ ',
+            helperText: '支持 12+8 之类的算式',
+            border: OutlineInputBorder(),
+          ),
+          validator: (v) {
+            final major = evalAmountExpr((v ?? '').trim());
+            if (major == null || major <= 0) return '请输入有效金额';
+            return null;
+          },
+          onFieldSubmitted: (_) {
+            if (formKey.currentState?.validate() ?? false) {
+              Navigator.pop(ctx, ctrl.text.trim());
+            }
+          },
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          key: const Key('ledger_detail_amount_ok'),
+          onPressed: () {
+            if (formKey.currentState?.validate() ?? false) {
+              Navigator.pop(ctx, ctrl.text.trim());
+            }
+          },
+          child: const Text('确定'),
+        ),
+      ],
+    ),
+  );
+  // Hold the controller until the dialog route (exit animation included) is
+  // fully gone: popping returns before the TextField is unmounted.
+  return done.whenComplete(() {
+    Future<void>.delayed(const Duration(milliseconds: 500), ctrl.dispose);
+  });
+}
+
+/// Single-line text prompt; pops `true` when confirmed.
+Future<bool?> _promptText(
+  BuildContext context, {
+  required String title,
+  required TextEditingController controller,
+  String? hint,
+  int maxLength = 200,
+}) {
+  final done = showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(title),
+      content: TextField(
+        key: const Key('ledger_detail_text_field'),
+        controller: controller,
+        autofocus: true,
+        maxLength: maxLength,
+        decoration: InputDecoration(hintText: hint, border: const OutlineInputBorder()),
+        onSubmitted: (_) => Navigator.pop(ctx, true),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(ctx, true),
+          child: const Text('确定'),
+        ),
+      ],
+    ),
+  );
+  // Caller-owned controller: release it only after the exit animation.
+  return done.whenComplete(() {
+    Future<void>.delayed(const Duration(milliseconds: 500), controller.dispose);
+  });
+}
+
+/// Tag editor shared by the detail rows and the bookkeeping sheet.
+Future<List<String>?> showTagEditorDialog(
+  BuildContext context, {
+  required List<String> initial,
+  List<String> suggestions = const [],
+  String title = '编辑标签',
+}) {
+  final current = List<String>.from(initial);
+  final ctrl = TextEditingController();
+  final done = showDialog<List<String>>(
+    context: context,
+    builder: (ctx) {
+      return StatefulBuilder(
+        builder: (ctx, setLocal) {
+          void addTag(String raw) {
+            var t = raw.trim();
+            if (t.isEmpty) return;
+            if (t.length > 12) t = t.substring(0, 12);
+            if (current.contains(t) || current.length >= 5) return;
+            setLocal(() => current.add(t));
+            ctrl.clear();
+          }
+
+          return AlertDialog(
+            title: Text(title),
+            content: SizedBox(
+              width: 360,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    children: [
+                      for (final t in current)
+                        InputChip(
+                          label: Text(t),
+                          onDeleted: () => setLocal(() => current.remove(t)),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: CentliSpacing.item),
+                  TextField(
+                    controller: ctrl,
+                    decoration: const InputDecoration(
+                      labelText: '新标签',
+                      hintText: '回车确认，最多 5 个',
+                      border: OutlineInputBorder(),
+                    ),
+                    onSubmitted: addTag,
+                  ),
+                  if (suggestions.isNotEmpty) ...[
+                    const SizedBox(height: CentliSpacing.item),
+                    Wrap(
+                      spacing: 6,
+                      children: [
+                        for (final s in suggestions.take(12))
+                          ActionChip(
+                            label: Text(s),
+                            onPressed: () => addTag(s),
+                          ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                key: const Key('ledger_detail_tags_save'),
+                onPressed: () =>
+                    Navigator.pop(ctx, List<String>.from(current)),
+                child: const Text('保存'),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
+  // Release after the route's exit animation (see _promptAmount).
+  return done.whenComplete(() {
+    Future<void>.delayed(const Duration(milliseconds: 500), ctrl.dispose);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Widgets
+// ---------------------------------------------------------------------------
+
+class _EditSources {
+  const _EditSources({
+    required this.accounts,
+    required this.outCats,
+    required this.inCats,
+    required this.categories,
+    required this.tagSuggestions,
+  });
+
+  final List<Account> accounts;
+  final List<Category> outCats;
+  final List<Category> inCats;
+  final List<Category> categories;
+  final List<String> tagSuggestions;
+}
+
+/// Tappable list row: label on the left, value + chevron on the right.
+class _EditRow extends StatelessWidget {
+  const _EditRow({
+    super.key,
+    required this.theme,
+    required this.icon,
+    required this.title,
+    required this.value,
+    required this.onTap,
+    this.emptyText = '—',
+  });
+
+  final ListTileThemeData theme;
+  final IconData icon;
+  final String title;
+  final String? value;
+  final VoidCallback onTap;
+  final String emptyText;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final hasValue = value != null && value!.trim().isNotEmpty;
+    return ListTileTheme(
+      data: theme,
+      child: ListTile(
+        leading: Icon(icon, size: 20),
+        title: Text(title),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 200),
+              child: Text(
+                hasValue ? value! : emptyText,
+                textAlign: TextAlign.right,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: hasValue
+                      ? scheme.onSurfaceVariant
+                      : scheme.outline,
+                ),
+              ),
+            ),
+            const SizedBox(width: 2),
+            Icon(Icons.chevron_right, size: 18, color: scheme.outline),
+          ],
+        ),
+        onTap: onTap,
+      ),
+    );
+  }
+}
+
+/// Title line under the amount: "支出 · 午餐" / "转账 · 支付宝 → 余额宝".
+class _Subtitle extends ConsumerWidget {
+  const _Subtitle({
+    required this.type,
+    required this.isTransfer,
+    required this.categoryName,
+    required this.fromAccountName,
+    required this.toAccountName,
+    required this.onResolved,
+    this.sourceFuture,
+  });
+
+  final String type;
+  final bool isTransfer;
+  final String? categoryName;
+  final String fromAccountName;
+  final String? toAccountName;
+  final void Function(_EditSources sources) onResolved;
+  final Future<_EditSources?>? sourceFuture;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final scheme = Theme.of(context).colorScheme;
+    final pending = sourceFuture;
+    if (pending != null) {
+      pending.then((s) {
+        if (s != null) onResolved(s);
+      }, onError: (Object _) {});
+    }
+    final typeLabel = _typeLabel(type);
+    final text = isTransfer
+        ? '$typeLabel  ·  $fromAccountName → ${toAccountName ?? '?'}'
+        : '$typeLabel${categoryName != null ? '  ·  $categoryName' : ''}';
+    return Text(
+      text,
+      style: Theme.of(context)
+          .textTheme
+          .titleMedium
+          ?.copyWith(color: scheme.onSurfaceVariant),
+    );
+  }
+
+  static String _typeLabel(String type) {
+    switch (type) {
+      case 'in':
+        return '收入';
+      case 'transfer':
+        return '转账';
+      case 'refund':
+        return '退款';
+      default:
+        return '支出';
     }
   }
 }
