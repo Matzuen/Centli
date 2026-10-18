@@ -125,6 +125,13 @@ class MainActivity : FlutterFragmentActivity() {
                     flushQueuedPendingIntake()
                     result.success(null)
                 }
+                "getDroppedNotifications" -> {
+                    result.success(CentliNotificationListener.getDroppedNotifications(this))
+                }
+                "clearDroppedNotifications" -> {
+                    CentliNotificationListener.clearDroppedNotifications(this)
+                    result.success(null)
+                }
                 else -> result.notImplemented()
             }
         }

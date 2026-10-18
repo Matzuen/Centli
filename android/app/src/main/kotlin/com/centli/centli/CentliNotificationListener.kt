@@ -40,13 +40,20 @@ class CentliNotificationListener : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         if (sbn == null) return
-        if (!isAutoCaptureEnabled(this)) return
-
         val pkg = sbn.packageName ?: return
-        if (!isWatchedPackage(this, pkg)) return
+        val extras = sbn.notification?.extras
+        val title = extras?.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: ""
 
-        val extras = sbn.notification?.extras ?: return
-        val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: ""
+        if (!isAutoCaptureEnabled(this)) {
+            recordDrop(this, pkg, title, "disabled")
+            return
+        }
+        if (!isWatchedPackage(this, pkg)) {
+            recordDrop(this, pkg, title, "not_watched")
+            return
+        }
+
+        if (extras == null) return
         val textParts = listOfNotNull(
             extras.getCharSequence(Notification.EXTRA_TEXT)?.toString(),
             extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString(),
@@ -54,7 +61,10 @@ class CentliNotificationListener : NotificationListenerService() {
         ).filter { it.isNotBlank() }.distinct()
         val text = textParts.joinToString("\n")
 
-        if (title.isBlank() && text.isBlank()) return
+        if (title.isBlank() && text.isBlank()) {
+            recordDrop(this, pkg, title, "blank")
+            return
+        }
 
         val whenMs = sbn.notification?.`when`?.takeIf { it > 0 }
             ?: System.currentTimeMillis()
@@ -195,6 +205,69 @@ class CentliNotificationListener : NotificationListenerService() {
             val items = peekQueue(context)
             if (items.isNotEmpty()) clearQueue(context)
             return items
+        }
+
+        private const val KEY_DROPS = "drops"
+        private const val MAX_DROPS = 20
+
+        /** Ring buffer of recently dropped notifications (no body text). */
+        fun recordDrop(context: Context, pkg: String, title: String, reason: String) {
+            try {
+                val p = prefs(context)
+                val arr = try {
+                    JSONArray(p.getString(KEY_DROPS, "[]"))
+                } catch (_: Exception) {
+                    JSONArray()
+                }
+                val truncated = title.take(80)
+                // Dedupe by pkg+title: remove older same key, keep newest.
+                val kept = JSONArray()
+                for (i in 0 until arr.length()) {
+                    val o = arr.optJSONObject(i) ?: continue
+                    if (o.optString("pkg") == pkg && o.optString("title") == truncated) {
+                        continue
+                    }
+                    kept.put(o)
+                }
+                val entry = JSONObject()
+                entry.put("pkg", pkg)
+                entry.put("title", truncated)
+                entry.put("when", System.currentTimeMillis())
+                entry.put("reason", reason)
+                kept.put(entry)
+                while (kept.length() > MAX_DROPS) {
+                    kept.remove(0)
+                }
+                p.edit().putString(KEY_DROPS, kept.toString()).apply()
+            } catch (e: Exception) {
+                Log.w(TAG, "recordDrop failed", e)
+            }
+        }
+
+        fun getDroppedNotifications(context: Context): List<Map<String, Any?>> {
+            val raw = prefs(context).getString(KEY_DROPS, "[]") ?: "[]"
+            return try {
+                val arr = JSONArray(raw)
+                buildList {
+                    for (i in arr.length() - 1 downTo 0) { // newest first
+                        val o = arr.optJSONObject(i) ?: continue
+                        add(
+                            hashMapOf(
+                                "pkg" to o.optString("pkg"),
+                                "title" to o.optString("title").take(80),
+                                "when" to o.optLong("when"),
+                                "reason" to o.optString("reason"),
+                            ),
+                        )
+                    }
+                }
+            } catch (_: Exception) {
+                emptyList()
+            }
+        }
+
+        fun clearDroppedNotifications(context: Context) {
+            prefs(context).edit().remove(KEY_DROPS).apply()
         }
 
         fun ensureRebind(context: Context) {

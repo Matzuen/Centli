@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../../data/db/centli_database.dart';
 import 'notification_listener_stub.dart';
 import 'notification_parse.dart';
 
@@ -32,6 +33,12 @@ abstract final class NotiTemplateStore {
   static bool _loaded = false;
   static int _lastSkippedCount = 0;
   static String? _lastLoadError;
+
+  static const String extraWatchedPackagesKey = 'extra_watched_packages';
+  static CentliDatabase? _settingsDb;
+
+  /// Bind DB so [syncWatchedPackagesToNative] can union extras (G28).
+  static void bindDatabase(CentliDatabase db) => _settingsDb = db;
 
   static int get version => _version;
   static String get source => _source;
@@ -687,8 +694,54 @@ abstract final class NotiTemplateStore {
         'com.tencent.mm',
       ]);
     }
+    // G28: persist manual joins across restart (union after template pkgs).
+    pkgs.addAll(await _loadExtraWatchedPackages());
     await NotificationCaptureStub.setWatchedPackages(pkgs.toList()..sort());
     await NotificationCaptureStub.setRulesJson(jsonEncode(rules));
+  }
+
+  /// Pure helper for tests: template pkgs ∪ extras (deduped).
+  @visibleForTesting
+  static Set<String> unionWatchedPackages(
+    Iterable<String> templatePkgs,
+    Iterable<String> extras,
+  ) {
+    return {...templatePkgs, ...extras.where((e) => e.trim().isNotEmpty)};
+  }
+
+  static Future<List<String>> _loadExtraWatchedPackages() async {
+    final db = _settingsDb;
+    if (db == null) return const [];
+    final raw = await db.getSetting(extraWatchedPackagesKey);
+    if (raw == null || raw.trim().isEmpty) return const [];
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return const [];
+      return decoded.map((e) => '$e'.trim()).where((e) => e.isNotEmpty).toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  static Future<void> addExtraWatchedPackage(String pkg) async {
+    final db = _settingsDb;
+    if (db == null) return;
+    final p = pkg.trim();
+    if (p.isEmpty) return;
+    final cur = await _loadExtraWatchedPackages();
+    if (cur.contains(p)) {
+      await syncWatchedPackagesToNative();
+      return;
+    }
+    // Skip if already covered by templates.
+    final templatePkgs = <String>{for (final t in peek()) ...t.packages};
+    if (templatePkgs.contains(p)) {
+      await syncWatchedPackagesToNative();
+      return;
+    }
+    cur.add(p);
+    await db.setSetting(extraWatchedPackagesKey, jsonEncode(cur));
+    await syncWatchedPackagesToNative();
   }
 
   static Future<File> _officialDocumentsFile() async {

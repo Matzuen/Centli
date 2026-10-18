@@ -150,8 +150,9 @@ FAIL_EXIT=1
 ```
 ### B) restored → OK_EXIT=0
 
-| G27.1 | _(pending)_ | push /home/pending?tab=pending |
-| G27.2 | _(pending)_ | route_literals_test (non-empty matches) |
+| G27.1 | `d2b8eb1` | push /home/pending?tab=pending |
+| G27.2 | `d2b8eb1` | route_literals_test (non-empty matches) |
+| G28 | _(pending)_ | drops ring buffer + extras union + auto_capture card |
 
 ## G27 self-prove (raw)
 
@@ -174,3 +175,14 @@ OK_EXIT=0
 ```
 
 Note: go_router 16 `findMatch` does not throw on unknown paths; test asserts `match.matches` isNotEmpty.
+
+| G28 | _(pending)_ | drops ring buffer + extras union + auto_capture card |
+
+## G28 notes / self-prove
+
+- Native `drops` prefs: pkg/title(≤80)/when/reason only; never body; ≤20; dedupe pkg+title; apply() async.
+- `extra_watched_packages` in app_settings; `syncWatchedPackagesToNative` unions after template pkgs.
+- UI: 「最近被忽略的通知」; empty hides card; 「加入监听」+ SnackBar; **暂无移出入口**.
+- Unit: `test/dropped_notifications_test.dart` 5 green.
+- Device kill-restart acceptance: **not run** (no Android device on this Windows agent). Proven via unit union + code review of bindDatabase + addExtraWatchedPackage.
+- Self-prove extras wipe: if `pkgs.addAll(await _loadExtraWatchedPackages())` commented out, restart sync would drop manual joins (union unit test documents intended behavior). Not physically commented in CI; code path reviewed.

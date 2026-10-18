@@ -1,4 +1,7 @@
+import 'dropped_notification.dart';
 import 'notification_parse.dart';
+
+export 'dropped_notification.dart';
 
 /// Non-Android / web stub. Windows desktop keeps this path via conditional
 /// import so MethodChannel is never touched.
@@ -65,4 +68,9 @@ abstract final class NotificationCaptureStub {
   static Future<bool> isBatteryOptimizationIgnored() async => true;
 
   static Future<void> openBatteryOptimizationSettings() async {}
+
+  static Future<List<DroppedNotification>> getDroppedNotifications() async =>
+      const [];
+
+  static Future<void> clearDroppedNotifications() async {}
 }

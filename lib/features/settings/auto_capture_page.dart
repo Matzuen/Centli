@@ -31,6 +31,7 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
   bool _batteryIgnored = false;
   Map<String, String> _accountMap = {};
   List<Account> _accounts = const [];
+  List<DroppedNotification> _dropped = const [];
 
   @override
   void initState() {
@@ -72,10 +73,12 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
     }
     final accountMap = await db.getCaptureAccountMap();
 
+    NotiTemplateStore.bindDatabase(db);
     final templates = await NotiTemplateStore.load();
     final version = NotiTemplateStore.version;
     final updatedAt = NotiTemplateStore.updatedAt;
     final source = NotiTemplateStore.source;
+    final dropped = await NotificationCaptureStub.getDroppedNotifications();
 
     await db.setSetting('notification_template_version', '$version');
 
@@ -91,6 +94,7 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
       _pendingCount = pending;
       _accountMap = accountMap;
       _accounts = accounts;
+      _dropped = dropped;
       _loading = false;
     });
     // Touch templates so analyzer keeps import used in mapping labels.
@@ -308,6 +312,32 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
     return pkg;
   }
 
+  String _relTime(int whenMs) {
+    if (whenMs <= 0) return '';
+    final diff = DateTime.now().millisecondsSinceEpoch - whenMs;
+    if (diff < 60 * 1000) return '刚刚';
+    if (diff < 60 * 60 * 1000) return '${diff ~/ (60 * 1000)} 分钟前';
+    if (diff < 24 * 60 * 60 * 1000) return '${diff ~/ (60 * 60 * 1000)} 小时前';
+    return '${diff ~/ (24 * 60 * 60 * 1000)} 天前';
+  }
+
+  Future<void> _joinWatch(DroppedNotification d) async {
+    final db = ref.read(databaseProvider);
+    NotiTemplateStore.bindDatabase(db);
+    await NotiTemplateStore.addExtraWatchedPackage(d.pkg);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('已加入监听：${d.pkg}')),
+    );
+    await _reload(soft: true);
+  }
+
+  Future<void> _clearDropped() async {
+    await NotificationCaptureStub.clearDroppedNotifications();
+    if (!mounted) return;
+    setState(() => _dropped = const []);
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -520,6 +550,40 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
                   const SizedBox(height: CentliSpacing.section),
                 ],
                 const SizedBox(height: CentliSpacing.section),
+                if (_dropped.isNotEmpty) ...[
+                  CentliSoftCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        ListTile(
+                          title: const Text('最近被忽略的通知'),
+                          subtitle: const Text(
+                            '这些通知因为不在监听列表里被跳过了。加入后，同类通知会进入「待确认」。',
+                          ),
+                          trailing: TextButton(
+                            onPressed: _clearDropped,
+                            child: const Text('清空'),
+                          ),
+                        ),
+                        for (final d in _dropped)
+                          ListTile(
+                            dense: true,
+                            title: Text(
+                              '${d.pkg} · ${d.title}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            subtitle: Text(_relTime(d.whenMs)),
+                            trailing: TextButton(
+                              onPressed: () => _joinWatch(d),
+                              child: const Text('加入监听'),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: CentliSpacing.section),
+                ],
                 CentliSoftCard(
                   child: ListTile(
                     leading: const Icon(Icons.rule_folder_outlined),

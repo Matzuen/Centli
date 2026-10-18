@@ -123,6 +123,7 @@ class _CentliAppState extends ConsumerState<CentliApp> {
     if (_bridgeStarted || !mounted) return;
     _bridgeStarted = true;
     final db = ref.read(databaseProvider);
+    NotiTemplateStore.bindDatabase(db);
     // Templates are loaded lazily on first capture (ingestRaw / parse).
     // Preload in background so cold start is not blocked on JSON/disk I/O.
     unawaited(NotiTemplateStore.load());

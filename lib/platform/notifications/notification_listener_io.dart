@@ -3,7 +3,10 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
 
+import 'dropped_notification.dart';
 import 'notification_parse.dart';
+
+export 'dropped_notification.dart';
 
 /// IO platforms: real MethodChannel on Android; graceful no-op elsewhere
 /// (Windows / macOS / Linux / iOS).
@@ -269,6 +272,34 @@ abstract final class NotificationCaptureStub {
     if (!supported) return;
     try {
       await _channel.invokeMethod<void>('cancelAllPendingConfirm');
+    } on MissingPluginException {
+      // no-op
+    } on PlatformException {
+      // no-op
+    }
+  }
+
+
+  static Future<List<DroppedNotification>> getDroppedNotifications() async {
+    if (!supported) return const [];
+    try {
+      final raw = await _channel.invokeMethod<List<dynamic>>('getDroppedNotifications');
+      if (raw == null) return const [];
+      return raw
+          .whereType<Map>()
+          .map((e) => DroppedNotification.fromMap(Map<Object?, Object?>.from(e)))
+          .toList();
+    } on MissingPluginException {
+      return const [];
+    } on PlatformException {
+      return const [];
+    }
+  }
+
+  static Future<void> clearDroppedNotifications() async {
+    if (!supported) return;
+    try {
+      await _channel.invokeMethod<void>('clearDroppedNotifications');
     } on MissingPluginException {
       // no-op
     } on PlatformException {
