@@ -1,7 +1,7 @@
 # Centli B4-PATCH G26–G29 notes
 
 Generated: 2026-10-18 (Asia/Shanghai)
-HEAD: `7390056aa6dff9202a91688d7d47f52a3fe0d23b`
+HEAD: `5b066f5450891a48844eccce101bf8aa5c627b37`
 Version: `1.4.4+10`
 schemaVersion: `11`
 
@@ -191,7 +191,7 @@ Note: go_router 16 `findMatch` does not throw on unknown paths; test asserts `ma
 ## Wrap / Final
 
 - Baseline HEAD: `60035e6` · version `1.4.2+8` · schema **11** · tests **225**
-- Final HEAD: `7390056aa6dff9202a91688d7d47f52a3fe0d23b` (`7390056`)
-- version: **1.4.4+10** · schema **11**
-- Device gaps: G28 kill-restart join-watch; G29 notification action on-device — documented, not run on Windows agent.
+- Final HEAD: `5b066f5450891a48844eccce101bf8aa5c627b37` (`5b066f5`)
+- version: **1.4.4+10** · schema **11** · tests **237** (`VERIFY: OK`)
+- Device gaps: G28 kill-restart join-watch; G29 notification action on-device — not run (no Android device).
 - 暂无移出入口 (extra_watched remove UI)
