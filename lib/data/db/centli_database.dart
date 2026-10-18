@@ -846,6 +846,8 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
   ///
   /// Keyword may be empty when at least one filter is set (type / category /
   /// account / date range). Account filter matches [accountId] or [toAccountId].
+  /// Keywords separated by spaces / full-width spaces are ANDed: every token
+  /// must hit the note, tags, category name, account name, type word or amount.
   Future<List<Transaction>> searchTransactions(
     String ledgerId,
     String query, {
@@ -864,30 +866,36 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
         endMs != null;
     if (q.isEmpty && !hasFilter) return const [];
 
-    final pattern = q.isEmpty ? null : '%${q.toLowerCase()}%';
-    final amountMinors =
-        q.isEmpty ? const <int>[] : _amountMinorCandidates(q);
+    // Space (incl. full-width) separates keywords; all of them must match.
+    final tokens = q
+        .split(RegExp(r'[\s\u3000]+'))
+        .map((e) => e.trim().toLowerCase())
+        .where((e) => e.isNotEmpty)
+        .toList();
 
-    // Resolve category / account name hits (and 转账 keyword → transfer type).
-    var nameCatIds = const <String>[];
-    var nameAccIds = const <String>[];
+    List<String>? nameCatIds;
+    List<String>? nameAccIds;
     var matchTransferByName = false;
-    if (pattern != null) {
+    if (tokens.isNotEmpty) {
       final cats = await (select(categories)
             ..where((t) => t.ledgerId.equals(ledgerId)))
           .get();
-      nameCatIds = [
-        for (final c in cats)
-          if (c.name.toLowerCase().contains(q.toLowerCase())) c.id,
-      ];
       final accs = await (select(accounts)
             ..where((t) => t.ledgerId.equals(ledgerId)))
           .get();
-      nameAccIds = [
-        for (final a in accs)
-          if (a.name.toLowerCase().contains(q.toLowerCase())) a.id,
+      // A token typed verbatim as a category / account name becomes an id hit
+      // (the LIKE only covers note / tags).
+      nameCatIds = [
+        for (final tok in tokens)
+          for (final c in cats)
+            if (c.name.toLowerCase() == tok) c.id,
       ];
-      matchTransferByName = '\u8f6c\u8d26'.contains(q) || q.contains('\u8f6c\u8d26');
+      nameAccIds = [
+        for (final tok in tokens)
+          for (final a in accs)
+            if (a.name.toLowerCase() == tok) a.id,
+      ];
+      matchTransferByName = tokens.any((t) => '\u8f6c\u8d26'.contains(t));
     }
 
     // Fetch one extra row to detect truncation for UI notice.
@@ -916,21 +924,30 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
               pred = pred & t.happenAt.isSmallerThanValue(endMs);
             }
 
-            if (pattern != null) {
+            for (final tok in tokens) {
+              final pattern = '%$tok%';
               Expression<bool> textHit =
-                  t.note.lower().like(pattern) |
-                  t.tags.lower().like(pattern);
-              if (nameCatIds.isNotEmpty) {
-                textHit = textHit | t.categoryId.isIn(nameCatIds);
+                  t.note.lower().like(pattern) | t.tags.lower().like(pattern);
+              final catHits = [
+                for (final c in nameCatIds ?? const <String>[])
+                  if (c.isNotEmpty) c,
+              ];
+              if (catHits.isNotEmpty) {
+                textHit = textHit | t.categoryId.isIn(catHits);
               }
-              if (nameAccIds.isNotEmpty) {
+              final accHits = [
+                for (final a in nameAccIds ?? const <String>[])
+                  if (a.isNotEmpty) a,
+              ];
+              if (accHits.isNotEmpty) {
                 textHit = textHit |
-                    t.accountId.isIn(nameAccIds) |
-                    t.toAccountId.isIn(nameAccIds);
+                    t.accountId.isIn(accHits) |
+                    t.toAccountId.isIn(accHits);
               }
-              if (matchTransferByName) {
+              if (matchTransferByName && tok == '\u8f6c\u8d26') {
                 textHit = textHit | t.type.equals('transfer');
               }
+              final amountMinors = _amountMinorCandidates(tok);
               if (amountMinors.isEmpty) {
                 pred = pred & textHit;
               } else {
@@ -1149,6 +1166,97 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
         updatedAt: ts,
       ),
     );
+  }
+
+  // --- Last-used / note-level quick bookkeeping memory (settings JSON) ---
+
+  static const lastBookkeepingKey = 'last_bookkeeping';
+
+  /// Last type/account/category used in the manual panel, so the next 记一笔
+  /// starts from the same place. Null when nothing was saved yet.
+  Future<LastBookkeepingChoice?> loadLastBookkeeping() async {
+    final raw = await getSetting(lastBookkeepingKey);
+    if (raw == null || raw.trim().isEmpty) return null;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return null;
+      return LastBookkeepingChoice.fromJson(Map<String, dynamic>.from(decoded));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> saveLastBookkeeping(LastBookkeepingChoice choice) async {
+    await setSetting(lastBookkeepingKey, jsonEncode(choice.toJson()));
+  }
+
+  /// Note → category id for 手动记账 (「午饭」→ 餐饮). Same idea as
+  /// [MerchantRules] but keyed on the note the user typed, incl. 1–2 字.
+  static const noteCategoryMapKey = 'note_category_map';
+  static const int noteCategoryMapLimit = 300;
+
+  Future<Map<String, String>> loadNoteCategoryMap() async {
+    final raw = await getSetting(noteCategoryMapKey);
+    if (raw == null || raw.trim().isEmpty) return {};
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return {};
+      // Keep the decode order explicit: eviction relies on insertion order
+      // (oldest first). Do NOT transform keys here — normalisation happens
+      // once in [noteCategoryKey].
+      return <String, String>{
+        for (final e in decoded.entries)
+          if (e.key is String && e.value is String)
+            '${e.key}': '${e.value}'.trim(),
+      };
+    } catch (_) {
+      return {};
+    }
+  }
+
+  /// Remember the category chosen for [notes] (one or more note texts).
+  Future<void> rememberNoteCategories(
+    Iterable<String> notes,
+    String categoryId,
+  ) async {
+    // Preserve order: the JSON must keep the most-recent key last so eviction
+    // (which drops the first key) removes the oldest entry, not a fresh one.
+    // Set.from() over a list literal is not order-stable across hash seeds.
+    final keys = <String>[];
+    for (final n in notes) {
+      final k = noteCategoryKey(n);
+      if (k != null && !keys.contains(k)) keys.add(k);
+    }
+    if (keys.isEmpty) return;
+    final map = await loadNoteCategoryMap();
+    for (final k in keys) {
+      map.remove(k);
+      map[k] = categoryId;
+    }
+    while (map.length > noteCategoryMapLimit) {
+      map.remove(map.keys.first);
+    }
+    await setSetting(noteCategoryMapKey, jsonEncode(map));
+  }
+
+  /// Category previously used for [note], if remembered. 精确命中优先，
+  /// 再退回「整句包含某个记忆碎片」的模糊命中（如「午饭和同事」→「午饭」）。
+  Future<String?> recallCategoryForNote(String? note) async {
+    final key = noteCategoryKey(note);
+    if (key == null) return null;
+    final map = await loadNoteCategoryMap();
+    final exact = map[key];
+    if (exact != null) return exact;
+    String? best;
+    var bestLen = 0;
+    for (final e in map.entries) {
+      if (e.key.length < 2) continue;
+      if (key.contains(e.key) && e.key.length > bestLen) {
+        best = e.value;
+        bestLen = e.key.length;
+      }
+    }
+    return best;
   }
 
   Future<void> createAccount({
@@ -1570,6 +1678,50 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
         fxRate: Value(fxRate),
         toAmountMinor: Value(toAmountMinor),
         updatedAt: Value(ts),
+      ),
+    );
+  }
+
+  /// Field-level update for bill-detail row edits. Only non-null arguments
+  /// change; source / occurrence / fx columns are preserved, so a row edit can
+  /// never reset the notification provenance. Category is re-derived from
+  /// [type] when the type changes.
+  Future<void> updateTransactionFields({
+    required String id,
+    String? type,
+    int? amountMinor,
+    String? accountId,
+    String? toAccountId,
+    String? categoryId,
+    DateTime? happenAt,
+    List<String>? tags,
+    String? note,
+    int? includeInStat,
+    int? includeInBudget,
+  }) async {
+    await (update(transactions)..where((t) => t.id.equals(id))).write(
+      TransactionsCompanion(
+        type: type != null ? Value(type) : const Value.absent(),
+        amountMinor:
+            amountMinor != null ? Value(amountMinor) : const Value.absent(),
+        accountId: accountId != null ? Value(accountId) : const Value.absent(),
+        toAccountId: toAccountId != null
+            ? Value(toAccountId)
+            : const Value.absent(),
+        categoryId: categoryId != null
+            ? Value(categoryId)
+            : const Value.absent(),
+        happenAt: happenAt != null
+            ? Value(happenAt.toUtc().millisecondsSinceEpoch)
+            : const Value.absent(),
+        tags: tags != null ? Value(encodeTxnTags(tags)) : const Value.absent(),
+        note: note != null ? Value(note) : const Value.absent(),
+        includeInStat:
+            includeInStat != null ? Value(includeInStat) : const Value.absent(),
+        includeInBudget: includeInBudget != null
+            ? Value(includeInBudget)
+            : const Value.absent(),
+        updatedAt: Value(nowMs()),
       ),
     );
   }
@@ -2281,6 +2433,177 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
     );
   }
 
+  /// 统计页「汇总」：范围内的笔数（含转账）+ 收入 / 支出 / 结余。
+  Future<StatsTotals> statsTotalsInBase(
+    String ledgerId,
+    int startMs,
+    int endMs,
+    String baseCurrency,
+  ) async {
+    final rows = await (select(transactions)
+          ..where(
+            (t) =>
+                t.ledgerId.equals(ledgerId) &
+                t.deletedAt.isNull() &
+                t.includeInStat.equals(1) &
+                t.happenAt.isBiggerOrEqualValue(startMs) &
+                t.happenAt.isSmallerThanValue(endMs),
+          ))
+        .get();
+    final book = await loadFxBook();
+    var income = 0;
+    var expense = 0;
+    var count = 0;
+    for (final r in rows) {
+      // 转账也算一笔（笔数列），但不进入收入 / 支出。
+      count += 1;
+      if (r.type != 'in' && r.type != 'out' && r.type != 'refund') continue;
+      final asBase = book.convertMinor(
+        fromCcy: r.currency,
+        toCcy: baseCurrency,
+        amountMinor: r.amountMinor,
+        onDay: FxBook.dayFromHappenAtMs(r.happenAt),
+      );
+      if (asBase == null) continue;
+      if (r.type == 'in') {
+        income += asBase;
+      } else if (r.type == 'refund') {
+        expense -= asBase;
+      } else {
+        expense += asBase;
+      }
+    }
+    return StatsTotals(
+      count: count,
+      incomeMinor: income,
+      expenseMinor: expense,
+    );
+  }
+
+  /// All-time income / expense in [baseCurrency] (deleted + excluded skipped),
+  /// for the 总收入 / 总支出 line on the home summary card.
+  Future<({int incomeMinor, int expenseMinor})> lifetimeTotalsInBase(
+    String ledgerId,
+    String baseCurrency,
+  ) async {
+    final rows = await (select(transactions)
+          ..where(
+            (t) =>
+                t.ledgerId.equals(ledgerId) &
+                t.deletedAt.isNull() &
+                t.includeInStat.equals(1),
+          ))
+        .get();
+    final book = await loadFxBook();
+    var income = 0;
+    var expense = 0;
+    for (final r in rows) {
+      if (r.type != 'in' && r.type != 'out') continue;
+      final asBase = book.convertMinor(
+        fromCcy: r.currency,
+        toCcy: baseCurrency,
+        amountMinor: r.amountMinor,
+        onDay: FxBook.dayFromHappenAtMs(r.happenAt),
+      );
+      if (asBase == null) continue;
+      if (r.type == 'in') {
+        income += asBase;
+      } else {
+        expense += asBase;
+      }
+    }
+    return (incomeMinor: income, expenseMinor: expense);
+  }
+
+  /// 统计页环形图：按 `kind` 汇总分类。
+  ///
+  /// - `out` / `in`：只取支出 / 收入分类；
+  /// - `all`：支出与收入**分开**返回（环形图里两类各自成段，颜色跟随方向）。
+  Future<({List<({String categoryId, String name, int totalMinor})> expenses,
+      List<({String categoryId, String name, int totalMinor})> incomes})>
+      statsAllCategoriesInBase(
+    String ledgerId,
+    int startMs,
+    int endMs,
+    String baseCurrency,
+  ) async {
+    final out = await categoryBreakdownInBase(
+      ledgerId,
+      startMs,
+      endMs,
+      kind: 'out',
+      baseCurrency: baseCurrency,
+    );
+    final inc = await categoryBreakdownInBase(
+      ledgerId,
+      startMs,
+      endMs,
+      kind: 'in',
+      baseCurrency: baseCurrency,
+    );
+    return (expenses: out, incomes: inc);
+  }
+
+  /// 统计页「账户」卡：按账户汇总收入 / 支出（**不含转账**）。
+  ///
+  /// 收入记到 `accountId`，支出也记到 `accountId`（付款账户）；退款冲减支出。
+  /// 账户名来自账户表，已归档账户也保留（有历史数据就会显示）。
+  Future<List<StatsAccountRow>> statsByAccountInBase(
+    String ledgerId,
+    int startMs,
+    int endMs,
+    String baseCurrency,
+  ) async {
+    final rows = await (select(transactions)
+          ..where(
+            (t) =>
+                t.ledgerId.equals(ledgerId) &
+                t.deletedAt.isNull() &
+                t.includeInStat.equals(1) &
+                t.type.isNotValue('transfer') &
+                t.happenAt.isBiggerOrEqualValue(startMs) &
+                t.happenAt.isSmallerThanValue(endMs),
+          ))
+        .get();
+    final accounts = await loadAccountsIncludingArchived(ledgerId);
+    final nameById = {for (final a in accounts) a.id: a.name};
+    final book = await loadFxBook();
+    final income = <String, int>{};
+    final expense = <String, int>{};
+    for (final r in rows) {
+      if (r.type != 'in' && r.type != 'out' && r.type != 'refund') continue;
+      final asBase = book.convertMinor(
+        fromCcy: r.currency,
+        toCcy: baseCurrency,
+        amountMinor: r.amountMinor,
+        onDay: FxBook.dayFromHappenAtMs(r.happenAt),
+      );
+      if (asBase == null) continue;
+      if (r.type == 'in') {
+        income[r.accountId] = (income[r.accountId] ?? 0) + asBase;
+      } else if (r.type == 'refund') {
+        expense[r.accountId] = (expense[r.accountId] ?? 0) - asBase;
+      } else {
+        expense[r.accountId] = (expense[r.accountId] ?? 0) + asBase;
+      }
+    }
+    final ids = {...income.keys, ...expense.keys};
+    return [
+      for (final id in ids)
+        StatsAccountRow(
+          accountId: id,
+          name: nameById[id] ?? id,
+          incomeMinor: income[id] ?? 0,
+          expenseMinor: expense[id] ?? 0,
+        ),
+    ]..sort((a, b) {
+        final byAbs = (b.incomeMinor.abs() + b.expenseMinor.abs())
+            .compareTo(a.incomeMinor.abs() + a.expenseMinor.abs());
+        if (byAbs != 0) return byAbs;
+        return a.name.compareTo(b.name);
+      });
+  }
+
   /// Category totals in [baseCurrency]; skips txns that cannot be converted.
   Future<List<({String categoryId, String name, int totalMinor})>>
       categoryBreakdownInBase(
@@ -2962,4 +3285,105 @@ LazyDatabase _openConnection() {
     final file = File(p.join(dir.path, 'centli.sqlite'));
     return NativeDatabase.createInBackground(file);
   });
+}
+/// Normalised lookup key for note → category memory. Lowercase, whitespace
+/// collapsed, punctuation stripped; null for empty / 1-char noise.
+String? noteCategoryKey(String? note) {
+  final raw = (note ?? '').trim().toLowerCase();
+  if (raw.isEmpty) return null;
+  final cleaned = raw
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .replaceAll(RegExp(r'[，。！？、；：,.!?;:"“”‘’（）()\[\]【】]'), '')
+      .trim();
+  if (cleaned.length < 2) return null;
+  return cleaned;
+}
+
+/// Remembered starting state for the manual 记一笔 panel.
+class LastBookkeepingChoice {
+  const LastBookkeepingChoice({
+    this.type = 'out',
+    this.accountId,
+    this.categoryId,
+    this.categoryByType = const {},
+  });
+
+  /// `out` / `in` / `transfer`.
+  final String type;
+  final String? accountId;
+  final String? categoryId;
+
+  /// categoryId per type (`out` / `in`), so switching方向 keeps its own choice.
+  final Map<String, String> categoryByType;
+
+  factory LastBookkeepingChoice.fromJson(Map<String, dynamic> j) {
+    final byType = <String, String>{};
+    final raw = j['categoryByType'];
+    if (raw is Map) {
+      for (final e in raw.entries) {
+        if (e.key is String && e.value is String) {
+          byType['${e.key}'] = '${e.value}';
+        }
+      }
+    }
+    return LastBookkeepingChoice(
+      type: (j['type'] as String?) ?? 'out',
+      accountId: j['accountId'] as String?,
+      categoryId: j['categoryId'] as String?,
+      categoryByType: byType,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'type': type,
+        'accountId': accountId,
+        'categoryId': categoryId,
+        'categoryByType': categoryByType,
+      };
+
+  LastBookkeepingChoice copyWith({
+    String? type,
+    String? accountId,
+    String? categoryId,
+    Map<String, String>? categoryByType,
+  }) {
+    return LastBookkeepingChoice(
+      type: type ?? this.type,
+      accountId: accountId ?? this.accountId,
+      categoryId: categoryId ?? this.categoryId,
+      categoryByType: categoryByType ?? this.categoryByType,
+    );
+  }
+}
+
+/// 统计页汇总行（本币，转账不计入收入 / 支出，但计入 [count]）。
+class StatsTotals {
+  const StatsTotals({
+    required this.count,
+    required this.incomeMinor,
+    required this.expenseMinor,
+  });
+
+  final int count;
+  final int incomeMinor;
+  final int expenseMinor;
+
+  int get netMinor => incomeMinor - expenseMinor;
+}
+
+/// 账户维度汇总（转账完全排除）。
+class StatsAccountRow {
+  const StatsAccountRow({
+    required this.accountId,
+    required this.name,
+    required this.incomeMinor,
+    required this.expenseMinor,
+  });
+
+  final String accountId;
+  final String name;
+  final int incomeMinor;
+  final int expenseMinor;
+
+  int get netMinor => incomeMinor - expenseMinor;
 }

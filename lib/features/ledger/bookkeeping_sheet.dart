@@ -1,4 +1,6 @@
-﻿import 'package:flutter/material.dart';
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
@@ -11,12 +13,31 @@ import '../../data/db/centli_database.dart';
 import '../../data/db/txn_tags.dart';
 import '../../data/db/database_provider.dart';
 import 'category_picker_sheet.dart';
+import 'ledger_detail_page.dart' show showTagEditorDialog;
 
+/// Set by the bill-detail page when 金额 was edited but not yet saved through
+/// 保存. The bookkeeping sheet applies it on next open (it only shows on
+/// phones; on desktop save now or enter the amount in the sheet).
+int? pendingDetailAmountMinor;
+
+/// Opens the manual panel.
+///
+/// - [existing]: edit that bill in place.
+/// - [template]: start a NEW bill pre-filled from [template] (账户 / 分类 /
+///   标签 / 备注，金额清零) — 「照着这笔再记一笔」.
+/// - [initialNote]: pre-fill only the note (used when the note recalls a
+///   category before the panel opens).
 Future<bool?> showBookkeepingSheet(
   BuildContext context, {
   Transaction? existing,
+  Transaction? template,
+  String? initialNote,
   DateTime? initialHappenAt,
 }) {
+  // Detail-page rows collect edits and persist them on 保存; the sheet saves
+  // everything when closed via ✓. Drop any unconsumed detail amount so the
+  // sheet's visible (possibly stale) amount is not silently overridden.
+  pendingDetailAmountMinor = null;
   return showModalBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
@@ -28,6 +49,8 @@ Future<bool?> showBookkeepingSheet(
     ),
     builder: (context) => BookkeepingSheet(
       existing: existing,
+      template: template,
+      initialNote: initialNote,
       initialHappenAt: initialHappenAt,
     ),
   );
@@ -37,10 +60,19 @@ class BookkeepingSheet extends ConsumerStatefulWidget {
   const BookkeepingSheet({
     super.key,
     this.existing,
+    this.template,
+    this.initialNote,
     this.initialHappenAt,
   });
 
   final Transaction? existing;
+
+  /// Bill to copy when creating a new one (account / category / tags / note).
+  final Transaction? template;
+
+  /// Note to pre-fill for a 记一笔 (category is recalled from it).
+  final String? initialNote;
+
   final DateTime? initialHappenAt;
 
 @override
@@ -66,6 +98,7 @@ List<Account> _accounts = [];
   bool _loading = true;
   bool _saving = false;
   late DateTime _happenAt;
+  LastBookkeepingChoice? _lastChoice;
 
   @override
   void initState() {
@@ -119,10 +152,23 @@ List<Account> _accounts = [];
         }
       }
     }
-    final cats = await db.loadCategories(
+    final template = widget.template;
+    final last = existing == null && template == null
+        ? await db.loadLastBookkeeping()
+        : null;
+    _lastChoice = last;
+    if (last != null && _type == 'out') {
+      _type = last.type;
+    }
+    var cats = await db.loadCategories(
       ledgerId,
       _type == 'in' ? 'in' : 'out',
     );
+    // 备注 → 上次分类（手动记账同样生效）。
+    String? recalledCategory;
+    if (existing == null && template == null) {
+      recalledCategory = await db.recallCategoryForNote(widget.initialNote);
+    }
     if (!mounted) return;
     setState(() {
       _ledgerId = ledgerId;
@@ -138,9 +184,19 @@ List<Account> _accounts = [];
           _amountText = _amountText.replaceFirst(RegExp(r'\.?0+$'), '');
           if (_amountText.isEmpty) _amountText = '0';
         }
+        final pendingAmount = pendingDetailAmountMinor;
+        pendingDetailAmountMinor = null;
         _accountId = existing.accountId;
         _toAccountId = existing.toAccountId;
         _categoryId = existing.categoryId;
+        if (pendingAmount != null && pendingAmount > 0) {
+          _amountText = fromMinor(existing.currency, pendingAmount)
+              .toStringAsFixed(currencyDecimals[existing.currency] ?? 2);
+          if (_amountText.contains('.')) {
+            _amountText = _amountText.replaceFirst(RegExp(r'\.?0+$'), '');
+            if (_amountText.isEmpty) _amountText = '0';
+          }
+        }
             _noteCtrl.text = existing.note ?? '';
         _tags = List<String>.from(decodeTxnTags(existing.tags));
         _happenAt = DateTime.fromMillisecondsSinceEpoch(
@@ -160,10 +216,31 @@ List<Account> _accounts = [];
         if (existing.fxRate != null) {
           _fxRateText = existing.fxRate.toString();
         }
+      } else if (template != null) {
+        // 照着这笔再记一笔：复制分类 / 账户 / 标签 / 备注，金额留空。
+        _type = template.type;
+        _accountId = template.accountId;
+        _toAccountId = template.toAccountId;
+        _categoryId = template.categoryId;
+        _noteCtrl.text = template.note ?? '';
+        _tags = List<String>.from(decodeTxnTags(template.tags));
+        _happenAt = DateTime.now();
       } else {
-        _accountId = accounts.isNotEmpty ? accounts.first.id : null;
+        final rememberedAcc = last?.accountId != null &&
+                accounts.any((a) => a.id == last!.accountId)
+            ? last!.accountId
+            : null;
+        _accountId =
+            rememberedAcc ?? (accounts.isNotEmpty ? accounts.first.id : null);
         _toAccountId = accounts.length > 1 ? accounts[1].id : null;
-        _categoryId = cats.isNotEmpty ? cats.first.id : null;
+        final preferredCat = recalledCategory ??
+            last?.categoryByType[_type == 'in' ? 'in' : 'out'] ??
+            last?.categoryId;
+        _categoryId = preferredCat != null &&
+                cats.any((c) => c.id == preferredCat)
+            ? preferredCat
+            : (cats.isNotEmpty ? cats.first.id : null);
+        _noteCtrl.text = widget.initialNote ?? '';
       }
       _categories = cats;
       // reload cats for existing type (may differ from default out)
@@ -173,6 +250,22 @@ List<Account> _accounts = [];
       await _reloadCategories();
       if (existing.categoryId != null) {
         setState(() => _categoryId = existing.categoryId);
+      }
+    } else if (template != null && template.type != 'out' &&
+        template.type != 'transfer') {
+      // 模板是收入 / 退款时，分类列表要换成对应方向。
+      cats = await db.loadCategories(
+        ledgerId,
+        template.type == 'in' ? 'in' : 'out',
+      );
+      if (mounted) {
+        setState(() {
+          _categories = cats;
+          final keep = template.categoryId;
+          _categoryId = keep != null && cats.any((c) => c.id == keep)
+              ? keep
+              : (cats.isNotEmpty ? cats.first.id : null);
+        });
       }
     }
   }
@@ -277,7 +370,7 @@ List<Account> _accounts = [];
                     '\u8f6c\u51fa ${formatMinor(fromCcy, toMinor(fromCcy, major))}',
                     style: Theme.of(ctx).textTheme.bodyMedium,
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: CentliSpacing.section),
                   SegmentedButton<bool>(
                     segments: const [
                       ButtonSegment(
@@ -289,7 +382,7 @@ List<Account> _accounts = [];
                     selected: {useTo},
                     onSelectionChanged: (s) => setLocal(() => useTo = s.first),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: CentliSpacing.section),
                   if (useTo)
                     TextField(
                       controller: toCtrl,
@@ -476,6 +569,25 @@ List<Account> _accounts = [];
           toAmountMinor: toAmountMinor,
         );
       }
+      // 记住这次的选择：下次「记一笔」直接沿用账户 / 分类。
+      if (!mounted) return;
+      if (_type != 'transfer' && _accountId != null && _categoryId != null) {
+        final byType = Map<String, String>.from(_lastChoice?.categoryByType ?? {});
+        byType[_type == 'in' ? 'in' : 'out'] = _categoryId!;
+        final choice = LastBookkeepingChoice(
+          type: _type,
+          accountId: _accountId,
+          categoryId: _categoryId,
+          categoryByType: byType,
+        );
+        _lastChoice = choice;
+        await db.setSetting(
+          CentliDatabase.lastBookkeepingKey,
+          jsonEncode(choice.toJson()),
+        );
+        // 备注 → 分类：同一条备注下次自动带出这个分类。
+        await db.rememberNoteCategories([?note], _categoryId!);
+      }
       if (!mounted) return;
       if (keepOpen && widget.existing == null) {
         // 再记一笔：落库后保留面板，清空金额/备注，时间刷新为现在。
@@ -634,87 +746,17 @@ List<Account> _accounts = [];
   }
 
   Future<void> _editSheetTags() async {
-    final current = List<String>.from(_tags);
-    final ctrl = TextEditingController();
     final suggestions = _ledgerId == null
         ? <String>[]
         : await ref.read(databaseProvider).listDistinctTags(_ledgerId!);
     if (!mounted) return;
-    final result = await showDialog<List<String>>(
-      context: context,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx, setLocal) {
-            void addTag(String raw) {
-              var t = raw.trim();
-              if (t.isEmpty) return;
-              if (t.length > 12) t = t.substring(0, 12);
-              if (current.contains(t) || current.length >= 5) return;
-              setLocal(() => current.add(t));
-              ctrl.clear();
-            }
-
-            return AlertDialog(
-              title: const Text('标签'),
-              content: SizedBox(
-                width: 360,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Wrap(
-                      spacing: 6,
-                      children: [
-                        for (final t in current)
-                          InputChip(
-                            label: Text(t),
-                            onDeleted: () => setLocal(() => current.remove(t)),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: ctrl,
-                      decoration: const InputDecoration(
-                        labelText: '新标签',
-                        border: OutlineInputBorder(),
-                      ),
-                      onSubmitted: addTag,
-                    ),
-                    if (suggestions.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 6,
-                        children: [
-                          for (final s in suggestions.take(12))
-                            ActionChip(
-                              label: Text(s),
-                              onPressed: () => addTag(s),
-                            ),
-                        ],
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('取消'),
-                ),
-                FilledButton(
-                  onPressed: () =>
-                      Navigator.pop(ctx, List<String>.from(current)),
-                  child: const Text('确定'),
-                ),
-              ],
-            );
-          },
-        );
-      },
+    final result = await showTagEditorDialog(
+      context,
+      initial: _tags,
+      suggestions: suggestions,
+      title: '标签',
     );
-    ctrl.dispose();
-    if (result != null) setState(() => _tags = result);
+    if (result != null && mounted) setState(() => _tags = result);
   }
 
 
@@ -799,7 +841,7 @@ List<Account> _accounts = [];
                                                           : scheme.onSurfaceVariant,
                                                     ),
                                               ),
-                                              const SizedBox(height: 6),
+                                              const SizedBox(height: CentliSpacing.item),
                                               Container(
                                                 height: 2,
                                                 color: _type == entry.$1
@@ -877,7 +919,7 @@ List<Account> _accounts = [];
                               ],
                             ),
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: CentliSpacing.section),
                           // Chips: time / category / account / tags (single scroll row)
                           Padding(
                             key: const Key('bk_chips_row'),
@@ -998,7 +1040,7 @@ List<Account> _accounts = [];
                                     ?.copyWith(color: scheme.onSurfaceVariant),
                               ),
                             ),
-                          const SizedBox(height: 6),
+                          const SizedBox(height: CentliSpacing.item),
                           Padding(
                             key: const Key('bk_note'),
                             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -1042,7 +1084,7 @@ List<Account> _accounts = [];
                               ),
                             ),
                           ),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: CentliSpacing.item),
                         ],
                       ),
                     ),
@@ -1173,7 +1215,7 @@ class _AccountPickerSheet extends StatelessWidget {
       height: height,
       child: Column(
         children: [
-          const SizedBox(height: 8),
+          const SizedBox(height: CentliSpacing.item),
           Container(
             width: 40,
             height: 4,

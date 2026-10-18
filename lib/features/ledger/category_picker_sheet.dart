@@ -111,7 +111,7 @@ class _CategoryPickerBodyState extends State<_CategoryPickerBody> {
       height: height,
       child: Column(
         children: [
-          const SizedBox(height: 8),
+          const SizedBox(height: CentliSpacing.item),
           Container(
             width: 40,
             height: 4,
@@ -260,7 +260,7 @@ class _CategoryPickerBodyState extends State<_CategoryPickerBody> {
                                         size: 44,
                                         roundedSquare: true,
                                       ),
-                                      const SizedBox(height: 6),
+                                      const SizedBox(height: CentliSpacing.item),
                                       Text(
                                         c.name,
                                         textAlign: TextAlign.center,
