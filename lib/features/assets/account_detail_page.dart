@@ -186,10 +186,10 @@ class _AccountDetailBody extends ConsumerWidget {
                 ),
               ),
             ),
-          if (account.archived != 0) const SizedBox(height: 8),
+          if (account.archived != 0) const SizedBox(height: CentliSpacing.item),
           CentliSoftCard(
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(CentliSpacing.cardPad),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -197,14 +197,14 @@ class _AccountDetailBody extends ConsumerWidget {
                     '\u4f59\u989d',
                     style: Theme.of(context).textTheme.labelLarge,
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: CentliSpacing.item),
                   Text(
                     formatMinor(account.currency, bal, hide: hide),
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                           fontWeight: FontWeight.w600,
                         ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: CentliSpacing.section),
                   Row(
                     children: [
                       _chip(context, '\u5e01\u79cd', account.currency),
@@ -212,14 +212,14 @@ class _AccountDetailBody extends ConsumerWidget {
                       _chip(context, '\u7c7b\u578b', ref.watch(_assetTypeByIdProvider(account.type)).valueOrNull?.name ?? '其他'),
                     ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: CentliSpacing.item),
                   Text(
                     '\u671f\u521d ${formatMinor(account.currency, account.openingBalanceMinor, hide: hide)}',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: scheme.onSurfaceVariant,
                         ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: CentliSpacing.dense),
                   Text(
                     '\u8c03\u6574\u4f59\u989d\u4f1a\u8bb0\u4e00\u7b14\u300c\u4f59\u989d\u6821\u6b63\u300d\uff08\u4e0d\u8ba1\u5165\u7edf\u8ba1\uff09',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -230,16 +230,16 @@ class _AccountDetailBody extends ConsumerWidget {
               ),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: CentliSpacing.item),
           DateRangeControl(
             range: range,
             onChanged: (next) {
               ref.read(_accountRangeProvider(account.id).notifier).state = next;
             },
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: CentliSpacing.item),
           Text('\u6d41\u6c34', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 8),
+          const SizedBox(height: CentliSpacing.item),
           txAsync.when(
             loading: () => const Padding(
               padding: EdgeInsets.all(24),
@@ -255,7 +255,7 @@ class _AccountDetailBody extends ConsumerWidget {
                       children: [
                         Icon(Icons.receipt_long_outlined,
                             size: 40, color: scheme.outline),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: CentliSpacing.item),
                         Text(
                           '\u8be5\u65f6\u6bb5\u65e0\u6d41\u6c34',
                           style: TextStyle(color: scheme.onSurfaceVariant),
@@ -363,7 +363,7 @@ class _AccountTxnTile extends ConsumerWidget {
         InkWell(
           onTap: () => context.push('/ledger/${txn.id}'),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+            padding: const EdgeInsets.all(CentliSpacing.cardPad),
             child: Row(
               children: [
                 FutureBuilder<({String name, String? icon})>(
@@ -399,7 +399,7 @@ class _AccountTxnTile extends ConsumerWidget {
                               ),
                         ),
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: CentliSpacing.dense),
                       FutureBuilder<String>(
                         future: _subtitle(db),
                         builder: (context, snap) {
@@ -432,7 +432,7 @@ class _AccountTxnTile extends ConsumerWidget {
                         height: 1.2,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: CentliSpacing.dense),
                     Text(
                       timeLabel,
                       style: Theme.of(context)
@@ -550,7 +550,7 @@ Future<void> _showAdjustBalance(
           Text(
             '\u5f53\u524d ${formatMinor(account.currency, currentBalanceMinor)}',
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: CentliSpacing.section),
           TextField(
             controller: ctrl,
             keyboardType:

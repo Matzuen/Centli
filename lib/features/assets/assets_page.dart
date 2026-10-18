@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/theme.dart';
+import '../../core/widgets/centli_error_state.dart';
 import '../../core/constants/currencies.dart';
 import '../../core/widgets/centli_icon.dart';
 import '../../core/widgets/icon_picker_sheet.dart';
@@ -67,10 +68,9 @@ class AssetsPage extends ConsumerStatefulWidget {
   ConsumerState<AssetsPage> createState() => _AssetsPageState();
 }
 
-class _AssetsPageState extends ConsumerState<AssetsPage> {
-  bool _showArchived = false;
+/// 环形图配色（资产分析按类型着色）。
+const kAssetsDonutColors = <Color>[
 
-  static const _donutColors = [
     Color(0xFFE53935),
     Color(0xFF26A69A),
     Color(0xFFFBC02D),
@@ -80,6 +80,11 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
     Color(0xFF66BB6A),
     Color(0xFFAB47BC),
   ];
+
+class _AssetsPageState extends ConsumerState<AssetsPage> {
+  bool _showArchived = false;
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -96,7 +101,7 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
           bottom: false,
           child: ledgerAsync.when(
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => Center(child: Text('$e')),
+            error: (e, _) => CentliErrorState(error: e, compact: true),
             data: (ledger) {
               if (ledger == null) {
                 return const Center(child: Text('尚未初始化账本'));
@@ -111,7 +116,7 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
               final typesAsync = ref.watch(_assetTypesProvider(ledgerId));
               return accountsAsync.when(
                 loading: () => const Center(child: CircularProgressIndicator()),
-                error: (e, _) => Center(child: Text('$e')),
+                error: (e, _) => CentliErrorState(error: e, compact: true),
                 data: (accounts) {
                   final balances = balancesAsync.valueOrNull ?? {};
                   final nwArgs = (ledgerId: ledgerId, base: base);
@@ -187,7 +192,7 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                             padding: EdgeInsets.all(24),
                             child: Center(child: CircularProgressIndicator()),
                           ),
-                          error: (e, _) => Text('$e'),
+                          error: (e, _) => CentliErrorState(error: e, compact: true),
                           data: (nw) {
                             final net = nw.totalMinor;
                             final book =
@@ -210,14 +215,17 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                                   );
                             final assetSum = split?.assetMinor ?? 0;
                             final liabilitySum = split?.liabilityMinor ?? 0;
-                            final positives = <({Account a, int bal})>[];
-                            for (final a in cardAccounts) {
-                              final bal =
-                                  balances[a.id] ?? a.openingBalanceMinor;
-                              if (bal >= 0) {
-                                positives.add((a: a, bal: bal));
-                              }
-                            }
+                            // 资产分析按**账户类型**汇总（银行 / 线上 / 信用卡 …），
+                            // 金额折算成本位币；负余额的账户类型也计入，占比带负号。
+                            final typeSlices = assetTypeSlices(
+                              accounts: cardAccounts,
+                              balances: balances,
+                              types: typesAsync.valueOrNull ??
+                                  const <AssetType>[],
+                              book: book,
+                              baseCurrency: base,
+                              onDay: day,
+                            );
                             final unconverted = nw.unconvertedByCcy;
                             final unconvertedHint = unconverted.isEmpty
                                 ? null
@@ -239,14 +247,13 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                                         '净资产',
                                         style: Theme.of(context)
                                             .textTheme
-                                            .titleMedium
+                                            .labelMedium
                                             ?.copyWith(
-                                              fontWeight: FontWeight.w700,
+                                              color:
+                                                  scheme.onSurfaceVariant,
                                             ),
                                       ),
-                                      const SizedBox(
-                                        height: CentliSpacing.item,
-                                      ),
+                                      const SizedBox(height: CentliSpacing.dense),
                                       Text(
                                         formatMinor(base, net, hide: hide),
                                         style: Theme.of(context)
@@ -320,137 +327,12 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                                   ),
                                 ),
                                 const SizedBox(height: CentliSpacing.section),
-                                if (positives.isNotEmpty)
-                                  CentliSoftCard(
-                                    padding: const EdgeInsets.fromLTRB(
-                                      16,
-                                      14,
-                                      16,
-                                      14,
-                                    ),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          '资产分析',
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .titleMedium
-                                              ?.copyWith(
-                                                fontWeight: FontWeight.w700,
-                                              ),
-                                        ),
-                                        const SizedBox(
-                                          height: CentliSpacing.section,
-                                        ),
-                                        SizedBox(
-                                          height: 150,
-                                          child: Row(
-                                            children: [
-                                              Expanded(
-                                                child: PieChart(
-                                                  PieChartData(
-                                                    sectionsSpace: 2,
-                                                    centerSpaceRadius: 34,
-                                                    sections: [
-                                                      for (
-                                                        var i = 0;
-                                                        i < positives.length;
-                                                        i++
-                                                      )
-                                                        PieChartSectionData(
-                                                          value: positives[i]
-                                                              .bal
-                                                              .toDouble()
-                                                              .clamp(1, 1e18),
-                                                          color:
-                                                              _donutColors[i %
-                                                                  _donutColors
-                                                                      .length],
-                                                          radius: 28,
-                                                          title: '',
-                                                        ),
-                                                    ],
-                                                  ),
-                                                ),
-                                              ),
-                                              const SizedBox(width: 8),
-                                              Expanded(
-                                                child: ListView(
-                                                  children: [
-                                                    for (
-                                                      var i = 0;
-                                                      i < positives.length &&
-                                                          i < 6;
-                                                      i++
-                                                    )
-                                                      Padding(
-                                                        padding:
-                                                            const EdgeInsets.only(
-                                                              bottom: 6,
-                                                            ),
-                                                        child: Row(
-                                                          children: [
-                                                            Container(
-                                                              width: 10,
-                                                              height: 10,
-                                                              decoration: BoxDecoration(
-                                                                color:
-                                                                    _donutColors[i %
-                                                                        _donutColors
-                                                                            .length],
-                                                                borderRadius:
-                                                                    BorderRadius.circular(
-                                                                      2,
-                                                                    ),
-                                                              ),
-                                                            ),
-                                                            const SizedBox(
-                                                              width: 6,
-                                                            ),
-                                                            Expanded(
-                                                              child: Text(
-                                                                positives[i]
-                                                                    .a
-                                                                    .name,
-                                                                maxLines: 1,
-                                                                overflow:
-                                                                    TextOverflow
-                                                                        .ellipsis,
-                                                                style:
-                                                                    const TextStyle(
-                                                                      fontSize:
-                                                                          12,
-                                                                    ),
-                                                              ),
-                                                            ),
-                                                            Text(
-                                                              _pct(
-                                                                positives[i]
-                                                                    .bal,
-                                                                assetSum == 0
-                                                                    ? 1
-                                                                    : assetSum,
-                                                              ),
-                                                              style: const TextStyle(
-                                                                fontSize: 12,
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .w600,
-                                                              ),
-                                                            ),
-                                                          ],
-                                                        ),
-                                                      ),
-                                                  ],
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ],
-                                    ),
+                                if (typeSlices.isNotEmpty)
+                                  _AssetAnalysisCard(
+                                    key: const Key('assets_analysis_card'),
+                                    slices: typeSlices,
+                                    base: base,
+                                    hide: hide,
                                   ),
                               ],
                             );
@@ -475,8 +357,23 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                             title: _showArchived ? '暂无已归档账户' : '暂无账户',
                             message: _showArchived
                                 ? '归档账户不计入总资产，可在详情中恢复。'
-                                : '添加现金、银行卡或信用账户后，这里会汇总净资产。',
+                                : '还没有账户。先记一笔，Centli 会自动使用默认账户；'
+                                    '也可以点下面的按钮添加现金 / 银行卡 / 信用账户。',
                             padding: const EdgeInsets.all(CentliSpacing.cardPad),
+                            action: _showArchived
+                                ? null
+                                : FilledButton.tonalIcon(
+                                    key: const Key('assets_add_first'),
+                                    onPressed: () async {
+                                      await showAccountEditor(
+                                        context,
+                                        ref,
+                                        ledgerId: ledger.id,
+                                      );
+                                    },
+                                    icon: const Icon(Icons.add, size: 18),
+                                    label: const Text('添加第一个账户'),
+                                  ),
                           ),
                         )
                       else ...[
@@ -502,10 +399,6 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
     );
   }
 
-  String _pct(int part, int total) {
-    final p = total <= 0 ? 0.0 : part * 100.0 / total;
-    return '${p.toStringAsFixed(p >= 10 ? 0 : 1)}%';
-  }
 
   List<Widget> _groupedCards(
     BuildContext context, {
@@ -588,7 +481,7 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+                  padding: const EdgeInsets.fromLTRB(CentliSpacing.cardPad, CentliSpacing.cardPad, CentliSpacing.cardPad, CentliSpacing.dense),
                   child: Row(
                     children: [
                       Text(
@@ -596,11 +489,13 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                         style: Theme.of(context).textTheme.titleSmall
                             ?.copyWith(fontWeight: FontWeight.w800),
                       ),
-                      const Spacer(),
-                      Flexible(
+                      const SizedBox(width: 12),
+                      Expanded(
                         child: Text(
                           '$sumLabel$unconvertedSuffix',
                           textAlign: TextAlign.end,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(fontWeight: FontWeight.w700),
                         ),
                       ),
@@ -621,28 +516,37 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                           size: 40,
                           roundedSquare: true,
                         ),
-                        title: Text(a.name),
+                        title: Text(
+                          a.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                         subtitle: Text(
                           _showArchived
                               ? '$typeName · 已归档'
                               : typeName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              formatMinor(a.currency, bal, hide: hide),
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                color: _showArchived
-                                    ? Theme.of(context)
-                                        .colorScheme
-                                        .onSurfaceVariant
-                                    : null,
-                              ),
+                        // No chevron: with it the amount had to share the
+                        // right edge. The row itself still navigates.
+                        // 约束宽度：大字号/大金额时不能让 trailing 吃掉整行。
+                        trailing: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 120),
+                          child: Text(
+                            formatMinor(a.currency, bal, hide: hide),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.end,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: _showArchived
+                                  ? Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant
+                                  : null,
                             ),
-                            const Icon(Icons.chevron_right),
-                          ],
+                          ),
                         ),
                         onTap: () => context.push('/assets/${a.id}'),
                       );
@@ -656,6 +560,278 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
       );
     }
     return out;
+  }
+}
+
+/// 资产分析的一个扇区：按账户类型汇总（本位币）。
+typedef AssetTypeSlice = ({String name, int totalMinor, String pct});
+
+/// 百分比文字：`80%` / `0%` / `−24.6%`（负号在括号内，与设计稿一致）。
+@visibleForTesting
+String assetTypePctLabel(int part, int denominator) {
+  if (denominator == 0) return '0%';
+  final p = part * 100.0 / denominator;
+  final abs = p.abs();
+  // One decimal up to 100% so small slices keep their precision
+  // (−24.6%, 0.5%, 2.3%), and exact integers never show a trailing .0.
+  final digits = abs >= 100 ? 0 : 1;
+  final body = abs.toStringAsFixed(digits);
+  // Drop the trailing ".0" only when it is exactly integral.
+  final trimmed = body.endsWith('.0') ? body.substring(0, body.length - 2) : body;
+  if (abs == 0) return '0%';
+  final sign = p < -0.05 ? '−' : '';
+  return '$sign$trimmed%';
+}
+
+/// 按账户类型汇总余额（折算成本位币），返回按类型顺序排列的扇区。
+///
+/// - 分母是**全部**账户的绝对额之和（含负债），所以负余额类型会得到负的
+///   百分比（钱包 −200 在总和 800 时是 −24.6%）。
+/// - 没有账户的类型跳过；有账户但余额为 0 的类型保留（显示 0%）。
+@visibleForTesting
+List<AssetTypeSlice> assetTypeSlices({
+  required List<Account> accounts,
+  required Map<String, int> balances,
+  required List<AssetType> types,
+  required FxBook? book,
+  required String baseCurrency,
+  required String onDay,
+}) {
+  final visible = accounts;
+  if (visible.isEmpty) return const [];
+  final typeById = {for (final t in types) t.id: t};
+  AssetType? fallback;
+  for (final t in types) {
+    if (t.name == '其他') {
+      fallback = t;
+      break;
+    }
+  }
+
+  // Sum per type id (accounts with an unknown type fall back to 其他).
+  final byType = <String, int>{};
+  final order = <String>[];
+  const virtualOther = '__virtual_other__';
+  for (final t in types) {
+    order.add(t.id);
+  }
+  for (final a in visible) {
+    final key = types.any((t) => t.id == a.type)
+        ? a.type
+        : (fallback?.id ?? virtualOther);
+    if (!byType.containsKey(key)) {
+      byType[key] = 0;
+      if (!order.contains(key)) order.add(key);
+    }
+    final bal = balances[a.id] ?? a.openingBalanceMinor;
+    final asBase = book == null
+        ? (a.currency == baseCurrency ? bal : null)
+        : balanceInBase(
+            currency: a.currency,
+            balanceMinor: bal,
+            book: book,
+            baseCurrency: baseCurrency,
+            onDay: onDay,
+          );
+    // Unconvertible foreign balances are excluded (same rule as totals).
+    if (asBase != null) byType[key] = byType[key]! + asBase;
+  }
+
+  var denominator = 0;
+  for (final v in byType.values) {
+    denominator += v.abs();
+  }
+
+  final out = <AssetTypeSlice>[];
+  for (final key in order) {
+    final total = byType[key];
+    if (total == null) continue;
+    final name = key == virtualOther ? '其他' : (typeById[key]?.name ?? '其他');
+    out.add((
+      name: name,
+      totalMinor: total,
+      pct: assetTypePctLabel(total, denominator),
+    ));
+  }
+  return out;
+}
+
+/// 卡片 2：资产分析 —— 环形图（左）+ 图例（右，名称 + 金额 + 百分比）。
+class _AssetAnalysisCard extends StatelessWidget {
+  const _AssetAnalysisCard({
+    super.key,
+    required this.slices,
+    required this.base,
+    required this.hide,
+  });
+
+  final List<AssetTypeSlice> slices;
+  final String base;
+  final bool hide;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    // Negative slices are liabilities: draw them in the expense red, the rest
+    // cycle through the palette.
+    var paletteIndex = 0;
+    const liabilityColor = CentliTheme.expenseRed;
+    final colors = <Color>[];
+    for (final s in slices) {
+      if (s.totalMinor < 0) {
+        colors.add(liabilityColor);
+        continue;
+      }
+      var c = kAssetsDonutColors[paletteIndex % kAssetsDonutColors.length];
+      // Never let a positive slice reuse the liability red.
+      while (c.toARGB32() == liabilityColor.toARGB32()) {
+        paletteIndex++;
+        c = kAssetsDonutColors[paletteIndex % kAssetsDonutColors.length];
+      }
+      paletteIndex++;
+      colors.add(c);
+    }
+    final pieTotal = slices.fold<int>(0, (a, b) => a + b.totalMinor.abs());
+    return CentliSoftCard(
+      padding: const EdgeInsets.all(CentliSpacing.cardPad),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '资产分析',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: CentliSpacing.section),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              SizedBox(
+                width: 120,
+                height: 120,
+                child: pieTotal <= 0
+                    ? Center(
+                        child: Text(
+                          '暂无余额',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      )
+                    : PieChart(
+                        PieChartData(
+                          sectionsSpace: 2,
+                          centerSpaceRadius: 30,
+                          sections: [
+                            for (var i = 0; i < slices.length; i++)
+                              if (slices[i].totalMinor.abs() > 0)
+                                PieChartSectionData(
+                                  value: slices[i].totalMinor.abs().toDouble(),
+                                  color: colors[i],
+                                  radius: 26,
+                                  title: '',
+                                ),
+                          ],
+                        ),
+                      ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (var i = 0; i < slices.length; i++)
+                      _AnalysisLegendRow(
+                        name: slices[i].name,
+                        color: colors[i],
+                        amount: formatMinor(
+                          base,
+                          slices[i].totalMinor,
+                          hide: hide,
+                        ),
+                        pct: slices[i].pct,
+                        negative: slices[i].totalMinor < 0,
+                        theme: theme,
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 图例一行：色块 + 名称 + 金额（百分比）—— 单行显示。
+class _AnalysisLegendRow extends StatelessWidget {
+  const _AnalysisLegendRow({
+    required this.name,
+    required this.color,
+    required this.amount,
+    required this.pct,
+    required this.negative,
+    required this.theme,
+  });
+
+  final String name;
+  final Color color;
+  final String amount;
+  final String pct;
+  final bool negative;
+  final ThemeData theme;
+
+  @override
+  Widget build(BuildContext context) {
+    final money = '$amount（$pct）';
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        children: [
+          Container(
+            width: 9,
+            height: 9,
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 6),
+          // The amount + percent must stay whole; only the name may ellipsize.
+          Flexible(
+            flex: 2,
+            child: Text(
+              name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            flex: 5,
+            child: Text(
+              money,
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.right,
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w600,
+                color: negative ? CentliTheme.expenseRed : null,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -709,16 +885,21 @@ Future<void> showAccountEditor(
   Account? existing,
 }) async {
   final nameCtrl = TextEditingController(text: existing?.name ?? '');
-  final openingCtrl = TextEditingController(
+  final db = ref.read(databaseProvider);
+  // 编辑已有账户时，这个输入框表示**当前金额**（余额），保存时写一笔
+  // 「余额校正」把余额调到输入值；新建账户时它才是期初余额。
+  final String? currency0 = existing?.currency;
+  final currentBalanceMinor = existing == null
+      ? 0
+      : (await db.accountBalances(existing.ledgerId))[existing.id] ??
+          existing.openingBalanceMinor;
+  final balanceCtrl = TextEditingController(
     text: existing == null
         ? '0'
-        : fromMinor(
-            existing.currency,
-            existing.openingBalanceMinor,
-          ).toStringAsFixed(currencyDecimals[existing.currency] ?? 2),
+        : fromMinor(currency0!, currentBalanceMinor)
+            .toStringAsFixed(currencyDecimals[currency0] ?? 2),
   );
   var currency = existing?.currency ?? 'CNY';
-  final db = ref.read(databaseProvider);
   final allTypes = await db.loadAssetTypes(ledgerId, includeArchived: true);
   final activeTypes = [for (final t in allTypes) if (t.archived == 0) t];
   String type;
@@ -775,7 +956,7 @@ Future<void> showAccountEditor(
                           size: 56,
                           roundedSquare: true,
                         ),
-                        const SizedBox(height: 6),
+                        const SizedBox(height: CentliSpacing.item),
                         Text(
                           '点按选择图标',
                           style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
@@ -785,7 +966,7 @@ Future<void> showAccountEditor(
                       ],
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: CentliSpacing.sectionLoose),
                   TextField(
                     controller: nameCtrl,
                     decoration: const InputDecoration(
@@ -842,16 +1023,21 @@ Future<void> showAccountEditor(
                   ),
                   const SizedBox(height: CentliSpacing.section),
                   TextField(
-                    controller: openingCtrl,
+                    key: const Key('account_editor_balance'),
+                    controller: balanceCtrl,
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,
                     ),
                     decoration: InputDecoration(
-                      labelText: '期初余额',
+                      labelText: existing == null ? '期初余额' : '当前金额',
                       border: const OutlineInputBorder(),
-                      helperText: decimals == 0
-                          ? '无小数（$currency）'
-                          : '$decimals 位小数',
+                      helperText: existing == null
+                          ? (decimals == 0
+                              ? '无小数（$currency）'
+                              : '$decimals 位小数')
+                          : '保存后会记一笔「余额校正」，把余额调整到这个数'
+                              '（不改期初，不计入统计）',
+                      helperMaxLines: 2,
                     ),
                   ),
                 ],
@@ -875,14 +1061,14 @@ Future<void> showAccountEditor(
 
   if (saved != true) {
     nameCtrl.dispose();
-    openingCtrl.dispose();
+    balanceCtrl.dispose();
     return;
   }
 
   final name = nameCtrl.text.trim();
-  final openingMajor = double.tryParse(openingCtrl.text.trim()) ?? 0;
+  final typedMajor = double.tryParse(balanceCtrl.text.trim()) ?? 0;
   nameCtrl.dispose();
-  openingCtrl.dispose();
+  balanceCtrl.dispose();
 
   if (name.isEmpty) {
     if (context.mounted) {
@@ -892,48 +1078,38 @@ Future<void> showAccountEditor(
     return;
   }
 
-  final openingMinor = toMinor(currency, openingMajor);
+  final typedMinor = toMinor(currency, typedMajor);
   if (existing == null) {
     await db.createAccount(
       ledgerId: ledgerId,
       name: name,
       currency: currency,
       type: type,
-      openingBalanceMinor: openingMinor,
+      openingBalanceMinor: typedMinor,
       icon: iconKey,
     );
-  } else {
-    if (openingMinor != existing.openingBalanceMinor) {
-      if (!context.mounted) return;
-      final ok = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('确认修改期初余额'),
-          content: const Text(
-            '修改期初余额会改变该账户全部历史余额的起点，确认继续？',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('确认修改'),
-            ),
-          ],
-        ),
+    return;
+  }
+  // 编辑：只更新名称 / 分类 / 图标，期初余额保持不变。
+  await db.updateAccount(
+    id: existing.id,
+    name: name,
+    currency: currency,
+    type: type,
+    openingBalanceMinor: existing.openingBalanceMinor,
+    icon: iconKey,
+  );
+  // 当前金额变了 → 记一笔「余额校正」把余额调过去。
+  if (typedMinor != currentBalanceMinor) {
+    await db.adjustAccountBalance(
+      account: existing,
+      targetBalanceMinor: typedMinor,
+      currentBalanceMinor: currentBalanceMinor,
+    );
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('已记入余额校正')),
       );
-      if (ok != true) return;
-      if (!context.mounted) return;
     }
-    await db.updateAccount(
-      id: existing.id,
-      name: name,
-      currency: currency,
-      type: type,
-      openingBalanceMinor: openingMinor,
-      icon: iconKey,
-    );
   }
 }

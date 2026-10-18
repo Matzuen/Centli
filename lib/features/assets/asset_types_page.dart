@@ -49,7 +49,7 @@ class AssetTypesPage extends ConsumerWidget {
               return ListView.separated(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 88),
                 itemCount: types.length,
-                separatorBuilder: (_, _) => const SizedBox(height: 8),
+                separatorBuilder: (_, _) => const SizedBox(height: CentliSpacing.item),
                 itemBuilder: (context, index) {
                   final t = types[index];
                   return _AssetTypeTile(

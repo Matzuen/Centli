@@ -161,7 +161,7 @@ class _IconLibraryPageState extends State<IconLibraryPage> {
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
                 child: CentliSoftCard(
-                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                  padding: const EdgeInsets.all(CentliSpacing.cardPad),
                   child: Row(
                     children: [
                       CentliIconChip(
@@ -220,7 +220,7 @@ class _IconLibraryPageState extends State<IconLibraryPage> {
                   ),
                 ),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: CentliSpacing.item),
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
@@ -387,7 +387,7 @@ class _IconLibraryPageState extends State<IconLibraryPage> {
                             ],
                           )
                         : Padding(
-                            padding: const EdgeInsets.all(16),
+                            padding: const EdgeInsets.all(CentliSpacing.cardPad),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
@@ -396,7 +396,7 @@ class _IconLibraryPageState extends State<IconLibraryPage> {
                                   style:
                                       Theme.of(context).textTheme.titleSmall,
                                 ),
-                                const SizedBox(height: 12),
+                                const SizedBox(height: CentliSpacing.section),
                                 Row(
                                   children: [
                                     Expanded(
@@ -430,7 +430,7 @@ class _IconLibraryPageState extends State<IconLibraryPage> {
                                     ),
                                   ],
                                 ),
-                                const SizedBox(height: 8),
+                                const SizedBox(height: CentliSpacing.item),
                                 Align(
                                   alignment: Alignment.centerLeft,
                                   child: TextButton.icon(
