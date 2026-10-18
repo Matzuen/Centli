@@ -119,3 +119,58 @@ EXITCODE=0
 ```
 
 Visual: light golden shows gray drag handle above 支出/收入/转账; type switch intact.
+
+## G26.7 self-prove (raw)
+
+### A) remove Center → FAIL
+
+```
+Expected: a numeric value within <1.0> of <69.5>
+  Actual: <16.0>
+   Which:  differs by <53.5>
+FAIL_EXIT=1
+```
+
+Source contract also fails: `G26.7 requires Center around pending SegmentedButton`.
+
+### B) restored → green
+
+```
+00:00 +2: All tests passed!
+OK_EXIT=0
+```
+
+
+## G26.4 self-prove (raw)
+
+### A) Text revert → FAIL (icon finder)
+```
+Found 0 widgets with icon IconData(U+0EEB5)
+FAIL_EXIT=1
+```
+### B) restored → OK_EXIT=0
+
+| G27.1 | _(pending)_ | push /home/pending?tab=pending |
+| G27.2 | _(pending)_ | route_literals_test (non-empty matches) |
+
+## G27 self-prove (raw)
+
+### A) temporarily `context.push('/pending')` → FAIL
+
+```
+route_literals: skipped 3 dynamic path(s); checking 43 literal(s)
+Expected: non-empty
+  Actual: []
+  代码里写了不存在的路由: /pending
+FAIL_EXIT=1
+```
+
+### B) restored → green
+
+```
+route_literals: skipped 3 dynamic path(s); checking 43 literal(s)
+00:00 +1: All tests passed!
+OK_EXIT=0
+```
+
+Note: go_router 16 `findMatch` does not throw on unknown paths; test asserts `match.matches` isNotEmpty.

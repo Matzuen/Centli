@@ -17,7 +17,7 @@ void _showResultSnackBar(BuildContext context, ManualIngestResult result) {
           ? SnackBarAction(
               label: '查看',
               onPressed: () {
-                if (context.mounted) context.push('/pending');
+                if (context.mounted) context.push('/home/pending?tab=pending');
               },
             )
           : null,
