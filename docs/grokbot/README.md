@@ -157,7 +157,7 @@ Grok Bot 按新工单继续
 
 ### 6.2 版本与文档
 
-- 当前版本 **`1.4.4+10`**（见 `pubspec.yaml`）
+- 当前版本 **`1.10.5+36`**（见 `pubspec.yaml`）
 - 版本号的字面量**只允许出现在两处**：`pubspec.yaml` 与 `lib/core/app_version.dart`。
   其余 5 个调用点（`about_page` / `me_page` ×2 / `export_service` ×2）统一引用
   `kAppVersionFallback`，一致性由 `test/app_version_test.dart` 守卫（改 pubspec 不改常量 → 测试红）。
@@ -191,8 +191,9 @@ Grok Bot 按新工单继续
 | B1–B3 | `1.1.x`（当时未按批次编号） |
 | B4 + B4-PATCH | **`1.4.2+8`**（已于 2026-10-17 发布） |
 | B4-PATCH 补丁（G16 等） | `1.4.2+8` |
-| B4-PATCH G26–G29 | **`1.4.4+10`** |
-| B5 | `1.5.0+9` |
+| B4-PATCH G26–G29 | `1.4.4+10`（已于 2026-10-18 发布） |
+| B4-PATCH 账单详情逐项编辑 + 通知规则 v8 | **`1.4.5+11`** |
+| B5（语音移除 + 记账记忆 + 搜索/回收站/错误态） | **`1.5.0+12`**（已发布 `1.4.5+11`，故 build 从 `+12` 起，不再沿用本表的旧示例 `+9`） |
 
 每批必须同步 `README.md` / `README.en.md` / 本节当前版本。
 

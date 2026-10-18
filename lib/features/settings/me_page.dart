@@ -69,7 +69,7 @@ class MePage extends ConsumerWidget {
                                 fontSize: 16,
                               ),
                             ),
-                            const SizedBox(height: 2),
+                            const SizedBox(height: CentliSpacing.dense),
                             Text(
                               ledger == null
                                   ? '未初始化'

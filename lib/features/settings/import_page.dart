@@ -197,7 +197,7 @@ class _ImportPageState extends ConsumerState<ImportPage> {
                   if (preview.warnings.isNotEmpty) ...[
                     const Divider(height: 1, indent: 16),
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                      padding: const EdgeInsets.all(CentliSpacing.cardPad),
                       child: Text(
                         preview.warnings.map((w) => '\u2022 $w').join('\n'),
                         style: TextStyle(

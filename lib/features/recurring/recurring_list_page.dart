@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../app/theme.dart';
+
 import '../../core/utils/money.dart';
 import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
@@ -49,7 +51,7 @@ class RecurringListPage extends ConsumerWidget {
                     '还没有周期记账',
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: CentliSpacing.item),
                   FilledButton.icon(
                     onPressed: () => context.push('/me/recurring/new'),
                     icon: const Icon(Icons.add),
@@ -60,7 +62,7 @@ class RecurringListPage extends ConsumerWidget {
             );
           }
           return ListView(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(CentliSpacing.cardPad),
             children: [
               if (truncated > 0)
                 Card(
@@ -77,13 +79,13 @@ class RecurringListPage extends ConsumerWidget {
                 ),
               if (active.isNotEmpty) ...[
                 Text('进行中', style: Theme.of(context).textTheme.titleSmall),
-                const SizedBox(height: 8),
+                const SizedBox(height: CentliSpacing.item),
                 ...active.map((r) => _RuleTile(rule: r)),
-                const SizedBox(height: 16),
+                const SizedBox(height: CentliSpacing.sectionLoose),
               ],
               if (paused.isNotEmpty) ...[
                 Text('已暂停', style: Theme.of(context).textTheme.titleSmall),
-                const SizedBox(height: 8),
+                const SizedBox(height: CentliSpacing.item),
                 ...paused.map((r) => _RuleTile(rule: r)),
               ],
             ],

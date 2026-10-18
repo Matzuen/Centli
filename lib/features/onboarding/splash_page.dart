@@ -4,12 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+
 import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
 import '../../data/fx/fx_remote_service.dart';
 import '../recurring/recurring_runner.dart';
 import '../../app/deep_link.dart';
 import '../security/app_lock_controller.dart';
+import '../../app/theme.dart';
 
 /// Cold-start splash: brand mark + open DB / read settings, then route.
 class SplashPage extends ConsumerStatefulWidget {
@@ -110,7 +112,7 @@ class _SplashPageState extends ConsumerState<SplashPage> {
                   color: scheme.onPrimaryContainer,
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: CentliSpacing.sectionLoose + CentliSpacing.item),
               Text(
                 'Centli',
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
@@ -118,7 +120,7 @@ class _SplashPageState extends ConsumerState<SplashPage> {
                       letterSpacing: 0.5,
                     ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: CentliSpacing.item),
               Text(
                 'Centli · 厘清每一笔账',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(

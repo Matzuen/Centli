@@ -129,7 +129,7 @@ class _PermissionExplainPageState extends ConsumerState<PermissionExplainPage>
                   size: 56,
                   color: _granted ? scheme.primary : scheme.error,
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: CentliSpacing.sectionLoose),
                 Text(
                   !supported
                       ? '当前平台不支持通知监听'
@@ -138,7 +138,7 @@ class _PermissionExplainPageState extends ConsumerState<PermissionExplainPage>
                         fontWeight: FontWeight.w700,
                       ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: CentliSpacing.section),
                 Text(
                   !supported
                       ? '通知自动记账仅在 Android 可用。你可以稍后再说，或在「我的 · 自动记账」查看说明；Windows 上可用「待确认」页的示例数据调试解析。'
@@ -150,10 +150,10 @@ class _PermissionExplainPageState extends ConsumerState<PermissionExplainPage>
                         height: 1.45,
                       ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: CentliSpacing.sectionLoose + CentliSpacing.item),
                 CentliSoftCard(
                   child: Padding(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(CentliSpacing.cardPad),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -161,18 +161,18 @@ class _PermissionExplainPageState extends ConsumerState<PermissionExplainPage>
                           '权限用途',
                           style: Theme.of(context).textTheme.titleSmall,
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: CentliSpacing.item),
                         const Text('· 读取支付宝 / 微信等支付成功类通知'),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: CentliSpacing.dense),
                         const Text('· 解析金额与商户，生成待确认账单'),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: CentliSpacing.dense),
                         const Text('· 默认不自动入账；可随时在「自动记账」关闭'),
                       ],
                     ),
                   ),
                 ),
                 if (_awaitingReturn) ...[
-                  const SizedBox(height: 16),
+                  const SizedBox(height: CentliSpacing.sectionLoose),
                   CentliSoftCard(
                     color: scheme.secondaryContainer,
                     child: ListTile(
@@ -193,7 +193,7 @@ class _PermissionExplainPageState extends ConsumerState<PermissionExplainPage>
                     onPressed: _busy ? null : _openSettings,
                     child: Text(_awaitingReturn ? '再次打开系统设置' : '打开系统设置'),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: CentliSpacing.item),
                   TextButton(
                     onPressed: _busy ? null : _continue,
                     child: Text(
@@ -210,7 +210,7 @@ class _PermissionExplainPageState extends ConsumerState<PermissionExplainPage>
                     ),
                   ),
                   if (supported && _granted) ...[
-                    const SizedBox(height: 8),
+                    const SizedBox(height: CentliSpacing.item),
                     TextButton(
                       onPressed: _busy ? null : _openSettings,
                       child: const Text('重新打开系统设置'),

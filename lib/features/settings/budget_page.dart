@@ -91,7 +91,7 @@ class BudgetPage extends ConsumerWidget {
                 onNext: () => ref.read(budgetMonthProvider.notifier).state =
                     _shiftMonth(ym, 1),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: CentliSpacing.item),
               Text(
                 '\u91d1\u989d\u6309\u672c\u4f4d\u5e01 $base\uff1b\u4ec5\u7edf\u8ba1\u5df2\u5f00\u542f\u300c\u8ba1\u5165\u9884\u7b97\u300d\u7684\u652f\u51fa\u3002'
                 '\u5206\u7c7b\u9884\u7b97\u4e0e\u603b\u9884\u7b97\u72ec\u7acb\uff08\u4e0d\u81ea\u52a8\u52a0\u603b\uff09\u3002',
@@ -99,7 +99,7 @@ class BudgetPage extends ConsumerWidget {
                       color: scheme.onSurfaceVariant,
                     ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: CentliSpacing.section),
               progressAsync.when(
                 loading: () => const LinearProgressIndicator(),
                 error: (e, _) => Text('$e'),
@@ -114,7 +114,7 @@ class BudgetPage extends ConsumerWidget {
                                 color: scheme.onSurfaceVariant,
                               ),
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: CentliSpacing.item),
                       ],
                       _BudgetProgressCard(
                         title: '\u6708\u5ea6\u603b\u9884\u7b97',
@@ -144,12 +144,12 @@ class BudgetPage extends ConsumerWidget {
                                     );
                               },
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: CentliSpacing.sectionLoose),
                       Text(
                         '\u5206\u7c7b\u9884\u7b97',
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: CentliSpacing.item),
                       if (p.categories.isEmpty)
                         CentliSoftCard(
                           child: Padding(
@@ -158,9 +158,9 @@ class BudgetPage extends ConsumerWidget {
                               children: [
                                 Icon(Icons.pie_chart_outline,
                                     size: 40, color: scheme.outline),
-                                const SizedBox(height: 8),
+                                const SizedBox(height: CentliSpacing.item),
                                 const Text('\u6682\u65e0\u5206\u7c7b\u9884\u7b97'),
-                                const SizedBox(height: 4),
+                                const SizedBox(height: CentliSpacing.dense),
                                 Text(
                                   '\u70b9\u53f3\u4e0a\u89d2 + \u4e3a\u652f\u51fa\u5206\u7c7b\u8bbe\u989d\u5ea6',
                                   style: Theme.of(context).textTheme.bodySmall,
@@ -292,7 +292,7 @@ class _BudgetProgressCard extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(CentliSpacing.cardPad),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -317,7 +317,7 @@ class _BudgetProgressCard extends StatelessWidget {
                       size: 18, color: scheme.onSurfaceVariant),
                 ],
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: CentliSpacing.item),
               if (!hasLimit)
                 Text(
                   unsetHint ?? '\u672a\u8bbe\u7f6e',
@@ -334,7 +334,7 @@ class _BudgetProgressCard extends StatelessWidget {
                         color: over ? scheme.error : null,
                       ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: CentliSpacing.item),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(4),
                   child: LinearProgressIndicator(
@@ -344,7 +344,7 @@ class _BudgetProgressCard extends StatelessWidget {
                     backgroundColor: scheme.surfaceContainerHighest,
                   ),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: CentliSpacing.item),
                 Text(
                   over
                       ? '\u8d85\u652f ${formatMinor(currency, spentMinor - limit, hide: hide)}'
@@ -356,7 +356,7 @@ class _BudgetProgressCard extends StatelessWidget {
                 ),
               ],
               if (!hasLimit && spentMinor > 0) ...[
-                const SizedBox(height: 4),
+                const SizedBox(height: CentliSpacing.dense),
                 Text(
                   '\u5df2\u82b1 ${formatMinor(currency, spentMinor, hide: hide)}',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -521,7 +521,7 @@ Future<void> _showCategoryBudgetEditor(
                     border: OutlineInputBorder(),
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: CentliSpacing.section),
                 TextField(
                   controller: ctrl,
                   autofocus: true,

@@ -162,7 +162,7 @@ class LedgersPage extends ConsumerWidget {
                       border: OutlineInputBorder(),
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: CentliSpacing.section),
                   DropdownButtonFormField<String>(
                     initialValue: base,
                     items: [

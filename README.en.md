@@ -5,20 +5,22 @@ Local-first personal bookkeeping (**Chinese UI only**): **clear every bill**.
 > Canonical docs are in Chinese: see [`README.md`](README.md) and [`docs/RELEASE_NOTES.md`](docs/RELEASE_NOTES.md).
 
 - Flutter · Drift (SQLite) · Riverpod · go_router
-- Version: `1.4.4+10`
+- Version: `1.10.5+36`
 - Currency display: `CNY · 人民币`
 - Bottom nav (5 tabs): 首页 / 统计 / 记账 / 资产 / 我的
 
 ## Features
 
-- Home: summary + net-worth chart; calendar cells show daily in/out
+- Home: summary + net-worth chart; calendar cells show daily in/out; the calendar tab's 「每日收支」 plots one point per day (that day's net income − expense; days without bills are 0) as a single line, green above zero and red below
 - Manual transactions (expense / income / transfer); chip row + category picker; amount keypad with `+ − × ÷`
-- Separate text / voice bookkeeping sheets; long-press center tab for shortcuts
+- Separate text quick-entry sheet (long-press the center tab); voice was removed
 - Transaction tags (list / detail / search / import-export)
 - Multi-ledger, accounts, category tree; icons from assets or 1–2 hanzi fallback
 - Stats: income + expense; monthly budgets
-- Android pending auto-capture from WeChat/Alipay **payment** notifications only
-- Recognition rules: official read-only + user CRUD + try-parse + import/export
+- Bill detail: **保存** (save) + delete in the app bar; amount, account, category, type, time, tags, note and the include-in-stats/budget switches are each **tap-to-edit** (picks persist immediately, amount waits for 保存); only the edited columns are written, provenance is preserved
+- Android pending auto-capture from WeChat/Alipay **transaction** notifications (payment, debit, income, refund, repayment); capture-first design — false positives are filtered in 待确认
+- Recognition rules v8: loose "must contain" (any transaction word), trimmed exclusions (chat / OTP / login / reminders / you-initiated transfers stay out); `assets/noti_templates.json` mirrors the builtins and is covered by tests
+- Recognition rules: official read-only + user CRUD + try-parse (step-by-step reason) + import/export
 - Smart fill: local rules + optional LLM
 - FX rates; hide amounts; app lock; theme light/dark/system
 - Local backup only: full **JSON** restore (`schema_version: 4`); **Excel** human export + best-effort import (no cloud)
@@ -54,6 +56,148 @@ Prefer JSON (`format: centli-export`). Excel import is best-effort (no fx/settin
 > batch 4 ships as `1.4.x`. There is no `1.2` / `1.3` because those batches were never
 > released under this scheme. Fixes within a batch bump the patch digit
 > (`1.4.1` → `1.4.2`); the build number increments by 1 on every release.
+
+### 1.10.5 (2026-10-18)
+
+- Fixed uneven home card spacing: the empty pending section rendered as a zero-height widget but kept the gaps on both sides, making overview→chart 32pt while chart→bills was 16pt
+- The pending block (gap included) is now rendered conditionally; all card gaps are a uniform 16pt, with tests for both the empty and non-empty cases
+
+### 1.10.4 (2026-10-18)
+
+- Moved the home net-worth card up 8pt (segment-control gap 8 → 4, list top inset 4 → 0)
+
+### 1.10.3 (2026-10-18)
+
+- Fixed 3 layout overflows on 320dp screens / large text: the home delta amount, bill-list amounts like ¥1,234,567.89, and the assets row's balance at 200% text scale
+- Added a narrow-screen smoke test: 13 pages render at 320dp, plus 3 pages at 200% text scale
+
+### 1.10.2 (2026-10-18)
+
+- Moved the last/max/min summary onto the same row as the 「净资产变化」 title, freeing a row for the plot
+- Removed the bill-list button from the chart card header; only the stats shortcut remains
+
+### 1.10.1 (2026-10-18)
+
+- Y-axis allows 6–7 stops: 7 preferred, falling back to 6 when 7 would stretch the axis beyond ~2.5x the data span
+- Fixed float tails in labels and gave flat series a band so the line is not glued to the axis
+
+### 1.10.0 (2026-10-18)
+
+- The net-worth chart Y axis now always renders 7 evenly spaced stops (it used to cap at 5, and often showed only 4)
+- Step is derived from a 7-way split of the data range (1/2/2.5/5 × 10ⁿ), anchored at zero so 0 lands on a grid line
+
+### 1.9.8 (2026-10-18)
+
+- Removed the overview card footer line (「近30天涨跌 · 本位币 CNY…」); the card now ends with the assets/liabilities columns
+
+### 1.9.7 (2026-10-18)
+
+- Pulled the net-worth chart caption closer to the title (4 → 2) and to the plot (8 → 4)
+
+### 1.9.6 (2026-10-18)
+
+- The pie button on the net-worth chart now switches to the Stats tab instead of pushing Stats on top of Home (bottom nav stays in sync)
+
+### 1.9.5 (2026-10-18)
+
+- Fixed the bill-list button on the net-worth chart jumping to a non-existent page (the search page is registered at `/home/search`, the button pushed `/search`)
+- Added a router guard test that checks every `push/go` target against the paths declared in `router.dart`
+
+### 1.9.4 (2026-10-18)
+
+- Tightened the home overview rhythm: 16pt between overview card / net-worth chart / bill list, and the chart plot trimmed from 132 to 112 so the card no longer looks padded top and bottom
+
+### 1.9.3 (2026-10-18)
+
+- Smoother lines: any two points now draw a curve (few points used to fall back to straight segments), smoothness raised to 0.35 with over-shoot prevention
+- Vertex dots removed — the curve carries the trend; hovering shows a single dot on the current day
+
+### 1.9.2 (2026-10-18)
+
+- Fixed the net-worth chart tooltip being clipped at the right edge (hovering the last day showed a half bubble); the tooltip now clamps inside the chart with a 6pt margin
+
+### 1.9.1 (2026-10-18)
+
+- Unified spacing: every soft card now uses a 16pt inner padding (was a mix of 12/14/16/18/20/24) and page roots share one inset (16 / 8 / 16 / 32-or-120)
+- Vertical gaps collapsed onto four tokens — dense 4, item 8, section 12, sectionLoose 16 — replacing 172 scattered numbers
+
+### 1.9.0 (2026-10-18)
+
+- Home 「待确认」 is now a swipeable card carousel (next card peeks in); each card shows channel · time, colour-coded amount, note and guessed category, with 忽略 / 入账 actions
+- Booking happens right on the home page: tapping 入账 opens a confirm sheet prefilled with the amount and suggested category, editable before submitting; the carousel advances automatically
+- The pending page's 调整 button now reuses the same sheet
+
+### 1.8.1 (2026-10-18)
+
+- Editing an account now sets the **current amount** (prefilled with the live balance); saving records a 「余额校正」 that moves the balance to the typed value without touching the opening balance or the stats
+- Renaming / retyping / changing the icon no longer touches the opening balance (and no longer asks for confirmation)
+
+### 1.8.0 (2026-10-18)
+
+- Notification rules v9 match the **title only**: any Alipay / WeChat title containing a pay / transaction / receive / refund / transfer / repayment word is parsed; the body is no longer filtered (it is only used to extract the amount and merchant)
+- Reminder / OTP titles are still skipped (repayment reminders, 待还 / 应还 / 账单日, verification codes, login alerts, chat)
+- Direction priority: receive → refund → repay → transfer → pay
+- After upgrading, run 我的 → 自动记账 → 解析模板 → 检查模板更新 (bundled version 8 → 9)
+
+### 1.7.2 (2026-10-18)
+
+- Asset-analysis legend never truncates the amount: the name ellipsizes, the amount + percent stay whole (「¥-87.89（−11.5%）」 instead of 「-11.5...」)
+- Group headers push the sum fully to the right
+- Account rows drop the chevron so the amount sits at the row edge (tap still opens the account)
+- Only liability types use the red in the analysis ring
+
+### 1.7.1 (2026-10-18)
+
+- Added breathing room between the stats ring and its legend (fixed 132pt ring column + 20pt gap); still fits 320dp phones
+
+### 1.7.0 (2026-10-18)
+
+- Asset analysis now groups by **account type** (bank / online / credit card / investment / loan / wallet) instead of individual accounts, with 0% types kept and empty types dropped
+- One-line legend: name + amount + percent (e.g. 「钱包 −200.00（−24.6%）」); the denominator is the sum of absolute balances, so liability types show a negative percent in red
+- 「净资产」 on the overview card is now a caption above the big number
+
+### 1.6.2 (2026-10-18)
+
+- Stats legend is now a single line per category: name + amount (percent), e.g. 「娱乐 ¥15.89（2%）」; ring/legend split re-balanced to 4:7 so amounts fit on narrow phones
+
+### 1.6.1 (2026-10-18)
+
+- Net-worth chart Y axis shows every stop again (the short-card rule that kept only the first and last label is gone), with edge labels aligned so they are not clipped
+
+### 1.6.0 (2026-10-18)
+
+- Stats rebuilt as four cards: range (month / year / custom with dotted date header), category donut + legend (expense / income / all), summary (counts / income / expense / balance), and per-account table marked 「不包含转账数据」 (transfers excluded)
+- Removed the stats daily-trend line (duplicate of the home calendar chart) and the duplicate budget progress bar
+
+### 1.5.1 (2026-10-18)
+
+- Overview card re-laid out to the design: ledger name, large net worth with period change, then assets / liabilities columns each carrying month + lifetime income or expense
+- Net-worth chart card gained two header actions (bill list, category share)
+- Y axis now shows fixed even stops (4–5, derived from the 1/2/5 ladder and guaranteed to cover the data)
+- Hovering highlights only the nearest day (dashed line + hollow dot)
+
+### 1.5.0 (2026-10-18)
+
+- **Voice bookkeeping removed** — long-pressing the center tab now opens a text quick-entry panel only; microphone and recording permissions dropped from both platforms
+- **Bookkeeping memory** — the panel reuses your last account/category (per direction); a note such as 「午饭」 recalls the category you filed it under (exact or longest fragment, up to 300 entries)
+- **Duplicate as new bill** — the detail page can pre-fill a new bill from the current one (account / category / tags / note; amount cleared)
+- **Explicit save only** — the detail page writes nothing until 保存; leaving with unsaved edits asks first
+- **Home summary card** — ledger name / net worth + period change / assets · liabilities / month income · month expense / total income · total expense
+- **Search** — quick category / account / date chips; space-separated keywords are ANDed; hits are highlighted; active keywords and filters are shown as removable chips
+- **Recycle bin** — rows show category, account and note; the detail sheet lists every field with restore / delete-forever
+- **Errors** — network / database / permission failures are distinguished, with a retry button and the raw error behind 「详情」
+- **Empty states** — stats, assets and search now explain what to do next instead of showing blank cards
+- **Pending page** — the six app-bar actions collapse into a 更多 menu
+
+### 1.4.5 (2026-10-18)
+
+- Home calendar trend: two sign-split lines replaced by **one per-day in/out line** — each point is that day's net (13th −1, 14th −71, 16th +633; no bills = 0), colour switching at the zero axis
+- Fix the touch tooltip showing two days at once (「15 0.00」 above 「16 +633」): no more synthetic zero-crossing points; the popup labels only the day nearest the pointer
+- Bill detail: 「保存」 replaces the edit icon; every row (amount, account, category, type, time, tags, note, include switches) is tap-to-edit and saves on selection; amount commits on 保存
+- Row edits update only the changed fields (source / dedupe key / FX kept); fix a controller-disposed-during-dialog-animation crash
+- Bill detail: empty tags stay empty (no placeholder dash); account / category show names instead of IDs
+- Notification rules v8: "must contain" relaxed to any transaction word; exclusions trimmed (sent-away receipts and red-packet/discount payments are captured now; 收益/权益 到账 still excluded); 「收到 XXX 的 66 元转账」 pattern added
+- New regression tests: 14 capture cases + 9 exclusion cases, plus assets/builtin rule parity
 
 ### 1.4.4 (2026-10-18)
 

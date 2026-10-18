@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../app/theme.dart';
+
 import '../../core/utils/id_gen.dart';
 import '../../core/utils/money.dart';
 import '../../core/utils/recurring_calendar.dart';
@@ -224,12 +226,12 @@ class _RecurringWizardPageState extends ConsumerState<RecurringWizardPage> {
         title: Text(_step == 0 ? '新建周期 · 类型与周期' : '新建周期 · 详情'),
       ),
       body: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(CentliSpacing.cardPad),
         child: _step == 0 ? _step1() : _step2(),
       ),
       bottomNavigationBar: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(CentliSpacing.cardPad),
           child: Row(
             children: [
               if (_step > 0)
@@ -261,7 +263,7 @@ class _RecurringWizardPageState extends ConsumerState<RecurringWizardPage> {
     return ListView(
       children: [
         Text('类型', style: Theme.of(context).textTheme.titleSmall),
-        const SizedBox(height: 8),
+        const SizedBox(height: CentliSpacing.item),
         SegmentedButton<String>(
           segments: const [
             ButtonSegment(value: 'out', label: Text('支出')),
@@ -273,9 +275,9 @@ class _RecurringWizardPageState extends ConsumerState<RecurringWizardPage> {
             await _reloadCats();
           },
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: CentliSpacing.sectionLoose + CentliSpacing.item),
         Text('周期', style: Theme.of(context).textTheme.titleSmall),
-        const SizedBox(height: 8),
+        const SizedBox(height: CentliSpacing.item),
         Wrap(
           spacing: 8,
           children: [
@@ -293,7 +295,7 @@ class _RecurringWizardPageState extends ConsumerState<RecurringWizardPage> {
               ),
           ],
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: CentliSpacing.sectionLoose),
         Row(
           children: [
             const Text('间隔'),
@@ -328,7 +330,7 @@ class _RecurringWizardPageState extends ConsumerState<RecurringWizardPage> {
             border: OutlineInputBorder(),
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: CentliSpacing.section),
         DropdownButtonFormField<String>(
           key: ValueKey('acc-$_accountId'),
           initialValue: _accountId,
@@ -342,7 +344,7 @@ class _RecurringWizardPageState extends ConsumerState<RecurringWizardPage> {
           ],
           onChanged: (v) => setState(() => _accountId = v),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: CentliSpacing.section),
         DropdownButtonFormField<String>(
           key: ValueKey('cat-$_categoryId'),
           initialValue: _categoryId,
@@ -356,7 +358,7 @@ class _RecurringWizardPageState extends ConsumerState<RecurringWizardPage> {
           ],
           onChanged: (v) => setState(() => _categoryId = v),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: CentliSpacing.section),
         TextField(
           controller: _noteCtrl,
           decoration: const InputDecoration(
@@ -364,7 +366,7 @@ class _RecurringWizardPageState extends ConsumerState<RecurringWizardPage> {
             border: OutlineInputBorder(),
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: CentliSpacing.section),
         ListTile(
           contentPadding: EdgeInsets.zero,
           title: const Text('起始日期'),
@@ -381,9 +383,9 @@ class _RecurringWizardPageState extends ConsumerState<RecurringWizardPage> {
             if (d != null) setState(() => _startAt = d);
           },
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: CentliSpacing.section),
         Text('将生成', style: Theme.of(context).textTheme.titleSmall),
-        const SizedBox(height: 8),
+        const SizedBox(height: CentliSpacing.item),
         for (final d in prev)
           Text('· ${DateFormat('yyyy年M月d日').format(d)}'),
         if (_catchUpCount > 1)

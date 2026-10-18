@@ -27,7 +27,7 @@ class ManualCaptureHelpPage extends StatelessWidget {
             '可用下面三种方式手动加入「待确认」队列（与自动记账同一队列）。',
             style: bodyStyle,
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: CentliSpacing.sectionLoose),
           _section(
             context,
             icon: Icons.share_outlined,
@@ -40,7 +40,7 @@ class ManualCaptureHelpPage extends StatelessWidget {
                 '冷启动分享也会打开待确认页。',
                 style: bodyStyle,
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: CentliSpacing.item),
               Text(
                 '提示：Android 已支持分享接收；iOS 系统分享扩展将在后续版本补充，'
                 '目前可用剪贴板或快捷指令 URL。',
@@ -75,7 +75,7 @@ class ManualCaptureHelpPage extends StatelessWidget {
                 '2) 将文字 URL 编码后拼进 centli://pending?text=... 并打开。',
                 style: bodyStyle,
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: CentliSpacing.item),
               OutlinedButton.icon(
                 onPressed: () async {
                   await Clipboard.setData(const ClipboardData(text: sampleUrl));
@@ -104,7 +104,7 @@ class ManualCaptureHelpPage extends StatelessWidget {
     return CentliSoftCard(
       margin: const EdgeInsets.only(bottom: 12),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(CentliSpacing.cardPad),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -120,7 +120,7 @@ class ManualCaptureHelpPage extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: CentliSpacing.item),
             ...children,
           ],
         ),

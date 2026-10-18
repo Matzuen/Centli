@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+
 import '../../app/deep_link.dart';
 
 import 'app_lock_controller.dart';
 import 'app_lock_service.dart';
 import 'pin_pad.dart';
+import '../../app/theme.dart';
 
 /// Full-screen unlock gate at `/lock`.
 class AppLockPage extends ConsumerStatefulWidget {
@@ -127,14 +129,14 @@ class _AppLockPageState extends ConsumerState<AppLockPage> {
                       color: scheme.onPrimaryContainer,
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: CentliSpacing.sectionLoose),
                   Text(
                     'Centli 已锁定',
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                           fontWeight: FontWeight.w700,
                         ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: CentliSpacing.item),
                   Text(
                     _usePin ? '请输入 6 位 PIN' : '使用生物识别解锁',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -148,7 +150,7 @@ class _AppLockPageState extends ConsumerState<AppLockPage> {
                       icon: const Icon(Icons.fingerprint),
                       label: const Text('生物识别解锁'),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: CentliSpacing.section),
                     TextButton(
                       onPressed: _busy
                           ? null
@@ -159,7 +161,7 @@ class _AppLockPageState extends ConsumerState<AppLockPage> {
                       child: const Text('用 PIN'),
                     ),
                     if (_error != null) ...[
-                      const SizedBox(height: 12),
+                      const SizedBox(height: CentliSpacing.section),
                       Text(_error!, style: TextStyle(color: scheme.error)),
                     ],
                   ] else ...[
@@ -170,7 +172,7 @@ class _AppLockPageState extends ConsumerState<AppLockPage> {
                       errorText: _error,
                     ),
                     if (_bioAvailable && _bioPreferred) ...[
-                      const SizedBox(height: 8),
+                      const SizedBox(height: CentliSpacing.item),
                       TextButton.icon(
                         onPressed: _busy
                             ? null

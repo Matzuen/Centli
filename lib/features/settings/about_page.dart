@@ -75,7 +75,7 @@ class _AboutPageState extends State<AboutPage> {
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
-              const SizedBox(height: 2),
+              const SizedBox(height: CentliSpacing.dense),
               Text(
                 '版本 $appVersion',
                 textAlign: TextAlign.center,

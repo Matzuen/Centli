@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+
 import 'app_lock_service.dart';
+import '../../app/theme.dart';
 
 /// Dot display + numeric keypad for [kAppLockPinLength]-digit PIN.
 class PinPad extends StatelessWidget {
@@ -34,7 +36,7 @@ class PinPad extends StatelessWidget {
                 ),
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: CentliSpacing.sectionLoose),
         ],
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -56,7 +58,7 @@ class PinPad extends StatelessWidget {
           }),
         ),
         if (errorText != null) ...[
-          const SizedBox(height: 12),
+          const SizedBox(height: CentliSpacing.section),
           Text(
             errorText!,
             style: TextStyle(color: scheme.error, fontSize: 13),

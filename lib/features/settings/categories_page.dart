@@ -302,7 +302,7 @@ class _CategoryKindList extends ConsumerWidget {
           children: [
             Expanded(
               child: ReorderableListView.builder(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                padding: const EdgeInsets.all(CentliSpacing.cardPad),
                 buildDefaultDragHandles: false,
                 itemCount: roots.length,
                 onReorderItem: onReorderRoots,
@@ -723,7 +723,7 @@ Future<_CategoryEditorResult?> _promptCategoryEditor(
                           iconKey: iconKey,
                           size: 56,
                         ),
-                        const SizedBox(height: 6),
+                        const SizedBox(height: CentliSpacing.item),
                         Text(
                           '点按选择图标',
                           style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
@@ -733,7 +733,7 @@ Future<_CategoryEditorResult?> _promptCategoryEditor(
                       ],
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: CentliSpacing.sectionLoose),
                   TextField(
                     controller: ctrl,
                     autofocus: true,

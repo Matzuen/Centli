@@ -123,7 +123,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                           onPressed: _openNotificationPermission,
                           child: const Text('去开启'),
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: CentliSpacing.item),
                         TextButton(
                           onPressed: _finish,
                           child: const Text('稍后再说'),
@@ -166,7 +166,7 @@ class _OnboardSlide extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const SizedBox(height: 8),
+          const SizedBox(height: CentliSpacing.item),
           Row(
             children: [
               Icon(icon, color: scheme.primary, size: 28),
@@ -179,7 +179,7 @@ class _OnboardSlide extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: CentliSpacing.section),
           Text(
             body,
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
@@ -204,7 +204,7 @@ class _CalcSketch extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     return CentliSoftCard(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(CentliSpacing.cardPad),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -217,7 +217,7 @@ class _CalcSketch extends StatelessWidget {
                 _chip(context, '转账'),
               ],
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: CentliSpacing.sectionLoose),
             Text(
               '¥ 0',
               textAlign: TextAlign.center,
@@ -225,7 +225,7 @@ class _CalcSketch extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                   ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: CentliSpacing.section),
             Wrap(
               spacing: 8,
               children: [
@@ -402,12 +402,12 @@ class _PermissionSketch extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: CentliSpacing.sectionLoose),
             Text(
               '用途：解析支付成功类通知 → 待确认队列',
               style: Theme.of(context).textTheme.bodyMedium,
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: CentliSpacing.item),
             Text(
               '不会静默入账；可随时在「我的 · 自动记账」关闭。',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(

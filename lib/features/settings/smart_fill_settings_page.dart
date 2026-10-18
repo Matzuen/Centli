@@ -239,14 +239,14 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
                         '当前生效配置',
                         style: Theme.of(context).textTheme.titleSmall,
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: CentliSpacing.item),
                       SelectableText(
                         '接口地址：${_effectiveBase ?? _baseCtrl.text}\n'
                         '模型：${_effectiveModel ?? _modelCtrl.text}\n'
                         'Key：${_hasKey ? "已保存（sk-…${_keyTail ?? ""}）" : "未配置"}',
                       ),
                       if (_modelWarning != null) ...[
-                        const SizedBox(height: 8),
+                        const SizedBox(height: CentliSpacing.item),
                         Text(
                           _modelWarning!,
                           style: TextStyle(
@@ -256,13 +256,13 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
                         ),
                       ],
                       if (_detailCompat == 'true') ...[
-                        const SizedBox(height: 8),
+                        const SizedBox(height: CentliSpacing.item),
                         Text(
                           '已自动兼容：服务端不接受 detail 字段',
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                       ],
-                      const SizedBox(height: 12),
+                      const SizedBox(height: CentliSpacing.section),
                       Align(
                         alignment: Alignment.centerLeft,
                         child: FilledButton.tonalIcon(
@@ -280,7 +280,7 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
                         ),
                       ),
                       if (_testResult != null) ...[
-                        const SizedBox(height: 8),
+                        const SizedBox(height: CentliSpacing.item),
                         GestureDetector(
                           onLongPress: () async {
                             final messenger = ScaffoldMessenger.of(context);
@@ -338,7 +338,7 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
                   keyboardType: TextInputType.url,
                   autocorrect: false,
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: CentliSpacing.section),
                 Builder(
                   builder: (context) {
                     final baseForHint = _baseCtrl.text.trim().isEmpty
@@ -366,7 +366,7 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
                         ),
                         if (hint.kind == DeepSeekModelHintKind.typo &&
                             hint.suggestion != null) ...[
-                          const SizedBox(height: 8),
+                          const SizedBox(height: CentliSpacing.item),
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -396,7 +396,7 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
                           ),
                         ] else if (hint.kind ==
                             DeepSeekModelHintKind.unsupportedVision) ...[
-                          const SizedBox(height: 8),
+                          const SizedBox(height: CentliSpacing.item),
                           Text(
                             hint.message ?? '',
                             style: TextStyle(
@@ -409,7 +409,7 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
                     );
                   },
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: CentliSpacing.section),
                 TextField(
                   controller: _keyCtrl,
                   enabled: !_saving,
@@ -458,7 +458,7 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
                           '使用说明',
                           style: Theme.of(context).textTheme.titleSmall,
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: CentliSpacing.item),
                         const Text(
                           '1. 在记账页展开「智能填单」，输入话术后点「填入」。\n'
                           '2. 未开启或未配置密钥时，仅用本地关键词/分类匹配。\n'

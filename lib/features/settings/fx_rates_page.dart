@@ -159,7 +159,7 @@ class _FxRatesPageState extends ConsumerState<FxRatesPage> {
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: CentliSpacing.item),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             title: const Text('启动时自动刷新'),
@@ -168,7 +168,7 @@ class _FxRatesPageState extends ConsumerState<FxRatesPage> {
             onChanged: _refreshing ? null : _toggleAuto,
           ),
           if (_statusHint != null) ...[
-            const SizedBox(height: 4),
+            const SizedBox(height: CentliSpacing.dense),
             Text(
               _statusHint!,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -176,7 +176,7 @@ class _FxRatesPageState extends ConsumerState<FxRatesPage> {
                   ),
             ),
           ],
-          const SizedBox(height: 12),
+          const SizedBox(height: CentliSpacing.section),
           ratesAsync.when(
             loading: () => const Padding(
               padding: EdgeInsets.all(24),
@@ -193,9 +193,9 @@ class _FxRatesPageState extends ConsumerState<FxRatesPage> {
                         Icon(Icons.currency_exchange,
                             size: 40,
                             color: Theme.of(context).colorScheme.outline),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: CentliSpacing.item),
                         const Text('暂无汇率'),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: CentliSpacing.dense),
                         Text(
                           '点云图标远程拉取，或右上角 + 手工添加',
                           style: Theme.of(context).textTheme.bodySmall,
@@ -292,7 +292,7 @@ Future<void> _showEditor(
                       border: OutlineInputBorder(),
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: CentliSpacing.section),
                   Row(
                     children: [
                       Expanded(
@@ -333,7 +333,7 @@ Future<void> _showEditor(
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: CentliSpacing.section),
                   TextField(
                     controller: rateCtrl,
                     keyboardType:
@@ -343,7 +343,7 @@ Future<void> _showEditor(
                       border: OutlineInputBorder(),
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: CentliSpacing.section),
                   TextField(
                     controller: sourceCtrl,
                     decoration: const InputDecoration(
