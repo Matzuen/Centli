@@ -1,9 +1,11 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/theme.dart';
+import '../../core/widgets/centli_error_state.dart';
 import '../../core/utils/date_range.dart';
 import '../../core/widgets/date_range_control.dart';
 import '../../core/widgets/txn_grouped_list.dart';
@@ -15,6 +17,9 @@ import '../../data/db/database_provider.dart';
 import '../capture/capture_intake_actions.dart';
 import '../ledger/bookkeeping_sheet.dart';
 import '../../platform/notifications/notification_listener_stub.dart';
+import '../../platform/notifications/notification_parse.dart';
+import '../../platform/notifications/noti_template_store.dart';
+import '../pending/pending_confirm_sheet.dart';
 
 final _homePendingListProvider =
     StreamProvider.family<List<PendingCapture>, String>((ref, ledgerId) {
@@ -69,15 +74,32 @@ final _netWorthHomeProvider =
           .netWorthInBase(args.ledgerId, args.base);
     });
 
-final _homeAccountsProvider =
-    StreamProvider.family<List<Account>, String>((ref, ledgerId) {
-      return ref.watch(databaseProvider).watchActiveAccounts(ledgerId);
+/// All-time income / expense in base currency (总收入 / 总支出).
+final _lifetimeTotalsProvider =
+    FutureProvider.family<
+      ({int incomeMinor, int expenseMinor}),
+      ({String ledgerId, String base})
+    >((ref, args) async {
+      await ref.watch(txnWriteSignalProvider(args.ledgerId).future);
+      await ref.watch(fxBookProvider.future);
+      return ref
+          .read(databaseProvider)
+          .lifetimeTotalsInBase(args.ledgerId, args.base);
     });
 
-final _homeBalancesProvider =
-    StreamProvider.family<Map<String, int>, String>((ref, ledgerId) {
-      return ref.watch(databaseProvider).watchAccountBalances(ledgerId);
-    });
+final _homeAccountsProvider = StreamProvider.family<List<Account>, String>((
+  ref,
+  ledgerId,
+) {
+  return ref.watch(databaseProvider).watchActiveAccounts(ledgerId);
+});
+
+final _homeBalancesProvider = StreamProvider.family<Map<String, int>, String>((
+  ref,
+  ledgerId,
+) {
+  return ref.watch(databaseProvider).watchAccountBalances(ledgerId);
+});
 
 final _dailyExpenseProvider =
     FutureProvider.family<
@@ -115,8 +137,6 @@ final _dailyIncomeProvider =
           );
     });
 
-
-
 /// Test aliases (same instances as private providers above).
 /// Test-only public aliases for private providers (B1 refresh tests).
 @visibleForTesting
@@ -139,6 +159,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   /// 0 = 概览, 1 = 日历
   int _mode = 0;
   DateTime? _calendarDay;
+
   /// Local month for calendar grid; independent of [homeRangeProvider].
   DateTime? _calendarMonth;
 
@@ -159,7 +180,7 @@ class _HomePageState extends ConsumerState<HomePage> {
           bottom: false,
           child: ledgerAsync.when(
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => Center(child: Text('加载失败，下拉重试')),
+            error: (e, _) => CentliErrorState(error: e, compact: true),
             data: (ledger) {
               if (ledger == null) {
                 return const Center(child: Text('尚未初始化账本'));
@@ -186,10 +207,10 @@ class _HomePageState extends ConsumerState<HomePage> {
               );
               final homeAccounts =
                   ref.watch(_homeAccountsProvider(ledgerId)).valueOrNull ??
-                      const <Account>[];
+                  const <Account>[];
               final homeBalances =
                   ref.watch(_homeBalancesProvider(ledgerId)).valueOrNull ??
-                      const <String, int>{};
+                  const <String, int>{};
               final fxBook = ref.watch(fxBookProvider).valueOrNull;
               final alSplit = fxBook == null
                   ? null
@@ -209,10 +230,12 @@ class _HomePageState extends ConsumerState<HomePage> {
               final expenseSeries = ref.watch(_dailyExpenseProvider(baseArgs));
               final incomeSeries = ref.watch(_dailyIncomeProvider(baseArgs));
               final nowLocal = DateTime.now();
-              final calMonth = _calendarMonth ??
-                  DateTime(nowLocal.year, nowLocal.month);
-              final calRange =
-                  DateRangeWindow.forMonth(calMonth.year, calMonth.month);
+              final calMonth =
+                  _calendarMonth ?? DateTime(nowLocal.year, nowLocal.month);
+              final calRange = DateRangeWindow.forMonth(
+                calMonth.year,
+                calMonth.month,
+              );
               final calArgs = (
                 ledgerId: ledgerId,
                 key: calRange.key,
@@ -226,11 +249,35 @@ class _HomePageState extends ConsumerState<HomePage> {
                 endMs: calRange.endMs,
                 base: base,
               );
-              final calExpenseSeries =
-                  ref.watch(_dailyExpenseProvider(calBaseArgs));
-              final calIncomeSeries =
-                  ref.watch(_dailyIncomeProvider(calBaseArgs));
+              final calExpenseSeries = ref.watch(
+                _dailyExpenseProvider(calBaseArgs),
+              );
+              final calIncomeSeries = ref.watch(
+                _dailyIncomeProvider(calBaseArgs),
+              );
               final calRecent = ref.watch(_rangeTxProvider(calArgs));
+              final lifetime = ref.watch(
+                _lifetimeTotalsProvider((ledgerId: ledgerId, base: base)),
+              );
+              final nowMonth = DateRangeWindow.forMonth(
+                nowLocal.year,
+                nowLocal.month,
+              );
+              final monthSummary = ref.watch(
+                _rangeBaseProvider((
+                  ledgerId: ledgerId,
+                  key: nowMonth.key,
+                  startMs: nowMonth.startMs,
+                  endMs: nowMonth.endMs,
+                  base: base,
+                )),
+              );
+
+              // 待确认条数：为 0 时首页连「间距 + 卡片」一起不渲染，
+              // 保证概览卡→图表与图表→账单的间距完全一致。
+              final pendingItems =
+                  ref.watch(_homePendingListProvider(ledgerId)).valueOrNull ??
+                      const <PendingCapture>[];
 
               return Column(
                 children: [
@@ -290,7 +337,13 @@ class _HomePageState extends ConsumerState<HomePage> {
                     ),
                   ),
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                    // 底部留白收窄：净资产卡片稍微上移。
+                    padding: const EdgeInsets.fromLTRB(
+                      CentliSpacing.pageH,
+                      CentliSpacing.item,
+                      CentliSpacing.pageH,
+                      CentliSpacing.dense,
+                    ),
                     child: Container(
                       padding: const EdgeInsets.all(4),
                       decoration: BoxDecoration(
@@ -319,8 +372,10 @@ class _HomePageState extends ConsumerState<HomePage> {
                                 setState(() {
                                   _mode = 1;
                                   _calendarDay = null;
-                                  _calendarMonth ??=
-                                      DateTime(now.year, now.month);
+                                  _calendarMonth ??= DateTime(
+                                    now.year,
+                                    now.month,
+                                  );
                                 });
                               },
                             ),
@@ -347,33 +402,48 @@ class _HomePageState extends ConsumerState<HomePage> {
                         key: ValueKey(_mode),
                         padding: const EdgeInsets.fromLTRB(
                           CentliSpacing.pageH,
-                          CentliSpacing.dense,
+                          0,
                           CentliSpacing.pageH,
                           CentliSpacing.pageBottomNav,
                         ),
                         children: [
                           if (_mode == 0) ...[
                             _LedgerSummaryCard(
+                              ledgerName: ledger.name,
                               base: base,
                               hide: hide,
                               range: range,
                               netWorth: nw,
                               summary: summary,
                               assetLiability: alSplit,
+                              lifetime: lifetime,
+                              monthSummary: monthSummary,
                             ),
-                            const SizedBox(height: CentliSpacing.section),
-                            _HomePendingSection(ledgerId: ledgerId, hide: hide),
-                            const SizedBox(height: CentliSpacing.section),
+                            // 待确认为空时「间距 + 卡片」整体不出现，
+                            // 概览卡到图表的距离才和图表到账单的一致。
+                            if (pendingItems.isNotEmpty) ...[
+                              const SizedBox(
+                                height: CentliSpacing.sectionLoose,
+                              ),
+                              _HomePendingCarousel(
+                                items: pendingItems,
+                                hide: hide,
+                              ),
+                            ],
+                            const SizedBox(height: CentliSpacing.sectionLoose),
                             _NetChangeChartCard(
+                              ledgerId: ledgerId,
                               base: base,
                               hide: hide,
                               incomeSeries: incomeSeries,
                               expenseSeries: expenseSeries,
                               netWorth: nw,
                             ),
-                            const SizedBox(height: CentliSpacing.item),
+                            const SizedBox(height: CentliSpacing.sectionLoose),
                             CentliSoftCard(
-                              padding: const EdgeInsets.all(CentliSpacing.cardPad),
+                              padding: const EdgeInsets.all(
+                                CentliSpacing.cardPad,
+                              ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
@@ -393,7 +463,10 @@ class _HomePageState extends ConsumerState<HomePage> {
                                         child: CircularProgressIndicator(),
                                       ),
                                     ),
-                                    error: (e, _) => Text('加载失败，下拉重试'),
+                                    error: (e, _) => CentliErrorState(
+                                      error: e,
+                                      compact: true,
+                                    ),
                                     data: (txns) {
                                       if (txns.isEmpty) {
                                         return Padding(
@@ -415,7 +488,9 @@ class _HomePageState extends ConsumerState<HomePage> {
                                                       scheme.onSurfaceVariant,
                                                 ),
                                               ),
-                                              const SizedBox(height: 4),
+                                              const SizedBox(
+                                                height: CentliSpacing.dense,
+                                              ),
                                               Text(
                                                 '点底部「记一笔」记下第一笔',
                                                 style: Theme.of(context)
@@ -461,6 +536,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                             ),
                             const SizedBox(height: CentliSpacing.section),
                             _DailyTrendCard(
+                              month: calMonth,
                               base: base,
                               hide: hide,
                               expenseSeries: calExpenseSeries,
@@ -516,9 +592,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                     Expanded(
                       child: Text(
                         '${day.month}月${day.day}日 · ${_weekdayCn(day)}',
-                        style: Theme.of(sheetContext)
-                            .textTheme
-                            .titleMedium
+                        style: Theme.of(sheetContext).textTheme.titleMedium
                             ?.copyWith(fontWeight: FontWeight.w700),
                       ),
                     ),
@@ -536,11 +610,13 @@ class _HomePageState extends ConsumerState<HomePage> {
                             const Duration(milliseconds: 80),
                           );
                           if (!mounted) return;
-                          final ledger =
-                              ref.read(currentLedgerProvider).valueOrNull;
+                          final ledger = ref
+                              .read(currentLedgerProvider)
+                              .valueOrNull;
                           if (ledger == null) return;
                           final nowLocal = DateTime.now();
-                          final calMonth = _calendarMonth ??
+                          final calMonth =
+                              _calendarMonth ??
                               DateTime(nowLocal.year, nowLocal.month);
                           final calRange = DateRangeWindow.forMonth(
                             calMonth.year,
@@ -574,9 +650,8 @@ class _HomePageState extends ConsumerState<HomePage> {
                 child: Text(
                   '支出 ${formatMinor(base, expenseMinor, hide: hide)}'
                   ' · 收入 ${formatMinor(base, incomeMinor, hide: hide)}',
-                  style: Theme.of(sheetContext).textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
+                  style: Theme.of(sheetContext).textTheme.bodySmall
+                      ?.copyWith(color: scheme.onSurfaceVariant),
                 ),
               ),
               const Divider(height: 1),
@@ -623,7 +698,6 @@ bool _isSameLocalDay(Transaction txn, DateTime day) {
       local.day == day.day;
 }
 
-
 class _ModeTab extends StatelessWidget {
   const _ModeTab({
     required this.label,
@@ -667,26 +741,45 @@ class _ModeTab extends StatelessWidget {
   }
 }
 
+/// 概览卡：
+///
+/// ```
+/// 账本名
+/// ¥ 3,375.20                ▲ ¥ 3,375.20
+/// ─────────────────────────────
+/// 资产  ¥5,010.00      负债  ¥1,634.80
+///   月收入 ¥5,724.00     月支出 ¥1,388.58
+///   总收入 ¥11,841.96    总支出 ¥7,067.68
+/// ```
 class _LedgerSummaryCard extends StatelessWidget {
   const _LedgerSummaryCard({
+    required this.ledgerName,
     required this.base,
     required this.hide,
     required this.range,
     required this.netWorth,
     required this.summary,
     required this.assetLiability,
+    required this.lifetime,
+    required this.monthSummary,
   });
 
+  final String ledgerName;
   final String base;
   final bool hide;
   final DateRangeWindow range;
   final AsyncValue<BaseNetWorth> netWorth;
   final AsyncValue<BaseRangeSummary> summary;
   final BaseAssetLiability? assetLiability;
+  final AsyncValue<({int incomeMinor, int expenseMinor})> lifetime;
+  final AsyncValue<BaseRangeSummary> monthSummary;
+
+  String _money(int minor) => formatMinor(base, minor, hide: hide);
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final loading = netWorth.isLoading || summary.isLoading;
     final failed = netWorth.hasError || summary.hasError;
     final nw = netWorth.valueOrNull;
@@ -697,14 +790,15 @@ class _LedgerSummaryCard extends StatelessWidget {
     final net = nw?.totalMinor ?? 0;
     final asset = assetLiability?.assetMinor ?? (net > 0 ? net : 0);
     final liability = assetLiability?.liabilityMinor ?? (net < 0 ? -net : 0);
-    final rangeLabel = range.label;
+    final month = monthSummary.valueOrNull;
+    final life = lifetime.valueOrNull;
 
     if (failed) {
       return CentliSoftCard(
         padding: const EdgeInsets.all(CentliSpacing.cardPad),
-        child: Text(
-          '\u52a0\u8f7d\u5931\u8d25\uff0c\u4e0b\u62c9\u91cd\u8bd5',
-          style: Theme.of(context).textTheme.bodySmall,
+        child: CentliErrorState(
+          error: netWorth.error ?? summary.error,
+          compact: true,
         ),
       );
     }
@@ -724,36 +818,111 @@ class _LedgerSummaryCard extends StatelessWidget {
     }
 
     final deltaPositive = delta >= 0;
-    final deltaColor =
-        deltaPositive ? CentliTheme.incomeGreen : CentliTheme.expenseRed;
+    final deltaColor = deltaPositive
+        ? CentliTheme.incomeGreen
+        : CentliTheme.expenseRed;
+    final labelSmall = theme.textTheme.labelMedium?.copyWith(
+      color: scheme.onSurfaceVariant,
+    );
+    final subLabel = theme.textTheme.bodySmall?.copyWith(
+      color: scheme.onSurfaceVariant,
+      fontSize: 11.5,
+    );
+    final subValue = theme.textTheme.bodySmall?.copyWith(
+      fontWeight: FontWeight.w600,
+      fontSize: 12.5,
+      color: scheme.onSurface,
+    );
+
+    Widget subLine(String label, String? value, Color color) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 2),
+        child: Row(
+          children: [
+            Text(label, style: subLabel),
+            const SizedBox(width: 3),
+            Flexible(
+              child: Text(
+                value ?? '—',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: subValue?.copyWith(color: color),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // 一列：资产 / 月收入 / 总收入 或 负债 / 月支出 / 总支出
+    Widget column({
+      required String title,
+      required String total,
+      required Color totalColor,
+      required String monthLabel,
+      required String? monthValue,
+      required Color monthColor,
+      required String lifeLabel,
+      required String? lifeValue,
+      required Color lifeColor,
+    }) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(title, style: labelSmall),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  total,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: totalColor,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          subLine(monthLabel, monthValue, monthColor),
+          subLine(lifeLabel, lifeValue, lifeColor),
+        ],
+      );
+    }
 
     return CentliSoftCard(
       padding: const EdgeInsets.all(CentliSpacing.cardPad),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // 账本名
           Text(
-            '\u51c0\u8d44\u4ea7',
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: scheme.onSurfaceVariant,
-            ),
+            ledgerName,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: labelSmall,
           ),
           const SizedBox(height: CentliSpacing.dense),
+          // 净资产 + 区间涨跌
           Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Expanded(
                 child: Text(
-                  formatMinor(base, net, hide: hide),
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    letterSpacing: -0.4,
+                  _money(net),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.headlineMedium?.copyWith(
+                    letterSpacing: -0.6,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
               if (s != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 2),
+                // 大金额 + 窄屏时这一块必须能收缩，否则整行溢出。
+                Flexible(
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -765,11 +934,15 @@ class _LedgerSummaryCard extends StatelessWidget {
                         color: deltaColor,
                       ),
                       const SizedBox(width: 2),
-                      Text(
-                        '${deltaPositive ? '+' : '-'}${formatMinor(base, delta.abs(), hide: hide)}',
-                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: deltaColor,
-                          fontWeight: FontWeight.w700,
+                      Flexible(
+                        child: Text(
+                          _money(delta.abs()),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.labelLarge?.copyWith(
+                            color: deltaColor,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
                     ],
@@ -780,103 +953,57 @@ class _LedgerSummaryCard extends StatelessWidget {
           if (nw != null && nw.hasUnconverted) ...[
             const SizedBox(height: CentliSpacing.item),
             Text(
-              '\u672a\u6298\u7b97\uff1a${nw.unconvertedByCcy.entries.map((e) => '${e.key} ${formatMinor(e.key, e.value, hide: hide)}').join('\u3001')}',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
+              '未折算：${nw.unconvertedByCcy.entries.map((e) => '${e.key} ${formatMinor(e.key, e.value, hide: hide)}').join('、')}',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
             ),
           ],
           const SizedBox(height: CentliSpacing.section),
+          const Divider(height: 1),
+          const SizedBox(height: CentliSpacing.item),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: _finCol(
-                  context,
-                  topLabel: '\u8d44\u4ea7',
-                  topValue: formatMinor(base, asset, hide: hide),
-                  topColor: CentliTheme.incomeGreen,
-                  botLabel: '$rangeLabel\u6536\u5165',
-                  botValue: formatMinor(base, income, hide: hide),
-                  botColor: CentliTheme.incomeGreen,
+                child: column(
+                  title: '资产',
+                  total: _money(asset),
+                  totalColor: CentliTheme.incomeGreen,
+                  monthLabel: '月收入',
+                  monthValue: month == null ? null : _money(month.incomeMinor),
+                  monthColor: CentliTheme.incomeGreen,
+                  lifeLabel: '总收入',
+                  lifeValue: life == null ? null : _money(life.incomeMinor),
+                  lifeColor: CentliTheme.incomeGreen,
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 8),
               Expanded(
-                child: _finCol(
-                  context,
-                  topLabel: '\u8d1f\u503a',
-                  topValue: formatMinor(base, liability, hide: hide),
-                  topColor: CentliTheme.expenseRed,
-                  botLabel: '$rangeLabel\u652f\u51fa',
-                  botValue: formatMinor(base, expense, hide: hide),
-                  botColor: CentliTheme.expenseRed,
+                child: column(
+                  title: '负债',
+                  total: _money(liability),
+                  totalColor: CentliTheme.expenseRed,
+                  monthLabel: '月支出',
+                  monthValue: month == null ? null : _money(month.expenseMinor),
+                  monthColor: CentliTheme.expenseRed,
+                  lifeLabel: '总支出',
+                  lifeValue: life == null ? null : _money(life.expenseMinor),
+                  lifeColor: CentliTheme.expenseRed,
                 ),
               ),
             ],
-          ),
-          const SizedBox(height: CentliSpacing.item),
-          Text(
-            '\u672c\u4f4d\u5e01 $base\uff08\u6309\u53d1\u751f\u65e5\u6c47\u7387\u6298\u7b97\uff1b\u533a\u95f4\u6da8\u8dcc=\u6536\u5165-\u652f\u51fa\uff09',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: scheme.onSurfaceVariant,
-            ),
           ),
         ],
       ),
     );
   }
-
-  Widget _finCol(
-    BuildContext context, {
-    required String topLabel,
-    required String topValue,
-    required Color topColor,
-    required String botLabel,
-    required String botValue,
-    required Color botColor,
-  }) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          topLabel,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: scheme.onSurfaceVariant,
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          topValue,
-          style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w700,
-            color: topColor,
-          ),
-        ),
-        const SizedBox(height: CentliSpacing.item),
-        Text(
-          botLabel,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: scheme.onSurfaceVariant,
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          botValue,
-          style: theme.textTheme.labelLarge?.copyWith(
-            fontWeight: FontWeight.w700,
-            color: botColor,
-          ),
-        ),
-      ],
-    );
-  }
 }
 
+/// 净资产变化卡：折线 + 右上「账单列表 / 分类占比」两个入口。
 class _NetChangeChartCard extends StatelessWidget {
   const _NetChangeChartCard({
+    required this.ledgerId,
     required this.base,
     required this.hide,
     required this.incomeSeries,
@@ -884,6 +1011,7 @@ class _NetChangeChartCard extends StatelessWidget {
     required this.netWorth,
   });
 
+  final String ledgerId;
   final String base;
   final bool hide;
   final AsyncValue<List<({DateTime dayLocal, int totalMinor})>> incomeSeries;
@@ -892,17 +1020,16 @@ class _NetChangeChartCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final loading = incomeSeries.isLoading ||
-        expenseSeries.isLoading ||
-        netWorth.isLoading;
+    final loading =
+        incomeSeries.isLoading || expenseSeries.isLoading || netWorth.isLoading;
     final failed =
         incomeSeries.hasError || expenseSeries.hasError || netWorth.hasError;
     if (failed) {
       return CentliSoftCard(
         padding: const EdgeInsets.all(CentliSpacing.cardPad),
-        child: Text(
-          '加载失败，下拉重试',
-          style: Theme.of(context).textTheme.bodySmall,
+        child: CentliErrorState(
+          error: incomeSeries.error ?? expenseSeries.error ?? netWorth.error,
+          compact: true,
         ),
       );
     }
@@ -948,6 +1075,12 @@ class _NetChangeChartCard extends StatelessWidget {
       spots.add(FlSpot(i.toDouble(), running));
     }
 
+    /// 跳到底部导航的某个 tab（`/stats` 等），并替换掉当前推入的页面，
+    /// 这样返回不会回到半截状态，底栏也会同步高亮对应 tab。
+    void openTab(String location) {
+      GoRouter.of(context).go(location);
+    }
+
     return CentliTrendChart(
       title: '\u51c0\u8d44\u4ea7\u53d8\u5316',
       spots: spots,
@@ -955,6 +1088,43 @@ class _NetChangeChartCard extends StatelessWidget {
       base: base,
       hide: hide,
       sparseMessage: '\u533a\u95f4\u53d8\u52a8\u8f83\u5c11',
+      height: 112,
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _ChartActionButton(
+            key: const Key('net_change_pie'),
+            tooltip: '分类占比',
+            icon: Icons.pie_chart_outline,
+            // 直接切到「统计」tab，而不是在当前 tab 上叠一层统计页。
+            onPressed: () => openTab('/stats'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Small icon button used in the chart card header.
+class _ChartActionButton extends StatelessWidget {
+  const _ChartActionButton({
+    super.key,
+    required this.tooltip,
+    required this.icon,
+    required this.onPressed,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: tooltip,
+      icon: Icon(icon, size: 20),
+      visualDensity: VisualDensity.compact,
+      onPressed: onPressed,
     );
   }
 }
@@ -1037,7 +1207,7 @@ class _CalendarCard extends StatelessWidget {
       return CentliSoftCard(
         padding: const EdgeInsets.all(CentliSpacing.cardPad),
         child: Text(
-          '加载失败，下拉重试',
+          '数据加载失败，点「重试」或下拉刷新',
           style: Theme.of(context).textTheme.bodySmall,
         ),
       );
@@ -1059,7 +1229,8 @@ class _CalendarCard extends StatelessWidget {
     final today = DateTime.now();
     final thisMonth = DateTime(today.year, today.month, 1);
     final isCurrentMonth =
-        monthStart.year == thisMonth.year && monthStart.month == thisMonth.month;
+        monthStart.year == thisMonth.year &&
+        monthStart.month == thisMonth.month;
     final labels = [
       '\u5468\u65e5',
       '\u5468\u4e00',
@@ -1069,9 +1240,14 @@ class _CalendarCard extends StatelessWidget {
       '\u5468\u4e94',
       '\u5468\u516d',
     ];
-    final incomeByDay = _dayMap(incomeSeries.valueOrNull ?? const [], monthStart);
-    final expenseByDay =
-        _dayMap(expenseSeries.valueOrNull ?? const [], monthStart);
+    final incomeByDay = _dayMap(
+      incomeSeries.valueOrNull ?? const [],
+      monthStart,
+    );
+    final expenseByDay = _dayMap(
+      expenseSeries.valueOrNull ?? const [],
+      monthStart,
+    );
 
     return CentliSoftCard(
       padding: const EdgeInsets.all(CentliSpacing.cardPad),
@@ -1100,8 +1276,11 @@ class _CalendarCard extends StatelessWidget {
                 onPressed: isCurrentMonth
                     ? null
                     : () {
-                        final n =
-                            DateTime(monthStart.year, monthStart.month + 1, 1);
+                        final n = DateTime(
+                          monthStart.year,
+                          monthStart.month + 1,
+                          1,
+                        );
                         onMonthChanged(n);
                       },
                 icon: const Icon(Icons.chevron_right),
@@ -1123,7 +1302,7 @@ class _CalendarCard extends StatelessWidget {
                 ),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: CentliSpacing.item),
           GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
@@ -1165,21 +1344,21 @@ class _CalendarCard extends StatelessWidget {
                   child: MediaQuery.withClampedTextScaling(
                     maxScaleFactor: 1.15,
                     child: Column(
-                    children: [
-                      Text(
-                        '$day',
-                        style: TextStyle(
-                          fontWeight: selected || isToday
-                              ? FontWeight.w800
-                              : FontWeight.w500,
-                          fontSize: 13,
+                      children: [
+                        Text(
+                          '$day',
+                          style: TextStyle(
+                            fontWeight: selected || isToday
+                                ? FontWeight.w800
+                                : FontWeight.w500,
+                            fontSize: 13,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 1),
-                      _amtLine(context, inMinor, CentliTheme.incomeGreen),
-                      _amtLine(context, outMinor, CentliTheme.expenseRed),
-                    ],
-                  ),
+                        const SizedBox(height: 1),
+                        _amtLine(context, inMinor, CentliTheme.incomeGreen),
+                        _amtLine(context, outMinor, CentliTheme.expenseRed),
+                      ],
+                    ),
                   ),
                 ),
               );
@@ -1191,14 +1370,57 @@ class _CalendarCard extends StatelessWidget {
   }
 }
 
+/// First day (local) of [d]'s month.
+DateTime _firstOfMonth(DateTime d) => DateTime(d.year, d.month);
+
+/// 1-based day-of-month of [d] inside the month starting at [monthStart];
+/// days outside that month clamp into [1, daysInMonth] so a mis-bucketed row
+/// never shifts the whole series.
+int _dayOfMonth(DateTime d, DateTime monthStart) {
+  if (d.year == monthStart.year && d.month == monthStart.month) return d.day;
+  final lastDay = DateTime(monthStart.year, monthStart.month + 1, 0).day;
+  return d.isBefore(monthStart) ? 1 : lastDay;
+}
+
+/// Per-day net (income − expense) for every day of [monthStart]'s month.
+///
+/// Index i is day i+1. Days without bills are 0 — they are "no bill that day",
+/// not "carry the previous total". The calendar chart plots these values
+/// directly: 13 号 −1、14 号 −71、16 号 63 就是这三个点，其余天为 0。
+@visibleForTesting
+List<double> monthlyDailyNetMajor({
+  required String base,
+  required DateTime monthStart,
+  required List<({DateTime dayLocal, int totalMinor})> income,
+  required List<({DateTime dayLocal, int totalMinor})> expense,
+}) {
+  final daysInMonth = DateTime(monthStart.year, monthStart.month + 1, 0).day;
+  final inByDay = <int, int>{};
+  final outByDay = <int, int>{};
+  for (final e in income) {
+    final d = _dayOfMonth(e.dayLocal, monthStart);
+    if (d <= daysInMonth) inByDay[d] = e.totalMinor;
+  }
+  for (final e in expense) {
+    final d = _dayOfMonth(e.dayLocal, monthStart);
+    if (d <= daysInMonth) outByDay[d] = e.totalMinor;
+  }
+  return [
+    for (var d = 1; d <= daysInMonth; d++)
+      dailyNetMajor(base, inByDay[d] ?? 0, outByDay[d] ?? 0),
+  ];
+}
+
 class _DailyTrendCard extends StatelessWidget {
   const _DailyTrendCard({
+    required this.month,
     required this.base,
     required this.hide,
     required this.expenseSeries,
     required this.incomeSeries,
   });
 
+  final DateTime month;
   final String base;
   final bool hide;
   final AsyncValue<List<({DateTime dayLocal, int totalMinor})>> expenseSeries;
@@ -1212,7 +1434,7 @@ class _DailyTrendCard extends StatelessWidget {
       return CentliSoftCard(
         padding: const EdgeInsets.all(CentliSpacing.cardPad),
         child: Text(
-          '加载失败，下拉重试',
+          '数据加载失败，点「重试」或下拉刷新',
           style: Theme.of(context).textTheme.bodySmall,
         ),
       );
@@ -1228,50 +1450,31 @@ class _DailyTrendCard extends StatelessWidget {
         ),
       );
     }
-    final expense = expenseSeries.valueOrNull ?? const [];
-    final income = incomeSeries.valueOrNull ?? const [];
-    final n = expense.length > income.length ? expense.length : income.length;
-    final spots = <FlSpot>[];
-    final dayLabels = <DateTime>[];
-    for (var i = 0; i < n; i++) {
-      final outV = i < expense.length ? expense[i].totalMinor : 0;
-      final inV = i < income.length ? income[i].totalMinor : 0;
-      // Daily net inflow (same polarity as overview chart day component).
-      spots.add(FlSpot(i.toDouble(), dailyNetMajor(base, inV, outV)));
-      final day = i < income.length
-          ? income[i].dayLocal
-          : (i < expense.length
-                ? expense[i].dayLocal
-                : DateTime.fromMillisecondsSinceEpoch(0));
-      dayLabels.add(day);
-    }
+    final monthStart = _firstOfMonth(month);
+    final dailyNet = monthlyDailyNetMajor(
+      base: base,
+      monthStart: monthStart,
+      income: incomeSeries.valueOrNull ?? const [],
+      expense: expenseSeries.valueOrNull ?? const [],
+    );
+    final spots = <FlSpot>[
+      for (var i = 0; i < dailyNet.length; i++)
+        FlSpot(i.toDouble(), dailyNet[i]),
+    ];
+    final dayLabels = <DateTime>[
+      for (var i = 0; i < dailyNet.length; i++)
+        DateTime(monthStart.year, monthStart.month, i + 1),
+    ];
 
     return CentliTrendChart(
-      title: '\u6bcf\u65e5\u8d8b\u52bf',
+      title: '\u6bcf\u65e5\u6536\u652f',
       spots: spots,
       dayLabels: dayLabels,
       base: base,
       hide: hide,
       height: 120,
-      colorBySign: true,
-      sparseMessage: '\u672c\u6708\u53d8\u52a8\u8f83\u5c11',
-    );
-  }
-}
-
-class _HomePendingSection extends ConsumerWidget {
-  const _HomePendingSection({required this.ledgerId, required this.hide});
-  final String ledgerId;
-  final bool hide;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final listAsync = ref.watch(_homePendingListProvider(ledgerId));
-    final items = listAsync.valueOrNull ?? const <PendingCapture>[];
-    if (items.isEmpty) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: _HomePendingCarousel(items: items, hide: hide),
+      signColored: true,
+      sparseMessage: '\u672c\u6708\u6682\u65e0\u6536\u652f',
     );
   }
 }
@@ -1294,7 +1497,7 @@ class _HomePendingCarouselState extends ConsumerState<_HomePendingCarousel> {
   @override
   void initState() {
     super.initState();
-    _pageController = PageController();
+    _pageController = PageController(viewportFraction: 0.92);
   }
 
   @override
@@ -1315,44 +1518,75 @@ class _HomePendingCarouselState extends ConsumerState<_HomePendingCarousel> {
   Widget build(BuildContext context) {
     final items = widget.items;
     final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
 
     return CentliSoftCard(
+      padding: const EdgeInsets.fromLTRB(
+        CentliSpacing.cardPad,
+        CentliSpacing.cardPad,
+        CentliSpacing.cardPad,
+        CentliSpacing.dense,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          ListTile(
-            dense: true,
-            visualDensity: VisualDensity.compact,
-            contentPadding: const EdgeInsets.fromLTRB(
-              CentliSpacing.cardPad,
-              CentliSpacing.dense,
-              CentliSpacing.item,
-              0,
-            ),
-            title: Text(
-              '待确认 (${items.length})',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-            ),
-            subtitle: const Text('左右滑动快速处理 · 点此查看全部'),
-            trailing: const Icon(Icons.chevron_right),
+          // 标题行：待确认 (N) + 「查看全部」
+          InkWell(
             onTap: () => context.push('/home/pending'),
+            borderRadius: BorderRadius.circular(8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '待确认 (${items.length})',
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: CentliSpacing.dense),
+                      Text(
+                        '左右滑动切换 · 点卡片填写并入账',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(Icons.chevron_right, color: scheme.onSurfaceVariant),
+              ],
+            ),
           ),
+          const SizedBox(height: CentliSpacing.item),
+          // 卡片横向轮播（相邻卡片露出一角，暗示可滑动）
           SizedBox(
-            height: 96,
+            height: 152,
             child: PageView.builder(
+              key: const Key('home_pending_carousel'),
               controller: _pageController,
               itemCount: items.length,
               onPageChanged: (i) => setState(() => _index = i),
               itemBuilder: (context, i) {
                 final c = items[i];
-                return _HomePendingSlide(
-                  capture: c,
-                  hide: widget.hide,
-                  busy: _busyId == c.id,
-                  onIgnore: () => _ignore(c),
-                  onOpen: () => context.push('/home/pending'),
+                return AnimatedPadding(
+                  duration: const Duration(milliseconds: 160),
+                  padding: EdgeInsets.only(
+                    left: 2,
+                    right: i == items.length - 1 ? 0 : 8,
+                    bottom: 6,
+                  ),
+                  child: _HomePendingSlide(
+                    key: ValueKey('pending_slide_${c.id}'),
+                    capture: c,
+                    hide: widget.hide,
+                    busy: _busyId == c.id,
+                    onConfirm: () => _confirm(c),
+                    onIgnore: () => _ignore(c),
+                    onOpen: () => context.push('/home/pending'),
+                  ),
                 );
               },
             ),
@@ -1383,6 +1617,27 @@ class _HomePendingCarouselState extends ConsumerState<_HomePendingCarousel> {
     );
   }
 
+  /// 就地弹出「确认入账」：填完金额 / 分类 / 账户即可落账。
+  Future<void> _confirm(PendingCapture c) async {
+    if (_busyId != null) return;
+    final ok = await showPendingConfirmDialog(context, ref, capture: c);
+    if (!ok || !mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('已入账')));
+    // 列表由 Drift 流刷新；把轮播前移到下一张（或回到第一张）。
+    final remaining = widget.items.length - 1;
+    if (remaining > 0) {
+      final next = _index.clamp(0, remaining - 1);
+      if (_pageController.hasClients) {
+        _pageController.animateToPage(
+          next,
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOut,
+        );
+      }
+    }
+  }
+
   Future<void> _ignore(PendingCapture c) async {
     if (_busyId != null) return;
     setState(() => _busyId = c.id);
@@ -1395,86 +1650,141 @@ class _HomePendingCarouselState extends ConsumerState<_HomePendingCarousel> {
   }
 }
 
+/// 一张待确认卡片：渠道 · 金额 · 备注，右下角「忽略 / 入账」。
 class _HomePendingSlide extends StatelessWidget {
   const _HomePendingSlide({
+    super.key,
     required this.capture,
     required this.hide,
     required this.busy,
+    required this.onConfirm,
     required this.onIgnore,
     required this.onOpen,
   });
+
   final PendingCapture capture;
   final bool hide;
   final bool busy;
+  final VoidCallback onConfirm;
   final VoidCallback onIgnore;
   final VoidCallback onOpen;
 
   @override
   Widget build(BuildContext context) {
     final c = capture;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final ccy = c.currency ?? 'CNY';
     final amount = c.amountMinor == null
         ? '金额未知'
         : formatMinor(ccy, c.amountMinor!, hide: hide);
-    final merchant = (c.note ?? '').trim();
-    final title = merchant.isNotEmpty
-        ? '${_pkgLabel(c.sourcePkg)} · $amount · $merchant'
-        : '${_pkgLabel(c.sourcePkg)} · $amount';
+    final direction = pendingDirectionLabel(_captureDirection(c));
+    final when = c.happenAt == null
+        ? null
+        : DateFormat('MM-dd HH:mm')
+              .format(DateTime.fromMillisecondsSinceEpoch(c.happenAt!));
+    final amountColor = _captureDirection(c) == 'in'
+        ? CentliTheme.incomeGreen
+        : CentliTheme.expenseRed;
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        CentliSpacing.cardPad,
-        0,
-        CentliSpacing.dense,
-        CentliSpacing.dense,
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Expanded(
-            child: InkWell(
-              onTap: onOpen,
-              borderRadius: BorderRadius.circular(8),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      maxLines: 2,
+    return Material(
+      color: scheme.surfaceContainerHighest.withValues(alpha: 0.55),
+      borderRadius: BorderRadius.circular(16),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onOpen,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 10, 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      [pendingSourceLabel(c.sourcePkg), ?when].join(' · '),
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodyMedium
-                          ?.copyWith(fontWeight: FontWeight.w600),
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
                     ),
-                    const SizedBox(height: 2),
-                    _CategoryHint(capture: c),
-                  ],
+                  ),
+                  Text(
+                    direction,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: CentliSpacing.dense),
+              Text(
+                amount,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: amountColor,
                 ),
               ),
-            ),
+              const SizedBox(height: CentliSpacing.dense),
+              Text(
+                (c.note ?? '').trim().isEmpty ? '无备注' : c.note!.trim(),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall,
+              ),
+              const Spacer(),
+              Row(
+                children: [
+                  _CategoryHint(capture: c),
+                  const Spacer(),
+                  TextButton(
+                    style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                    ),
+                    onPressed: busy ? null : onIgnore,
+                    child: const Text('忽略'),
+                  ),
+                  const SizedBox(width: 4),
+                  FilledButton.tonal(
+                    style: FilledButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                    ),
+                    onPressed: busy ? null : onConfirm,
+                    child: const Text('入账'),
+                  ),
+                ],
+              ),
+            ],
           ),
-          TextButton(
-            style: TextButton.styleFrom(
-              visualDensity: VisualDensity.compact,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-            ),
-            onPressed: busy ? null : onIgnore,
-            child: const Text('忽略'),
-          ),
-        ],
+        ),
       ),
     );
   }
+}
 
-  String _pkgLabel(String pkg) {
-    if (pkg.contains('Alipay') || pkg.contains('alipay')) {
-      return '支付宝';
-    }
-    if (pkg.contains('tencent.mm')) return '微信';
-    return pkg;
+/// 方向：优先用落库的 direction，没有就按标题重新解析。
+String _captureDirection(PendingCapture c) {
+  final stored = c.direction?.trim();
+  if (stored != null && stored.isNotEmpty) {
+    return NotiTemplate.normalizeDirection(stored);
   }
+  final templates = NotiTemplateStore.peek();
+  return NotiTemplate.normalizeDirection(
+    parseNotification(
+      RawNotification(
+        pkg: c.sourcePkg,
+        title: c.rawTitle ?? '',
+        text: c.rawText,
+        whenMs: c.happenAt ?? c.createdAt,
+      ),
+      templates.isEmpty ? null : templates,
+    ).direction,
+  );
 }
 
 class _CategoryHint extends ConsumerWidget {

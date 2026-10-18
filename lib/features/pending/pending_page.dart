@@ -11,6 +11,7 @@ import '../../platform/notifications/notification_parse.dart';
 import '../../platform/notifications/notification_listener_stub.dart';
 import '../../platform/notifications/noti_template_store.dart';
 import '../capture/capture_intake_actions.dart';
+import 'pending_confirm_sheet.dart';
 import '../../app/theme.dart';
 
 
@@ -100,57 +101,60 @@ class _PendingPageBodyState extends ConsumerState<PendingPage> {
       appBar: AppBar(
         title: const Text('待确认'),
         actions: [
-          if (filter == 'pending' || filter == 'parse_failed')
-            IconButton(
-              tooltip: '全部忽略',
-              icon: const Icon(Icons.playlist_remove_outlined),
-              onPressed: () => _ignoreAll(context),
-            ),
-          if (filter == 'ignored')
-            IconButton(
-              tooltip: '清空已忽略',
-              icon: const Icon(Icons.delete_sweep_outlined),
-              onPressed: () => _clearIgnored(context),
-            ),
-          IconButton(
-            tooltip: '截图识别',
-            icon: const Icon(Icons.document_scanner_outlined),
-            onPressed: () => importCaptureFromScreenshot(context, ref),
-          ),
-          IconButton(
-            tooltip: '从剪贴板导入',
-            icon: const Icon(Icons.content_paste_go_outlined),
-            onPressed: () => importCaptureFromClipboard(context, ref),
-          ),
-          IconButton(
-            tooltip: '发出去没通知？',
-            icon: const Icon(Icons.help_outline),
-            onPressed: () => context.push('/me/auto/manual-help'),
-          ),
-          if (kDebugMode)
-            IconButton(
-            tooltip: '添加示例通知',
-            icon: const Icon(Icons.science_outlined),
-            onPressed: () async {
-              final ledger = ref.read(currentLedgerProvider).valueOrNull;
-              if (ledger == null) return;
-              final db = ref.read(databaseProvider);
-              final templates = await NotiTemplateStore.load();
-              final n = await seedSamplePendingCaptures(
-                ledgerId: ledger.id,
-                ingest: db.ingestParsedNotification,
-                templates: templates,
-              );
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      n == 0 ? '示例已存在（去重）' : '已加入 $n 条示例',
-                    ),
+          // 6 个动作收进「更多」，顶栏只留一个入口。
+          PopupMenuButton<String>(
+            key: const Key('pending_more_menu'),
+            tooltip: '更多',
+            onSelected: (v) => _onPendingAction(context, v),
+            itemBuilder: (ctx) => [
+              if (filter == 'pending' || filter == 'parse_failed')
+                const PopupMenuItem(
+                  value: 'ignore_all',
+                  child: ListTile(
+                    leading: Icon(Icons.playlist_remove_outlined),
+                    title: Text('全部忽略'),
                   ),
-                );
-              }
-            },
+                ),
+              if (filter == 'ignored')
+                const PopupMenuItem(
+                  value: 'clear_ignored',
+                  child: ListTile(
+                    leading: Icon(Icons.delete_sweep_outlined),
+                    title: Text('清空已忽略'),
+                  ),
+                ),
+              if (filter != 'ignored')
+                const PopupMenuItem(
+                  value: 'screenshot',
+                  child: ListTile(
+                    leading: Icon(Icons.document_scanner_outlined),
+                    title: Text('截图识别'),
+                  ),
+                ),
+              if (filter != 'ignored')
+                const PopupMenuItem(
+                  value: 'clipboard',
+                  child: ListTile(
+                    leading: Icon(Icons.content_paste_go_outlined),
+                    title: Text('从剪贴板导入'),
+                  ),
+                ),
+              const PopupMenuItem(
+                value: 'help',
+                child: ListTile(
+                  leading: Icon(Icons.help_outline),
+                  title: Text('发出去没通知？'),
+                ),
+              ),
+              if (kDebugMode)
+                const PopupMenuItem(
+                  value: 'sample',
+                  child: ListTile(
+                    leading: Icon(Icons.science_outlined),
+                    title: Text('添加示例通知'),
+                  ),
+                ),
+            ],
           ),
         ],
       ),
@@ -273,7 +277,7 @@ class _PendingPageBodyState extends ConsumerState<PendingPage> {
                           ),
                           itemCount: items.length,
                           separatorBuilder: (context, index) =>
-                              const SizedBox(height: 8),
+                              const SizedBox(height: CentliSpacing.item),
                           itemBuilder: (context, i) {
                             final capture = items[i];
                             return _PendingCard(
@@ -297,6 +301,36 @@ class _PendingPageBodyState extends ConsumerState<PendingPage> {
     );
   }
 
+
+  Future<void> _onPendingAction(BuildContext context, String value) async {
+    switch (value) {
+      case 'ignore_all':
+        await _ignoreAll(context);
+      case 'clear_ignored':
+        await _clearIgnored(context);
+      case 'screenshot':
+        await importCaptureFromScreenshot(context, ref);
+      case 'clipboard':
+        await importCaptureFromClipboard(context, ref);
+      case 'help':
+        if (context.mounted) context.push('/me/auto/manual-help');
+      case 'sample':
+        final ledger = ref.read(currentLedgerProvider).valueOrNull;
+        if (ledger == null) return;
+        final db = ref.read(databaseProvider);
+        final templates = await NotiTemplateStore.load();
+        final n = await seedSamplePendingCaptures(
+          ledgerId: ledger.id,
+          ingest: db.ingestParsedNotification,
+          templates: templates,
+        );
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(n == 0 ? '示例已存在（去重）' : '已加入 $n 条示例')),
+          );
+        }
+    }
+  }
 
   Future<void> _ignoreAll(BuildContext context) async {
     final ledger = ref.read(currentLedgerProvider).valueOrNull;
@@ -602,7 +636,7 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
             ),
             if (isPending) ...[
               if (!_expanded) ...[
-                const SizedBox(height: 6),
+                const SizedBox(height: CentliSpacing.item),
                 Text(
                   '$_directionLabel · $_amountLabel · $merchant · $_categoryName · $_accountName',
                   maxLines: 2,
@@ -612,7 +646,7 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
                       ),
                 ),
                 if (_direction == 'repay') ...[
-                  const SizedBox(height: 6),
+                  const SizedBox(height: CentliSpacing.item),
                   Text(
                     '还款不计入收支统计，避免与花呗消费重复计算',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -642,7 +676,7 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
                           ),
                     ),
                   ),
-                const SizedBox(height: 8),
+                const SizedBox(height: CentliSpacing.item),
                 Row(
                   children: [
                     TextButton(
@@ -653,7 +687,19 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
                     TextButton(
                       onPressed: _busy
                           ? null
-                          : () => setState(() => _expanded = true),
+                          : () async {
+                              final messenger = ScaffoldMessenger.of(context);
+                              final ok = await showPendingConfirmDialog(
+                                context,
+                                ref,
+                                capture: c,
+                              );
+                              if (ok) {
+                                messenger.showSnackBar(
+                                  const SnackBar(content: Text('已入账')),
+                                );
+                              }
+                            },
                       child: const Text('调整'),
                     ),
                     const SizedBox(width: 8),
@@ -664,7 +710,7 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
                   ],
                 ),
               ] else ...[
-                const SizedBox(height: 8),
+                const SizedBox(height: CentliSpacing.item),
                 TextField(
                   controller: _amountCtrl,
                   keyboardType: const TextInputType.numberWithOptions(
@@ -677,7 +723,7 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
                   ),
                   onChanged: (_) => setState(() {}),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: CentliSpacing.item),
                 TextField(
                   controller: _noteCtrl,
                   decoration: const InputDecoration(
@@ -687,7 +733,7 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
                   ),
                   onChanged: (_) => setState(() {}),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: CentliSpacing.item),
                 DropdownButtonFormField<String>(
                   initialValue: _categoryId != null &&
                           widget.categories.any((x) => x.id == _categoryId)
@@ -715,7 +761,7 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
                         : null,
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: CentliSpacing.item),
                 DropdownButtonFormField<String>(
                   initialValue: _accountId != null &&
                           widget.accounts.any((x) => x.id == _accountId)
@@ -746,7 +792,7 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
                         : null,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: CentliSpacing.dense),
                 Theme(
                   data: Theme.of(context)
                       .copyWith(dividerColor: Colors.transparent),
@@ -771,7 +817,7 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: CentliSpacing.item),
                 Row(
                   children: [
                     TextButton(
