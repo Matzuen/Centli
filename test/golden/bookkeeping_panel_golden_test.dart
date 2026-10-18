@@ -91,28 +91,33 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
+    // Open via showBookkeepingSheet so showDragHandle is in the golden (G26.1).
     await tester.pumpWidget(
       ProviderScope(
         overrides: [databaseProvider.overrideWithValue(db)],
         child: MaterialApp(
           debugShowCheckedModeBanner: false,
           theme: withGoldenFont(theme),
-          home: Scaffold(
-            body: Align(
-              alignment: Alignment.bottomCenter,
-              child: Material(
-                color: theme.colorScheme.surface,
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(24),
+          home: Builder(
+            builder: (context) {
+              return Scaffold(
+                backgroundColor: theme.colorScheme.primaryContainer,
+                body: Center(
+                  child: FilledButton(
+                    onPressed: () {
+                      showBookkeepingSheet(context);
+                    },
+                    child: const Text('open'),
+                  ),
                 ),
-                clipBehavior: Clip.antiAlias,
-                child: const BookkeepingSheet(),
-              ),
-            ),
+              );
+            },
           ),
         ),
       ),
     );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
 
     for (final k in ['1', '2', '3', '4', '.', '5', '6']) {

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
@@ -21,6 +21,7 @@ Future<bool?> showBookkeepingSheet(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
+    showDragHandle: true,
     backgroundColor: Theme.of(context).colorScheme.surface,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -753,7 +754,7 @@ List<Account> _accounts = [];
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 0),
                           Builder(
                             builder: (context) {
                               final segs = <(String, String)>[
@@ -764,7 +765,7 @@ List<Account> _accounts = [];
                               ];
                               return Padding(
                                 key: const Key('bk_type_switcher'),
-                                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                                padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
                                 child: Row(
                                   children: [
                                     for (final entry in segs)

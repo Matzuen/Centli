@@ -1,4 +1,4 @@
-# Centli B4-PATCH G25 notes
+# Centli B4-PATCH G26–G29 notes
 
 Generated: 2026-10-17 (Asia/Shanghai)
 HEAD: `b2ba38c4b586a2deb04e7bfa0493b4d01f8b1936`
@@ -83,3 +83,38 @@ Last verify: `00:06 +224: All tests passed!` full run **225 passed / 0 failed**
 ## Final
 - Final HEAD: `b2ba38c4b586a2deb04e7bfa0493b4d01f8b1936` (`b2ba38c`)
 - version: **1.4.2+8** · schema **11** · tests **225**
+
+
+---
+
+# G26–G29 (baseline 60035e6 → …)
+
+Baseline: `60035e6` · version `1.4.2+8` · schema **11** · tests **225**
+User override version bump (once at wrap): **`1.4.4+10`**
+
+## Subtask → commit (G26+)
+
+| Task | hash | Notes |
+|---|---|---|
+| G26.1 | `bfac55c` | showDragHandle + golden via real modal; top pad tightened 8dp |
+
+## G26.1 self-prove (raw)
+
+### A) remove `showDragHandle: true` → golden fails
+
+```
+00:02 +0 -2: Some tests failed.
+Failing tests:
+  bookkeeping_panel_golden_test.dart: bookkeeping panel golden dark
+  bookkeeping_panel_golden_test.dart: bookkeeping panel golden light
+EXITCODE=1
+```
+
+### B) restored → green
+
+```
+00:02 +2: All tests passed!
+EXITCODE=0
+```
+
+Visual: light golden shows gray drag handle above 支出/收入/转账; type switch intact.
