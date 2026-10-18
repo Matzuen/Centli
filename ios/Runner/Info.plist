@@ -68,10 +68,6 @@
 	</array>
 	<key>NSFaceIDUsageDescription</key>
 	<string>用于解锁 Centli 应用锁</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>用于本地语音填单：将说话内容识别为文字后预填记账字段，音频不上传 Centli 服务器。</string>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>用于本地语音填单：在设备上把语音转成文字并走现有智能填单规则，不经 Centli 云端。</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
