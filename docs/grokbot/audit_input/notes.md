@@ -152,7 +152,8 @@ FAIL_EXIT=1
 
 | G27.1 | `d2b8eb1` | push /home/pending?tab=pending |
 | G27.2 | `d2b8eb1` | route_literals_test (non-empty matches) |
-| G28 | _(pending)_ | drops ring buffer + extras union + auto_capture card |
+| G28 | `a48016a` | drops ring buffer + extras union + auto_capture card |
+| G29 | _(pending)_ | widen keywords + noti actions 入账/改金额/忽略 |
 
 ## G27 self-prove (raw)
 

@@ -306,4 +306,23 @@ abstract final class NotificationCaptureStub {
       // no-op
     }
   }
+
+  static Future<void> recordDroppedNotification({
+    required String pkg,
+    required String title,
+    String reason = 'weak',
+  }) async {
+    if (!supported) return;
+    try {
+      await _channel.invokeMethod<void>('recordDroppedNotification', {
+        'pkg': pkg,
+        'title': title,
+        'reason': reason,
+      });
+    } on MissingPluginException {
+      // no-op
+    } on PlatformException {
+      // no-op
+    }
+  }
 }

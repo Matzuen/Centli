@@ -4,6 +4,7 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.app.RemoteInput
 import android.content.Context
 import android.content.Intent
 import android.os.Build
@@ -11,7 +12,7 @@ import android.os.Build
 /**
  * Local push after a payment notification is ingested into pending_captures.
  * Title format: 待确认 ¥xx (optional body: merchant).
- * Tap opens MainActivity with route extra → Flutter /home/pending.
+ * Tap opens MainActivity; actions: 入账 / 改金额 / 忽略 (G29.2).
  */
 object PendingConfirmNotifier {
     const val CHANNEL_ID = "centli_pending_confirm"
@@ -49,9 +50,60 @@ object PendingConfirmNotifier {
             putExtra(EXTRA_OPEN, "/home/pending")
             putExtra(EXTRA_PENDING_ID, pendingId)
         }
-        val flags = PendingIntent.FLAG_UPDATE_CURRENT or
+        val contentFlags = PendingIntent.FLAG_UPDATE_CURRENT or
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
-        val pi = PendingIntent.getActivity(app, notifId(pendingId), intent, flags)
+        val pi = PendingIntent.getActivity(app, notifId(pendingId), intent, contentFlags)
+
+        val mutableFlags = PendingIntent.FLAG_UPDATE_CURRENT or
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                PendingIntent.FLAG_MUTABLE
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                PendingIntent.FLAG_IMMUTABLE
+            } else {
+                0
+            }
+        // RemoteInput requires mutable PendingIntent on API 31+.
+        val remoteFlags = PendingIntent.FLAG_UPDATE_CURRENT or
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE
+            else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE
+            else 0
+
+        fun broadcast(action: String, actionIndex: Int, mutable: Boolean): PendingIntent {
+            val i = Intent(app, PendingActionReceiver::class.java).apply {
+                this.action = action
+                putExtra(PendingActionReceiver.EXTRA_PENDING_ID, pendingId)
+            }
+            val flags = if (mutable) remoteFlags else mutableFlags
+            return PendingIntent.getBroadcast(
+                app,
+                PendingActionReceiver.requestCode(pendingId, actionIndex),
+                i,
+                flags,
+            )
+        }
+
+        val confirmAction = Notification.Action.Builder(
+            android.R.drawable.ic_menu_save,
+            "入账",
+            broadcast(PendingActionReceiver.ACTION_CONFIRM, 0, mutable = false),
+        ).build()
+
+        val remoteInput = RemoteInput.Builder(PendingActionReceiver.KEY_AMOUNT_INPUT)
+            .setLabel("金额，如 24.70")
+            .build()
+        val editAction = Notification.Action.Builder(
+            android.R.drawable.ic_menu_edit,
+            "改金额",
+            broadcast(PendingActionReceiver.ACTION_SET_AMOUNT, 1, mutable = true),
+        ).addRemoteInput(remoteInput)
+            .setAllowGeneratedReplies(true)
+            .build()
+
+        val ignoreAction = Notification.Action.Builder(
+            android.R.drawable.ic_menu_close_clear_cancel,
+            "忽略",
+            broadcast(PendingActionReceiver.ACTION_IGNORE, 2, mutable = false),
+        ).build()
 
         val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Notification.Builder(app, CHANNEL_ID)
@@ -66,6 +118,9 @@ object PendingConfirmNotifier {
             .setContentIntent(pi)
             .setAutoCancel(true)
             .setOnlyAlertOnce(true)
+            .addAction(confirmAction)
+            .addAction(editAction)
+            .addAction(ignoreAction)
 
         if (!body.isNullOrBlank()) {
             builder.setStyle(Notification.BigTextStyle().bigText(body))

@@ -73,4 +73,11 @@ abstract final class NotificationCaptureStub {
       const [];
 
   static Future<void> clearDroppedNotifications() async {}
+
+  static Future<void> recordDroppedNotification({
+    required String pkg,
+    required String title,
+    String reason = 'weak',
+  }) async {}
 }
+

@@ -56,6 +56,15 @@
 
         </activity>
         <!-- P1 stub: user must enable in system Notification access settings -->
+        <receiver
+            android:name=".PendingActionReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.centli.centli.action.CONFIRM" />
+                <action android:name="com.centli.centli.action.IGNORE" />
+                <action android:name="com.centli.centli.action.SET_AMOUNT" />
+            </intent-filter>
+        </receiver>
         <service
             android:name=".CentliNotificationListener"
             android:label="@string/notification_listener_label"

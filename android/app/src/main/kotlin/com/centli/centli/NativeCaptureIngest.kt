@@ -161,9 +161,9 @@ object NativeCaptureIngest {
         val merchant: String?,
     )
 
-    // Fallback hardcode when rules_json empty/corrupt (pre-T2-2 behavior).
-    private val MUST_ALIPAY: Pattern = Pattern.compile("支付成功|付款成功|交易成功|交易提醒|交易通知|消费成功|已支付|扣款成功|扣款提醒|已扣款|支出\\s*[¥￥]|向.+付款|付款|支付金额|支付\\s*[¥￥]|付款\\s*[¥￥]|商户消费|成功付款|还款|还清")
-    private val MUST_WECHAT: Pattern = Pattern.compile("微信支付|支付成功|已支付|付款成功|商户消费|支付金额|付款金额|已付款|扣款成功")
+    // G29.1: widened keyword gate; Dart noise filter drops marketing without amount.
+    private val MUST_ALIPAY: Pattern = Pattern.compile("交易|支付|付款|收款|退款|红包|转账|扣款|消费|入账|到账|支出|收入|余额")
+    private val MUST_WECHAT: Pattern = Pattern.compile("交易|支付|付款|收款|退款|红包|转账|扣款|消费|入账|到账|支出|收入|余额|零钱")
     private val EXCLUDE_COMMON: Pattern = Pattern.compile(
         "验证码|登录|朋友圈|微信消息|发来一条|会话|拍了拍|互动消息|新的朋友|群聊|" +
             "语音通话|视频通话|收到一条|发来一个红包|领取了你的红包|服务通知|余额宝收益|生活号|" +

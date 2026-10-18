@@ -1,6 +1,7 @@
 import '../../core/utils/money.dart';
 import '../../data/db/centli_database.dart';
 import 'notification_listener_stub.dart';
+import 'notification_noise.dart';
 import 'notification_parse.dart';
 import 'noti_template_store.dart';
 
@@ -46,8 +47,29 @@ abstract final class NotificationIngestBridge {
 
     final templates = await NotiTemplateStore.load();
     final parsed = parseNotification(notification, templates);
-    // No payment template matched (mustContain / exclude) → drop chat & other pushes.
-    if (parsed.templateId == null) {
+    final matched = parsed.templateId != null;
+    // G29.1: widened native gate + Dart noise filter → G28 drops (reason=weak).
+    if (shouldDropAsWeakNoise(
+          templateMatched: matched,
+          amountMinor: parsed.amountMinor,
+          title: notification.title,
+          text: notification.text,
+        ) ||
+        (!matched && parsed.amountMinor == null)) {
+      await NotificationCaptureStub.recordDroppedNotification(
+        pkg: notification.pkg,
+        title: notification.title,
+        reason: 'weak',
+      );
+      return null;
+    }
+    // No payment template matched but has amount → still try ingest as soft? keep prior: drop.
+    if (!matched) {
+      await NotificationCaptureStub.recordDroppedNotification(
+        pkg: notification.pkg,
+        title: notification.title,
+        reason: 'weak',
+      );
       return null;
     }
     final key = dedupeKey(notification, parsed);

@@ -132,6 +132,17 @@ class MainActivity : FlutterFragmentActivity() {
                     CentliNotificationListener.clearDroppedNotifications(this)
                     result.success(null)
                 }
+                "recordDroppedNotification" -> {
+                    @Suppress("UNCHECKED_CAST")
+                    val args = call.arguments as? Map<String, Any?> ?: emptyMap()
+                    val pkg = args["pkg"] as? String ?: ""
+                    val title = args["title"] as? String ?: ""
+                    val reason = args["reason"] as? String ?: "weak"
+                    if (pkg.isNotBlank()) {
+                        CentliNotificationListener.recordDrop(this, pkg, title, reason)
+                    }
+                    result.success(null)
+                }
                 else -> result.notImplemented()
             }
         }
