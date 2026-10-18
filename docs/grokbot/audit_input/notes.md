@@ -1,103 +1,27 @@
 # Centli B4-PATCH G26–G29 notes
 
 Generated: 2026-10-18 (Asia/Shanghai)
-HEAD: 254bfe7988e36e9525735d4ddb43366805d5e6ff
+HEAD: `78141419ef0bad42d4822211bb882ebe10ae6dbb`
 Version: `1.4.4+10`
 schemaVersion: `11`
 
-Baseline HEAD (before G25): `f18dabd` · version `1.4.2+8` · schema **11** · tests **224**
+Baseline HEAD (before G26): `60035e6` · version `1.4.2+8` · schema **11** · tests **225**
 
 ## Subtask → commit
 
 | Task | hash | Notes |
 |---|---|---|
-| G25.1 | `d87edf0` | verify.sh/ps1: delete artifacts → generate → MISSING/EMPTY asserts; remove always-true HEAD compare |
-| G25.2 | `e6da77e` | `test/audit_notes_freshness_test.dart`: notes HEAD ancestor-or-equal via merge-base |
-| G25.3 | `1286607` | Annotate invalid G23 Corrupted-HEAD.txt STALE self-proof as 无效; paste self-proof outputs |
-
-## G23 self-prove（产品方否定 / G25.3）
-
-- ~~Corrupted `HEAD.txt` to `deadbeef…` → assert prints `AUDIT INPUT STALE: HEAD.txt != git HEAD` and exits 1~~ **本验证无效**：脚本会先用 git HEAD 覆写 HEAD.txt 再比对，所以恒真。已由 G25 替换为「先删再写 + 存在性断言」。
-- Full verify run regenerates all audit_input; HEAD.txt == `git rev-parse HEAD`
-- `git rm --cached` all previously tracked `audit_input/*` (keep on disk) to match README「该目录不进版本库」
-- Version: stay **`1.4.2+8`** (G23.7: no bump for tooling)
-
-## G25.1 self-prove (raw)
-
-### A) commits.txt generation commented out → nonzero + MISSING/EMPTY
-
-```
-00:06 +224: All tests passed!
-AUDIT INPUT MISSING/EMPTY: commits.txt
-EXITCODE=1
-```
-
-### B) restored → VERIFY: OK
-
-```
-00:06 +224: All tests passed!
-analyze_rc=0 test_rc=0
-VERIFY: OK
-EXITCODE=0
-```
-
-## G25.2 self-prove (raw)
-
-### A) notes.md HEAD set to `deadbeefdeadbeefdeadbeefdeadbeefdeadbeef` → test fails
-
-```
-00:00 +0 -1: notes.md HEAD is ancestor of or equal to current HEAD [E]
-  Expected: <0>
-    Actual: <128>
-  notes.md HEAD `deadbeefdeadbeefdeadbeefdeadbeefdeadbeef` must be ancestor of or equal to current HEAD `d87edf0399ddd9952756665c5bd253706dfaceb7` (merge-base --is-ancestor exit 128)
-00:00 +0 -1: Some tests failed.
-EXITCODE=1
-```
-
-### B) restored → test passes
-
-```
-00:00 +0: notes.md HEAD is ancestor of or equal to current HEAD
-00:00 +1: All tests passed!
-EXITCODE=0
-```
-
-## Gate
-
-### analyze
-Deferred to verify script (No issues found! on last verify run)
-
-### test
-Last verify: `00:06 +224: All tests passed!` full run **225 passed / 0 failed**
-
-### verify
-`VERIFY: OK` (G25.1 self-prove B)
-
-## Risks / scope
-
-- Version **not** bumped (G25.5)
-- No APK / no push / no amend
-- Never touched `docs/grokbot/audit_report_*.md`
-- G23 Corrupted-HEAD.txt STALE self-proof marked **无效** (not deleted)
-
-## Final
-- Final HEAD: `b2ba38c4b586a2deb04e7bfa0493b4d01f8b1936` (`b2ba38c`)
-- version: **1.4.2+8** · schema **11** · tests **225**
-
-
----
-
-# G26–G29 (baseline 60035e6 → …)
-
-Baseline: `60035e6` · version `1.4.2+8` · schema **11** · tests **225**
-User override version bump (once at wrap): **`1.4.4+10`**
-
-## Subtask → commit (G26+)
-
-| Task | hash | Notes |
-|---|---|---|
-| G26.1 | `2098145` | showDragHandle + golden via real modal; top pad tightened 8dp |
+| G26.1 | `2098145` | showDragHandle + golden via real modal; top pad tightened |
 | G26.2 | `5e95ffc` | empty hint 记账→记一笔; shell comment |
+| G26.3–G26.4 | `7d18d36` | AC-only warning; backspace Icons.backspace_outlined |
+| G26.5 | `5309036` | list tile · 不计入 (muted) |
+| G26.6 | `7ca216e` | pending empty copy → 识别规则页点试一试 |
+| G26.7 | `c7679df` | Center SegmentedButton + 411dp layout test |
+| G27 | `d2b8eb1` | /home/pending?tab=pending + route_literals_test |
+| G28 | `a48016a` | drops ring buffer + extras union + auto_capture card |
+| G29 | `86c280b` | widen keywords + noti actions 入账/改金额/忽略 |
+| version | `7390056` | bump → **1.4.4+10** + READMEs |
+| wrap | `5b066f5` / `254bfe7` / tip | analyze cleanup + notes stamp |
 
 ## G26.1 self-prove (raw)
 
@@ -191,7 +115,8 @@ Note: go_router 16 `findMatch` does not throw on unknown paths; test asserts `ma
 ## Wrap / Final
 
 - Baseline HEAD: `60035e6` · version `1.4.2+8` · schema **11** · tests **225**
-- Final HEAD: `5b066f5450891a48844eccce101bf8aa5c627b37` (`5b066f5`)
-- version: **1.4.4+10** · schema **11** · tests **237** (`VERIFY: OK`)
-- Device gaps: G28 kill-restart join-watch; G29 notification action on-device — not run (no Android device).
+- Final HEAD: `78141419ef0bad42d4822211bb882ebe10ae6dbb` (`7814141`) — tip after this notes commit will be newer; freshness test requires ancestor-or-equal
+- version: **1.4.4+10** · schema **11** · tests **237** (`VERIFY: OK`, analyze_rc=0 test_rc=0)
+- Device gaps: G28 kill-restart join-watch; G29 notification actions on-device — **not run** (no Android device on Windows agent)
 - 暂无移出入口 (extra_watched remove UI)
+- No push / no APK / audit_report_*.md left untracked
