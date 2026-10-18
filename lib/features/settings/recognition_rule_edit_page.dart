@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+
 import '../../core/utils/id_gen.dart';
 import '../../platform/notifications/notification_parse.dart';
 import '../../platform/notifications/noti_template_store.dart';
+import '../../app/theme.dart';
 
 /// Add / edit a user recognition rule.
 class RecognitionRuleEditPage extends StatefulWidget {
@@ -217,7 +219,7 @@ class _RecognitionRuleEditPageState extends State<RecognitionRuleEditPage> {
                     validator: (v) =>
                         (v == null || v.trim().isEmpty) ? '请填写名称' : null,
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: CentliSpacing.section),
                   DropdownButtonFormField<String>(
                     initialValue: _appChoice,
                     decoration: const InputDecoration(
@@ -243,7 +245,7 @@ class _RecognitionRuleEditPageState extends State<RecognitionRuleEditPage> {
                     },
                   ),
                   if (_appChoice == 'other') ...[
-                    const SizedBox(height: 12),
+                    const SizedBox(height: CentliSpacing.section),
                     TextFormField(
                       controller: _pkgOtherCtrl,
                       decoration: const InputDecoration(
@@ -258,7 +260,7 @@ class _RecognitionRuleEditPageState extends State<RecognitionRuleEditPage> {
                       },
                     ),
                   ],
-                  const SizedBox(height: 12),
+                  const SizedBox(height: CentliSpacing.section),
                   DropdownButtonFormField<String?>(
                     initialValue: _accountHint,
                     decoration: const InputDecoration(
@@ -273,12 +275,12 @@ class _RecognitionRuleEditPageState extends State<RecognitionRuleEditPage> {
                     ],
                     onChanged: (v) => setState(() => _accountHint = v),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: CentliSpacing.sectionLoose),
                   Text(
                     '匹配条件（正则，普通关键词用 | 分隔）',
                     style: Theme.of(context).textTheme.titleSmall,
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: CentliSpacing.item),
                   TextFormField(
                     controller: _mustCtrl,
                     decoration: const InputDecoration(
@@ -287,7 +289,7 @@ class _RecognitionRuleEditPageState extends State<RecognitionRuleEditPage> {
                       hintText: '支付成功|付款成功',
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: CentliSpacing.section),
                   TextFormField(
                     controller: _excludeCtrl,
                     decoration: const InputDecoration(
@@ -296,7 +298,7 @@ class _RecognitionRuleEditPageState extends State<RecognitionRuleEditPage> {
                       hintText: '验证码|登录',
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: CentliSpacing.section),
                   TextFormField(
                     controller: _titleCtrl,
                     decoration: const InputDecoration(
@@ -304,12 +306,12 @@ class _RecognitionRuleEditPageState extends State<RecognitionRuleEditPage> {
                       border: OutlineInputBorder(),
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: CentliSpacing.sectionLoose),
                   Text(
                     '提取',
                     style: Theme.of(context).textTheme.titleSmall,
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: CentliSpacing.item),
                   TextFormField(
                     controller: _amountCtrl,
                     decoration: const InputDecoration(
@@ -319,7 +321,7 @@ class _RecognitionRuleEditPageState extends State<RecognitionRuleEditPage> {
                     ),
                     maxLines: 2,
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: CentliSpacing.section),
                   TextFormField(
                     controller: _merchantCtrl,
                     decoration: const InputDecoration(
@@ -335,7 +337,7 @@ class _RecognitionRuleEditPageState extends State<RecognitionRuleEditPage> {
                     value: _merchantFromTitle,
                     onChanged: (v) => setState(() => _merchantFromTitle = v),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: CentliSpacing.sectionLoose + CentliSpacing.item),
                   FilledButton(
                     onPressed: _saving ? null : _save,
                     child: const Text('保存'),

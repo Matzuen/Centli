@@ -14,6 +14,7 @@ class NotiTemplate {
     this.merchantFromTitle = false,
     this.defaultAccountHint,
     this.direction = 'out',
+    this.matchOn = 'body',
   });
 
   /// Allowed values: `in` | `out` | `refund` | `repay`. Use [normalizeDirection].
@@ -41,6 +42,17 @@ class NotiTemplate {
   /// Flow direction: `in` (income), `out` (expense), `refund`, `repay`.
   final String direction;
 
+  /// Which text the keyword rules run against: `body` (标题+正文, legacy) or
+  /// `title` (只匹配通知标题 —— 正文不参与过滤). `title` is the current
+  /// default for the built-in Alipay / WeChat rules.
+  final String matchOn;
+
+  bool get matchesTitleOnly => matchOn == 'title';
+
+  /// Text the must/exclude regexes run against.
+  String keywordText(RawNotification raw) =>
+      matchesTitleOnly ? raw.title : raw.fullText;
+
   String get displayName {
     final n = name?.trim();
     if (n != null && n.isNotEmpty) return n;
@@ -61,6 +73,7 @@ class NotiTemplate {
       merchantFromTitle: (j['merchantFromTitle'] as bool?) ?? false,
       defaultAccountHint: j['defaultAccountHint'] as String?,
       direction: normalizeDirection(j['direction'] as String?),
+      matchOn: (j['matchOn'] as String?) ?? 'body',
     );
   }
 
@@ -221,102 +234,116 @@ const kAmountRegex =
 const kAmountRegexYuan =
     r'([0-9]+(?:,[0-9]{3})*(?:\.[0-9]{1,2})?)\s*元';
 
-/// Built-in templates (also mirrored in assets/noti_templates.json).
+/// 标题关键词（只看标题，正文不参与过滤）。
+///
+/// 用户规则：微信 / 支付宝的通知，只要**标题**含支付 / 交易 / 收款 / 退款 /
+/// 转账 / 到账 / 还款等词就解析，不再对正文做任何过滤。
+const kTitlePayWords = r'支付|付款|消费|扣款|支出|转出|汇款|缴费|充值|买单|付款码|交易';
+const kTitleReceiveWords = r'收款|到账|入账|收到|转入|转入零钱|零钱转入';
+const kTitleRefundWords = r'退款|退回|已退';
+const kTitleRepayWords = r'还款|还清|代扣';
+const kTitleTransferWords = r'转账';
+
+/// 内置规则（同时镜像到 assets/noti_templates.json）。
+///
+/// 顺序即优先级：到账 / 收款 → 退款 → 还款 → 转账 → 支付。
+/// 一条通知可能同时含多个词（「转账到账」「还款…扣款」），先命中的决定方向。
+/// `matchOn: 'title'` 表示**只匹配标题**；`excludeTextRegex` 也已收窄到
+/// 只保留标题里出现的噪音（验证码 / 登录 / 朋友圈等），正文不再过滤。
 List<NotiTemplate> builtinNotiTemplates() => const [
-      // Income / refund first so they win over expense when keywords overlap.
       NotiTemplate(
         id: 'alipay_receive_zh',
         name: '支付宝收款到账',
         packages: ['com.eg.android.AlipayGphone'],
-        mustContainRegex: r'收款到账|收款成功|已收款|收到一笔|转入成功|余额.*转入',
-        excludeTextRegex: r'验证码|登录|服务通知|生活号|退款',
+        // 「转账」单独出现可能是「你发起了…转账」（支出），所以收入侧只认
+        // 到账 / 收款类词；真正的转入会同时带「到账」。
+        mustContainRegex: kTitleReceiveWords,
+        // 标题里的「验证码到账」这类仍要挡掉；正文不再参与。
+        excludeTextRegex: r'验证码|登录|服务通知|账单',
         amountRegex: kAmountRegex,
         merchantRegex: r'(?:来自|从)\s*(.+?)(?:\s|$)',
         defaultAccountHint: 'alipay',
         direction: 'in',
+        matchOn: 'title',
       ),
       NotiTemplate(
         id: 'alipay_refund_zh',
         name: '支付宝退款',
         packages: ['com.eg.android.AlipayGphone'],
-        mustContainRegex: r'退款成功|已退款|退款到账|退回成功|退款金额',
-        excludeTextRegex: r'验证码|登录|服务通知|生活号',
+        mustContainRegex: kTitleRefundWords,
+        excludeTextRegex: r'验证码|登录',
         amountRegex: kAmountRegex,
         merchantRegex: r'(?:商户|来自)\s*(.+?)(?:\s|$)',
         defaultAccountHint: 'alipay',
         direction: 'refund',
+        matchOn: 'title',
       ),
       NotiTemplate(
         id: 'wechat_receive_zh',
         name: '微信收款到账',
         packages: ['com.tencent.mm'],
-        // Prefer miss over wrong direction for 红包: only clear receive phrases.
-        mustContainRegex:
-            r'收款到账|收款成功|已收款|收到转账|零钱转入|微信收款|红包到账|你领取了.+红包|收到.*红包',
-        excludeTextRegex:
-            r'验证码|登录|朋友圈|发来一条|会话|拍了拍|互动消息|新的朋友|群聊|语音通话|视频通话|发来一个红包|退款',
+        // 「转账成功」「你领取了…红包」都是钱进来了，算收入。
+        mustContainRegex: '$kTitleReceiveWords|你领取了.+红包|转账成功|已转账',
+        excludeTextRegex: r'验证码|登录|朋友圈|拍了拍|互动消息|新的朋友',
         amountRegex: kAmountRegex,
         merchantRegex: r'(?:来自|从)\s*(.+?)(?:\s|$)',
         defaultAccountHint: 'wechat',
         direction: 'in',
+        matchOn: 'title',
       ),
       NotiTemplate(
         id: 'wechat_refund_zh',
         name: '微信退款',
         packages: ['com.tencent.mm'],
-        mustContainRegex: r'退款成功|已退款|退款到账|退回|退款金额',
-        excludeTextRegex:
-            r'验证码|登录|朋友圈|发来一条|会话|拍了拍|互动消息|新的朋友|群聊|语音通话|视频通话',
+        mustContainRegex: kTitleRefundWords,
+        excludeTextRegex: r'验证码|登录',
         amountRegex: kAmountRegex,
         merchantRegex: r'(?:商户|来自)\s*(.+?)(?:\s|$)',
         defaultAccountHint: 'wechat',
         direction: 'refund',
+        matchOn: 'title',
+      ),
+      // 还款必须在支付之前：「还款…扣款」同时命中扣款。
+      NotiTemplate(
+        id: 'alipay_repay_zh',
+        name: '支付宝还款',
+        packages: ['com.eg.android.AlipayGphone'],
+        mustContainRegex: kTitleRepayWords,
+        // 提醒类标题（花呗还款提醒）里也会出现「还款」「待还」，必须挡掉，
+        // 否则把「请于…前还款」当成已经还了。
+        excludeTextRegex:
+            r'验证码|登录|待还|应还|请于|即将到期|还款提醒|账单提醒|账单日|还款日',
+        amountRegex: kAmountRegex,
+        defaultAccountHint: 'alipay',
+        direction: 'repay',
+        matchOn: 'title',
       ),
       NotiTemplate(
         id: 'alipay_pay_success_zh',
         name: '支付宝交易/支付成功',
         packages: ['com.eg.android.AlipayGphone'],
-        // Prefer occasional false positives into 待确认 over missing pay notices.
-        // Do NOT use bare 「支付」 — it matches 「支付宝」 itself.
-        // Income keywords removed from exclude (see receive/refund templates).
-        mustContainRegex:
-            r'支付成功|付款成功|交易成功|交易提醒|交易通知|消费成功|已支付|扣款成功|扣款提醒|已扣款|支出\s*[¥￥]|向.+付款|付款|支付金额|支付\s*[¥￥]|付款\s*[¥￥]|商户消费|成功付款',
-        excludeTextRegex:
-            r'验证码|登录|服务通知|余额宝收益|生活号|收款到账|收款成功|已收款|退款成功|已退款',
+        mustContainRegex: kTitlePayWords,
+        excludeTextRegex: r'验证码|登录|服务通知|生活号',
         amountRegex: kAmountRegex,
         merchantRegex: r'(?:向|给|商户)\s*(.+?)(?:\s|$)',
         defaultAccountHint: 'alipay',
         direction: 'out',
-      ),
-      // T0B-2/T0B-3: Huabei/credit repay; exclude 待还/应还 reminders.
-      NotiTemplate(
-        id: 'alipay_repay_zh',
-        name: '支付宝还款',
-        packages: ['com.eg.android.AlipayGphone'],
-        mustContainRegex: r'还款|还清|已还清|账单还清',
-        excludeTextRegex:
-            r'验证码|登录|服务通知|生活号|待还|应还|请于|即将到期|还款提醒|账单提醒',
-        amountRegex: kAmountRegex,
-        defaultAccountHint: 'alipay',
-        direction: 'repay',
+        matchOn: 'title',
       ),
       NotiTemplate(
         id: 'wechat_pay_success_zh',
         name: '微信支付成功',
         packages: ['com.tencent.mm'],
-        mustContainRegex:
-            r'微信支付|支付成功|已支付|付款成功|商户消费|支付金额|付款金额|已付款|扣款成功',
-        // Keep chat / peer-claimed 红包 excluded; income uses dedicated template.
-        excludeTextRegex:
-            r'验证码|登录|朋友圈|微信消息|发来一条|会话|拍了拍|互动消息|新的朋友|群聊|语音通话|视频通话|收到一条|发来一个红包|领取了你的红包|收款到账|退款成功|已退款',
+        mustContainRegex: '$kTitlePayWords|$kTitleTransferWords',
+        excludeTextRegex: r'验证码|登录|朋友圈|会话|拍了拍|互动消息|新的朋友',
         amountRegex: kAmountRegex,
         merchantRegex: r'(.+?)(?:-微信支付|付款)',
         merchantFromTitle: true,
         defaultAccountHint: 'wechat',
         direction: 'out',
+        matchOn: 'title',
       ),
     ];
-
 ParseResult parseNotification(
   RawNotification raw, [
   List<NotiTemplate>? templates,
@@ -331,15 +358,17 @@ ParseResult parseNotification(
           !RegExp(t.titleRegex!).hasMatch(raw.title)) {
         continue;
       }
-      final body = raw.fullText;
+      // 标题模式下只检查标题：正文里有任何词都不再影响是否解析。
+      final keywordText = t.keywordText(raw);
       if (t.excludeTextRegex != null &&
-          RegExp(t.excludeTextRegex!).hasMatch(body)) {
+          RegExp(t.excludeTextRegex!).hasMatch(keywordText)) {
         continue;
       }
       if (t.mustContainRegex != null &&
-          !RegExp(t.mustContainRegex!).hasMatch(body)) {
+          !RegExp(t.mustContainRegex!).hasMatch(keywordText)) {
         continue;
       }
+      final body = raw.fullText;
 
       final extracted = _extractAmount(body, t.amountRegex, t.defaultCurrency);
       String? merchant;
@@ -423,17 +452,19 @@ ParseExplainResult explainNotificationParse(
       steps.add('「$label」标题未匹配 titleRegex');
       continue;
     }
-    final body = raw.fullText;
+    final keywordText = t.keywordText(raw);
+    final where = t.matchesTitleOnly ? '标题' : '标题+正文';
     if (t.excludeTextRegex != null &&
-        RegExp(t.excludeTextRegex!).hasMatch(body)) {
-      steps.add('「$label」命中排除词 excludeTextRegex');
+        RegExp(t.excludeTextRegex!).hasMatch(keywordText)) {
+      steps.add('「$label」$where命中排除词 excludeTextRegex');
       continue;
     }
     if (t.mustContainRegex != null &&
-        !RegExp(t.mustContainRegex!).hasMatch(body)) {
-      steps.add('「$label」未含必须关键词 mustContainRegex');
+        !RegExp(t.mustContainRegex!).hasMatch(keywordText)) {
+      steps.add('「$label」$where未含必须关键词 mustContainRegex（只看标题）');
       continue;
     }
+    final body = raw.fullText;
 
     final extracted = _extractAmount(body, t.amountRegex, t.defaultCurrency);
     String? merchant;

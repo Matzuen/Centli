@@ -1,6 +1,6 @@
 {
-  "version": 7,
-  "updated_at": "2026-10-17",
+  "version": 9,
+  "updated_at": "2026-10-18",
   "templates": [
     {
       "id": "alipay_receive_zh",
@@ -10,13 +10,14 @@
       ],
       "defaultCurrency": "CNY",
       "titleRegex": null,
-      "mustContainRegex": "收款到账|收款成功|已收款|收到一笔|转入成功|余额.*转入",
-      "excludeTextRegex": "验证码|登录|服务通知|生活号|退款",
-      "amountRegex": "(?:(?:USD|EUR|CNY|HKD|TWD|JPY)\\s*)?(?:¥|￥|\\$|€)?\\s*([0-9]+(?:,[0-9]{3})*(?:\\.[0-9]{1,2})?)",
+      "mustContainRegex": "收款|到账|入账|收到|转入|转入零钱|零钱转入",
+      "excludeTextRegex": "验证码|登录|服务通知|账单",
+      "amountRegex": "(?:(?:USD|EUR|CNY|HKD|TWD|JPY)\\s*|(?:¥|￥|\\$|€))?\\s*([0-9]+(?:,[0-9]{3})*(?:\\.[0-9]{1,2})?)",
       "merchantRegex": "(?:来自|从)\\s*(.+?)(?:\\s|$)",
       "merchantFromTitle": false,
       "defaultAccountHint": "alipay",
-      "direction": "in"
+      "direction": "in",
+      "matchOn": "title"
     },
     {
       "id": "alipay_refund_zh",
@@ -26,13 +27,14 @@
       ],
       "defaultCurrency": "CNY",
       "titleRegex": null,
-      "mustContainRegex": "退款成功|已退款|退款到账|退回成功|退款金额",
-      "excludeTextRegex": "验证码|登录|服务通知|生活号",
-      "amountRegex": "(?:(?:USD|EUR|CNY|HKD|TWD|JPY)\\s*)?(?:¥|￥|\\$|€)?\\s*([0-9]+(?:,[0-9]{3})*(?:\\.[0-9]{1,2})?)",
+      "mustContainRegex": "退款|退回|已退",
+      "excludeTextRegex": "验证码|登录",
+      "amountRegex": "(?:(?:USD|EUR|CNY|HKD|TWD|JPY)\\s*|(?:¥|￥|\\$|€))?\\s*([0-9]+(?:,[0-9]{3})*(?:\\.[0-9]{1,2})?)",
       "merchantRegex": "(?:商户|来自)\\s*(.+?)(?:\\s|$)",
       "merchantFromTitle": false,
       "defaultAccountHint": "alipay",
-      "direction": "refund"
+      "direction": "refund",
+      "matchOn": "title"
     },
     {
       "id": "wechat_receive_zh",
@@ -42,13 +44,14 @@
       ],
       "defaultCurrency": "CNY",
       "titleRegex": null,
-      "mustContainRegex": "收款到账|收款成功|已收款|收到转账|零钱转入|微信收款|红包到账|你领取了.+红包|收到红包",
-      "excludeTextRegex": "验证码|登录|朋友圈|发来一条|会话|拍了拍|互动消息|新的朋友|群聊|语音通话|视频通话|发来一个红包|领取了你的红包|退款",
-      "amountRegex": "(?:(?:USD|EUR|CNY|HKD|TWD|JPY)\\s*)?(?:¥|￥|\\$|€)?\\s*([0-9]+(?:,[0-9]{3})*(?:\\.[0-9]{1,2})?)",
+      "mustContainRegex": "收款|到账|入账|收到|转入|转入零钱|零钱转入|你领取了.+红包|转账成功|已转账",
+      "excludeTextRegex": "验证码|登录|朋友圈|拍了拍|互动消息|新的朋友",
+      "amountRegex": "(?:(?:USD|EUR|CNY|HKD|TWD|JPY)\\s*|(?:¥|￥|\\$|€))?\\s*([0-9]+(?:,[0-9]{3})*(?:\\.[0-9]{1,2})?)",
       "merchantRegex": "(?:来自|从)\\s*(.+?)(?:\\s|$)",
       "merchantFromTitle": false,
       "defaultAccountHint": "wechat",
-      "direction": "in"
+      "direction": "in",
+      "matchOn": "title"
     },
     {
       "id": "wechat_refund_zh",
@@ -58,29 +61,14 @@
       ],
       "defaultCurrency": "CNY",
       "titleRegex": null,
-      "mustContainRegex": "退款成功|已退款|退款到账|退回|退款金额",
-      "excludeTextRegex": "验证码|登录|朋友圈|发来一条|会话|拍了拍|互动消息|新的朋友|群聊|语音通话|视频通话",
-      "amountRegex": "(?:(?:USD|EUR|CNY|HKD|TWD|JPY)\\s*)?(?:¥|￥|\\$|€)?\\s*([0-9]+(?:,[0-9]{3})*(?:\\.[0-9]{1,2})?)",
+      "mustContainRegex": "退款|退回|已退",
+      "excludeTextRegex": "验证码|登录",
+      "amountRegex": "(?:(?:USD|EUR|CNY|HKD|TWD|JPY)\\s*|(?:¥|￥|\\$|€))?\\s*([0-9]+(?:,[0-9]{3})*(?:\\.[0-9]{1,2})?)",
       "merchantRegex": "(?:商户|来自)\\s*(.+?)(?:\\s|$)",
       "merchantFromTitle": false,
       "defaultAccountHint": "wechat",
-      "direction": "refund"
-    },
-    {
-      "id": "alipay_pay_success_zh",
-      "name": "支付宝交易/支付成功",
-      "packages": [
-        "com.eg.android.AlipayGphone"
-      ],
-      "defaultCurrency": "CNY",
-      "titleRegex": null,
-      "mustContainRegex": "支付成功|付款成功|交易成功|交易提醒|交易通知|消费成功|已支付|扣款成功|扣款提醒|已扣款|支出\\s*[¥￥]|向.+付款|付款|支付金额|支付\\s*[¥￥]|付款\\s*[¥￥]|商户消费|成功付款",
-      "excludeTextRegex": "验证码|登录|服务通知|余额宝收益|生活号|收款到账|收款成功|已收款|退款成功|已退款",
-      "amountRegex": "(?:(?:USD|EUR|CNY|HKD|TWD|JPY)\\s*)?(?:¥|￥|\\$|€)?\\s*([0-9]+(?:,[0-9]{3})*(?:\\.[0-9]{1,2})?)",
-      "merchantRegex": "(?:向|给|商户)\\s*(.+?)(?:\\s|$)",
-      "merchantFromTitle": false,
-      "defaultAccountHint": "alipay",
-      "direction": "out"
+      "direction": "refund",
+      "matchOn": "title"
     },
     {
       "id": "alipay_repay_zh",
@@ -90,13 +78,31 @@
       ],
       "defaultCurrency": "CNY",
       "titleRegex": null,
-      "mustContainRegex": "还款|还清|已还清|账单还清",
-      "excludeTextRegex": "验证码|登录|服务通知|生活号|待还|应还|请于|即将到期|还款提醒|账单提醒",
+      "mustContainRegex": "还款|还清|代扣",
+      "excludeTextRegex": "验证码|登录|待还|应还|请于|即将到期|还款提醒|账单提醒|账单日|还款日",
       "amountRegex": "(?:(?:USD|EUR|CNY|HKD|TWD|JPY)\\s*|(?:¥|￥|\\$|€))?\\s*([0-9]+(?:,[0-9]{3})*(?:\\.[0-9]{1,2})?)",
       "merchantRegex": null,
       "merchantFromTitle": false,
       "defaultAccountHint": "alipay",
-      "direction": "repay"
+      "direction": "repay",
+      "matchOn": "title"
+    },
+    {
+      "id": "alipay_pay_success_zh",
+      "name": "支付宝交易/支付成功",
+      "packages": [
+        "com.eg.android.AlipayGphone"
+      ],
+      "defaultCurrency": "CNY",
+      "titleRegex": null,
+      "mustContainRegex": "支付|付款|消费|扣款|支出|转出|汇款|缴费|充值|买单|付款码|交易",
+      "excludeTextRegex": "验证码|登录|服务通知|生活号",
+      "amountRegex": "(?:(?:USD|EUR|CNY|HKD|TWD|JPY)\\s*|(?:¥|￥|\\$|€))?\\s*([0-9]+(?:,[0-9]{3})*(?:\\.[0-9]{1,2})?)",
+      "merchantRegex": "(?:向|给|商户)\\s*(.+?)(?:\\s|$)",
+      "merchantFromTitle": false,
+      "defaultAccountHint": "alipay",
+      "direction": "out",
+      "matchOn": "title"
     },
     {
       "id": "wechat_pay_success_zh",
@@ -106,13 +112,14 @@
       ],
       "defaultCurrency": "CNY",
       "titleRegex": null,
-      "mustContainRegex": "微信支付|支付成功|已支付|付款成功|商户消费|支付金额|付款金额|已付款|扣款成功",
-      "excludeTextRegex": "验证码|登录|朋友圈|微信消息|发来一条|会话|拍了拍|互动消息|新的朋友|群聊|语音通话|视频通话|收到一条|发来一个红包|领取了你的红包|收款到账|退款成功|已退款",
-      "amountRegex": "(?:(?:USD|EUR|CNY|HKD|TWD|JPY)\\s*)?(?:¥|￥|\\$|€)?\\s*([0-9]+(?:,[0-9]{3})*(?:\\.[0-9]{1,2})?)",
+      "mustContainRegex": "支付|付款|消费|扣款|支出|转出|汇款|缴费|充值|买单|付款码|交易|转账",
+      "excludeTextRegex": "验证码|登录|朋友圈|会话|拍了拍|互动消息|新的朋友",
+      "amountRegex": "(?:(?:USD|EUR|CNY|HKD|TWD|JPY)\\s*|(?:¥|￥|\\$|€))?\\s*([0-9]+(?:,[0-9]{3})*(?:\\.[0-9]{1,2})?)",
       "merchantRegex": "(.+?)(?:-微信支付|付款)",
       "merchantFromTitle": true,
       "defaultAccountHint": "wechat",
-      "direction": "out"
+      "direction": "out",
+      "matchOn": "title"
     }
   ]
 }

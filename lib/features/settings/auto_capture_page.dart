@@ -273,12 +273,12 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
                 Text('版本：$_templateVersion'),
                 Text('来源：$_templateSource'),
                 if (_templateUpdatedAt != null) Text('更新于：$_templateUpdatedAt'),
-                const SizedBox(height: 12),
+                const SizedBox(height: CentliSpacing.section),
                 Text(
                   '模板共 ${templates.length} 条',
                   style: Theme.of(ctx).textTheme.titleSmall,
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: CentliSpacing.item),
                 for (final t in templates) ...[
                   ListTile(
                     contentPadding: EdgeInsets.zero,
@@ -287,7 +287,7 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
                     subtitle: Text(t.packages.map(_pkgLabel).join('、')),
                   ),
                 ],
-                const SizedBox(height: 4),
+                const SizedBox(height: CentliSpacing.dense),
                 Text(
                   '监听应用：${apps.join('、')}',
                   style: Theme.of(ctx).textTheme.bodySmall,

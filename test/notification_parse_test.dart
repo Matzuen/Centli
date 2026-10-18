@@ -140,7 +140,7 @@ group('payment filter drops chat / non-pay', () {
       expect(r.amountMinor, 4200);
     });
 
-    test('alipay non-pay message without keywords is dropped', () {
+    test('alipay 标题含「支付宝」→ 会被抓进待确认（v9 只看标题）', () {
       final raw = RawNotification(
         pkg: 'com.eg.android.AlipayGphone',
         title: '支付宝',
@@ -148,8 +148,9 @@ group('payment filter drops chat / non-pay', () {
         whenMs: 1,
       );
       final r = parseNotification(raw);
-      expect(r.templateId, isNull);
-      expect(r.ok, isFalse);
+      // 「支付宝」本身含「支付」；宁可多抓进待确认，也不再靠正文过滤。
+      expect(r.templateId, 'alipay_pay_success_zh');
+      expect(r.ok, isFalse, reason: '无金额 → 解析失败但保留待确认');
     });
 
     test('alipay 扣款 wording matches', () {
@@ -202,7 +203,7 @@ group('payment filter drops chat / non-pay', () {
       expect(r.templateId, isNull);
     });
 
-    test('wechat 商户消费 matches', () {
+    test('wechat 关键词只在正文 → 不解析（v9 只看标题）', () {
       final raw = RawNotification(
         pkg: 'com.tencent.mm',
         title: '某某超市',
@@ -210,9 +211,8 @@ group('payment filter drops chat / non-pay', () {
         whenMs: 1,
       );
       final r = parseNotification(raw);
-      expect(r.templateId, 'wechat_pay_success_zh');
-      expect(r.ok, isTrue);
-      expect(r.amountMinor, 2550);
+      expect(r.templateId, isNull);
+      expect(r.ok, isFalse);
     });
 
     test('wechat 付款成功 matches', () {
@@ -281,7 +281,7 @@ group('manual capture parser (share/OCR/clipboard)', () {
     test('expense pay success carries direction out', () {
       final raw = RawNotification(
         pkg: 'com.eg.android.AlipayGphone',
-        title: '',
+        title: '支付成功',
         text: '向 星巴克 付款成功 ¥28.50',
         whenMs: 1,
       );
@@ -329,7 +329,7 @@ group('manual capture parser (share/OCR/clipboard)', () {
     test('alipay 收款到账 is direction in', () {
       final raw = RawNotification(
         pkg: 'com.eg.android.AlipayGphone',
-        title: '',
+        title: '收款到账',
         text: '收款到账 ¥200',
         whenMs: 1,
       );
@@ -343,7 +343,7 @@ group('manual capture parser (share/OCR/clipboard)', () {
     test('alipay 退款成功 is direction refund', () {
       final raw = RawNotification(
         pkg: 'com.eg.android.AlipayGphone',
-        title: '',
+        title: '退款成功',
         text: '退款成功 ¥28.50',
         whenMs: 1,
       );
@@ -357,7 +357,7 @@ group('manual capture parser (share/OCR/clipboard)', () {
     test('alipay pay success still out (regression)', () {
       final raw = RawNotification(
         pkg: 'com.eg.android.AlipayGphone',
-        title: '',
+        title: '支付成功',
         text: '向 星巴克 付款成功 ¥28.50',
         whenMs: 1,
       );
@@ -395,12 +395,14 @@ group('manual capture parser (share/OCR/clipboard)', () {
   });
 
   group('微信红包 income phrasing (T0)', () {
-    RawNotification wx(String text) => RawNotification(
-          pkg: 'com.tencent.mm',
-          title: '微信',
-          text: text,
-          whenMs: 1,
-        );
+    // v9：关键词只看标题。真实微信通知的标题就是「微信支付」「收款到账」
+  // 「你领取了一个红包」这类，所以 helper 默认把正文当作标题。
+  RawNotification wx(String text, {String? title}) => RawNotification(
+        pkg: 'com.tencent.mm',
+        title: title ?? text,
+        text: text,
+        whenMs: 1,
+      );
 
     test('你领取了张三的红包 is in', () {
       final r = parseNotification(wx('你领取了张三的红包 ¥8.88'));
@@ -417,12 +419,29 @@ group('manual capture parser (share/OCR/clipboard)', () {
       expect(r.amountMinor, 888);
     });
 
-    test('你领取了你的红包 is in (T0-1)', () {
+    // Loosened rules (v8): receipts for money *sent away*（对方领取了你的红包）
+    // are captured too — a duplicate in 待确认 beats a missed real income.
+    test('你领取了你的红包 is in (loosened v8)', () {
       final r = parseNotification(wx('你领取了你的红包 ¥8.88'));
       expect(r.ok, isTrue);
       expect(r.direction, 'in');
       expect(r.templateId, 'wechat_receive_zh');
       expect(r.amountMinor, 888);
+    });
+
+    test('对方已收款的转账回执 is captured as income (v8)', () {
+      final r = parseNotification(wx('微信支付转账成功，对方已收款 ¥50.00'));
+      expect(r.ok, isTrue);
+      expect(r.direction, 'in');
+      expect(r.templateId, 'wechat_receive_zh');
+      expect(r.amountMinor, 5000);
+    });
+
+    test('你发起了…转账：标题含「转账」→ 抓（v9 只看标题）', () {
+      final r = parseNotification(wx('你发起了 ¥30.00 的转账'));
+      // 标题里出现「转账」→ 进待确认；「你发起」是钱发出去，按支出。
+      expect(r.ok, isTrue);
+      expect(r.direction, 'out');
     });
 
     test('你收到一个红包 is in (T0-2)', () {
@@ -555,6 +574,8 @@ group('manual capture parser (share/OCR/clipboard)', () {
       expect(b.amountMinor, isNull);
     });
 
+    // Loosened rules (v8): 红包 discounts are no longer excluded, so the
+    // notice is captured and the first (paid) amount beats the discount.
     test('currency symbol wins over yuan fallback', () {
       final r = parseNotification(
         RawNotification(
