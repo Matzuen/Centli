@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import 'theme.dart';
+
 import '../features/assets/account_detail_page.dart';
 import '../features/assets/assets_page.dart';
 import '../features/assets/asset_types_page.dart';
@@ -289,14 +291,14 @@ class _UnknownRoutePage extends StatelessWidget {
                   size: 64,
                   color: scheme.onSurfaceVariant,
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: CentliSpacing.sectionLoose),
                 Text(
                   '页面不存在',
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.w600,
                       ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: CentliSpacing.item),
                 Text(
                   '这个地址打不开，回首页继续记账吧',
                   textAlign: TextAlign.center,
@@ -304,7 +306,7 @@ class _UnknownRoutePage extends StatelessWidget {
                         color: scheme.onSurfaceVariant,
                       ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: CentliSpacing.sectionLoose + CentliSpacing.item),
                 FilledButton.icon(
                   onPressed: () => context.go('/home'),
                   icon: const Icon(Icons.home_rounded),

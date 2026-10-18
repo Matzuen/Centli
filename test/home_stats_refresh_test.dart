@@ -35,7 +35,8 @@ void main() {
     // Keep providers alive so txnWriteSignal watch can trigger rebuilds.
     final homeSub = container.listen(homeRangeBaseProvider(args), (_, _) {});
     final nwSub = container.listen(homeNetWorthProvider(nwArgs), (_, _) {});
-    final statsSub = container.listen(statsBaseProvider(args), (_, _) {});
+    final statsSub =
+        container.listen(statsTotalsProvider(args), (_, _) {});
     addTearDown(homeSub.close);
     addTearDown(nwSub.close);
     addTearDown(statsSub.close);
@@ -43,7 +44,8 @@ void main() {
     final homeBefore =
         await container.read(homeRangeBaseProvider(args).future);
     final nwBefore = await container.read(homeNetWorthProvider(nwArgs).future);
-    final statsBefore = await container.read(statsBaseProvider(args).future);
+    final statsBefore =
+        await container.read(statsTotalsProvider(args).future);
 
     expect(homeBefore.expenseMinor, 0);
     expect(statsBefore.expenseMinor, 0);
@@ -58,12 +60,12 @@ void main() {
 
     // Wait until FutureProviders rebuild from txnWriteSignal (no invalidate).
     BaseRangeSummary? homeAfter;
-    BaseRangeSummary? statsAfter;
+    StatsTotals? statsAfter;
     BaseNetWorth? nwAfter;
     final deadline = DateTime.now().add(const Duration(seconds: 5));
     while (DateTime.now().isBefore(deadline)) {
       final h = container.read(homeRangeBaseProvider(args)).valueOrNull;
-      final s = container.read(statsBaseProvider(args)).valueOrNull;
+      final s = container.read(statsTotalsProvider(args)).valueOrNull;
       final n = container.read(homeNetWorthProvider(nwArgs)).valueOrNull;
       if (h != null &&
           s != null &&

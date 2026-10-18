@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+
 import '../utils/date_range.dart';
+import '../../app/theme.dart';
 
 /// Chevron bar + tappable label that opens month / custom / last-30 picker.
 class DateRangeControl extends StatelessWidget {
@@ -137,7 +139,7 @@ Future<DateRangeWindow?> showCentliDateRangeSheet(
                 }
               },
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: CentliSpacing.item),
           ],
         ),
       );
