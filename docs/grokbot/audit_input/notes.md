@@ -1,7 +1,7 @@
 # Centli B4-PATCH G26–G29 notes
 
 Generated: 2026-10-18 (Asia/Shanghai)
-HEAD: `5b066f5450891a48844eccce101bf8aa5c627b37`
+HEAD: 254bfe7988e36e9525735d4ddb43366805d5e6ff
 Version: `1.4.4+10`
 schemaVersion: `11`
 
