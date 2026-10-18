@@ -5,7 +5,7 @@ Local-first personal bookkeeping (**Chinese UI only**): **clear every bill**.
 > Canonical docs are in Chinese: see [`README.md`](README.md) and [`docs/RELEASE_NOTES.md`](docs/RELEASE_NOTES.md).
 
 - Flutter · Drift (SQLite) · Riverpod · go_router
-- Version: `1.4.2+8`
+- Version: `1.4.4+10`
 - Currency display: `CNY · 人民币`
 - Bottom nav (5 tabs): 首页 / 统计 / 记账 / 资产 / 我的
 
@@ -54,6 +54,14 @@ Prefer JSON (`format: centli-export`). Excel import is best-effort (no fx/settin
 > batch 4 ships as `1.4.x`. There is no `1.2` / `1.3` because those batches were never
 > released under this scheme. Fixes within a batch bump the patch digit
 > (`1.4.1` → `1.4.2`); the build number increments by 1 on every release.
+
+### 1.4.4 (2026-10-18)
+
+- Bookkeeping sheet: drag handle; backspace icon with normal (non-warning) colors
+- Empty-home hint uses 「记一笔」; list shows 「不计入」 for excluded stats
+- Pending tabs centered; screenshot 「查看」 opens `/home/pending?tab=pending`
+- Auto-capture: 「最近被忽略的通知」 with join-watch (persists across restart)
+- Wider payment keywords; pending notification actions: confirm / edit amount / ignore
 
 ### 1.4.2 (2026-10-17)
 - Fix misleading smart-fill API base URL hint (DeepSeek usually needs no /v1)
