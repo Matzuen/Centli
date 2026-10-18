@@ -168,26 +168,28 @@ class _PendingPageBodyState extends ConsumerState<PendingPage> {
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(CentliSpacing.pageH, CentliSpacing.item, CentliSpacing.pageH, 0),
-                child: SegmentedButton<String>(
-                  showSelectedIcon: false,
-                  style: SegmentedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    visualDensity: VisualDensity.compact,
-                    textStyle: const TextStyle(fontSize: 13),
-                  ),
-                  segments: const [
-                    ButtonSegment(value: 'pending', label: Text('待确认')),
-                    ButtonSegment(
-                      value: 'parse_failed',
-                      label: Text('解析失败'),
+                child: Center(
+                  child: SegmentedButton<String>(
+                    showSelectedIcon: false,
+                    style: SegmentedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      visualDensity: VisualDensity.compact,
+                      textStyle: const TextStyle(fontSize: 13),
                     ),
-                    ButtonSegment(value: 'ignored', label: Text('已忽略')),
-                    ButtonSegment(value: 'confirmed', label: Text('已入账')),
-                  ],
-                  selected: {filter},
-                  onSelectionChanged: (s) {
-                    ref.read(_pendingFilterProvider.notifier).state = s.first;
-                  },
+                    segments: const [
+                      ButtonSegment(value: 'pending', label: Text('待确认')),
+                      ButtonSegment(
+                        value: 'parse_failed',
+                        label: Text('解析失败'),
+                      ),
+                      ButtonSegment(value: 'ignored', label: Text('已忽略')),
+                      ButtonSegment(value: 'confirmed', label: Text('已入账')),
+                    ],
+                    selected: {filter},
+                    onSelectionChanged: (s) {
+                      ref.read(_pendingFilterProvider.notifier).state = s.first;
+                    },
+                  ),
                 ),
               ),
               Expanded(

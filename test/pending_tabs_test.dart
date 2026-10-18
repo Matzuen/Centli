@@ -1,8 +1,11 @@
+import 'dart:io';
 import 'package:centli/data/db/centli_database.dart';
 import 'package:centli/features/pending/pending_page.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:centli/data/db/database_provider.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -238,6 +241,67 @@ void main() {
       expect(sizePending.width, sizeConfirmed.width);
       // Measured: Size(288.0, 40.0) at 320dp viewport with ~32dp page padding.
       expect(sizePending.width, 288.0);
+    });
+  });
+  group('pending segmented control centered at 411dp (G26.7)', () {
+    test('pending_page wraps SegmentedButton in Center', () {
+      final src = File('lib/features/pending/pending_page.dart').readAsStringSync();
+      expect(
+        RegExp(
+          r'child:\s*Center\(\s*child:\s*SegmentedButton<String>',
+          multiLine: true,
+        ).hasMatch(src),
+        isTrue,
+        reason: 'G26.7 requires Center around pending SegmentedButton',
+      );
+    });
+
+    testWidgets('SegmentedButton is horizontally centered at 411dp', (tester) async {
+      const width = 411.0;
+      tester.view.physicalSize = const Size(width, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      // Mirror pending_page layout: Padding(pageH) → Center → SegmentedButton.
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                  child: Center(
+                    child: SegmentedButton<String>(
+                      showSelectedIcon: false,
+                      style: SegmentedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        visualDensity: VisualDensity.compact,
+                        textStyle: const TextStyle(fontSize: 13),
+                      ),
+                      segments: const [
+                        ButtonSegment(value: 'pending', label: Text('待确认')),
+                        ButtonSegment(
+                          value: 'parse_failed',
+                          label: Text('解析失败'),
+                        ),
+                        ButtonSegment(value: 'ignored', label: Text('已忽略')),
+                        ButtonSegment(value: 'confirmed', label: Text('已入账')),
+                      ],
+                      selected: const {'pending'},
+                      onSelectionChanged: (_) {},
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final r = tester.getRect(find.byType(SegmentedButton<String>));
+      expect(r.left, closeTo((width - r.width) / 2, 1.0));
     });
   });
 }
