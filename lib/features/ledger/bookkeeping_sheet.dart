@@ -1260,7 +1260,8 @@ class _Keypad extends StatelessWidget {
 
   Color _bg(BuildContext context, String k) {
     if (k == '\u2713') return CentliTheme.keypadConfirm(context);
-    if (k == 'AC' || k == '\u232b') return CentliTheme.keypadAcBg(context);
+    if (k == 'AC') return CentliTheme.keypadAcBg(context);
+    if (k == '\u232b') return CentliTheme.keypadNumBg(context);
     if (k == '+' || k == '-' || k == '*' || k == '/' || k == '=') {
       return CentliTheme.keypadOpBg(context);
     }
@@ -1269,7 +1270,8 @@ class _Keypad extends StatelessWidget {
 
   Color _fg(BuildContext context, String k) {
     if (k == '\u2713') return Colors.white;
-    if (k == 'AC' || k == '\u232b') return CentliTheme.keypadAcFg(context);
+    if (k == 'AC') return CentliTheme.keypadAcFg(context);
+    if (k == '\u232b') return CentliTheme.keypadNumFg(context);
     if (k == '+' || k == '-' || k == '*' || k == '/' || k == '=') {
       return CentliTheme.keypadOpFg(context);
     }
@@ -1354,14 +1356,20 @@ class _Keypad extends StatelessWidget {
             },
             onLongPress: k == '\u2713' ? onLongSubmit : null,
             child: Center(
-              child: Text(
-                _label(k),
-                style: TextStyle(
-                  fontSize: k == 'AC' ? 16 : 20,
-                  fontWeight: FontWeight.w700,
-                  color: _fg(context, k),
-                ),
-              ),
+              child: k == '\u232b'
+                  ? Icon(
+                      Icons.backspace_outlined,
+                      size: 22,
+                      color: _fg(context, k),
+                    )
+                  : Text(
+                      _label(k),
+                      style: TextStyle(
+                        fontSize: k == 'AC' ? 16 : 20,
+                        fontWeight: FontWeight.w700,
+                        color: _fg(context, k),
+                      ),
+                    ),
             ),
           ),
         ),

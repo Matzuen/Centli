@@ -96,7 +96,8 @@ User override version bump (once at wrap): **`1.4.4+10`**
 
 | Task | hash | Notes |
 |---|---|---|
-| G26.1 | `bfac55c` | showDragHandle + golden via real modal; top pad tightened 8dp |
+| G26.1 | `2098145` | showDragHandle + golden via real modal; top pad tightened 8dp |
+| G26.2 | `5e95ffc` | empty hint 记账→记一笔; shell comment |
 
 ## G26.1 self-prove (raw)
 

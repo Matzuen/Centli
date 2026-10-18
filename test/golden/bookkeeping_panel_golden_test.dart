@@ -131,6 +131,8 @@ void main() {
     final db = await openDb();
     addTearDown(db.close);
     await pumpSheet(tester, db: db, theme: CentliTheme.light());
+    // G26.4: lock backspace as Icon (0.01% golden tol can miss Text↔Icon).
+    expect(find.byIcon(Icons.backspace_outlined), findsOneWidget);
     await expectLater(
       find.byType(MaterialApp),
       matchesGoldenFile('goldens/bookkeeping_panel.png'),
@@ -143,6 +145,7 @@ void main() {
     final db = await openDb();
     addTearDown(db.close);
     await pumpSheet(tester, db: db, theme: CentliTheme.dark());
+    expect(find.byIcon(Icons.backspace_outlined), findsOneWidget);
     await expectLater(
       find.byType(MaterialApp),
       matchesGoldenFile('goldens/bookkeeping_panel_dark.png'),
