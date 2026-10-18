@@ -212,7 +212,7 @@ class _PendingPageBodyState extends ConsumerState<PendingPage> {
                           ? '开启自动记账后，支付成功通知会集中在此确认入账。'
                               '发出去的红包/转账往往没有通知，可用截图识别或剪贴板导入。'
                           : filter == 'parse_failed'
-                              ? '解析失败的通知会出现在这里，可对照「识别规则 · 试一试」调整模板。'
+                              ? '解析失败的通知会出现在这里，可到「识别规则」页点「试一试」调整模板。'
                               : filter == 'ignored'
                                   ? '忽略的待确认会出现在这里；可清空以释放空间。'
                                   : filter == 'confirmed'
