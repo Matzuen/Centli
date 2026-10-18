@@ -35,7 +35,6 @@ int? parseRemoteInputAmountMinor(String raw) {
 }
 
 /// Whether a widened-gate notification should be dropped as weak noise.
-@visibleForTesting
 bool shouldDropAsWeakNoise({
   required bool templateMatched,
   required int? amountMinor,

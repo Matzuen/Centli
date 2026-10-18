@@ -1,8 +1,8 @@
 # Centli B4-PATCH G26–G29 notes
 
-Generated: 2026-10-17 (Asia/Shanghai)
-HEAD: `b2ba38c4b586a2deb04e7bfa0493b4d01f8b1936`
-Version: `1.4.2+8`
+Generated: 2026-10-18 (Asia/Shanghai)
+HEAD: `7390056aa6dff9202a91688d7d47f52a3fe0d23b`
+Version: `1.4.4+10`
 schemaVersion: `11`
 
 Baseline HEAD (before G25): `f18dabd` · version `1.4.2+8` · schema **11** · tests **224**
@@ -153,7 +153,7 @@ FAIL_EXIT=1
 | G27.1 | `d2b8eb1` | push /home/pending?tab=pending |
 | G27.2 | `d2b8eb1` | route_literals_test (non-empty matches) |
 | G28 | `a48016a` | drops ring buffer + extras union + auto_capture card |
-| G29 | _(pending)_ | widen keywords + noti actions 入账/改金额/忽略 |
+| G29 | `86c280b` | widen keywords + noti actions 入账/改金额/忽略 |
 
 ## G27 self-prove (raw)
 
@@ -177,7 +177,7 @@ OK_EXIT=0
 
 Note: go_router 16 `findMatch` does not throw on unknown paths; test asserts `match.matches` isNotEmpty.
 
-| G28 | _(pending)_ | drops ring buffer + extras union + auto_capture card |
+| G28 | 48016a | drops ring buffer + extras union + auto_capture card |
 
 ## G28 notes / self-prove
 
@@ -187,3 +187,11 @@ Note: go_router 16 `findMatch` does not throw on unknown paths; test asserts `ma
 - Unit: `test/dropped_notifications_test.dart` 5 green.
 - Device kill-restart acceptance: **not run** (no Android device on this Windows agent). Proven via unit union + code review of bindDatabase + addExtraWatchedPackage.
 - Self-prove extras wipe: if `pkgs.addAll(await _loadExtraWatchedPackages())` commented out, restart sync would drop manual joins (union unit test documents intended behavior). Not physically commented in CI; code path reviewed.
+
+## Wrap / Final
+
+- Baseline HEAD: `60035e6` · version `1.4.2+8` · schema **11** · tests **225**
+- Final HEAD: `7390056aa6dff9202a91688d7d47f52a3fe0d23b` (`7390056`)
+- version: **1.4.4+10** · schema **11**
+- Device gaps: G28 kill-restart join-watch; G29 notification action on-device — documented, not run on Windows agent.
+- 暂无移出入口 (extra_watched remove UI)

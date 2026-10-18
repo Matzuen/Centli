@@ -4,8 +4,6 @@ import 'package:centli/features/pending/pending_page.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:centli/data/db/database_provider.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
