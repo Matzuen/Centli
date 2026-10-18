@@ -154,7 +154,11 @@ class TxnListTile extends ConsumerWidget {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          unconverted ? '$timeLabel · \u672a\u6298\u7b97' : timeLabel,
+                          [
+                            timeLabel,
+                            if (unconverted) '\u672a\u6298\u7b97',
+                            if (txn.includeInStat == 0) '\u4e0d\u8ba1\u5165',
+                          ].join(' · '),
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                 color: unconverted ? scheme.error : muted,
                                 height: 1.2,
