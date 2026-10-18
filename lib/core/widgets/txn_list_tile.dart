@@ -9,7 +9,11 @@ import '../../data/db/database_provider.dart';
 import '../constants/currencies.dart';
 import '../utils/fx.dart';
 import '../utils/money.dart';
+import '../../app/theme.dart';
 import 'category_visuals.dart';
+
+/// Highlight colour for search keywords on transaction rows.
+const Color kKeywordHighlight = Color(0xFF7C4DFF);
 
 /// Expense / income accent colors (reference screenshot).
 const Color kTxnExpenseRed = Color(0xFFE53935);
@@ -27,6 +31,7 @@ class TxnListTile extends ConsumerWidget {
     required this.hide,
     this.showSeparator = false,
     this.lookups = TxnListLookups.empty,
+    this.highlight = const [],
   });
 
   final Transaction txn;
@@ -38,6 +43,9 @@ class TxnListTile extends ConsumerWidget {
   /// Preloaded category/account maps for this ledger.
   final TxnListLookups lookups;
 
+  /// Search keywords to mark in the title / subtitle (empty = no highlight).
+  final List<String> highlight;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isOut = txn.type == 'out';
@@ -46,22 +54,20 @@ class TxnListTile extends ConsumerWidget {
     final amountColor = isBalanceAdjust
         ? Theme.of(context).colorScheme.onSurfaceVariant
         : isTransfer
-            ? Theme.of(context).colorScheme.onSurface
-            : (isOut ? kTxnExpenseRed : kTxnIncomeGreen); // refund → income green
-    final time = DateTime.fromMillisecondsSinceEpoch(txn.happenAt, isUtc: true)
-        .toLocal();
+        ? Theme.of(context).colorScheme.onSurface
+        : (isOut ? kTxnExpenseRed : kTxnIncomeGreen); // refund → income green
+    final time = DateTime.fromMillisecondsSinceEpoch(
+      txn.happenAt,
+      isUtc: true,
+    ).toLocal();
     final timeLabel = DateFormat('HH:mm').format(time);
     final scheme = Theme.of(context).colorScheme;
     final muted = scheme.onSurfaceVariant;
     final cat = (txn.categoryId == null || txn.categoryId!.isEmpty)
         ? null
         : lookups.categoriesById[txn.categoryId!];
-    final title = isBalanceAdjust
-        ? '余额校正'
-        : _categoryTitle(cat);
-    final subtitle = isBalanceAdjust
-        ? '不计入统计／预算'
-        : _subtitle();
+    final title = isBalanceAdjust ? '余额校正' : _categoryTitle(cat);
+    final subtitle = isBalanceAdjust ? '不计入统计／预算' : _subtitle();
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -77,7 +83,7 @@ class TxnListTile extends ConsumerWidget {
         InkWell(
           onTap: () => context.push('/ledger/${txn.id}'),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+            padding: const EdgeInsets.all(CentliSpacing.cardPad),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
@@ -91,82 +97,91 @@ class TxnListTile extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        title,
+                      _HighlightedText(
+                        text: title,
+                        keywords: highlight,
                         maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
                               fontWeight: FontWeight.w600,
                               height: 1.2,
                               color: scheme.onSurface,
                             ),
                       ),
                       if (subtitle.isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          subtitle,
+                        const SizedBox(height: CentliSpacing.dense),
+                        _HighlightedText(
+                          text: subtitle,
+                          keywords: highlight,
                           maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: muted,
-                                height: 1.2,
-                              ),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: muted, height: 1.2),
                         ),
                       ],
                       if (decodeTxnTags(txn.tags).isNotEmpty) ...[
-                        const SizedBox(height: 4),
+                        const SizedBox(height: CentliSpacing.dense),
                         _TxnTagChips(tags: decodeTxnTags(txn.tags)),
                       ],
                     ],
                   ),
                 ),
                 const SizedBox(width: 12),
-                Builder(
-                  builder: (context) {
-                    final ledger = ref.watch(currentLedgerProvider).valueOrNull;
-                    final book = ref.watch(fxBookProvider).valueOrNull;
-                    final base = ledger?.baseCurrency;
-                    var unconverted = false;
-                    if (base != null &&
-                        book != null &&
-                        txn.currency != base &&
-                        txn.type != 'transfer') {
-                      final day = FxBook.dayFromHappenAtMs(txn.happenAt);
-                      unconverted = book.rate(
-                            fromCcy: txn.currency,
-                            toCcy: base,
-                            onDay: day,
-                          ) ==
-                          null;
-                    }
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          _amountLabel(),
-                          style: TextStyle(
-                            color: amountColor,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 16,
-                            height: 1.2,
+                Flexible(
+                  child: Builder(
+                    builder: (context) {
+                      final ledger = ref
+                          .watch(currentLedgerProvider)
+                          .valueOrNull;
+                      final book = ref.watch(fxBookProvider).valueOrNull;
+                      final base = ledger?.baseCurrency;
+                      var unconverted = false;
+                      if (base != null &&
+                          book != null &&
+                          txn.currency != base &&
+                          txn.type != 'transfer') {
+                        final day = FxBook.dayFromHappenAtMs(txn.happenAt);
+                        unconverted =
+                            book.rate(
+                              fromCcy: txn.currency,
+                              toCcy: base,
+                              onDay: day,
+                            ) ==
+                            null;
+                      }
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // 大金额（¥1,234,567.89）在窄屏上必须能省略，
+                          // 否则整行 Row 溢出。
+                          Text(
+                            _amountLabel(),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: amountColor,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 16,
+                              height: 1.2,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          [
-                            timeLabel,
-                            if (unconverted) '\u672a\u6298\u7b97',
-                            if (txn.includeInStat == 0) '\u4e0d\u8ba1\u5165',
-                          ].join(' · '),
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: unconverted ? scheme.error : muted,
-                                height: 1.2,
-                              ),
-                        ),
-                      ],
-                    );
-                  },
+                          const SizedBox(height: CentliSpacing.dense),
+                          Text(
+                            [
+                              timeLabel,
+                              if (unconverted) '\u672a\u6298\u7b97',
+                              if (txn.includeInStat == 0) '\u4e0d\u8ba1\u5165',
+                            ].join(' · '),
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: unconverted ? scheme.error : muted,
+                                  height: 1.2,
+                                ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
                 ),
               ],
             ),
@@ -226,6 +241,86 @@ class TxnListTile extends ConsumerWidget {
   }
 }
 
+/// Text with search keywords marked (accent colour + semibold).
+class _HighlightedText extends StatelessWidget {
+  const _HighlightedText({
+    required this.text,
+    required this.keywords,
+    required this.style,
+    this.maxLines,
+  });
+
+  final String text;
+  final List<String> keywords;
+  final TextStyle? style;
+  final int? maxLines;
+
+  @override
+  Widget build(BuildContext context) {
+    final spans = highlightSpans(
+      text,
+      keywords,
+      style: style,
+      highlightColor: kKeywordHighlight,
+    );
+    return Text.rich(
+      TextSpan(children: spans),
+      maxLines: maxLines,
+      overflow: TextOverflow.ellipsis,
+      style: style,
+    );
+  }
+}
+
+/// Split [text] into plain / highlighted spans for each [keywords] hit
+/// (case-insensitive, longest keyword first, overlaps merged).
+@visibleForTesting
+List<TextSpan> highlightSpans(
+  String text,
+  List<String> keywords, {
+  TextStyle? style,
+  required Color highlightColor,
+}) {
+  final raw =
+      [for (final k in keywords) k.trim()]
+          .where((k) => k.isNotEmpty)
+          .toSet()
+          .toList()
+        ..sort((a, b) => b.length.compareTo(a.length));
+  if (raw.isEmpty || text.isEmpty) return [TextSpan(text: text, style: style)];
+
+  final lower = text.toLowerCase();
+  final marked = List<bool>.filled(text.length, false);
+  for (final k in raw) {
+    final kl = k.toLowerCase();
+    var from = 0;
+    while (from <= lower.length - kl.length) {
+      final i = lower.indexOf(kl, from);
+      if (i < 0) break;
+      for (var j = i; j < i + kl.length; j++) {
+        marked[j] = true;
+      }
+      from = i + kl.length;
+    }
+  }
+  final hot = (style ?? const TextStyle()).copyWith(
+    color: highlightColor,
+    fontWeight: FontWeight.w800,
+  );
+  final out = <TextSpan>[];
+  var i = 0;
+  while (i < text.length) {
+    final m = marked[i];
+    var j = i + 1;
+    while (j < text.length && marked[j] == m) {
+      j++;
+    }
+    out.add(TextSpan(text: text.substring(i, j), style: m ? hot : style));
+    i = j;
+  }
+  return out;
+}
+
 class _TxnTagChips extends StatelessWidget {
   const _TxnTagChips({required this.tags});
   final List<String> tags;
@@ -248,17 +343,15 @@ class _TxnTagChips extends StatelessWidget {
             ),
             child: Text(
               t,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
+              style: Theme.of(context).textTheme.labelSmall
+                  ?.copyWith(color: scheme.onSurfaceVariant),
             ),
           ),
         if (extra > 0)
           Text(
             '+$extra',
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                ),
+            style: Theme.of(context).textTheme.labelSmall
+                ?.copyWith(color: scheme.onSurfaceVariant),
           ),
       ],
     );

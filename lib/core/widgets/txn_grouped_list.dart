@@ -64,10 +64,14 @@ class TxnGroupedList extends ConsumerWidget {
     this.padding = EdgeInsets.zero,
     this.shrinkWrap = false,
     this.physics,
+    this.highlight = const [],
   });
 
   final List<Transaction> txns;
   final bool hide;
+
+  /// Keywords to mark in each row (search results).
+  final List<String> highlight;
   final EdgeInsetsGeometry padding;
   final bool shrinkWrap;
   final ScrollPhysics? physics;
@@ -93,6 +97,7 @@ class TxnGroupedList extends ConsumerWidget {
           hide: hide,
           isFirst: gi == 0,
           lookups: lookups,
+          highlight: highlight,
         );
       },
     );
@@ -141,6 +146,7 @@ class _TxnDateGroup extends StatelessWidget {
     required this.hide,
     required this.isFirst,
     required this.lookups,
+    this.highlight = const [],
   });
 
   final String label;
@@ -148,6 +154,7 @@ class _TxnDateGroup extends StatelessWidget {
   final bool hide;
   final bool isFirst;
   final TxnListLookups lookups;
+  final List<String> highlight;
 
   @override
   Widget build(BuildContext context) {
@@ -176,6 +183,7 @@ class _TxnDateGroup extends StatelessWidget {
                   hide: hide,
                   showSeparator: i > 0,
                   lookups: lookups,
+                  highlight: highlight,
                 ),
             ],
           ),

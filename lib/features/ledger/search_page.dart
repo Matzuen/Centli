@@ -9,8 +9,20 @@ import '../../core/widgets/txn_grouped_list.dart';
 import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
 import '../../app/theme.dart';
+import '../../core/widgets/centli_error_state.dart';
 
-/// Bill search: keyword + filters (type / category / account / date range).
+/// Split "午餐 支付宝" into keywords (space / full-width space separated).
+@visibleForTesting
+List<String> searchKeywords(String raw) {
+  final seen = <String>{};
+  for (final part in raw.split(RegExp(r'[\s\u3000]+'))) {
+    final t = part.trim();
+    if (t.isNotEmpty) seen.add(t);
+  }
+  return seen.toList();
+}
+
+/// Bill search: multi-keyword text + quick filters (category / account / date).
 class SearchPage extends ConsumerStatefulWidget {
   const SearchPage({super.key});
 
@@ -40,20 +52,17 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   List<Category> _outCats = const [];
   List<Category> _inCats = const [];
 
+  List<String> get _keywords => searchKeywords(
+        _query.isEmpty ? _controller.text : _query,
+      );
+
+  bool get _hasText => _controller.text.trim().isNotEmpty;
+
   bool get _hasFilters =>
       _type != null ||
       _categoryId != null ||
       _accountId != null ||
       _range != null;
-
-  int get _activeFilterCount {
-    var n = 0;
-    if (_type != null) n++;
-    if (_categoryId != null) n++;
-    if (_accountId != null) n++;
-    if (_range != null) n++;
-    return n;
-  }
 
   @override
   void initState() {
@@ -88,7 +97,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   }
 
   void _onChanged(String raw) {
-    setState(() {}); // refresh clear affordance
+    setState(() {}); // clear affordance + keyword chips live update
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 280), () {
       _runSearch(raw);
@@ -143,8 +152,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
           );
       if (!mounted || seq != _seq) return;
       final truncated = rows.length > _searchLimit;
-      final shown =
-          truncated ? rows.take(_searchLimit).toList() : rows;
+      final shown = truncated ? rows.take(_searchLimit).toList() : rows;
       setState(() {
         _results = shown;
         _truncated = truncated;
@@ -169,45 +177,185 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     _runSearch();
   }
 
-  Future<void> _openFilterSheet() async {
-    final result = await showModalBottomSheet<_SearchFilters>(
+  // ---------------------------------------------------------------- filters
+
+  void _setType(String? type) {
+    setState(() {
+      _type = type;
+      if (_categoryId != null &&
+          (type == 'transfer' ||
+              !_catsForType(type).any((c) => c.id == _categoryId))) {
+        _categoryId = null;
+      }
+    });
+    _runSearch();
+  }
+
+  List<Category> _catsForType(String? type) {
+    if (type == 'in') return _inCats;
+    if (type == 'out') return _outCats;
+    return [..._outCats, ..._inCats];
+  }
+
+  Future<void> _pickCategory() async {
+    final cats = _catsForType(_type);
+    if (cats.isEmpty) return;
+    final id = await showModalBottomSheet<String>(
       context: context,
-      isScrollControlled: true,
       showDragHandle: true,
+      isScrollControlled: true,
       builder: (ctx) {
-        return _SearchFilterSheet(
-          initial: _SearchFilters(
-            type: _type,
-            categoryId: _categoryId,
-            accountId: _accountId,
-            range: _range,
+        final scheme = Theme.of(ctx).colorScheme;
+        return SafeArea(
+          child: SizedBox(
+            height: MediaQuery.sizeOf(ctx).height * 0.6,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                  child: Text(
+                    '按分类筛选',
+                    style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                ),
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    children: [
+                      ListTile(
+                        leading: Icon(
+                          Icons.apps,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                        title: const Text('全部分类'),
+                        onTap: () => Navigator.pop(ctx, ''),
+                      ),
+                      for (final c in cats)
+                        ListTile(
+                          leading: Icon(
+                            Icons.label_outline,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                          title: Text(c.name),
+                          trailing: c.id == _categoryId
+                              ? Icon(Icons.check, color: scheme.primary)
+                              : null,
+                          onTap: () => Navigator.pop(ctx, c.id),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
-          accounts: _accounts,
-          outCats: _outCats,
-          inCats: _inCats,
         );
       },
     );
-    if (result == null || !mounted) return;
-    setState(() {
-      _type = result.type;
-      _categoryId = result.categoryId;
-      _accountId = result.accountId;
-      _range = result.range;
-    });
-    await _runSearch();
+    if (id == null || !mounted) return;
+    setState(() => _categoryId = id.isEmpty ? null : id);
+    _runSearch();
+  }
+
+  Future<void> _pickAccount() async {
+    if (_accounts.isEmpty) return;
+    final id = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (ctx) {
+        final scheme = Theme.of(ctx).colorScheme;
+        return SafeArea(
+          child: SizedBox(
+            height: MediaQuery.sizeOf(ctx).height * 0.6,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                  child: Text(
+                    '按账户筛选',
+                    style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                ),
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    children: [
+                      ListTile(
+                        leading: Icon(
+                          Icons.apps,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                        title: const Text('全部账户'),
+                        onTap: () => Navigator.pop(ctx, ''),
+                      ),
+                      for (final a in _accounts)
+                        ListTile(
+                          leading: Icon(
+                            Icons.account_balance_wallet_outlined,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                          title: Text(
+                            a.archived == 1 ? '${a.name}（已归档）' : a.name,
+                          ),
+                          subtitle: Text(a.currency),
+                          trailing: a.id == _accountId
+                              ? Icon(Icons.check, color: scheme.primary)
+                              : null,
+                          onTap: () => Navigator.pop(ctx, a.id),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    if (id == null || !mounted) return;
+    setState(() => _accountId = id.isEmpty ? null : id);
+    _runSearch();
+  }
+
+  Future<void> _pickRange() async {
+    final picked = await showCentliDateRangeSheet(
+      context,
+      current: _range ?? DateRangeWindow.lastDays(days: 30),
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _range = picked);
+    _runSearch();
+  }
+
+  /// Space-separated type words become the type filter instead of keywords.
+  void _commitQuickType(String? type) {
+    if (type == null) return;
+    final words = {'支出': 'out', '收入': 'in', '转账': 'transfer'};
+    final keyword = words.entries.firstWhere((e) => e.value == type).key;
+    final rest = searchKeywords(_controller.text)
+        .where((k) => k != keyword)
+        .join(' ');
+    _controller.text = rest;
+    setState(() => _type = type);
+    _runSearch(rest);
   }
 
   String _typeLabel(String? t) {
     switch (t) {
       case 'out':
-        return '\u652f\u51fa';
+        return '支出';
       case 'in':
-        return '\u6536\u5165';
+        return '收入';
       case 'transfer':
-        return '\u8f6c\u8d26';
+        return '转账';
       default:
-        return '\u5168\u90e8';
+        return '全部';
     }
   }
 
@@ -223,13 +371,41 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     if (id == null) return null;
     for (final a in _accounts) {
       if (a.id == id) {
-        return a.archived == 1
-            ? '${a.name}（已归档）'
-            : a.name;
+        return a.archived == 1 ? '${a.name}（已归档）' : a.name;
       }
     }
     return id;
   }
+
+  /// 「更多」: every filter in one sheet (power-user path).
+  Future<void> _openFilterSheet() async {
+    final result = await showModalBottomSheet<_SearchFilters>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) => _SearchFilterSheet(
+        initial: _SearchFilters(
+          type: _type,
+          categoryId: _categoryId,
+          accountId: _accountId,
+          range: _range,
+        ),
+        accounts: _accounts,
+        outCats: _outCats,
+        inCats: _inCats,
+      ),
+    );
+    if (result == null || !mounted) return;
+    setState(() {
+      _type = result.type;
+      _categoryId = result.categoryId;
+      _accountId = result.accountId;
+      _range = result.range;
+    });
+    await _runSearch();
+  }
+
+  // ------------------------------------------------------------------ build
 
   @override
   Widget build(BuildContext context) {
@@ -244,26 +420,16 @@ class _SearchPageState extends ConsumerState<SearchPage> {
           focusNode: _focus,
           textInputAction: TextInputAction.search,
           decoration: const InputDecoration(
-            hintText:
-                '\u5907\u6ce8 / \u5546\u6237 / \u5206\u7c7b / \u8d26\u6237 / \u91d1\u989d',
+            hintText: '多个关键词用空格分开，如「午餐 支付宝」',
             border: InputBorder.none,
           ),
           onChanged: _onChanged,
           onSubmitted: _runSearch,
         ),
         actions: [
-          IconButton(
-            tooltip: '\u7b5b\u9009',
-            icon: Badge(
-              isLabelVisible: _activeFilterCount > 0,
-              label: Text('$_activeFilterCount'),
-              child: const Icon(Icons.tune),
-            ),
-            onPressed: _openFilterSheet,
-          ),
-          if (_controller.text.isNotEmpty)
+          if (_hasText)
             IconButton(
-              tooltip: '\u6e05\u7a7a',
+              tooltip: '清空',
               icon: const Icon(Icons.clear),
               onPressed: () {
                 _controller.clear();
@@ -275,80 +441,98 @@ class _SearchPageState extends ConsumerState<SearchPage> {
       ),
       body: Column(
         children: [
-          if (_hasFilters) _buildFilterChips(scheme),
+          _quickFilterBar(scheme),
+          if (_hasText) _keywordChips(scheme),
           Expanded(child: _buildBody(scheme, hide)),
         ],
       ),
     );
   }
 
-  Widget _buildFilterChips(ColorScheme scheme) {
-    final chips = <Widget>[];
-    if (_type != null) {
-      chips.add(
-        InputChip(
-          label: Text('\u7c7b\u578b: ${_typeLabel(_type)}'),
-          onDeleted: () {
-            setState(() => _type = null);
-            _runSearch();
-          },
-        ),
-      );
-    }
-    if (_categoryId != null) {
-      chips.add(
-        InputChip(
-          label: Text(
-            '\u5206\u7c7b: ${_categoryName(_categoryId) ?? ''}',
-          ),
-          onDeleted: () {
-            setState(() => _categoryId = null);
-            _runSearch();
-          },
-        ),
-      );
-    }
-    if (_accountId != null) {
-      chips.add(
-        InputChip(
-          label: Text(
-            '\u8d26\u6237: ${_accountName(_accountId) ?? ''}',
-          ),
-          onDeleted: () {
-            setState(() => _accountId = null);
-            _runSearch();
-          },
-        ),
-      );
-    }
-    if (_range != null) {
-      chips.add(
-        InputChip(
-          label: Text('\u65e5\u671f: ${_range!.label}'),
-          onDeleted: () {
-            setState(() => _range = null);
-            _runSearch();
-          },
-        ),
-      );
-    }
-    chips.add(
-      ActionChip(
-        label: const Text('\u6e05\u9664\u7b5b\u9009'),
-        onPressed: _clearFilters,
-      ),
-    );
+  // ------------------------------------------------------------ quick bar
 
+  Widget _quickFilterBar(ColorScheme scheme) {
+    final hasType = _type != null;
+    final typeLabel = hasType ? _typeLabel(_type) : '类型';
     return Material(
       color: scheme.surfaceContainerLowest,
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+        padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
         child: Row(
           children: [
-            for (var i = 0; i < chips.length; i++) ...[
-              if (i > 0) const SizedBox(width: 8),
-              chips[i],
+            FilterChip(
+              key: const Key('search_quick_type'),
+              avatar: Icon(
+                Icons.swap_vert,
+                size: 16,
+                color: hasType ? scheme.primary : scheme.onSurfaceVariant,
+              ),
+              label: Text(typeLabel),
+              selected: hasType,
+              onSelected: (_) => _showTypeMenu(context),
+            ),
+            const SizedBox(width: 8),
+            FilterChip(
+              key: const Key('search_quick_category'),
+              avatar: Icon(
+                Icons.label_outline,
+                size: 16,
+                color: _categoryId != null
+                    ? scheme.primary
+                    : scheme.onSurfaceVariant,
+              ),
+              label: Text(
+                _categoryId != null ? _categoryName(_categoryId) ?? '分类' : '分类',
+              ),
+              selected: _categoryId != null,
+              onSelected: (_) => _pickCategory(),
+            ),
+            const SizedBox(width: 8),
+            FilterChip(
+              key: const Key('search_quick_account'),
+              avatar: Icon(
+                Icons.account_balance_wallet_outlined,
+                size: 16,
+                color: _accountId != null
+                    ? scheme.primary
+                    : scheme.onSurfaceVariant,
+              ),
+              label: Text(
+                _accountId != null ? _accountName(_accountId) ?? '账户' : '账户',
+              ),
+              selected: _accountId != null,
+              onSelected: (_) => _pickAccount(),
+            ),
+            const SizedBox(width: 8),
+            FilterChip(
+              key: const Key('search_quick_date'),
+              avatar: Icon(
+                Icons.date_range,
+                size: 16,
+                color: _range != null ? scheme.primary : scheme.onSurfaceVariant,
+              ),
+              label: Text(_range?.label ?? '日期'),
+              selected: _range != null,
+              onSelected: (_) => _pickRange(),
+            ),
+            const SizedBox(width: 4),
+            ActionChip(
+              key: const Key('search_more_filters'),
+              avatar: Icon(
+                Icons.tune,
+                size: 16,
+                color: scheme.onSurfaceVariant,
+              ),
+              label: const Text('更多'),
+              onPressed: _openFilterSheet,
+            ),
+            if (_hasFilters) ...[
+              const SizedBox(width: 4),
+              TextButton(
+                onPressed: _clearFilters,
+                child: const Text('清除'),
+              ),
             ],
           ],
         ),
@@ -356,20 +540,113 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     );
   }
 
+  Future<void> _showTypeMenu(BuildContext context) async {
+    final result = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final opt in const [
+              ('', '全部类型'),
+              ('out', '支出'),
+              ('in', '收入'),
+              ('transfer', '转账'),
+            ])
+              ListTile(
+                title: Text(opt.$2),
+                trailing: (opt.$1.isEmpty ? null : opt.$1) == _type
+                    ? Icon(Icons.check, color: Theme.of(ctx).colorScheme.primary)
+                    : null,
+                onTap: () => Navigator.pop(ctx, opt.$1),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (result == null || !mounted) return;
+    _setType(result.isEmpty ? null : result);
+  }
+
+  // -------------------------------------------------------- keyword chips
+
+  Widget _keywordChips(ColorScheme scheme) {
+    final chips = <Widget>[];
+    for (final k in _keywords) {
+      chips.add(
+        Chip(
+          key: ValueKey('kw_$k'),
+          visualDensity: VisualDensity.compact,
+          backgroundColor: scheme.primaryContainer.withValues(alpha: 0.5),
+          label: Text(k),
+        ),
+      );
+    }
+    if (_type != null) {
+      chips.add(InputChip(
+        label: Text('类型: ${_typeLabel(_type)}'),
+        onDeleted: () => _setType(null),
+      ));
+    }
+    if (_categoryId != null) {
+      chips.add(InputChip(
+        label: Text('分类: ${_categoryName(_categoryId) ?? ''}'),
+        onDeleted: () {
+          setState(() => _categoryId = null);
+          _runSearch();
+        },
+      ));
+    }
+    if (_accountId != null) {
+      chips.add(InputChip(
+        label: Text('账户: ${_accountName(_accountId) ?? ''}'),
+        onDeleted: () {
+          setState(() => _accountId = null);
+          _runSearch();
+        },
+      ));
+    }
+    if (_range != null) {
+      chips.add(InputChip(
+        label: Text('日期: ${_range!.label}'),
+        onDeleted: () {
+          setState(() => _range = null);
+          _runSearch();
+        },
+      ));
+    }
+    if (_keywords.isEmpty && chips.isEmpty) return const SizedBox.shrink();
+    return Material(
+      color: scheme.surfaceContainerLowest,
+      child: SizedBox(
+        height: 48,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+          itemCount: chips.length,
+          separatorBuilder: (_, _) => const SizedBox(width: 6),
+          itemBuilder: (_, i) => chips[i],
+        ),
+      ),
+    );
+  }
+
+  // ----------------------------------------------------------------- body
+
   Widget _buildBody(ColorScheme scheme, bool hide) {
     if (_error != null) {
-      return Center(child: Text('\u641c\u7d22\u5931\u8d25: $_error'));
+      return CentliErrorState(
+        error: _error,
+        onRetry: () => _runSearch(),
+      );
     }
-    if (_query.isEmpty && !_hasFilters) {
+    if (!_hasText && !_hasFilters) {
       return CentliEmptyState(
         icon: Icons.search,
         title: '搜索账单',
-        message: '按备注、商户或金额关键词查询；也可用类型 / 分类 / 账户 / 日期筛选。',
-        action: OutlinedButton.icon(
-          onPressed: _openFilterSheet,
-          icon: const Icon(Icons.tune),
-          label: const Text('打开筛选'),
-        ),
+        message: '输入备注 / 商户 / 金额，多个关键词用空格分开；'
+            '也可以用上面的分类、账户、日期快捷筛选。',
       );
     }
     if (_loading && _results == null) {
@@ -380,7 +657,9 @@ class _SearchPageState extends ConsumerState<SearchPage> {
       return CentliEmptyState(
         icon: Icons.search_off_outlined,
         title: '无匹配账单',
-        message: '试试换个关键词，或放宽类型 / 分类 / 账户 / 日期筛选。',
+        message: _keywords.length > 1
+            ? '同时满足 ${_keywords.map((k) => '「$k」').join('、')} 的账单不存在，试试减少关键词。'
+            : '试试换个关键词，或放宽类型 / 分类 / 账户 / 日期筛选。',
         action: _hasFilters
             ? OutlinedButton(
                 onPressed: _clearFilters,
@@ -397,17 +676,42 @@ class _SearchPageState extends ConsumerState<SearchPage> {
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Text(
-                '\u7ed3\u679c\u5df2\u622a\u65ad\uff08\u4ec5\u663e\u793a\u6700\u65b0 $_searchLimit \u6761\uff09\uff0c\u8bf7\u7f29\u5c0f\u5173\u952e\u8bcd\u6216\u52a0\u7b5b\u9009\u3002',
+                '结果已截断（仅显示最新 $_searchLimit 条），请缩小关键词或加筛选。',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: scheme.onSurfaceVariant,
                     ),
               ),
             ),
           ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          child: Row(
+            children: [
+              Text(
+                '共 ${rows.length}${_truncated ? '+' : ''} 条',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+              ),
+              const Spacer(),
+              if (_keywords.any((k) =>
+                  const {'支出', '收入', '转账'}.contains(k)) &&
+                  _type == null)
+                TextButton(
+                  key: const Key('search_promote_type'),
+                  onPressed: () => _commitQuickType(_keywords.firstWhere(
+                    (k) => const {'支出', '收入', '转账'}.contains(k),
+                  )),
+                  child: const Text('把类型词当作筛选'),
+                ),
+            ],
+          ),
+        ),
         Expanded(
           child: TxnGroupedList(
             txns: rows,
             hide: hide,
+            highlight: _keywords,
             padding: const EdgeInsets.only(bottom: 24),
           ),
         ),
@@ -430,6 +734,8 @@ class _SearchFilters {
   final DateRangeWindow? range;
 }
 
+/// Combined filter sheet (the quick chips cover the common paths; this keeps
+/// every filter in one place for power users).
 class _SearchFilterSheet extends StatefulWidget {
   const _SearchFilterSheet({
     required this.initial,
@@ -456,7 +762,6 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
   List<Category> get _catsForType {
     if (_type == 'in') return widget.inCats;
     if (_type == 'out') return widget.outCats;
-    // Any type: show both lists
     return [...widget.outCats, ...widget.inCats];
   }
 
@@ -472,23 +777,20 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                '\u7b5b\u9009\u6761\u4ef6',
+                '筛选条件',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
-              const SizedBox(height: 12),
-              Text(
-                '\u7c7b\u578b',
-                style: Theme.of(context).textTheme.labelLarge,
-              ),
-              const SizedBox(height: 8),
+              const SizedBox(height: CentliSpacing.section),
+              Text('类型', style: Theme.of(context).textTheme.labelLarge),
+              const SizedBox(height: CentliSpacing.item),
               Wrap(
                 spacing: 8,
                 children: [
                   for (final opt in <(String?, String)>[
-                    (null, '\u5168\u90e8'),
-                    ('out', '\u652f\u51fa'),
-                    ('in', '\u6536\u5165'),
-                    ('transfer', '\u8f6c\u8d26'),
+                    (null, '全部'),
+                    ('out', '支出'),
+                    ('in', '收入'),
+                    ('transfer', '转账'),
                   ])
                     ChoiceChip(
                       label: Text(opt.$2),
@@ -496,7 +798,6 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
                       onSelected: (_) {
                         setState(() {
                           _type = opt.$1;
-                          // Drop category if it no longer belongs to the kind.
                           if (_categoryId != null && _type != null && _type != 'transfer') {
                             final ok = _catsForType.any((c) => c.id == _categoryId);
                             if (!ok) _categoryId = null;
@@ -507,12 +808,9 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
                     ),
                 ],
               ),
-              const SizedBox(height: 16),
-              Text(
-                '\u5206\u7c7b',
-                style: Theme.of(context).textTheme.labelLarge,
-              ),
-              const SizedBox(height: 8),
+              const SizedBox(height: CentliSpacing.sectionLoose),
+              Text('分类', style: Theme.of(context).textTheme.labelLarge),
+              const SizedBox(height: CentliSpacing.item),
               DropdownButtonFormField<String?>(
                 key: ValueKey('cat_${_type}_$_categoryId'),
                 initialValue: _categoryId,
@@ -524,7 +822,7 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
                 items: [
                   const DropdownMenuItem<String?>(
                     value: null,
-                    child: Text('\u5168\u90e8\u5206\u7c7b'),
+                    child: Text('全部分类'),
                   ),
                   for (final c in _catsForType)
                     DropdownMenuItem<String?>(
@@ -536,12 +834,9 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
                     ? null
                     : (v) => setState(() => _categoryId = v),
               ),
-              const SizedBox(height: 16),
-              Text(
-                '\u8d26\u6237',
-                style: Theme.of(context).textTheme.labelLarge,
-              ),
-              const SizedBox(height: 8),
+              const SizedBox(height: CentliSpacing.sectionLoose),
+              Text('账户', style: Theme.of(context).textTheme.labelLarge),
+              const SizedBox(height: CentliSpacing.item),
               DropdownButtonFormField<String?>(
                 key: ValueKey('acc_$_accountId'),
                 initialValue: _accountId,
@@ -553,45 +848,38 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
                 items: [
                   const DropdownMenuItem<String?>(
                     value: null,
-                    child: Text('\u5168\u90e8\u8d26\u6237'),
+                    child: Text('全部账户'),
                   ),
                   for (final a in widget.accounts)
                     DropdownMenuItem<String?>(
                       value: a.id,
                       child: Text(
                         a.archived == 1
-                            ? '${a.name} (${a.currency}) · \u5df2\u5f52\u6863'
+                            ? '${a.name} (${a.currency}) · 已归档'
                             : '${a.name} (${a.currency})',
                       ),
                     ),
                 ],
                 onChanged: (v) => setState(() => _accountId = v),
               ),
-              const SizedBox(height: 16),
-              Text(
-                '\u65e5\u671f\u8303\u56f4',
-                style: Theme.of(context).textTheme.labelLarge,
-              ),
-              const SizedBox(height: 8),
+              const SizedBox(height: CentliSpacing.sectionLoose),
+              Text('日期范围', style: Theme.of(context).textTheme.labelLarge),
+              const SizedBox(height: CentliSpacing.item),
               ListTile(
                 contentPadding: EdgeInsets.zero,
-                title: Text(
-                  _range?.label ?? '\u4e0d\u9650\u65e5\u671f',
-                ),
-                subtitle: const Text(
-                  '\u590d\u7528\u9996\u9875/\u7edf\u8ba1\u7684\u65e5\u671f\u9009\u62e9\u5668',
-                ),
+                title: Text(_range?.label ?? '不限日期'),
+                subtitle: const Text('复用首页 / 统计的日期选择器'),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     if (_range != null)
                       IconButton(
-                        tooltip: '\u6e05\u9664',
+                        tooltip: '清除',
                         icon: const Icon(Icons.clear),
                         onPressed: () => setState(() => _range = null),
                       ),
                     IconButton(
-                      tooltip: '\u9009\u62e9',
+                      tooltip: '选择',
                       icon: const Icon(Icons.date_range),
                       onPressed: () async {
                         final picked = await showCentliDateRangeSheet(
@@ -607,7 +895,7 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
                   ],
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: CentliSpacing.section),
               Row(
                 children: [
                   Expanded(
@@ -620,7 +908,7 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
                           _range = null;
                         });
                       },
-                      child: const Text('\u91cd\u7f6e'),
+                      child: const Text('重置'),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -637,7 +925,7 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
                           ),
                         );
                       },
-                      child: const Text('\u5e94\u7528'),
+                      child: const Text('应用'),
                     ),
                   ),
                 ],
