@@ -34,7 +34,7 @@ void main() {
               dayLabels: labelsOf(monthYs.length),
               base: 'CNY',
               hide: false,
-              signColored: true,
+              signColored: false,
             ),
           ),
         ),

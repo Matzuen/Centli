@@ -79,9 +79,9 @@ class TrendYAxis {
   final List<double> ticks;
 }
 
-/// Axis for [ys] with at most [tickCount] labels (default 7).
+/// Axis for [ys]. Default is 6 labels, and the result stays in 4–6.
 @visibleForTesting
-TrendYAxis trendYAxis(Iterable<double> ys, {int tickCount = 7}) {
+TrendYAxis trendYAxis(Iterable<double> ys, {int tickCount = 6}) {
   final list = ys.toList();
   final maxTicks = tickCount < 2 ? 2 : tickCount;
   if (list.isEmpty) {
@@ -91,11 +91,10 @@ TrendYAxis trendYAxis(Iterable<double> ys, {int tickCount = 7}) {
   final yMaxRaw = list.reduce((a, b) => a > b ? a : b);
   final span = (yMaxRaw - yMinRaw).abs();
 
-  // 允许 6~7 条：先试 7 条，若步长撑不满或需要过度拉伸，就退到 6 条。
-  // 评分同时考虑「条数接近上限」「步长与理想值接近」「轴不被拉太开」。
+  // 4~6 条：先试上限，步长把轴拉得过宽时再减少。
   TrendYAxis? best;
   var bestScore = double.infinity;
-  final lowest = maxTicks >= 7 ? 6 : 2;
+  final lowest = maxTicks >= 6 ? 4 : 2;
   for (var want = maxTicks; want >= lowest; want--) {
     final axis = _axisFor(list, yMinRaw, yMaxRaw, span, want);
     if (axis == null) continue;
@@ -417,7 +416,6 @@ class _CentliTrendChartState extends State<CentliTrendChart> {
     );
 
     Widget body;
-    String? caption;
     final spots = widget.spots;
     final dayLabels = widget.dayLabels;
     final signColored = widget.signColored;
@@ -426,22 +424,19 @@ class _CentliTrendChartState extends State<CentliTrendChart> {
       body = Center(child: Text('\u6682\u65e0\u8d8b\u52bf\u6570\u636e', style: muted));
     } else {
       final ys = spots.map((s) => s.y);
-      final yMinRaw = ys.reduce((a, b) => a < b ? a : b);
-      final yMaxRaw = ys.reduce((a, b) => a > b ? a : b);
-      final end = spots.last.y;
-      caption =
-          '\u672b\u503c ${_fmtMajor(end)} \u00b7 \u6700\u5927 ${_fmtMajor(yMaxRaw)} \u00b7 \u6700\u5c0f ${_fmtMajor(yMinRaw)}';
 
       var changeDays = 0;
       for (var i = 1; i < n; i++) {
         if ((spots[i].y - spots[i - 1].y).abs() > 0.001) changeDays++;
       }
 
-      if (changeDays < 2) {
+      // 只要区间里有过变动就画线。原先要至少两个转折才出图，
+      // 同一天多笔记账会被收成一段，图上什么都没有。
+      if (changeDays < 1) {
         // Cumulative chart: a flat final value means net in/out cancelled out.
         final fallback = signColored
             ? '\u672c\u671f\u6536\u652f\u5f52\u96f6'
-            : '\u533a\u95f4\u53d8\u52a8\u8f83\u5c11\uff0c\u7d2f\u8ba1 ${_fmtMajor(end)}';
+            : '\u533a\u95f4\u53d8\u52a8\u8f83\u5c11\uff0c\u7d2f\u8ba1 ${_fmtMajor(spots.last.y)}';
         body = Center(
           child: Text(
             widget.sparseMessage ?? fallback,
@@ -450,8 +445,7 @@ class _CentliTrendChartState extends State<CentliTrendChart> {
           ),
         );
       } else {
-        // 7 条刻度：读图时能看出 6000/5000/4000… 这样更细的网格。
-        final axis = trendYAxis(ys, tickCount: 7);
+        final axis = trendYAxis(ys);
         final yInterval = axis.interval;
         final minY = axis.minY;
         final maxY = axis.maxY;
@@ -630,8 +624,7 @@ class _CentliTrendChartState extends State<CentliTrendChart> {
                   // No touch indicators: overlapping dots from neighbouring
                   // colour segments looked like a second data series.
                   getTouchedSpotIndicator: (bar, indexes) => [
-                    // A single marker on the hovered day (never one per
-                    // colour segment — that read as a second data series).
+                    // 只留竖直虚线，不画圆点。
                     for (final index in indexes)
                       index >= 0 &&
                               index < bar.spots.length &&
@@ -643,16 +636,7 @@ class _CentliTrendChartState extends State<CentliTrendChart> {
                                 strokeWidth: 1,
                                 dashArray: [4, 3],
                               ),
-                              FlDotData(
-                                show: true,
-                                getDotPainter: (spot, pct, bar, i) =>
-                                    FlDotCirclePainter(
-                                  radius: 4,
-                                  color: scheme.surface,
-                                  strokeWidth: 2,
-                                  strokeColor: color,
-                                ),
-                              ),
+                              const FlDotData(show: false),
                             )
                           : null,
                   ],
@@ -681,7 +665,7 @@ class _CentliTrendChartState extends State<CentliTrendChart> {
                       color: color,
                       barWidth: 2.2,
                       isStrokeCapRound: true,
-                      // 不画顶点：曲线本身说明趋势，圆点会显得碎。
+                      // 折线不打点：圆点会把曲线打断，看着碎。
                       dotData: const FlDotData(show: false),
                       belowBarData: BarAreaData(
                         show: true,
@@ -703,21 +687,7 @@ class _CentliTrendChartState extends State<CentliTrendChart> {
                             : CentliTheme.expenseRed,
                         barWidth: 2.2,
                         isStrokeCapRound: true,
-                        // 平时不画顶点；悬浮时只在指针那一天给一个小圆点。
-                        dotData: FlDotData(
-                          show: hoveredDay != null,
-                          checkToShowDot: (spot, bar) =>
-                              hoveredDay != null &&
-                              spot.x.round() == hoveredDay,
-                          getDotPainter: (spot, pct, bar, index) =>
-                              FlDotCirclePainter(
-                            radius: 3,
-                            color: seg.positive
-                                ? CentliTheme.incomeGreen
-                                : CentliTheme.expenseRed,
-                            strokeWidth: 0,
-                          ),
-                        ),
+                        dotData: const FlDotData(show: false),
                         belowBarData: BarAreaData(
                           show: true,
                           color: (seg.positive
@@ -740,8 +710,6 @@ class _CentliTrendChartState extends State<CentliTrendChart> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 标题 + 统计摘要同一行：末值/最大/最小 紧贴标题右侧，
-          // 图标按钮依旧靠最右。
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
@@ -751,18 +719,7 @@ class _CentliTrendChartState extends State<CentliTrendChart> {
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              if (caption != null) ...[
-                const SizedBox(width: CentliSpacing.item),
-                Expanded(
-                  child: Text(
-                    caption,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: muted?.copyWith(fontSize: 11),
-                  ),
-                ),
-              ] else
-                const Spacer(),
+              const Spacer(),
               if (widget.trailing != null) ...[
                 const SizedBox(width: CentliSpacing.dense),
                 widget.trailing!,

@@ -164,13 +164,13 @@ void main() {
 
 
 
-  group('trendYAxis (7 tick marks)', () {
-    test('covers the data with at most 7 labels', () {
+  group('trendYAxis (4 to 6 tick marks)', () {
+    test('covers the data with at most 6 labels', () {
       // 10/01…10/16 net-worth path from the reference screenshot.
       final ys = [1000.0, 1200.0, 900.0, 1500.0, 2300.0, 1900.0, 2600.0];
       final axis = trendYAxis(ys);
-      expect(axis.ticks.length, lessThanOrEqualTo(7));
-      expect(axis.ticks.length, greaterThanOrEqualTo(2));
+      expect(axis.ticks.length, lessThanOrEqualTo(6));
+      expect(axis.ticks.length, greaterThanOrEqualTo(4));
       expect(axis.minY, lessThanOrEqualTo(ys.reduce((a, b) => a < b ? a : b)));
       expect(axis.maxY, greaterThanOrEqualTo(ys.reduce((a, b) => a > b ? a : b)));
       // Evenly spaced.
@@ -186,13 +186,14 @@ void main() {
       final axis = trendYAxis([6000, 2000, -1500, -4000]);
       expect(axis.minY, lessThanOrEqualTo(-4000));
       expect(axis.maxY, greaterThanOrEqualTo(6000));
-      expect(axis.ticks.length, lessThanOrEqualTo(7));
+      expect(axis.ticks.length, lessThanOrEqualTo(6));
+      expect(axis.ticks.length, greaterThanOrEqualTo(4));
     });
 
-    test('reference screenshot: 6000…-4000 stays within 7 stops', () {
+    test('reference screenshot: 6000…-4000 stays within 6 stops', () {
       // 10/01…10/16 net-worth path, roughly 6000 down to -4000.
       final axis = trendYAxis([6000, 4200, 2500, 800, -900, -2400, -4000]);
-      expect(axis.ticks.length, lessThanOrEqualTo(7));
+      expect(axis.ticks.length, inInclusiveRange(4, 6));
       // Ticks run bottom → top and must cover the data.
       expect(axis.ticks.first, lessThanOrEqualTo(-4000));
       expect(axis.ticks.last, greaterThanOrEqualTo(6000));
@@ -209,15 +210,12 @@ void main() {
       expect(flat.maxY, greaterThan(42));
     });
 
-    test('default axis exposes 7 stops for a wide range', () {
-      // -500…1000: step 500 → -500 / 0 / 500 / 1000 is only 4; the default
-      // now allows a finer step, so the label count must exceed 4.
+    test('default axis stays within 4 to 6 stops', () {
       final axis = trendYAxis([1000, 500, 0, -500]);
-      expect(axis.ticks.length, greaterThanOrEqualTo(5));
-      expect(axis.ticks.length, lessThanOrEqualTo(7));
+      expect(axis.ticks.length, inInclusiveRange(4, 6));
     });
 
-    test('produces 6 or 7 evenly spaced stops covering the data', () {
+    test('produces 4 to 6 evenly spaced stops covering the data', () {
       final datasets = <String, List<double>>{
         'screenshot': [
           -71.89, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -230,8 +228,7 @@ void main() {
       };
       for (final e in datasets.entries) {
         final a = trendYAxis(e.value);
-        // 用户口径：6 条或 7 条都可以，不再出现 4~5 条。
-        expect(a.ticks.length, inInclusiveRange(6, 7), reason: e.key);
+        expect(a.ticks.length, inInclusiveRange(4, 6), reason: e.key);
         // Evenly spaced.
         for (var i = 1; i < a.ticks.length; i++) {
           expect(a.ticks[i] - a.ticks[i - 1], closeTo(a.interval, 1e-6),
