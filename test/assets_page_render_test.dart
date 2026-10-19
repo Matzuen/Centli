@@ -2,6 +2,7 @@ import 'package:centli/app/theme.dart';
 import 'package:centli/data/db/centli_database.dart';
 import 'package:centli/data/db/database_provider.dart';
 import 'package:centli/features/assets/assets_page.dart';
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:drift/native.dart';
@@ -79,22 +80,66 @@ void main() {
     expect(cash.pct, '88.5%');
   });
 
-  testWidgets('legend keeps the amount + percent intact', (tester) async {
+  testWidgets('legend shows only the percent', (tester) async {
     final db = CentliDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);
     await db.seedDefaults();
     await pump(tester, db);
 
-    // Full strings must be present — the screenshot showed 「-11.5...」.
-    final texts = tester
-        .widgetList<Text>(find.byType(Text))
-        .map((t) => t.data ?? t.textSpan?.toPlainText() ?? '')
+    final legend = find.byKey(const Key('assets_legend'));
+    final pcts = tester
+        .widgetList<Text>(
+          find.descendant(of: legend, matching: find.byType(Text)),
+        )
+        .where((t) => (t.data ?? '').contains('%'))
         .toList();
-    final moneyRows = texts.where((t) => t.contains('%')).toList();
-    expect(moneyRows, isNotEmpty);
-    for (final t in moneyRows) {
-      expect(t.endsWith('%）'), isTrue, reason: 'truncated: $t');
+    expect(pcts, isNotEmpty);
+    final box = tester.getRect(legend);
+    final textFinder = find.descendant(of: legend, matching: find.byType(Text));
+    final contentMid = (tester.getTopLeft(textFinder.first).dy +
+            tester.getBottomLeft(textFinder.last).dy) /
+        2;
+    expect((contentMid - box.center.dy).abs(), lessThan(24));
+    for (final t in pcts) {
+      expect(t.data, matches(RegExp(r'^−?[\d.]+%$')), reason: t.data);
+      expect(t.style?.fontSize, 13, reason: t.data);
+      expect(t.style?.fontWeight, FontWeight.w400, reason: t.data);
     }
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('pie slice tooltip shows while pressed and hides on release',
+      (tester) async {
+    final db = CentliDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    await db.seedDefaults();
+    final ledger = await (db.select(db.ledgers)..limit(1)).getSingle();
+    final cash = (await db.loadActiveAccounts(ledger.id)).first;
+    await db.updateAccount(
+      id: cash.id,
+      name: cash.name,
+      currency: cash.currency,
+      type: cash.type,
+      openingBalanceMinor: 11111100,
+      icon: cash.icon,
+    );
+    await pump(tester, db);
+
+    final pie = find.byType(PieChart);
+    expect(pie, findsOneWidget);
+    final center = tester.getCenter(pie);
+    final gesture = await tester.startGesture(center + const Offset(46, 14));
+    await tester.pump();
+    final tip = find.byKey(const Key('assets_pie_tooltip'));
+    expect(tip, findsOneWidget);
+    final text = tester.widget<Text>(
+      find.descendant(of: tip, matching: find.byType(Text)),
+    );
+    expect(text.data, matches(RegExp(r'^.+（.+%）$')));
+    expect(text.style?.fontSize, 12);
+    await gesture.up();
+    await tester.pump();
+    expect(find.byKey(const Key('assets_pie_tooltip')), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

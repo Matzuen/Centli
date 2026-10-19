@@ -299,16 +299,6 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                             );
                           },
                         ),
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 12, top: 4),
-                        child: Text(
-                          _showArchived
-                              ? '已归档账户不计入总资产，可点进详情取消归档。'
-                              : '找不到账户？可到「已归档」查看；归档账户不计入总资产。',
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: scheme.onSurfaceVariant),
-                        ),
-                      ),
                       if (accounts.isEmpty)
                         CentliSoftCard(
                           child: CentliEmptyState(
@@ -349,6 +339,16 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                           book: ref.watch(fxBookProvider).valueOrNull,
                         ),
                       ],
+                      Padding(
+                        padding: const EdgeInsets.only(top: 16, bottom: 8),
+                        child: Text(
+                          _showArchived
+                              ? '已归档账户不计入总资产，可点进详情取消归档。'
+                              : '找不到账户？可到「已归档」查看；归档账户不计入总资产。',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: scheme.onSurfaceVariant),
+                        ),
+                      ),
                     ],
                   );
                 },
@@ -705,8 +705,9 @@ class _AssetLiabilityLine extends StatelessWidget {
   }
 }
 
-/// 卡片 2：资产分析 —— 环形图（左）+ 图例（右，名称 + 金额 + 百分比）。
-class _AssetAnalysisCard extends StatelessWidget {
+/// 卡片 2：资产分析。环形图和图例与统计页同一套：13 号金额，放不下省略；
+/// 按住扇区显示明细，松开消失。
+class _AssetAnalysisCard extends StatefulWidget {
   const _AssetAnalysisCard({
     super.key,
     required this.slices,
@@ -719,9 +720,22 @@ class _AssetAnalysisCard extends StatelessWidget {
   final bool hide;
 
   @override
+  State<_AssetAnalysisCard> createState() => _AssetAnalysisCardState();
+}
+
+class _AssetAnalysisCardState extends State<_AssetAnalysisCard> {
+  int? _touched;
+
+  void _setTouched(int? index) {
+    if (_touched == index) return;
+    setState(() => _touched = index);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final slices = widget.slices;
     // Negative slices are liabilities: draw them in the expense red, the rest
     // cycle through the palette.
     var paletteIndex = 0;
@@ -733,7 +747,6 @@ class _AssetAnalysisCard extends StatelessWidget {
         continue;
       }
       var c = kAssetsDonutColors[paletteIndex % kAssetsDonutColors.length];
-      // Never let a positive slice reuse the liability red.
       while (c.toARGB32() == liabilityColor.toARGB32()) {
         paletteIndex++;
         c = kAssetsDonutColors[paletteIndex % kAssetsDonutColors.length];
@@ -742,6 +755,9 @@ class _AssetAnalysisCard extends StatelessWidget {
       colors.add(c);
     }
     final pieTotal = slices.fold<int>(0, (a, b) => a + b.totalMinor.abs());
+    final net = slices.fold<int>(0, (a, b) => a + b.totalMinor);
+    final touched = _touched;
+    final tip = touched == null ? null : slices[touched];
     return CentliSoftCard(
       padding: const EdgeInsets.all(CentliSpacing.cardPad),
       child: Column(
@@ -754,60 +770,63 @@ class _AssetAnalysisCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: CentliSpacing.section),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              SizedBox(
-                width: 120,
-                height: 120,
-                child: pieTotal <= 0
-                    ? Center(
-                        child: Text(
-                          '暂无余额',
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: scheme.onSurfaceVariant,
-                          ),
-                        ),
-                      )
-                    : PieChart(
-                        PieChartData(
-                          sectionsSpace: 2,
-                          centerSpaceRadius: 30,
-                          sections: [
-                            for (var i = 0; i < slices.length; i++)
-                              if (slices[i].totalMinor.abs() > 0)
-                                PieChartSectionData(
-                                  value: slices[i].totalMinor.abs().toDouble(),
-                                  color: colors[i],
-                                  radius: 26,
-                                  title: '',
-                                ),
-                          ],
-                        ),
-                      ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+          SizedBox(
+            height: 190,
+            child: Stack(
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    for (var i = 0; i < slices.length; i++)
-                      _AnalysisLegendRow(
-                        name: slices[i].name,
-                        color: colors[i],
-                        amount: formatMinor(
-                          base,
-                          slices[i].totalMinor,
-                          hide: hide,
-                        ),
-                        pct: slices[i].pct,
-                        negative: slices[i].totalMinor < 0,
-                        theme: theme,
+                    SizedBox(
+                      width: 120,
+                      child: pieTotal <= 0
+                          ? Center(
+                              child: Text(
+                                '暂无余额',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: scheme.onSurfaceVariant,
+                                ),
+                              ),
+                            )
+                          : _AssetsDonut(
+                              slices: slices,
+                              colors: colors,
+                              centerLabel: '合计',
+                              centerValue: formatMinor(
+                                widget.base,
+                                net,
+                                hide: widget.hide,
+                              ),
+                              onTouch: _setTouched,
+                            ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: _AssetsLegend(
+                        slices: slices,
+                        colors: colors,
                       ),
+                    ),
                   ],
                 ),
-              ),
-            ],
+                if (tip != null)
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    child: IgnorePointer(
+                      child: Align(
+                        alignment: Alignment.topCenter,
+                        child: _AssetsSliceTooltip(
+                          text:
+                              '${tip.name}  ${formatMinor(widget.base, tip.totalMinor, hide: widget.hide)}'
+                              '（${tip.pct}）',
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ],
       ),
@@ -815,71 +834,207 @@ class _AssetAnalysisCard extends StatelessWidget {
   }
 }
 
-/// 图例一行：色块 + 名称 + 金额（百分比）—— 单行显示。
-class _AnalysisLegendRow extends StatelessWidget {
-  const _AnalysisLegendRow({
-    required this.name,
-    required this.color,
-    required this.amount,
-    required this.pct,
-    required this.negative,
-    required this.theme,
-  });
+class _AssetsSliceTooltip extends StatelessWidget {
+  const _AssetsSliceTooltip({required this.text});
 
-  final String name;
-  final Color color;
-  final String amount;
-  final String pct;
-  final bool negative;
-  final ThemeData theme;
+  final String text;
 
   @override
   Widget build(BuildContext context) {
-    final money = '$amount（$pct）';
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
-        children: [
-          Container(
-            width: 9,
-            height: 9,
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: BorderRadius.circular(2),
-            ),
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      key: const Key('assets_pie_tooltip'),
+      color: scheme.inverseSurface,
+      borderRadius: BorderRadius.circular(4),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Text(
+          text,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: scheme.onInverseSurface,
+            fontWeight: FontWeight.w600,
+            fontSize: 12,
           ),
-          const SizedBox(width: 6),
-          // The amount + percent must stay whole; only the name may ellipsize.
-          Flexible(
-            flex: 2,
-            child: Text(
-              name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall?.copyWith(
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Flexible(
-            flex: 5,
-            child: Text(
-              money,
-              maxLines: 1,
-              softWrap: false,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.right,
-              style: theme.textTheme.bodySmall?.copyWith(
-                fontSize: 11.5,
-                fontWeight: FontWeight.w600,
-                color: negative ? CentliTheme.expenseRed : null,
-                fontFeatures: const [FontFeature.tabularFigures()],
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
+    );
+  }
+}
+
+class _AssetsDonut extends StatelessWidget {
+  const _AssetsDonut({
+    required this.slices,
+    required this.colors,
+    required this.centerLabel,
+    required this.centerValue,
+    required this.onTouch,
+  });
+
+  final List<AssetTypeSlice> slices;
+  final List<Color> colors;
+  final String centerLabel;
+  final String centerValue;
+  final ValueChanged<int?> onTouch;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final sectionIndexes = <int>[
+      for (var i = 0; i < slices.length; i++)
+        if (slices[i].totalMinor.abs() > 0) i,
+    ];
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        PieChart(
+          PieChartData(
+            sectionsSpace: 2,
+            centerSpaceRadius: 42,
+            pieTouchData: PieTouchData(
+              touchCallback: (event, response) {
+                final released = event is FlTapUpEvent ||
+                    event is FlTapCancelEvent ||
+                    event is FlPanEndEvent ||
+                    event is FlPanCancelEvent ||
+                    event is FlLongPressEnd ||
+                    event is FlPointerExitEvent;
+                if (released || !event.isInterestedForInteractions) {
+                  onTouch(null);
+                  return;
+                }
+                final idx = response?.touchedSection?.touchedSectionIndex;
+                if (idx == null || idx < 0 || idx >= sectionIndexes.length) {
+                  onTouch(null);
+                  return;
+                }
+                onTouch(sectionIndexes[idx]);
+              },
+            ),
+            sections: [
+              for (final i in sectionIndexes)
+                PieChartSectionData(
+                  value: slices[i].totalMinor.abs().toDouble(),
+                  color: colors[i],
+                  radius: 30,
+                  title: '',
+                ),
+            ],
+          ),
+        ),
+        IgnorePointer(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                centerValue,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              Text(
+                centerLabel,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AssetsLegend extends StatelessWidget {
+  const _AssetsLegend({
+    required this.slices,
+    required this.colors,
+  });
+
+  final List<AssetTypeSlice> slices;
+  final List<Color> colors;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // 名称最多占一半，其余给百分比；百分比超宽时省略而不是撑破行。
+        final pctMax = (constraints.maxWidth * 0.5).clamp(0.0, double.infinity);
+        return SingleChildScrollView(
+          key: const Key('assets_legend'),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: constraints.maxHeight.isFinite
+                  ? constraints.maxHeight
+                  : 0,
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                for (var i = 0; i < slices.length; i++) ...[
+                  if (i > 0) const SizedBox(height: CentliSpacing.dense),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 5,
+                      horizontal: 2,
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 10,
+                          height: 10,
+                          decoration: BoxDecoration(
+                            color: colors[i],
+                            borderRadius: BorderRadius.circular(3),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            slices[i].name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        ConstrainedBox(
+                          constraints: BoxConstraints(maxWidth: pctMax),
+                          child: Text(
+                            slices[i].pct,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.end,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w400,
+                              height: 1.2,
+                              color: slices[i].totalMinor < 0
+                                  ? CentliTheme.expenseRed
+                                  : null,
+                              fontFeatures: const [
+                                FontFeature.tabularFigures(),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
