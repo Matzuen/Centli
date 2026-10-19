@@ -163,14 +163,15 @@ class _TxnDateGroup extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: EdgeInsets.fromLTRB(16, isFirst ? 4 : 16, 16, 6),
+          padding: EdgeInsets.fromLTRB(16, isFirst ? 8 : 18, 16, 8),
           child: Text(
             label,
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: scheme.onSurfaceVariant,
-                  letterSpacing: 0.15,
-                ),
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: scheme.onSurfaceVariant,
+              height: 1.2,
+            ),
           ),
         ),
         Material(

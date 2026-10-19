@@ -9,7 +9,6 @@ import '../../data/db/database_provider.dart';
 import '../constants/currencies.dart';
 import '../utils/fx.dart';
 import '../utils/money.dart';
-import '../../app/theme.dart';
 import 'category_visuals.dart';
 
 /// Highlight colour for search keywords on transaction rows.
@@ -67,7 +66,7 @@ class TxnListTile extends ConsumerWidget {
         ? null
         : lookups.categoriesById[txn.categoryId!];
     final title = isBalanceAdjust ? '余额校正' : _categoryTitle(cat);
-    final subtitle = isBalanceAdjust ? '不计入统计／预算' : _subtitle();
+    final subtitle = isBalanceAdjust ? '不计入统计／预算' : _detailLine();
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -83,107 +82,116 @@ class TxnListTile extends ConsumerWidget {
         InkWell(
           onTap: () => context.push('/ledger/${txn.id}'),
           child: Padding(
-            padding: const EdgeInsets.all(CentliSpacing.cardPad),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                CategoryCircleIcon(
-                  name: (cat?.name ?? '').trim(),
-                  kind: isTransfer ? 'transfer' : txn.type,
-                  iconKey: cat?.icon,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _HighlightedText(
-                        text: title,
-                        keywords: highlight,
-                        maxLines: 1,
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(
-                              fontWeight: FontWeight.w600,
-                              height: 1.2,
-                              color: scheme.onSurface,
-                            ),
-                      ),
-                      if (subtitle.isNotEmpty) ...[
-                        const SizedBox(height: CentliSpacing.dense),
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+            // 金额列按内容宽度贴右，但最多占 55%：大字号/大金额时省略，
+            // 而不是把整行撑破（flex: 0 会让它拿到无界宽度）。
+            child: LayoutBuilder(
+              builder: (context, constraints) => Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  CategoryCircleIcon(
+                    name: (cat?.name ?? '').trim(),
+                    kind: isTransfer ? 'transfer' : txn.type,
+                    iconKey: cat?.icon,
+                    size: 40,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                         _HighlightedText(
-                          text: subtitle,
+                          text: title,
                           keywords: highlight,
                           maxLines: 1,
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: muted, height: 1.2),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                            height: 1.2,
+                          ).copyWith(color: scheme.onSurface),
                         ),
-                      ],
-                      if (decodeTxnTags(txn.tags).isNotEmpty) ...[
-                        const SizedBox(height: CentliSpacing.dense),
-                        _TxnTagChips(tags: decodeTxnTags(txn.tags)),
-                      ],
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Flexible(
-                  child: Builder(
-                    builder: (context) {
-                      final ledger = ref
-                          .watch(currentLedgerProvider)
-                          .valueOrNull;
-                      final book = ref.watch(fxBookProvider).valueOrNull;
-                      final base = ledger?.baseCurrency;
-                      var unconverted = false;
-                      if (base != null &&
-                          book != null &&
-                          txn.currency != base &&
-                          txn.type != 'transfer') {
-                        final day = FxBook.dayFromHappenAtMs(txn.happenAt);
-                        unconverted =
-                            book.rate(
-                              fromCcy: txn.currency,
-                              toCcy: base,
-                              onDay: day,
-                            ) ==
-                            null;
-                      }
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          // 大金额（¥1,234,567.89）在窄屏上必须能省略，
-                          // 否则整行 Row 溢出。
-                          Text(
-                            _amountLabel(),
+                        if (subtitle.isNotEmpty) ...[
+                          const SizedBox(height: 3),
+                          _HighlightedText(
+                            text: subtitle,
+                            keywords: highlight,
                             maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color: amountColor,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 16,
-                              height: 1.2,
+                              color: muted,
+                              fontSize: 12,
+                              height: 1.25,
+                              fontWeight: FontWeight.w400,
                             ),
                           ),
-                          const SizedBox(height: CentliSpacing.dense),
-                          Text(
-                            [
-                              timeLabel,
-                              if (unconverted) '\u672a\u6298\u7b97',
-                              if (txn.includeInStat == 0) '\u4e0d\u8ba1\u5165',
-                            ].join(' · '),
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(
-                                  color: unconverted ? scheme.error : muted,
-                                  height: 1.2,
-                                ),
-                          ),
                         ],
-                      );
-                    },
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                  const SizedBox(width: 12),
+                  // 金额只占自身宽度并贴行尾；上限 55% 宽度，
+                  // 超出时省略，避免大字号/大金额把行撞破。
+                  ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: constraints.maxWidth * 0.55,
+                    ),
+                    child: Builder(
+                      builder: (context) {
+                        final ledger = ref
+                            .watch(currentLedgerProvider)
+                            .valueOrNull;
+                        final book = ref.watch(fxBookProvider).valueOrNull;
+                        final base = ledger?.baseCurrency;
+                        var unconverted = false;
+                        if (base != null &&
+                            book != null &&
+                            txn.currency != base &&
+                            txn.type != 'transfer') {
+                          final day = FxBook.dayFromHappenAtMs(txn.happenAt);
+                          unconverted =
+                              book.rate(
+                                fromCcy: txn.currency,
+                                toCcy: base,
+                                onDay: day,
+                              ) ==
+                              null;
+                        }
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _AmountText(
+                              symbol: hide
+                                  ? ''
+                                  : (currencySymbols[txn.currency] ??
+                                        txn.currency),
+                              number: hide ? '****' : _amountNumber(),
+                              color: amountColor,
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              [
+                                timeLabel,
+                                if (unconverted) '\u672a\u6298\u7b97',
+                                if (txn.includeInStat == 0)
+                                  '\u4e0d\u8ba1\u5165',
+                              ].join(' · '),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.right,
+                              style: TextStyle(
+                                color: unconverted ? scheme.error : muted,
+                                fontSize: 12,
+                                height: 1.25,
+                                fontWeight: FontWeight.w400,
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -191,15 +199,11 @@ class TxnListTile extends ConsumerWidget {
     );
   }
 
-  String _amountLabel() {
-    if (hide) return '****';
-    final symbol = currencySymbols[txn.currency] ?? txn.currency;
+  String _amountNumber() {
     final decimals = currencyDecimals[txn.currency] ?? 2;
     final major = fromMinor(txn.currency, txn.amountMinor);
-    final numStr = decimals == 0
-        ? '${major.round()}'
-        : major.toStringAsFixed(decimals);
-    return '$symbol $numStr';
+    if (decimals == 0) return '${major.round()}';
+    return major.toStringAsFixed(decimals);
   }
 
   String _categoryTitle(Category? cat) {
@@ -211,15 +215,15 @@ class TxnListTile extends ConsumerWidget {
     return base;
   }
 
-  String _subtitle() {
-    final accountPart = _accountPart();
-    final note = (txn.note ?? '').trim();
-    final right = note;
-
-    if (accountPart.isEmpty && right.isEmpty) return txn.currency;
-    if (accountPart.isEmpty) return right;
-    if (right.isEmpty) return accountPart;
-    return '$accountPart · $right';
+  /// 账户、备注、标签同一行，样式一致，用「 · 」隔开。
+  String _detailLine() {
+    final parts = <String>[
+      _accountPart(),
+      (txn.note ?? '').trim(),
+      ...decodeTxnTags(txn.tags),
+    ].where((s) => s.isNotEmpty).toList();
+    if (parts.isEmpty) return txn.currency;
+    return parts.join(' · ');
   }
 
   String _accountPart() {
@@ -238,6 +242,40 @@ class TxnListTile extends ConsumerWidget {
       }
     }
     return fromName;
+  }
+}
+
+/// 金额：13 号加粗，右对齐。
+class _AmountText extends StatelessWidget {
+  const _AmountText({
+    required this.symbol,
+    required this.number,
+    required this.color,
+  });
+
+  final String symbol;
+  final String number;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    const base = TextStyle(
+      fontWeight: FontWeight.w700,
+      fontSize: 13,
+      height: 1.2,
+    );
+    return Text.rich(
+      TextSpan(
+        style: base.copyWith(color: color),
+        children: [
+          if (symbol.isNotEmpty) TextSpan(text: symbol),
+          TextSpan(text: symbol.isEmpty ? number : ' $number'),
+        ],
+      ),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      textAlign: TextAlign.right,
+    );
   }
 }
 
@@ -319,41 +357,4 @@ List<TextSpan> highlightSpans(
     i = j;
   }
   return out;
-}
-
-class _TxnTagChips extends StatelessWidget {
-  const _TxnTagChips({required this.tags});
-  final List<String> tags;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final shown = tags.take(2).toList();
-    final extra = tags.length - shown.length;
-    return Wrap(
-      spacing: 4,
-      runSpacing: 2,
-      children: [
-        for (final t in shown)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-            decoration: BoxDecoration(
-              color: scheme.surfaceContainerHighest.withValues(alpha: 0.7),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(
-              t,
-              style: Theme.of(context).textTheme.labelSmall
-                  ?.copyWith(color: scheme.onSurfaceVariant),
-            ),
-          ),
-        if (extra > 0)
-          Text(
-            '+$extra',
-            style: Theme.of(context).textTheme.labelSmall
-                ?.copyWith(color: scheme.onSurfaceVariant),
-          ),
-      ],
-    );
-  }
 }
