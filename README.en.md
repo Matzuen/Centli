@@ -5,7 +5,7 @@ Local-first personal bookkeeping (**Chinese UI only**): **clear every bill**.
 > Canonical docs are in Chinese: see [`README.md`](README.md) and [`docs/RELEASE_NOTES.md`](docs/RELEASE_NOTES.md).
 
 - Flutter · Drift (SQLite) · Riverpod · go_router
-- Version: `1.10.5+36`
+- Version: `2.0.0+37`
 - Currency display: `CNY · 人民币`
 - Bottom nav (5 tabs): 首页 / 统计 / 记账 / 资产 / 我的
 
@@ -18,7 +18,7 @@ Local-first personal bookkeeping (**Chinese UI only**): **clear every bill**.
 - Multi-ledger, accounts, category tree; icons from assets or 1–2 hanzi fallback
 - Stats: income + expense; monthly budgets
 - Bill detail: **保存** (save) + delete in the app bar; amount, account, category, type, time, tags, note and the include-in-stats/budget switches are each **tap-to-edit** (picks persist immediately, amount waits for 保存); only the edited columns are written, provenance is preserved
-- Android pending auto-capture from WeChat/Alipay **transaction** notifications (payment, debit, income, refund, repayment); capture-first design — false positives are filtered in 待确认
+- Android pending auto-capture from WeChat/Alipay **transaction** notifications (payment, debit, income, refund, repayment); **a foreground keeper service** keeps the listener alive after the UI is swiped away, rebinding automatically; capture-first design — false positives are filtered in 待确认
 - Recognition rules v8: loose "must contain" (any transaction word), trimmed exclusions (chat / OTP / login / reminders / you-initiated transfers stay out); `assets/noti_templates.json` mirrors the builtins and is covered by tests
 - Recognition rules: official read-only + user CRUD + try-parse (step-by-step reason) + import/export
 - Smart fill: local rules + optional LLM
@@ -56,6 +56,32 @@ Prefer JSON (`format: centli-export`). Excel import is best-effort (no fx/settin
 > batch 4 ships as `1.4.x`. There is no `1.2` / `1.3` because those batches were never
 > released under this scheme. Fixes within a batch bump the patch digit
 > (`1.4.1` → `1.4.2`); the build number increments by 1 on every release.
+> **2.0.0** starts a new major line: the UI and icon set were overhauled, auto-capture
+> now runs behind a foreground service, and aggregates moved into SQL.
+
+### 2.0.0 (2026-10-19)
+
+UI
+- New multicolour icon set under `assets/icons/` (banks, brands, payments, food, electronics, home, life, office, misc); brand and bank marks keep their own colours, other icons use a soft grey pad with a theme-coloured glyph
+- 12 groups of near-duplicate icons were merged (`fire_simple`→`fire`, `local_taxi`→`taxi`, `tag_simple`→`tag`, …); old keys alias to the new ones so existing categories keep their icons
+- Home summary card gained a **monthly budget strip** (used / left / over); the net-worth card shows total assets left and liabilities right
+- Home pending area split into a "ready to confirm" carousel plus a separate banner for parse failures
+- Dialogs, menus and text fields share one radius/palette (inputs 14, menus 16)
+- Stats legend and summary tables re-laid out — the name takes its own width, the three money columns split the rest, and narrow screens shrink the font instead of truncating; hold a donut slice to see its detail above the ring
+
+Auto-capture
+- **Foreground keeper service** (`CentliCaptureKeeper`) keeps the notification listener bound after the UI is swiped away, and rebinds automatically if it drops
+- Native side honours `matchOn=title` and falls back to the bundled templates when Flutter has not synced yet, so a cold start can still book
+- Native writes straight into the pending table instead of waiting for the Flutter engine
+
+Performance
+- Home / stats / assets aggregates moved into **SQL** (grouped by type, category and day) instead of folding the whole table in memory
+- Recurring runs dedupe with one `IN` query instead of N per-occurrence lookups; account and category reads are cached
+- Notification regexes are **compiled once and cached**; the home-widget sync is debounced by 700 ms
+- Overview mode no longer also subscribes to the calendar month, so one refresh does not scan twice
+
+Fixes
+- The bill-list amount column overflowed the row at large text scales (`flex: 0` gave it unbounded width); it now hugs its content, caps at 55% of the row and ellipsizes beyond that
 
 ### 1.10.5 (2026-10-18)
 
