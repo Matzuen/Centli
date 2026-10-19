@@ -401,31 +401,6 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
                 ),
                 const SizedBox(height: CentliSpacing.section),
                 CentliSoftCard(
-                  child: Column(
-                    children: [
-                      ListTile(
-                        leading: const Icon(Icons.tips_and_updates_outlined),
-                        title: const Text('发出去没通知？'),
-                        subtitle: const Text(
-                          '红包/转账常无支付成功通知。可用分享账单、截图识别或剪贴板导入到待确认。',
-                        ),
-                        isThreeLine: true,
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: () => context.push('/me/auto/manual-help'),
-                      ),
-                      const Divider(height: 1, indent: 56),
-                      ListTile(
-                        leading: const Icon(Icons.pending_actions_outlined),
-                        title: const Text('打开待确认'),
-                        subtitle: const Text('集中确认、忽略或补全解析失败项'),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: () => context.push('/home/pending'),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: CentliSpacing.section),
-                CentliSoftCard(
                   child: ListTile(
                     leading: Icon(
                       _granted
@@ -524,7 +499,7 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
                               isExpanded: true,
                               decoration: const InputDecoration(
                                 isDense: true,
-                                border: OutlineInputBorder(),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
                                 labelText: '默认账户',
                               ),
                               items: [

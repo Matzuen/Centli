@@ -718,7 +718,7 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
                   ),
                   decoration: InputDecoration(
                     labelText: '金额 ($ccy)',
-                    border: const OutlineInputBorder(),
+                    border: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
                     isDense: true,
                   ),
                   onChanged: (_) => setState(() {}),
@@ -728,7 +728,7 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
                   controller: _noteCtrl,
                   decoration: const InputDecoration(
                     labelText: '备注',
-                    border: OutlineInputBorder(),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
                     isDense: true,
                   ),
                   onChanged: (_) => setState(() {}),
@@ -749,7 +749,7 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
                   }),
                   decoration: InputDecoration(
                     labelText: '分类',
-                    border: const OutlineInputBorder(),
+                    border: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
                     isDense: true,
                     enabledBorder: _categoryFallback
                         ? OutlineInputBorder(
@@ -780,7 +780,7 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
                   }),
                   decoration: InputDecoration(
                     labelText: '账户',
-                    border: const OutlineInputBorder(),
+                    border: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
                     isDense: true,
                     enabledBorder: _accountFallback
                         ? OutlineInputBorder(

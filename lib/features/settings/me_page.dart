@@ -66,7 +66,7 @@ class MePage extends ConsumerWidget {
                               ledger?.name ?? '账本',
                               style: const TextStyle(
                                 fontWeight: FontWeight.w800,
-                                fontSize: 16,
+                                fontSize: 15,
                               ),
                             ),
                             const SizedBox(height: CentliSpacing.dense),
@@ -405,7 +405,7 @@ Future<void> showLedgerEditor(
                     controller: nameCtrl,
                     decoration: const InputDecoration(
                       labelText: '账本名称',
-                      border: OutlineInputBorder(),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
                     ),
                   ),
                   const SizedBox(height: CentliSpacing.section),
@@ -423,7 +423,7 @@ Future<void> showLedgerEditor(
                     },
                     decoration: const InputDecoration(
                       labelText: '本位币',
-                      border: OutlineInputBorder(),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
                       helperText: '影响首页/统计/资产汇总币种；外币按汇率折算',
                     ),
                   ),

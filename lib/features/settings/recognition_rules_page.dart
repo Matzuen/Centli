@@ -207,7 +207,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
               decoration: const InputDecoration(
                 labelText: 'HTTPS JSON 地址',
                 hintText: 'https://example.com/noti_templates.json',
-                border: OutlineInputBorder(),
+                border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
               ),
             ),
           ],
@@ -355,7 +355,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
               decoration: const InputDecoration(
                 labelText: 'HTTPS JSON 地址',
                 hintText: 'https://example.com/user_rules.json',
-                border: OutlineInputBorder(),
+                border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
               ),
             ),
           ],
@@ -717,7 +717,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
                           initialValue: _tryAppChoice,
                           decoration: const InputDecoration(
                             labelText: '来源应用',
-                            border: OutlineInputBorder(),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
                             isDense: true,
                           ),
                           items: const [
@@ -750,7 +750,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
                             controller: _tryPkgCtrl,
                             decoration: const InputDecoration(
                               labelText: '包名',
-                              border: OutlineInputBorder(),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
                               isDense: true,
                               hintText: '例如 com.xxx.pay',
                             ),
@@ -761,7 +761,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
                           controller: _tryTitle,
                           decoration: const InputDecoration(
                             labelText: '标题（可选）',
-                            border: OutlineInputBorder(),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
                             isDense: true,
                           ),
                         ),
@@ -772,7 +772,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
                           maxLines: 6,
                           decoration: const InputDecoration(
                             labelText: '通知正文',
-                            border: OutlineInputBorder(),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
                             alignLabelWithHint: true,
                           ),
                         ),

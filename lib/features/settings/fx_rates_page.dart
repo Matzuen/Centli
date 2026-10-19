@@ -289,7 +289,7 @@ Future<void> _showEditor(
                     controller: dayCtrl,
                     decoration: const InputDecoration(
                       labelText: '日期 yyyy-MM-dd',
-                      border: OutlineInputBorder(),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
                     ),
                   ),
                   const SizedBox(height: CentliSpacing.section),
@@ -307,7 +307,7 @@ Future<void> _showEditor(
                           },
                           decoration: const InputDecoration(
                             labelText: '原币',
-                            border: OutlineInputBorder(),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
                           ),
                         ),
                       ),
@@ -327,7 +327,7 @@ Future<void> _showEditor(
                           },
                           decoration: const InputDecoration(
                             labelText: '目标币',
-                            border: OutlineInputBorder(),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
                           ),
                         ),
                       ),
@@ -340,7 +340,7 @@ Future<void> _showEditor(
                         const TextInputType.numberWithOptions(decimal: true),
                     decoration: const InputDecoration(
                       labelText: '汇率（1 原币 = ? 目标币）',
-                      border: OutlineInputBorder(),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
                     ),
                   ),
                   const SizedBox(height: CentliSpacing.section),
@@ -348,7 +348,7 @@ Future<void> _showEditor(
                     controller: sourceCtrl,
                     decoration: const InputDecoration(
                       labelText: '来源（可选）',
-                      border: OutlineInputBorder(),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
                     ),
                   ),
                 ],

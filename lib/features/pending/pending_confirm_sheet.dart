@@ -79,13 +79,18 @@ class _ConfirmPendingSheetState extends ConsumerState<_ConfirmPendingSheet> {
   late final TextEditingController _noteCtrl;
   String? _categoryId;
   String? _accountId;
+  String? _directionOverride;
   var _busy = false;
   var _includeRepayInStat = false;
 
   PendingCapture get c => widget.capture;
 
-  /// 先看持久化的方向，没有就重新解析一次。
+  /// 先看用户在弹窗里改过的类型，再看持久化方向，最后重新解析。
   String get _direction {
+    final chosen = _directionOverride;
+    if (chosen != null && chosen.isNotEmpty) {
+      return NotiTemplate.normalizeDirection(chosen);
+    }
     final stored = c.direction?.trim();
     if (stored != null && stored.isNotEmpty) {
       return NotiTemplate.normalizeDirection(stored);
@@ -237,9 +242,32 @@ class _ConfirmPendingSheetState extends ConsumerState<_ConfirmPendingSheet> {
                     ),
                   ),
                 ),
-                Chip(
-                  label: Text(pendingDirectionLabel(_direction)),
-                  visualDensity: VisualDensity.compact,
+                PopupMenuButton<String>(
+                  key: const Key('confirm_pending_type'),
+                  initialValue: _direction,
+                  onSelected: _busy
+                      ? null
+                      : (dir) {
+                          setState(() {
+                            _directionOverride = dir;
+                            final cats = _catsForDirection;
+                            if (!cats.any((x) => x.id == _categoryId)) {
+                              _categoryId =
+                                  cats.isEmpty ? null : cats.first.id;
+                            }
+                          });
+                        },
+                  itemBuilder: (context) => const [
+                    PopupMenuItem(value: 'out', child: Text('支出')),
+                    PopupMenuItem(value: 'in', child: Text('收入')),
+                    PopupMenuItem(value: 'refund', child: Text('退款')),
+                    PopupMenuItem(value: 'repay', child: Text('还款')),
+                  ],
+                  child: Chip(
+                    label: Text(pendingDirectionLabel(_direction)),
+                    avatar: const Icon(Icons.unfold_more, size: 16),
+                    visualDensity: VisualDensity.compact,
+                  ),
                 ),
               ],
             ),
@@ -264,7 +292,6 @@ class _ConfirmPendingSheetState extends ConsumerState<_ConfirmPendingSheet> {
                         const TextInputType.numberWithOptions(decimal: true),
                     decoration: InputDecoration(
                       labelText: '金额 ($ccy)',
-                      border: const OutlineInputBorder(),
                       isDense: true,
                     ),
                   ),
@@ -292,7 +319,6 @@ class _ConfirmPendingSheetState extends ConsumerState<_ConfirmPendingSheet> {
                         : (v) => setState(() => _accountId = v),
                     decoration: const InputDecoration(
                       labelText: '账户',
-                      border: OutlineInputBorder(),
                       isDense: true,
                     ),
                   ),
@@ -312,7 +338,6 @@ class _ConfirmPendingSheetState extends ConsumerState<_ConfirmPendingSheet> {
                   _busy ? null : (v) => setState(() => _categoryId = v),
               decoration: const InputDecoration(
                 labelText: '分类',
-                border: OutlineInputBorder(),
                 isDense: true,
               ),
             ),
@@ -321,7 +346,6 @@ class _ConfirmPendingSheetState extends ConsumerState<_ConfirmPendingSheet> {
               controller: _noteCtrl,
               decoration: const InputDecoration(
                 labelText: '备注',
-                border: OutlineInputBorder(),
                 isDense: true,
               ),
             ),

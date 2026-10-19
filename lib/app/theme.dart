@@ -150,6 +150,50 @@ abstract final class CentliTheme {
     ),
   ];
 
+  static ThemeData _chrome(ThemeData theme, {required bool dark}) {
+    final scheme = theme.colorScheme;
+    final surface = dark ? scheme.surfaceContainerHighest : Colors.white;
+    final menuShape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(16),
+    );
+    return theme.copyWith(
+      dialogTheme: DialogThemeData(
+        backgroundColor: surface,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(cardRadius),
+        ),
+      ),
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: surface,
+        surfaceTintColor: Colors.transparent,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+      ),
+      popupMenuTheme: PopupMenuThemeData(
+        color: surface,
+        elevation: 2,
+        surfaceTintColor: Colors.transparent,
+        shape: menuShape,
+      ),
+      menuTheme: MenuThemeData(
+        style: MenuStyle(
+          backgroundColor: WidgetStatePropertyAll(surface),
+          surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
+          shape: WidgetStatePropertyAll(menuShape),
+        ),
+      ),
+      dropdownMenuTheme: DropdownMenuThemeData(
+        menuStyle: MenuStyle(
+          backgroundColor: WidgetStatePropertyAll(surface),
+          surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
+          shape: WidgetStatePropertyAll(menuShape),
+        ),
+      ),
+    );
+  }
+
   static ThemeData light() {
     final scheme = ColorScheme.fromSeed(
       seedColor: seed,
@@ -157,25 +201,41 @@ abstract final class CentliTheme {
       primary: softBlue,
       error: expenseRed,
     );
-    return ThemeData(
+    final data = ThemeData(
       useMaterial3: true,
       colorScheme: scheme,
       textTheme: TextTheme(
+        headlineMedium: TextStyle(
+          fontSize: 24,
+          fontWeight: FontWeight.w700,
+          letterSpacing: -0.3,
+          color: scheme.onSurface,
+        ),
         titleLarge: TextStyle(
-          fontSize: 22,
+          fontSize: 18,
           fontWeight: FontWeight.w700,
           letterSpacing: -0.2,
           color: scheme.onSurface,
         ),
         titleMedium: TextStyle(
-          fontSize: 16,
+          fontSize: 14,
           fontWeight: FontWeight.w700,
           color: scheme.onSurface,
         ),
         headlineSmall: TextStyle(
-          fontSize: 22,
+          fontSize: 18,
           fontWeight: FontWeight.w700,
           letterSpacing: -0.3,
+          color: scheme.onSurface,
+        ),
+        bodyLarge: TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w400,
+          color: scheme.onSurface,
+        ),
+        bodyMedium: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w400,
           color: scheme.onSurface,
         ),
         bodySmall: TextStyle(
@@ -184,7 +244,7 @@ abstract final class CentliTheme {
           color: scheme.onSurfaceVariant,
         ),
         labelMedium: TextStyle(
-          fontSize: 13,
+          fontSize: 12,
           fontWeight: FontWeight.w500,
           color: scheme.onSurfaceVariant,
         ),
@@ -200,7 +260,7 @@ abstract final class CentliTheme {
         scrolledUnderElevation: 0,
         titleTextStyle: TextStyle(
           color: scheme.onSurface,
-          fontSize: 22,
+          fontSize: 18,
           fontWeight: FontWeight.w700,
           letterSpacing: -0.2,
         ),
@@ -293,6 +353,7 @@ abstract final class CentliTheme {
         ),
       ),
     );
+    return _chrome(data, dark: false);
   }
 
   static ThemeData dark() {
@@ -300,25 +361,41 @@ abstract final class CentliTheme {
       seedColor: seed,
       brightness: Brightness.dark,
     );
-    return ThemeData(
+    final data = ThemeData(
       useMaterial3: true,
       colorScheme: scheme,
       textTheme: TextTheme(
+        headlineMedium: TextStyle(
+          fontSize: 24,
+          fontWeight: FontWeight.w700,
+          letterSpacing: -0.3,
+          color: scheme.onSurface,
+        ),
         titleLarge: TextStyle(
-          fontSize: 22,
+          fontSize: 18,
           fontWeight: FontWeight.w700,
           letterSpacing: -0.2,
           color: scheme.onSurface,
         ),
         titleMedium: TextStyle(
-          fontSize: 16,
+          fontSize: 14,
           fontWeight: FontWeight.w700,
           color: scheme.onSurface,
         ),
         headlineSmall: TextStyle(
-          fontSize: 22,
+          fontSize: 18,
           fontWeight: FontWeight.w700,
           letterSpacing: -0.3,
+          color: scheme.onSurface,
+        ),
+        bodyLarge: TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w400,
+          color: scheme.onSurface,
+        ),
+        bodyMedium: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w400,
           color: scheme.onSurface,
         ),
         bodySmall: TextStyle(
@@ -327,9 +404,22 @@ abstract final class CentliTheme {
           color: scheme.onSurfaceVariant,
         ),
         labelMedium: TextStyle(
-          fontSize: 13,
+          fontSize: 12,
           fontWeight: FontWeight.w500,
           color: scheme.onSurfaceVariant,
+        ),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: scheme.surfaceContainerHighest,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: scheme.outlineVariant),
+        ),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 12,
         ),
       ),
       appBarTheme: AppBarTheme(
@@ -341,7 +431,7 @@ abstract final class CentliTheme {
         scrolledUnderElevation: 0,
         titleTextStyle: TextStyle(
           color: scheme.onSurface,
-          fontSize: 22,
+          fontSize: 18,
           fontWeight: FontWeight.w700,
           letterSpacing: -0.2,
         ),
@@ -389,6 +479,7 @@ abstract final class CentliTheme {
         shape: CircleBorder(),
       ),
     );
+    return _chrome(data, dark: true);
   }
 }
 

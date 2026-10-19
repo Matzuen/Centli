@@ -159,7 +159,7 @@ class LedgersPage extends ConsumerWidget {
                     autofocus: true,
                     decoration: const InputDecoration(
                       labelText: '账本名称',
-                      border: OutlineInputBorder(),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
                     ),
                   ),
                   const SizedBox(height: CentliSpacing.section),
@@ -174,7 +174,7 @@ class LedgersPage extends ConsumerWidget {
                     },
                     decoration: const InputDecoration(
                       labelText: '本位币',
-                      border: OutlineInputBorder(),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
                     ),
                   ),
                 ],

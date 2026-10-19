@@ -305,7 +305,7 @@ class _RecurringWizardPageState extends ConsumerState<RecurringWizardPage> {
               child: TextFormField(
                 initialValue: '$_interval',
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(border: OutlineInputBorder()),
+                decoration: const InputDecoration(border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14)))),
                 onChanged: (v) {
                   final n = int.tryParse(v) ?? 1;
                   setState(() => _interval = n < 1 ? 1 : n);
@@ -327,7 +327,7 @@ class _RecurringWizardPageState extends ConsumerState<RecurringWizardPage> {
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           decoration: const InputDecoration(
             labelText: '金额',
-            border: OutlineInputBorder(),
+            border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
           ),
         ),
         const SizedBox(height: CentliSpacing.section),
@@ -336,7 +336,7 @@ class _RecurringWizardPageState extends ConsumerState<RecurringWizardPage> {
           initialValue: _accountId,
           decoration: const InputDecoration(
             labelText: '账户',
-            border: OutlineInputBorder(),
+            border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
           ),
           items: [
             for (final a in _accounts)
@@ -350,7 +350,7 @@ class _RecurringWizardPageState extends ConsumerState<RecurringWizardPage> {
           initialValue: _categoryId,
           decoration: const InputDecoration(
             labelText: '分类',
-            border: OutlineInputBorder(),
+            border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
           ),
           items: [
             for (final c in _categories)
@@ -363,7 +363,7 @@ class _RecurringWizardPageState extends ConsumerState<RecurringWizardPage> {
           controller: _noteCtrl,
           decoration: const InputDecoration(
             labelText: '备注',
-            border: OutlineInputBorder(),
+            border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
           ),
         ),
         const SizedBox(height: CentliSpacing.section),

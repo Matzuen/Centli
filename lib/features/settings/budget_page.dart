@@ -406,7 +406,7 @@ Future<void> _showAmountEditor(
           ],
           decoration: InputDecoration(
             labelText: '\u989d\u5ea6\uff08$baseCurrency\uff09',
-            border: const OutlineInputBorder(),
+            border: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
             helperText: '\u7559\u7a7a\u5e76\u4fdd\u5b58\u7b49\u4e8e\u6e05\u9664\u8be5\u9884\u7b97',
           ),
         ),
@@ -518,7 +518,7 @@ Future<void> _showCategoryBudgetEditor(
                   },
                   decoration: const InputDecoration(
                     labelText: '\u5206\u7c7b',
-                    border: OutlineInputBorder(),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
                   ),
                 ),
                 const SizedBox(height: CentliSpacing.section),
@@ -532,7 +532,7 @@ Future<void> _showCategoryBudgetEditor(
                   ],
                   decoration: InputDecoration(
                     labelText: '\u989d\u5ea6\uff08$baseCurrency\uff09',
-                    border: const OutlineInputBorder(),
+                    border: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
                   ),
                 ),
               ],

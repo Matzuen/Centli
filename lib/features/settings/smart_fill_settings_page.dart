@@ -333,7 +333,7 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
                     labelText: '接口基础地址',
                     hintText: kDefaultLlmBaseUrl,
                     helperText: '通常无需 /v1，例如 https://api.deepseek.com。实际请求为「基础地址/chat/completions」',
-                    border: OutlineInputBorder(),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
                   ),
                   keyboardType: TextInputType.url,
                   autocorrect: false,
@@ -360,7 +360,7 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
                           decoration: const InputDecoration(
                             labelText: '模型名',
                             hintText: kDefaultLlmModel,
-                            border: OutlineInputBorder(),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
                           ),
                           autocorrect: false,
                         ),
@@ -418,7 +418,7 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
                     labelText: _hasKey ? '接口密钥（已保存，留空则不修改）' : '接口密钥',
                     hintText: _hasKey ? '••••••••' : '粘贴密钥',
                     helperText: '仅保存在本机安全存储，不会上传到厘记服务器',
-                    border: const OutlineInputBorder(),
+                    border: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
                     suffixIcon: IconButton(
                       tooltip: _obscureKey ? '显示' : '隐藏',
                       onPressed: () =>

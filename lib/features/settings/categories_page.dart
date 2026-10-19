@@ -739,7 +739,7 @@ Future<_CategoryEditorResult?> _promptCategoryEditor(
                     autofocus: true,
                     decoration: const InputDecoration(
                       labelText: '名称',
-                      border: OutlineInputBorder(),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
                     ),
                     onChanged: (_) => setLocal(() {}),
                     onSubmitted: (v) {

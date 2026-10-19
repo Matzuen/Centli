@@ -213,7 +213,7 @@ class _RecognitionRuleEditPageState extends State<RecognitionRuleEditPage> {
                     controller: _nameCtrl,
                     decoration: const InputDecoration(
                       labelText: '名称',
-                      border: OutlineInputBorder(),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
                       hintText: '例如：银行借记通知',
                     ),
                     validator: (v) =>
@@ -224,7 +224,7 @@ class _RecognitionRuleEditPageState extends State<RecognitionRuleEditPage> {
                     initialValue: _appChoice,
                     decoration: const InputDecoration(
                       labelText: '应用',
-                      border: OutlineInputBorder(),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
                     ),
                     items: const [
                       DropdownMenuItem(value: 'alipay', child: Text('支付宝')),
@@ -250,7 +250,7 @@ class _RecognitionRuleEditPageState extends State<RecognitionRuleEditPage> {
                       controller: _pkgOtherCtrl,
                       decoration: const InputDecoration(
                         labelText: '包名',
-                        border: OutlineInputBorder(),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
                         hintText: 'com.xxx.app',
                       ),
                       validator: (v) {
@@ -265,7 +265,7 @@ class _RecognitionRuleEditPageState extends State<RecognitionRuleEditPage> {
                     initialValue: _accountHint,
                     decoration: const InputDecoration(
                       labelText: '建议账户提示',
-                      border: OutlineInputBorder(),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
                       helperText: '用于映射到「应用 → 默认账户」',
                     ),
                     items: const [
@@ -285,7 +285,7 @@ class _RecognitionRuleEditPageState extends State<RecognitionRuleEditPage> {
                     controller: _mustCtrl,
                     decoration: const InputDecoration(
                       labelText: '正文必须包含',
-                      border: OutlineInputBorder(),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
                       hintText: '支付成功|付款成功',
                     ),
                   ),
@@ -294,7 +294,7 @@ class _RecognitionRuleEditPageState extends State<RecognitionRuleEditPage> {
                     controller: _excludeCtrl,
                     decoration: const InputDecoration(
                       labelText: '排除词',
-                      border: OutlineInputBorder(),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
                       hintText: '验证码|登录',
                     ),
                   ),
@@ -303,7 +303,7 @@ class _RecognitionRuleEditPageState extends State<RecognitionRuleEditPage> {
                     controller: _titleCtrl,
                     decoration: const InputDecoration(
                       labelText: '标题正则（可选）',
-                      border: OutlineInputBorder(),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
                     ),
                   ),
                   const SizedBox(height: CentliSpacing.sectionLoose),
@@ -316,7 +316,7 @@ class _RecognitionRuleEditPageState extends State<RecognitionRuleEditPage> {
                     controller: _amountCtrl,
                     decoration: const InputDecoration(
                       labelText: '金额正则',
-                      border: OutlineInputBorder(),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
                       helperText: '第 1 捕获组为数字；留空则用内置默认',
                     ),
                     maxLines: 2,
@@ -326,7 +326,7 @@ class _RecognitionRuleEditPageState extends State<RecognitionRuleEditPage> {
                     controller: _merchantCtrl,
                     decoration: const InputDecoration(
                       labelText: '商户正则（可选）',
-                      border: OutlineInputBorder(),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
                       hintText: r'(?:向|给|商户)\s*(.+?)(?:\s|$)',
                     ),
                   ),
