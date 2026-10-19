@@ -100,26 +100,27 @@ void main() {
     expect(find.byKey(const Key('stats_legend')), findsOneWidget);
   });
 
-  testWidgets('legend puts name and amount+percent on one line',
-      (tester) async {
+  testWidgets('legend puts name and amount on one line', (tester) async {
     await pump(tester);
     final legend = find.byKey(const Key('stats_legend'));
     expect(legend, findsOneWidget);
-    // Every legend row must be a single Text line: 名称 + 金额（占比%）.
     final texts = tester
         .widgetList<Text>(
           find.descendant(of: legend, matching: find.byType(Text)),
         )
         .map((t) => t.data ?? '')
-        .where((t) => t.contains('%'))
+        .where((t) => t.contains('¥') || t.contains('￥'))
         .toList();
-    expect(texts, isNotEmpty, reason: 'legend should show a percent');
+    expect(texts, isNotEmpty, reason: 'legend should show an amount');
+    final box = tester.getRect(legend);
+    final textFinder = find.descendant(of: legend, matching: find.byType(Text));
+    final contentMid = (tester.getTopLeft(textFinder.first).dy +
+            tester.getBottomLeft(textFinder.last).dy) /
+        2;
+    expect((contentMid - box.center.dy).abs(), lessThan(24));
     for (final t in texts) {
-      expect(t, matches(RegExp(r'^.+（\d+%）$')), reason: t);
-      // And it must be a single line widget, not a two-line column.
-      final w = tester.widget<Text>(
-        find.text(t).first,
-      );
+      expect(t.contains('%'), isFalse, reason: t);
+      final w = tester.widget<Text>(find.text(t).first);
       expect(w.maxLines, 1, reason: t);
     }
     expect(tester.takeException(), isNull);

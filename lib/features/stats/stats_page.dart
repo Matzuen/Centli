@@ -511,7 +511,6 @@ class _LegendList extends StatelessWidget {
   const _LegendList({
     required this.items,
     required this.colors,
-    required this.total,
     required this.base,
     required this.hide,
     required this.onTap,
@@ -519,7 +518,6 @@ class _LegendList extends StatelessWidget {
 
   final List<({String categoryId, String name, int totalMinor})> items;
   final List<Color> colors;
-  final int total;
   final String base;
   final bool hide;
   final ValueChanged<({String categoryId, String name, int totalMinor})> onTap;
@@ -532,62 +530,75 @@ class _LegendList extends StatelessWidget {
         // 色点、间距和名称至少留两个字，其余都给金额。
         final amountMax = (constraints.maxWidth - 4 - 10 - 12 - 26)
             .clamp(0.0, double.infinity);
-        return ListView.separated(
+        return SingleChildScrollView(
           key: const Key('stats_legend'),
-          padding: EdgeInsets.zero,
-          itemCount: items.length,
-          separatorBuilder: (_, _) =>
-              const SizedBox(height: CentliSpacing.dense),
-          itemBuilder: (context, i) {
-            final it = items[i];
-            final pct = total > 0 ? (it.totalMinor * 100 / total) : 0.0;
-            return InkWell(
-              onTap: () => onTap(it),
-              borderRadius: BorderRadius.circular(6),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 2),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 10,
-                      height: 10,
-                      decoration: BoxDecoration(
-                        color: colors[i],
-                        borderRadius: BorderRadius.circular(3),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: constraints.maxHeight.isFinite
+                  ? constraints.maxHeight
+                  : 0,
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                for (var i = 0; i < items.length; i++) ...[
+                  if (i > 0) const SizedBox(height: CentliSpacing.dense),
+                  InkWell(
+                    onTap: () => onTap(items[i]),
+                    borderRadius: BorderRadius.circular(6),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 5,
+                        horizontal: 2,
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 10,
+                            height: 10,
+                            decoration: BoxDecoration(
+                              color: colors[i],
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              items[i].name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          ConstrainedBox(
+                            constraints: BoxConstraints(maxWidth: amountMax),
+                            child: Text(
+                              formatMinor(
+                                base,
+                                items[i].totalMinor,
+                                hide: hide,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w400,
+                                height: 1.2,
+                                fontFeatures: [FontFeature.tabularFigures()],
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        it.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    ConstrainedBox(
-                      constraints: BoxConstraints(maxWidth: amountMax),
-                      child: Text(
-                        '${formatMinor(base, it.totalMinor, hide: hide)}'
-                        '（${pct.toStringAsFixed(0)}%）',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w400,
-                          height: 1.2,
-                          fontFeatures: [FontFeature.tabularFigures()],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
+                  ),
+                ],
+              ],
+            ),
+          ),
         );
       },
     );
@@ -968,7 +979,6 @@ class _BreakdownChartState extends State<_BreakdownChart> {
                 child: _LegendList(
                   items: widget.items,
                   colors: widget.colors,
-                  total: widget.total,
                   base: widget.base,
                   hide: widget.hide,
                   onTap: widget.onTapItem,
