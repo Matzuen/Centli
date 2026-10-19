@@ -482,42 +482,15 @@ class _BreakdownCard extends StatelessWidget {
               }
               final total = list.fold<int>(0, (a, b) => a + b.totalMinor);
               final colors = _categoryColors(scheme, list.length);
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  SizedBox(
-                    height: 190,
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        SizedBox(
-                          width: 132,
-                          child: _CategoryDonutChart(
-                            items: list,
-                            total: total,
-                            colors: colors,
-                            centerLabel: _kindLabel(kind),
-                            centerValue:
-                                formatMinor(base, total, hide: hide),
-                            onSectionTap: (i) => onTapItem(list[i]),
-                          ),
-                        ),
-                        // Breathing room between ring and legend.
-                        const SizedBox(width: 20),
-                        Expanded(
-                          child: _LegendList(
-                            items: list,
-                            colors: colors,
-                            total: total,
-                            base: base,
-                            hide: hide,
-                            onTap: onTapItem,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+              return _BreakdownChart(
+                items: list,
+                total: total,
+                colors: colors,
+                base: base,
+                hide: hide,
+                centerLabel: _kindLabel(kind),
+                centerValue: formatMinor(base, total, hide: hide),
+                onTapItem: onTapItem,
               );
             },
           ),
@@ -554,67 +527,76 @@ class _LegendList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return ListView.separated(
-      key: const Key('stats_legend'),
-      padding: EdgeInsets.zero,
-      itemCount: items.length,
-      separatorBuilder: (_, _) => const SizedBox(height: CentliSpacing.dense),
-      itemBuilder: (context, i) {
-        final it = items[i];
-        final pct = total > 0 ? (it.totalMinor * 100 / total) : 0.0;
-        return InkWell(
-          onTap: () => onTap(it),
-          borderRadius: BorderRadius.circular(6),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 2),
-            child: Row(
-              children: [
-                Container(
-                  width: 10,
-                  height: 10,
-                  decoration: BoxDecoration(
-                    color: colors[i],
-                    borderRadius: BorderRadius.circular(3),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                // 一行显示：名称  金额（占比%）
-                Expanded(
-                  child: Text(
-                    it.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w500,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // 色点、间距和名称至少留两个字，其余都给金额。
+        final amountMax = (constraints.maxWidth - 4 - 10 - 12 - 26)
+            .clamp(0.0, double.infinity);
+        return ListView.separated(
+          key: const Key('stats_legend'),
+          padding: EdgeInsets.zero,
+          itemCount: items.length,
+          separatorBuilder: (_, _) =>
+              const SizedBox(height: CentliSpacing.dense),
+          itemBuilder: (context, i) {
+            final it = items[i];
+            final pct = total > 0 ? (it.totalMinor * 100 / total) : 0.0;
+            return InkWell(
+              onTap: () => onTap(it),
+              borderRadius: BorderRadius.circular(6),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 2),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: colors[i],
+                        borderRadius: BorderRadius.circular(3),
+                      ),
                     ),
-                  ),
-                ),
-                const SizedBox(width: 4),
-                Flexible(
-                  child: Text(
-                    '${formatMinor(base, it.totalMinor, hide: hide)}'
-                    '（${pct.toStringAsFixed(0)}%）',
-                    maxLines: 1,
-                    softWrap: false,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.right,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w600,
-                      fontFeatures: const [FontFeature.tabularFigures()],
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        it.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 6),
+                    ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: amountMax),
+                      child: Text(
+                        '${formatMinor(base, it.totalMinor, hide: hide)}'
+                        '（${pct.toStringAsFixed(0)}%）',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w400,
+                          height: 1.2,
+                          fontFeatures: [FontFeature.tabularFigures()],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );
   }
 }
 
-/// 卡片 3：汇总（笔数 / 收入 / 支出 / 结余）。
+/// 卡片 3：汇总。
+///
+/// 笔数单独贴左；收入 / 支出 / 结余占满下一行，窄屏时缩小字号而不是省略。
 class _SummaryCard extends StatelessWidget {
   const _SummaryCard({
     required this.totals,
@@ -630,6 +612,48 @@ class _SummaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final labelStyle = theme.textTheme.labelSmall?.copyWith(
+      color: scheme.onSurfaceVariant,
+    );
+    final valueStyle = theme.textTheme.titleMedium?.copyWith(
+      fontWeight: FontWeight.w700,
+    );
+    const moneyStyle = TextStyle(
+      fontSize: 13,
+      fontWeight: FontWeight.w700,
+      height: 1.2,
+    );
+
+    Widget moneyCol({
+      required String label,
+      required String value,
+      required Color color,
+      required Alignment align,
+    }) {
+      final textAlign = switch (align) {
+        Alignment.centerLeft => TextAlign.left,
+        Alignment.centerRight => TextAlign.right,
+        _ => TextAlign.center,
+      };
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(label, textAlign: textAlign, style: labelStyle),
+          const SizedBox(height: CentliSpacing.dense),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: align,
+            child: Text(
+              value,
+              maxLines: 1,
+              softWrap: false,
+              style: moneyStyle.copyWith(color: color),
+            ),
+          ),
+        ],
+      );
+    }
+
     return CentliSoftCard(
       key: const Key('stats_summary_card'),
       padding: const EdgeInsets.all(CentliSpacing.cardPad),
@@ -647,50 +671,53 @@ class _SummaryCard extends StatelessWidget {
             loading: () => const LinearProgressIndicator(),
             error: (e, _) => CentliErrorState(error: e, compact: true),
             data: (t) {
-              final cells = <({String label, String value, Color color})>[
-                (
-                  label: '笔数',
-                  value: '${t.count}',
-                  color: scheme.onSurface,
-                ),
-                (
-                  label: '收入',
-                  value: formatMinor(base, t.incomeMinor, hide: hide),
-                  color: CentliTheme.incomeGreen,
-                ),
-                (
-                  label: '支出',
-                  value: formatMinor(base, t.expenseMinor, hide: hide),
-                  color: CentliTheme.expenseRed,
-                ),
-                (
-                  label: '结余',
-                  value: formatMinor(base, t.netMinor, hide: hide),
-                  color: t.netMinor >= 0
-                      ? CentliTheme.incomeGreen
-                      : CentliTheme.expenseRed,
-                ),
-              ];
-              return _TablePair(
-                headers: [for (final c in cells) c.label],
-                values: [
-                  for (final c in cells)
-                    Text(
-                      c.value,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: c.color,
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Text('笔数', style: labelStyle),
+                      const SizedBox(width: 8),
+                      Text(
+                        '${t.count}',
+                        style: valueStyle?.copyWith(color: scheme.onSurface),
                       ),
-                    ),
-                ],
-                // 笔数 is a count, the rest align right like money.
-                align: const [
-                  TextAlign.center,
-                  TextAlign.right,
-                  TextAlign.right,
-                  TextAlign.right,
+                    ],
+                  ),
+                  const SizedBox(height: CentliSpacing.item),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: moneyCol(
+                          label: '收入',
+                          value: formatMinor(base, t.incomeMinor, hide: hide),
+                          color: CentliTheme.incomeGreen,
+                          align: Alignment.centerLeft,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: moneyCol(
+                          label: '支出',
+                          value: formatMinor(base, t.expenseMinor, hide: hide),
+                          color: CentliTheme.expenseRed,
+                          align: Alignment.center,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: moneyCol(
+                          label: '结余',
+                          value: formatMinor(base, t.netMinor, hide: hide),
+                          color: t.netMinor >= 0
+                              ? CentliTheme.incomeGreen
+                              : CentliTheme.expenseRed,
+                          align: Alignment.centerRight,
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               );
             },
@@ -758,16 +785,13 @@ class _AccountsCard extends StatelessWidget {
                   ),
                 );
               }
-              final width = switch (list.length) {
-                <= 3 => 0.34,
-                _ => 0.30,
-              };
               return Table(
-                columnWidths: {
-                  0: FlexColumnWidth(1 - width),
-                  1: FlexColumnWidth(width * 0.9),
-                  2: FlexColumnWidth(width * 0.9),
-                  3: FlexColumnWidth(width * 0.9),
+                columnWidths: const {
+                  // 名称只占自身字宽，金额三列平分剩余宽度。
+                  0: IntrinsicColumnWidth(),
+                  1: FlexColumnWidth(1),
+                  2: FlexColumnWidth(1),
+                  3: FlexColumnWidth(1),
                 },
                 children: [
                   TableRow(
@@ -782,11 +806,11 @@ class _AccountsCard extends StatelessWidget {
                     TableRow(
                       children: [
                         Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 7),
+                          padding: const EdgeInsets.fromLTRB(0, 7, 12, 7),
                           child: Text(
                             r.name,
                             maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                            softWrap: false,
                             style: theme.textTheme.bodySmall,
                           ),
                         ),
@@ -806,7 +830,6 @@ class _AccountsCard extends StatelessWidget {
                           r.netMinor >= 0
                               ? CentliTheme.incomeGreen
                               : CentliTheme.expenseRed,
-                          bold: true,
                         ),
                       ],
                     ),
@@ -838,78 +861,28 @@ class _AccountsCard extends StatelessWidget {
     );
   }
 
-  Widget _moneyCell(String text, ThemeData theme, Color color,
-      {bool bold = false}) {
+  Widget _moneyCell(String text, ThemeData theme, Color color) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 7),
-      child: Text(
-        text,
-        textAlign: TextAlign.right,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: theme.textTheme.bodySmall?.copyWith(
-          color: color,
-          fontWeight: bold ? FontWeight.w700 : FontWeight.w600,
+      padding: const EdgeInsets.fromLTRB(6, 7, 0, 7),
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerRight,
+        child: Text(
+          text,
+          maxLines: 1,
+          softWrap: false,
+          textAlign: TextAlign.right,
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            height: 1.2,
+          ).copyWith(color: color),
         ),
       ),
     );
   }
 }
 
-/// Two rows of equal-width cells (header row + value row).
-class _TablePair extends StatelessWidget {
-  const _TablePair({
-    required this.headers,
-    required this.values,
-    required this.align,
-  });
-
-  final List<String> headers;
-  final List<Widget> values;
-  final List<TextAlign> align;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final n = headers.length;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            for (var i = 0; i < n; i++)
-              Expanded(
-                child: Text(
-                  headers[i],
-                  textAlign: align[i],
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-          ],
-        ),
-        const SizedBox(height: CentliSpacing.dense),
-        Row(
-          children: [
-            for (var i = 0; i < n; i++)
-              Expanded(
-                child: Align(
-                  alignment: switch (align[i]) {
-                    TextAlign.right => Alignment.centerRight,
-                    TextAlign.left => Alignment.centerLeft,
-                    _ => Alignment.center,
-                  },
-                  child: values[i],
-                ),
-              ),
-          ],
-        ),
-      ],
-    );
-  }
-}
 
 List<Color> _categoryColors(ColorScheme scheme, int count) {
   const extras = <Color>[
@@ -934,23 +907,146 @@ List<Color> _categoryColors(ColorScheme scheme, int count) {
   return List.generate(count, (i) => base[i % base.length]);
 }
 
-/// 环形图：中间显示合计 + 标签，扇区可点击下钻。
-class _CategoryDonutChart extends StatelessWidget {
-  const _CategoryDonutChart({
+/// 环形图 + 图例。按住扇区时在上方显示明细，松开即消失。
+class _BreakdownChart extends StatefulWidget {
+  const _BreakdownChart({
     required this.items,
     required this.total,
     required this.colors,
+    required this.base,
+    required this.hide,
     required this.centerLabel,
     required this.centerValue,
-    required this.onSectionTap,
+    required this.onTapItem,
   });
 
   final List<({String categoryId, String name, int totalMinor})> items;
   final int total;
   final List<Color> colors;
+  final String base;
+  final bool hide;
   final String centerLabel;
   final String centerValue;
-  final ValueChanged<int> onSectionTap;
+  final ValueChanged<({String categoryId, String name, int totalMinor})>
+      onTapItem;
+
+  @override
+  State<_BreakdownChart> createState() => _BreakdownChartState();
+}
+
+class _BreakdownChartState extends State<_BreakdownChart> {
+  int? _touched;
+
+  void _setTouched(int? index) {
+    if (_touched == index) return;
+    setState(() => _touched = index);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final touched = _touched;
+    final tip = touched == null ? null : widget.items[touched];
+    return SizedBox(
+      height: 190,
+      child: Stack(
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              SizedBox(
+                width: 120,
+                child: _CategoryDonutChart(
+                  items: widget.items,
+                  centerLabel: widget.centerLabel,
+                  centerValue: widget.centerValue,
+                  colors: widget.colors,
+                  onTouch: _setTouched,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _LegendList(
+                  items: widget.items,
+                  colors: widget.colors,
+                  total: widget.total,
+                  base: widget.base,
+                  hide: widget.hide,
+                  onTap: widget.onTapItem,
+                ),
+              ),
+            ],
+          ),
+          if (tip != null)
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: IgnorePointer(
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: _PieSliceTooltip(
+                    text: _sliceTip(tip),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  String _sliceTip(({String categoryId, String name, int totalMinor}) it) {
+    final pct =
+        widget.total > 0 ? (it.totalMinor * 100 / widget.total) : 0.0;
+    return '${it.name}  ${formatMinor(widget.base, it.totalMinor, hide: widget.hide)}'
+        '（${pct.toStringAsFixed(0)}%）';
+  }
+}
+
+class _PieSliceTooltip extends StatelessWidget {
+  const _PieSliceTooltip({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      key: const Key('stats_pie_tooltip'),
+      color: scheme.inverseSurface,
+      borderRadius: BorderRadius.circular(4),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Text(
+          text,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: scheme.onInverseSurface,
+            fontWeight: FontWeight.w600,
+            fontSize: 12,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 环形图：中间显示合计。按住扇区回调索引，松开传 null。
+class _CategoryDonutChart extends StatelessWidget {
+  const _CategoryDonutChart({
+    required this.items,
+    required this.colors,
+    required this.centerLabel,
+    required this.centerValue,
+    required this.onTouch,
+  });
+
+  final List<({String categoryId, String name, int totalMinor})> items;
+  final List<Color> colors;
+  final String centerLabel;
+  final String centerValue;
+  final ValueChanged<int?> onTouch;
 
   @override
   Widget build(BuildContext context) {
@@ -965,10 +1061,22 @@ class _CategoryDonutChart extends StatelessWidget {
             centerSpaceRadius: 42,
             pieTouchData: PieTouchData(
               touchCallback: (event, response) {
-                if (event is! FlTapUpEvent) return;
+                final released = event is FlTapUpEvent ||
+                    event is FlTapCancelEvent ||
+                    event is FlPanEndEvent ||
+                    event is FlPanCancelEvent ||
+                    event is FlLongPressEnd ||
+                    event is FlPointerExitEvent;
+                if (released || !event.isInterestedForInteractions) {
+                  onTouch(null);
+                  return;
+                }
                 final idx = response?.touchedSection?.touchedSectionIndex;
-                if (idx == null || idx < 0 || idx >= items.length) return;
-                onSectionTap(idx);
+                if (idx == null || idx < 0 || idx >= items.length) {
+                  onTouch(null);
+                  return;
+                }
+                onTouch(idx);
               },
             ),
             sections: [
@@ -976,7 +1084,6 @@ class _CategoryDonutChart extends StatelessWidget {
                 PieChartSectionData(
                   color: colors[i],
                   value: items[i].totalMinor.toDouble(),
-                  // Keep the ring clean: percentages live in the legend.
                   title: '',
                   radius: 30,
                 ),

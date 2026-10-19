@@ -139,6 +139,28 @@ void main() {
     expect(legend, findsOneWidget);
   });
 
+  testWidgets('pie slice tooltip shows while pressed and hides on release',
+      (tester) async {
+    await pump(tester);
+    final pie = find.byType(PieChart);
+    expect(pie, findsWidgets);
+    final center = tester.getCenter(pie.first);
+    // 0° is the right edge of the ring; nudge clockwise into the first slice.
+    final gesture = await tester.startGesture(center + const Offset(46, 14));
+    await tester.pump();
+    final tip = find.byKey(const Key('stats_pie_tooltip'));
+    expect(tip, findsOneWidget);
+    final text = tester.widget<Text>(
+      find.descendant(of: tip, matching: find.byType(Text)),
+    );
+    expect(text.data, matches(RegExp(r'^.+（\d+%）$')));
+    expect(text.style?.fontSize, 12);
+    await gesture.up();
+    await tester.pump();
+    expect(find.byKey(const Key('stats_pie_tooltip')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('ring and legend are separated by a real gap', (tester) async {
     await pump(tester);
     final legend = find.byKey(const Key('stats_legend'));
@@ -167,6 +189,11 @@ void main() {
       find.descendant(of: card, matching: find.text('3')),
       findsWidgets,
     );
+    // 笔数贴左：标签应靠近卡片左内边，不能悬在第一列正中。
+    final countLabel = find.descendant(of: card, matching: find.text('笔数'));
+    final cardLeft = tester.getTopLeft(card).dx;
+    final labelLeft = tester.getTopLeft(countLabel).dx;
+    expect(labelLeft - cardLeft, lessThan(28));
   });
 
   testWidgets('accounts card says transfers are excluded', (tester) async {
