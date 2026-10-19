@@ -49,6 +49,7 @@ String? defaultIconKeyForAccount({
   if (n.contains('支付宝') || lower.contains('alipay')) return 'alipay';
   if (n.contains('银联') || lower.contains('unionpay')) return 'unionpay';
   if (n.contains('花呗')) return 'huabei';
+  if (n.contains('白条')) return 'jd_baitiao';
   if (n.contains('京东')) return 'jd_pay';
   if (n.contains('美团')) return 'meituan';
   if (n.contains('现金') || type == 'cash' || tn.contains('现金')) return 'cash';
@@ -64,7 +65,10 @@ String? defaultIconKeyForAccount({
   if (n.contains('邮储')) return 'bank_psbc';
   if (n.contains('浦发')) return 'bank_spdb';
   if (n.contains('民生')) return 'bank_cmbc';
+  if (n.contains('网商')) return 'bank_mybank';
   if (n.contains('中信')) return 'bank_citic';
+  if (n.contains('北京银行')) return 'bank_bob';
+  if (n.contains('上海银行')) return 'bank_bosh';
   if (n.contains('光大')) return 'bank_ceb';
   if (n.contains('平安')) return 'bank_pab';
   if (n.contains('兴业')) return 'bank_cib';

@@ -410,7 +410,7 @@ class _IconLibraryPageState extends State<IconLibraryPage> {
                                         ],
                                         decoration: InputDecoration(
                                           hintText: '例如：餐、工资',
-                                          border: const OutlineInputBorder(),
+                                          border: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
                                           isDense: true,
                                           counterText: '',
                                           errorText: _hanziError,

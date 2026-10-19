@@ -49,17 +49,39 @@ String? encodeCentliHanzi(String input) {
   return '$kCentliHanziPrefix${chars.join()}';
 }
 
+/// Removed near-duplicate keys → kept key (old DB values still resolve).
+const Map<String, String> kCentliIconKeyAliases = {
+  'coin_vertical': 'coin',
+  'crown_simple': 'crown',
+  'currency_dollar_simple': 'currency_dollar',
+  'electric_scooter': 'scooter',
+  'fire_simple': 'fire',
+  'flight': 'airplane',
+  'house_line': 'home',
+  'laptop_mac': 'laptop',
+  'local_gas_station': 'gas_pump',
+  'local_taxi': 'taxi',
+  'tag_simple': 'tag',
+  'two_wheeler': 'motorcycle',
+};
+
+String resolveCentliIconKey(String? key) {
+  final k = (key ?? '').trim();
+  if (k.isEmpty) return k;
+  return kCentliIconKeyAliases[k] ?? k;
+}
+
 List<CentliIconGroup> get centliIconGroups => _groups;
 Map<String, CentliIconEntry> get centliIconByKey => _byKeyEntries;
 
 String? assetPathForIconKey(String? key) {
-  final k = (key ?? '').trim();
+  final k = resolveCentliIconKey(key);
   if (k.isEmpty || isCentliHanziIcon(k)) return null;
   return _byKeyEntries[k]?.asset;
 }
 
 ({Color bg, Color fg})? brandColorsForKey(String? key) {
-  final k = (key ?? '').trim();
+  final k = resolveCentliIconKey(key);
   if (k.isEmpty) return null;
   final e = _byKeyEntries[k];
   if (e == null || e.bg == null || e.fg == null) return null;
@@ -88,7 +110,7 @@ const List<CentliIconGroup> _groups = [
       ),
       CentliIconEntry(
         key: 'account_balance_wallet',
-        label: '钱夹',
+        label: '钱包夹',
         asset: 'assets/icons/money/account_balance_wallet.svg',
       ),
       CentliIconEntry(
@@ -98,7 +120,7 @@ const List<CentliIconGroup> _groups = [
       ),
       CentliIconEntry(
         key: 'payments',
-        label: '付款',
+        label: '工资',
         asset: 'assets/icons/money/payments.svg',
       ),
       CentliIconEntry(
@@ -123,7 +145,7 @@ const List<CentliIconGroup> _groups = [
       ),
       CentliIconEntry(
         key: 'account_balance',
-        label: '银行',
+        label: '银行大楼',
         asset: 'assets/icons/money/account_balance.svg',
       ),
       CentliIconEntry(
@@ -133,12 +155,12 @@ const List<CentliIconGroup> _groups = [
       ),
       CentliIconEntry(
         key: 'trending_up',
-        label: '上涨',
+        label: '理财上涨',
         asset: 'assets/icons/money/trending_up.svg',
       ),
       CentliIconEntry(
         key: 'show_chart',
-        label: '走势',
+        label: '走势图',
         asset: 'assets/icons/money/show_chart.svg',
       ),
       CentliIconEntry(
@@ -153,7 +175,7 @@ const List<CentliIconGroup> _groups = [
       ),
       CentliIconEntry(
         key: 'attach_money',
-        label: '金额',
+        label: '金额符号',
         asset: 'assets/icons/money/attach_money.svg',
       ),
       CentliIconEntry(
@@ -173,7 +195,7 @@ const List<CentliIconGroup> _groups = [
       ),
       CentliIconEntry(
         key: 'swap_horiz',
-        label: '互换',
+        label: '资金互换',
         asset: 'assets/icons/money/swap_horiz.svg',
       ),
       CentliIconEntry(
@@ -206,16 +228,6 @@ const List<CentliIconGroup> _groups = [
         key: 'redeem',
         label: '兑换',
         asset: 'assets/icons/money/redeem.svg',
-      ),
-      CentliIconEntry(
-        key: 'military_tech',
-        label: '勋章',
-        asset: 'assets/icons/money/military_tech.svg',
-      ),
-      CentliIconEntry(
-        key: 'work',
-        label: '工作',
-        asset: 'assets/icons/money/work.svg',
       ),
       CentliIconEntry(
         key: 'coin',
@@ -284,7 +296,7 @@ const List<CentliIconGroup> _groups = [
       ),
       CentliIconEntry(
         key: 'seal_percent',
-        label: '折扣',
+        label: '折扣章',
         asset: 'assets/icons/money/seal_percent.svg',
       ),
       CentliIconEntry(
@@ -329,7 +341,7 @@ const List<CentliIconGroup> _groups = [
       ),
       CentliIconEntry(
         key: 'sim_card',
-        label: 'SIM 卡',
+        label: 'SIM卡',
         asset: 'assets/icons/money/sim_card.svg',
       ),
       CentliIconEntry(
@@ -379,7 +391,7 @@ const List<CentliIconGroup> _groups = [
       ),
       CentliIconEntry(
         key: 'chart_line_up',
-        label: '增长曲线',
+        label: '上涨曲线',
         asset: 'assets/icons/money/chart_line_up.svg',
       ),
       CentliIconEntry(
@@ -394,7 +406,7 @@ const List<CentliIconGroup> _groups = [
       ),
       CentliIconEntry(
         key: 'chart_pie_slice',
-        label: '占比切片',
+        label: '饼图切片',
         asset: 'assets/icons/money/chart_pie_slice.svg',
       ),
       CentliIconEntry(
@@ -404,18 +416,8 @@ const List<CentliIconGroup> _groups = [
       ),
       CentliIconEntry(
         key: 'hand_coins',
-        label: '手捧硬币',
+        label: '手捧币',
         asset: 'assets/icons/money/hand_coins.svg',
-      ),
-      CentliIconEntry(
-        key: 'coin_vertical',
-        label: '竖排硬币',
-        asset: 'assets/icons/money/coin_vertical.svg',
-      ),
-      CentliIconEntry(
-        key: 'currency_dollar_simple',
-        label: '美元（简）',
-        asset: 'assets/icons/money/currency_dollar_simple.svg',
       ),
       CentliIconEntry(
         key: 'money',
@@ -447,7 +449,7 @@ const List<CentliIconGroup> _groups = [
       ),
       CentliIconEntry(
         key: 'wechat',
-        label: '微信',
+        label: '微信支付',
         asset: 'assets/icons/payment/wechat.svg',
         bg: Color(0xFFE8F8EF),
         fg: Color(0xFF07C160),
@@ -526,6 +528,13 @@ const List<CentliIconGroup> _groups = [
         fg: Color(0xFFE1251B),
       ),
       CentliIconEntry(
+        key: 'jd_baitiao',
+        label: '京东白条',
+        asset: 'assets/icons/payment/jd_baitiao.svg',
+        bg: Color(0xFFFFECEC),
+        fg: Color(0xFFE1251B),
+      ),
+      CentliIconEntry(
         key: 'douyin_pay',
         label: '抖音支付',
         asset: 'assets/icons/payment/douyin_pay.svg',
@@ -534,7 +543,7 @@ const List<CentliIconGroup> _groups = [
       ),
       CentliIconEntry(
         key: 'meituan',
-        label: '美团',
+        label: '美团支付',
         asset: 'assets/icons/payment/meituan.svg',
         bg: Color(0xFFFFF4E5),
         fg: Color(0xFFFFC300),
@@ -587,11 +596,15 @@ const List<CentliIconGroup> _groups = [
         key: 'bank_cmbc',
         label: '民生银行',
         asset: 'assets/icons/bank/bank_cmbc.svg',
+        bg: Color(0xFFE8F4FF),
+        fg: Color(0xFF1D2088),
       ),
       CentliIconEntry(
         key: 'bank_ceb',
         label: '光大银行',
         asset: 'assets/icons/bank/bank_ceb.svg',
+        bg: Color(0xFFF6EEF8),
+        fg: Color(0xFF6A1684),
       ),
       CentliIconEntry(
         key: 'bank_cgb',
@@ -629,6 +642,8 @@ const List<CentliIconGroup> _groups = [
         key: 'bank_pab',
         label: '平安银行',
         asset: 'assets/icons/bank/bank_pab.svg',
+        bg: Color(0xFFFFF1E8),
+        fg: Color(0xFFEA5504),
       ),
       CentliIconEntry(
         key: 'bank_bob',
@@ -653,7 +668,7 @@ const List<CentliIconGroup> _groups = [
     entries: [
       CentliIconEntry(
         key: 'brand_apple',
-        label: 'Apple',
+        label: '苹果',
         asset: 'assets/icons/brand/brand_apple.svg',
         bg: Color(0xFFF2F2F2),
         fg: Color(0xFF111111),
@@ -716,7 +731,7 @@ const List<CentliIconGroup> _groups = [
       ),
       CentliIconEntry(
         key: 'brand_bilibili',
-        label: 'B站',
+        label: '哔哩哔哩',
         asset: 'assets/icons/brand/brand_bilibili.svg',
         bg: Color(0xFFFFE8F0),
         fg: Color(0xFFFB7299),
@@ -753,12 +768,12 @@ const List<CentliIconGroup> _groups = [
       ),
       CentliIconEntry(
         key: 'local_cafe',
-        label: '咖啡',
+        label: '咖啡馆',
         asset: 'assets/icons/food/local_cafe.svg',
       ),
       CentliIconEntry(
         key: 'coffee',
-        label: '咖啡豆',
+        label: '咖啡杯',
         asset: 'assets/icons/food/coffee.svg',
       ),
       CentliIconEntry(
@@ -768,7 +783,7 @@ const List<CentliIconGroup> _groups = [
       ),
       CentliIconEntry(
         key: 'local_pizza',
-        label: '披萨',
+        label: '披萨店',
         asset: 'assets/icons/food/local_pizza.svg',
       ),
       CentliIconEntry(
@@ -778,7 +793,7 @@ const List<CentliIconGroup> _groups = [
       ),
       CentliIconEntry(
         key: 'lunch_dining',
-        label: '午餐',
+        label: '简餐',
         asset: 'assets/icons/food/lunch_dining.svg',
       ),
       CentliIconEntry(
@@ -808,7 +823,7 @@ const List<CentliIconGroup> _groups = [
       ),
       CentliIconEntry(
         key: 'bowl_food',
-        label: '盖饭',
+        label: '碗饭',
         asset: 'assets/icons/food/bowl_food.svg',
       ),
       CentliIconEntry(
@@ -823,7 +838,7 @@ const List<CentliIconGroup> _groups = [
       ),
       CentliIconEntry(
         key: 'beer_stein',
-        label: '啤酒',
+        label: '啤酒杯',
         asset: 'assets/icons/food/beer_stein.svg',
       ),
       CentliIconEntry(
@@ -848,12 +863,12 @@ const List<CentliIconGroup> _groups = [
       ),
       CentliIconEntry(
         key: 'cooking_pot',
-        label: '厨具',
+        label: '炖锅',
         asset: 'assets/icons/food/cooking_pot.svg',
       ),
       CentliIconEntry(
         key: 'fork_knife',
-        label: '餐具',
+        label: '刀叉',
         asset: 'assets/icons/food/fork_knife.svg',
       ),
       CentliIconEntry(
@@ -903,7 +918,7 @@ const List<CentliIconGroup> _groups = [
       ),
       CentliIconEntry(
         key: 'bowl_steam',
-        label: '热汤',
+        label: '热汤面',
         asset: 'assets/icons/food/bowl_steam.svg',
       ),
       CentliIconEntry(
@@ -954,17 +969,17 @@ const List<CentliIconGroup> _groups = [
       ),
       CentliIconEntry(
         key: 'local_offer',
-        label: '优惠',
+        label: '优惠标签',
         asset: 'assets/icons/life/local_offer.svg',
       ),
       CentliIconEntry(
         key: 'checkroom',
-        label: '衣物',
+        label: '衣帽间',
         asset: 'assets/icons/life/checkroom.svg',
       ),
       CentliIconEntry(
         key: 'content_cut',
-        label: '美发',
+        label: '理发',
         asset: 'assets/icons/life/content_cut.svg',
       ),
       CentliIconEntry(
@@ -979,7 +994,7 @@ const List<CentliIconGroup> _groups = [
       ),
       CentliIconEntry(
         key: 'sports_esports',
-        label: '游戏',
+        label: '电竞',
         asset: 'assets/icons/life/sports_esports.svg',
       ),
       CentliIconEntry(
@@ -1014,7 +1029,7 @@ const List<CentliIconGroup> _groups = [
       ),
       CentliIconEntry(
         key: 'medical_services',
-        label: '医疗',
+        label: '医疗箱',
         asset: 'assets/icons/life/medical_services.svg',
       ),
       CentliIconEntry(
@@ -1044,12 +1059,12 @@ const List<CentliIconGroup> _groups = [
       ),
       CentliIconEntry(
         key: 'menu_book',
-        label: '书籍',
+        label: '课本',
         asset: 'assets/icons/life/menu_book.svg',
       ),
       CentliIconEntry(
         key: 'volunteer_activism',
-        label: '公益',
+        label: '公益捐赠',
         asset: 'assets/icons/life/volunteer_activism.svg',
       ),
       CentliIconEntry(
@@ -1064,7 +1079,7 @@ const List<CentliIconGroup> _groups = [
       ),
       CentliIconEntry(
         key: 'beach_access',
-        label: '度假',
+        label: '度假沙滩',
         asset: 'assets/icons/life/beach_access.svg',
       ),
       CentliIconEntry(
@@ -1150,12 +1165,12 @@ const List<CentliIconGroup> _groups = [
       ),
       CentliIconEntry(
         key: 'directions_bus',
-        label: '公交',
+        label: '公交车',
         asset: 'assets/icons/transport/directions_bus.svg',
       ),
       CentliIconEntry(
         key: 'directions_subway',
-        label: '地铁',
+        label: '地铁站',
         asset: 'assets/icons/transport/directions_subway.svg',
       ),
       CentliIconEntry(
@@ -1164,19 +1179,9 @@ const List<CentliIconGroup> _groups = [
         asset: 'assets/icons/transport/train.svg',
       ),
       CentliIconEntry(
-        key: 'flight',
-        label: '飞机',
-        asset: 'assets/icons/transport/flight.svg',
-      ),
-      CentliIconEntry(
         key: 'flight_takeoff',
         label: '起飞',
         asset: 'assets/icons/transport/flight_takeoff.svg',
-      ),
-      CentliIconEntry(
-        key: 'local_taxi',
-        label: '出租',
-        asset: 'assets/icons/transport/local_taxi.svg',
       ),
       CentliIconEntry(
         key: 'directions_bike',
@@ -1184,23 +1189,8 @@ const List<CentliIconGroup> _groups = [
         asset: 'assets/icons/transport/directions_bike.svg',
       ),
       CentliIconEntry(
-        key: 'two_wheeler',
-        label: '摩托',
-        asset: 'assets/icons/transport/two_wheeler.svg',
-      ),
-      CentliIconEntry(
-        key: 'electric_scooter',
-        label: '滑板车',
-        asset: 'assets/icons/transport/electric_scooter.svg',
-      ),
-      CentliIconEntry(
-        key: 'local_gas_station',
-        label: '加油',
-        asset: 'assets/icons/transport/local_gas_station.svg',
-      ),
-      CentliIconEntry(
         key: 'bolt',
-        label: '充电',
+        label: '充电桩',
         asset: 'assets/icons/transport/bolt.svg',
       ),
       CentliIconEntry(
@@ -1225,7 +1215,7 @@ const List<CentliIconGroup> _groups = [
       ),
       CentliIconEntry(
         key: 'scooter',
-        label: '滑板车',
+        label: '电动车',
         asset: 'assets/icons/transport/scooter.svg',
       ),
       CentliIconEntry(
@@ -1250,7 +1240,7 @@ const List<CentliIconGroup> _groups = [
       ),
       CentliIconEntry(
         key: 'gas_pump',
-        label: '加油',
+        label: '加油站',
         asset: 'assets/icons/transport/gas_pump.svg',
       ),
       CentliIconEntry(
@@ -1291,7 +1281,7 @@ const List<CentliIconGroup> _groups = [
       ),
       CentliIconEntry(
         key: 'water_drop',
-        label: '水电',
+        label: '水费',
         asset: 'assets/icons/home/water_drop.svg',
       ),
       CentliIconEntry(
@@ -1303,11 +1293,6 @@ const List<CentliIconGroup> _groups = [
         key: 'build',
         label: '维修',
         asset: 'assets/icons/home/build.svg',
-      ),
-      CentliIconEntry(
-        key: 'house_line',
-        label: '房屋轮廓',
-        asset: 'assets/icons/home/house_line.svg',
       ),
       CentliIconEntry(
         key: 'bed',
@@ -1366,7 +1351,7 @@ const List<CentliIconGroup> _groups = [
       ),
       CentliIconEntry(
         key: 'toilet_paper',
-        label: '卫生纸',
+        label: '卷纸',
         asset: 'assets/icons/home/toilet_paper.svg',
       ),
       CentliIconEntry(
@@ -1416,11 +1401,6 @@ const List<CentliIconGroup> _groups = [
         asset: 'assets/icons/electronics/phone_iphone.svg',
       ),
       CentliIconEntry(
-        key: 'laptop_mac',
-        label: '电脑',
-        asset: 'assets/icons/electronics/laptop_mac.svg',
-      ),
-      CentliIconEntry(
         key: 'headphones',
         label: '耳机',
         asset: 'assets/icons/electronics/headphones.svg',
@@ -1452,7 +1432,7 @@ const List<CentliIconGroup> _groups = [
       ),
       CentliIconEntry(
         key: 'battery_charging_full',
-        label: '电池',
+        label: '充电电池',
         asset: 'assets/icons/electronics/battery_charging_full.svg',
       ),
       CentliIconEntry(
@@ -1467,12 +1447,12 @@ const List<CentliIconGroup> _groups = [
       ),
       CentliIconEntry(
         key: 'laptop',
-        label: '笔记本电脑',
+        label: '笔记本',
         asset: 'assets/icons/electronics/laptop.svg',
       ),
       CentliIconEntry(
         key: 'desktop_tower',
-        label: '台式主机',
+        label: '台式机',
         asset: 'assets/icons/electronics/desktop_tower.svg',
       ),
       CentliIconEntry(
@@ -1512,7 +1492,7 @@ const List<CentliIconGroup> _groups = [
       ),
       CentliIconEntry(
         key: 'usb',
-        label: 'U 盘',
+        label: 'U盘',
         asset: 'assets/icons/electronics/usb.svg',
       ),
     ],
@@ -1521,6 +1501,11 @@ const List<CentliIconGroup> _groups = [
     id: 'office',
     title: '办公',
     entries: [
+      CentliIconEntry(
+        key: 'work',
+        label: '公文包',
+        asset: 'assets/icons/office/work.svg',
+      ),
       CentliIconEntry(
         key: 'work_outline',
         label: '办公',
@@ -1543,7 +1528,7 @@ const List<CentliIconGroup> _groups = [
       ),
       CentliIconEntry(
         key: 'edit_note',
-        label: '笔记',
+        label: '记事',
         asset: 'assets/icons/office/edit_note.svg',
       ),
       CentliIconEntry(
@@ -1563,7 +1548,7 @@ const List<CentliIconGroup> _groups = [
       ),
       CentliIconEntry(
         key: 'calendar_month',
-        label: '日历',
+        label: '月历',
         asset: 'assets/icons/office/calendar_month.svg',
       ),
       CentliIconEntry(
@@ -1573,7 +1558,7 @@ const List<CentliIconGroup> _groups = [
       ),
       CentliIconEntry(
         key: 'workspace_premium',
-        label: '认证',
+        label: '认证徽章',
         asset: 'assets/icons/office/workspace_premium.svg',
       ),
       CentliIconEntry(
@@ -1593,12 +1578,12 @@ const List<CentliIconGroup> _groups = [
       ),
       CentliIconEntry(
         key: 'folder_open',
-        label: '打开的文件夹',
+        label: '打开文件夹',
         asset: 'assets/icons/office/folder_open.svg',
       ),
       CentliIconEntry(
         key: 'file_archive',
-        label: '归档文件',
+        label: '压缩包',
         asset: 'assets/icons/office/file_archive.svg',
       ),
       CentliIconEntry(
@@ -1633,17 +1618,17 @@ const List<CentliIconGroup> _groups = [
       ),
       CentliIconEntry(
         key: 'archive_box',
-        label: '档案盒',
+        label: '档案箱',
         asset: 'assets/icons/office/archive_box.svg',
       ),
       CentliIconEntry(
         key: 'clipboard_text',
-        label: '文本剪贴板',
+        label: '剪贴板',
         asset: 'assets/icons/office/clipboard_text.svg',
       ),
       CentliIconEntry(
         key: 'calendar_check',
-        label: '日历打勾',
+        label: '日程勾选',
         asset: 'assets/icons/office/calendar_check.svg',
       ),
     ],
@@ -1653,8 +1638,13 @@ const List<CentliIconGroup> _groups = [
     title: '其他',
     entries: [
       CentliIconEntry(
+        key: 'military_tech',
+        label: '勋章',
+        asset: 'assets/icons/other/military_tech.svg',
+      ),
+      CentliIconEntry(
         key: 'more_horiz',
-        label: '其他',
+        label: '更多',
         asset: 'assets/icons/other/more_horiz.svg',
       ),
       CentliIconEntry(
@@ -1699,7 +1689,7 @@ const List<CentliIconGroup> _groups = [
       ),
       CentliIconEntry(
         key: 'tag',
-        label: '价签',
+        label: '标签',
         asset: 'assets/icons/other/tag.svg',
       ),
       CentliIconEntry(
@@ -1768,18 +1758,13 @@ const List<CentliIconGroup> _groups = [
         asset: 'assets/icons/other/bookmarks.svg',
       ),
       CentliIconEntry(
-        key: 'tag_simple',
-        label: '简标价签',
-        asset: 'assets/icons/other/tag_simple.svg',
-      ),
-      CentliIconEntry(
         key: 'flag_checkered',
-        label: '方格旗',
+        label: '格子旗',
         asset: 'assets/icons/other/flag_checkered.svg',
       ),
       CentliIconEntry(
         key: 'calendar_dots',
-        label: '日历点阵',
+        label: '多点日历',
         asset: 'assets/icons/other/calendar_dots.svg',
       ),
       CentliIconEntry(
@@ -1791,16 +1776,6 @@ const List<CentliIconGroup> _groups = [
         key: 'bell_ringing',
         label: '响铃',
         asset: 'assets/icons/other/bell_ringing.svg',
-      ),
-      CentliIconEntry(
-        key: 'fire_simple',
-        label: '火苗',
-        asset: 'assets/icons/other/fire_simple.svg',
-      ),
-      CentliIconEntry(
-        key: 'crown_simple',
-        label: '皇冠（简）',
-        asset: 'assets/icons/other/crown_simple.svg',
       ),
       CentliIconEntry(
         key: 'medal',

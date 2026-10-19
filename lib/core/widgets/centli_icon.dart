@@ -51,9 +51,11 @@ class CentliIconChip extends StatelessWidget {
     } else if (visual.asset != null) {
       child = SvgPicture.asset(
         visual.asset!,
-        width: size * 0.52,
-        height: size * 0.52,
-        colorFilter: ColorFilter.mode(visual.fg, BlendMode.srcIn),
+        width: visual.keepColors ? size * 0.72 : size * 0.52,
+        height: visual.keepColors ? size * 0.72 : size * 0.52,
+        colorFilter: visual.keepColors
+            ? null
+            : ColorFilter.mode(visual.fg, BlendMode.srcIn),
         fit: BoxFit.contain,
       );
     } else {
@@ -83,6 +85,7 @@ class CentliVisual {
     this.icon = Icons.category_rounded,
     this.hanzi,
     this.asset,
+    this.keepColors = false,
   });
 
   final Color bg;
@@ -90,6 +93,9 @@ class CentliVisual {
   final IconData icon;
   final String? hanzi;
   final String? asset;
+
+  /// Brand marks (bank logos) keep their own fills instead of a single tint.
+  final bool keepColors;
 }
 
 /// Resolve SVG / hanzi / colors for any entity with [iconKey].
@@ -113,18 +119,27 @@ CentliVisual resolveCentliVisual({
   }
 
   if (key.isNotEmpty) {
-    final entry = centliIconByKey[key];
-    final asset = entry?.asset ?? assetPathForIconKey(key);
+    final resolved = resolveCentliIconKey(key);
+    final entry = centliIconByKey[resolved];
+    final asset = entry?.asset ?? assetPathForIconKey(resolved);
     if (asset != null) {
-      final tint = brandColorsForKey(key);
+      // Multicolor SVGs from iconfont keep fills; chip uses a soft neutral pad.
+      const keepColors = true;
+      final tint = brandColorsForKey(resolved);
       if (tint != null) {
-        return CentliVisual(asset: asset, bg: tint.bg, fg: tint.fg);
+        return CentliVisual(
+          asset: asset,
+          bg: const Color(0xFFF4F6F8),
+          fg: tint.fg,
+          keepColors: keepColors,
+        );
       }
-      final colors = colorsForName(name.isNotEmpty ? name : key);
+      final colors = colorsForName(name.isNotEmpty ? name : resolved);
       return CentliVisual(
         asset: asset,
-        bg: colors.$1,
+        bg: const Color(0xFFF4F6F8),
         fg: entry?.fg ?? colors.$2,
+        keepColors: keepColors,
       );
     }
   }
