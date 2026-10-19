@@ -21,10 +21,40 @@ import '../../platform/notifications/notification_parse.dart';
 import '../../platform/notifications/noti_template_store.dart';
 import '../pending/pending_confirm_sheet.dart';
 
-final _homePendingListProvider =
+/// 首页轮播：只收「解析成功、可直接确认」的待入账。
+final _homePendingOkProvider =
     StreamProvider.family<List<PendingCapture>, String>((ref, ledgerId) {
-      return ref.watch(databaseProvider).watchPendingCaptures(ledgerId);
-    });
+  return ref.watch(databaseProvider).watchPendingOkCaptures(ledgerId);
+});
+
+/// 解析失败条数：首页用条幅入口，不和可确认项混在同一轮播里。
+final _homeParseFailedCountProvider =
+    StreamProvider.family<int, String>((ref, ledgerId) {
+  return ref
+      .watch(databaseProvider)
+      .watchParseFailedCaptures(ledgerId)
+      .map((rows) => rows.length);
+});
+
+final _homeMonthBudgetsProvider =
+    StreamProvider.family<List<Budget>, String>((ref, ledgerId) {
+  return ref
+      .watch(databaseProvider)
+      .watchBudgetsForMonth(ledgerId, budgetYearMonth());
+});
+
+final _homeBudgetProgressProvider = FutureProvider.family<
+    MonthBudgetProgress,
+    ({String ledgerId, String base})>((ref, args) async {
+  await ref.watch(fxBookProvider.future);
+  await ref.watch(txnWriteSignalProvider(args.ledgerId).future);
+  await ref.watch(_homeMonthBudgetsProvider(args.ledgerId).future);
+  return ref.watch(databaseProvider).monthBudgetProgress(
+        args.ledgerId,
+        budgetYearMonth(),
+        args.base,
+      );
+});
 
 final homeRangeProvider = StateProvider<DateRangeWindow>((ref) {
   return DateRangeWindow.lastDays(days: 30);
@@ -249,13 +279,20 @@ class _HomePageState extends ConsumerState<HomePage> {
                 endMs: calRange.endMs,
                 base: base,
               );
-              final calExpenseSeries = ref.watch(
-                _dailyExpenseProvider(calBaseArgs),
-              );
-              final calIncomeSeries = ref.watch(
-                _dailyIncomeProvider(calBaseArgs),
-              );
-              final calRecent = ref.watch(_rangeTxProvider(calArgs));
+              // 概览模式不订阅日历月的流水，避免和所选区间各扫一遍。
+              final calExpenseSeries = _mode == 1
+                  ? ref.watch(_dailyExpenseProvider(calBaseArgs))
+                  : AsyncValue<
+                      List<({DateTime dayLocal, int totalMinor})>
+                    >.data(const []);
+              final calIncomeSeries = _mode == 1
+                  ? ref.watch(_dailyIncomeProvider(calBaseArgs))
+                  : AsyncValue<
+                      List<({DateTime dayLocal, int totalMinor})>
+                    >.data(const []);
+              final calRecent = _mode == 1
+                  ? ref.watch(_rangeTxProvider(calArgs))
+                  : const AsyncValue<List<Transaction>>.data([]);
               final lifetime = ref.watch(
                 _lifetimeTotalsProvider((ledgerId: ledgerId, base: base)),
               );
@@ -273,11 +310,18 @@ class _HomePageState extends ConsumerState<HomePage> {
                 )),
               );
 
-              // 待确认条数：为 0 时首页连「间距 + 卡片」一起不渲染，
+              // 待确认 / 解析失败：都为 0 时整块（含间距）不渲染，
               // 保证概览卡→图表与图表→账单的间距完全一致。
-              final pendingItems =
-                  ref.watch(_homePendingListProvider(ledgerId)).valueOrNull ??
+              final pendingOk =
+                  ref.watch(_homePendingOkProvider(ledgerId)).valueOrNull ??
                       const <PendingCapture>[];
+              final parseFailedCount =
+                  ref.watch(_homeParseFailedCountProvider(ledgerId))
+                          .valueOrNull ??
+                      0;
+              final budgetProgress = ref.watch(
+                _homeBudgetProgressProvider((ledgerId: ledgerId, base: base)),
+              );
 
               return Column(
                 children: [
@@ -418,15 +462,18 @@ class _HomePageState extends ConsumerState<HomePage> {
                               assetLiability: alSplit,
                               lifetime: lifetime,
                               monthSummary: monthSummary,
+                              budgetProgress: budgetProgress,
                             ),
-                            // 待确认为空时「间距 + 卡片」整体不出现，
+                            // 待确认 / 解析失败都空时「间距 + 卡片」整体不出现，
                             // 概览卡到图表的距离才和图表到账单的一致。
-                            if (pendingItems.isNotEmpty) ...[
+                            if (pendingOk.isNotEmpty ||
+                                parseFailedCount > 0) ...[
                               const SizedBox(
                                 height: CentliSpacing.sectionLoose,
                               ),
-                              _HomePendingCarousel(
-                                items: pendingItems,
+                              _HomePendingSection(
+                                okItems: pendingOk,
+                                parseFailedCount: parseFailedCount,
                                 hide: hide,
                               ),
                             ],
@@ -762,6 +809,7 @@ class _LedgerSummaryCard extends StatelessWidget {
     required this.assetLiability,
     required this.lifetime,
     required this.monthSummary,
+    required this.budgetProgress,
   });
 
   final String ledgerName;
@@ -773,6 +821,7 @@ class _LedgerSummaryCard extends StatelessWidget {
   final BaseAssetLiability? assetLiability;
   final AsyncValue<({int incomeMinor, int expenseMinor})> lifetime;
   final AsyncValue<BaseRangeSummary> monthSummary;
+  final AsyncValue<MonthBudgetProgress> budgetProgress;
 
   String _money(int minor) => formatMinor(base, minor, hide: hide);
 
@@ -994,8 +1043,114 @@ class _LedgerSummaryCard extends StatelessWidget {
               ),
             ],
           ),
+          _HomeBudgetStrip(
+            progress: budgetProgress.valueOrNull,
+            base: base,
+            hide: hide,
+          ),
         ],
       ),
+    );
+  }
+}
+
+/// 概览卡底部：有月度总预算时展示已用 / 剩余（或超支）。
+class _HomeBudgetStrip extends StatelessWidget {
+  const _HomeBudgetStrip({
+    required this.progress,
+    required this.base,
+    required this.hide,
+  });
+
+  final MonthBudgetProgress? progress;
+  final String base;
+  final bool hide;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = progress;
+    final limit = p?.totalLimitMinor;
+    if (p == null || limit == null || limit <= 0) {
+      return const SizedBox.shrink();
+    }
+
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final spent = p.spentTotalMinor;
+    final remain = limit - spent;
+    final over = remain < 0;
+    final ratio = (spent / limit).clamp(0.0, 1.5);
+    final barColor = over
+        ? scheme.error
+        : ratio >= 0.8
+            ? scheme.tertiary
+            : scheme.primary;
+    final remainLabel = over
+        ? '超支 ${formatMinor(base, -remain, hide: hide)}'
+        : '剩余 ${formatMinor(base, remain, hide: hide)}';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: CentliSpacing.section),
+        const Divider(height: 1),
+        InkWell(
+          onTap: () => context.push('/me/budget'),
+          borderRadius: BorderRadius.circular(10),
+          child: Padding(
+            padding: const EdgeInsets.only(top: CentliSpacing.item),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '本月预算',
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      remainLabel,
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: over ? scheme.error : scheme.onSurface,
+                      ),
+                    ),
+                    const SizedBox(width: 2),
+                    Icon(
+                      Icons.chevron_right,
+                      size: 18,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: CentliSpacing.dense),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: ratio.clamp(0.0, 1.0),
+                    minHeight: 6,
+                    backgroundColor: scheme.surfaceContainerHighest,
+                    color: barColor,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '已用 ${formatMinor(base, spent, hide: hide)}'
+                  ' / ${formatMinor(base, limit, hide: hide)}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                    fontSize: 11.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1068,11 +1223,15 @@ class _NetChangeChartCard extends StatelessWidget {
                 : DateTime.fromMillisecondsSinceEpoch(0));
       dayLabels.add(day);
     }
+    // 区间起点先落一个点，这样只有一天有账时也能看出台阶，而不是整条线贴平。
     var running = endNetMajor - periodNet;
-    final spots = <FlSpot>[];
+    final spots = <FlSpot>[FlSpot(0, running)];
+    if (dayLabels.isNotEmpty) {
+      dayLabels.insert(0, dayLabels.first.subtract(const Duration(days: 1)));
+    }
     for (var i = 0; i < n; i++) {
       running += dayNets[i];
-      spots.add(FlSpot(i.toDouble(), running));
+      spots.add(FlSpot((i + 1).toDouble(), running));
     }
 
     /// 跳到底部导航的某个 tab（`/stats` 等），并替换掉当前推入的页面，
@@ -1457,6 +1616,7 @@ class _DailyTrendCard extends StatelessWidget {
       income: incomeSeries.valueOrNull ?? const [],
       expense: expenseSeries.valueOrNull ?? const [],
     );
+    // 每日净额：有账天 = 收入 − 支出，无账天 = 0（不是累计）。
     final spots = <FlSpot>[
       for (var i = 0; i < dailyNet.length; i++)
         FlSpot(i.toDouble(), dailyNet[i]),
@@ -1473,23 +1633,32 @@ class _DailyTrendCard extends StatelessWidget {
       base: base,
       hide: hide,
       height: 120,
-      signColored: true,
+      // 单线：当日净额（收入 − 支出），可为负；不按正负拆成红绿两段。
+      signColored: false,
+      lineColor: CentliTheme.softBlue,
       sparseMessage: '\u672c\u6708\u6682\u65e0\u6536\u652f',
     );
   }
 }
 
-class _HomePendingCarousel extends ConsumerStatefulWidget {
-  const _HomePendingCarousel({required this.items, required this.hide});
-  final List<PendingCapture> items;
+/// 首页待处理区：可确认轮播 + 解析失败入口（二者不混在同一滑动里）。
+class _HomePendingSection extends ConsumerStatefulWidget {
+  const _HomePendingSection({
+    required this.okItems,
+    required this.parseFailedCount,
+    required this.hide,
+  });
+
+  final List<PendingCapture> okItems;
+  final int parseFailedCount;
   final bool hide;
 
   @override
-  ConsumerState<_HomePendingCarousel> createState() =>
-      _HomePendingCarouselState();
+  ConsumerState<_HomePendingSection> createState() =>
+      _HomePendingSectionState();
 }
 
-class _HomePendingCarouselState extends ConsumerState<_HomePendingCarousel> {
+class _HomePendingSectionState extends ConsumerState<_HomePendingSection> {
   late final PageController _pageController;
   int _index = 0;
   String? _busyId;
@@ -1507,18 +1676,20 @@ class _HomePendingCarouselState extends ConsumerState<_HomePendingCarousel> {
   }
 
   @override
-  void didUpdateWidget(covariant _HomePendingCarousel oldWidget) {
+  void didUpdateWidget(covariant _HomePendingSection oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (_index >= widget.items.length) {
-      _index = widget.items.isEmpty ? 0 : widget.items.length - 1;
+    if (_index >= widget.okItems.length) {
+      _index = widget.okItems.isEmpty ? 0 : widget.okItems.length - 1;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final items = widget.items;
+    final okItems = widget.okItems;
+    final failCount = widget.parseFailedCount;
     final scheme = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
+    final onlyFailed = okItems.isEmpty && failCount > 0;
 
     return CentliSoftCard(
       padding: const EdgeInsets.fromLTRB(
@@ -1530,102 +1701,163 @@ class _HomePendingCarouselState extends ConsumerState<_HomePendingCarousel> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // 标题行：待确认 (N) + 「查看全部」
-          InkWell(
-            onTap: () => context.push('/home/pending'),
-            borderRadius: BorderRadius.circular(8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '待确认 (${items.length})',
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w700,
+          if (okItems.isNotEmpty) ...[
+            InkWell(
+              onTap: () => context.push('/home/pending?tab=pending'),
+              borderRadius: BorderRadius.circular(8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '待确认 (${okItems.length})',
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: CentliSpacing.dense),
+                        Text(
+                          '左右滑动切换 · 点卡片填写并入账',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.chevron_right, color: scheme.onSurfaceVariant),
+                ],
+              ),
+            ),
+            const SizedBox(height: CentliSpacing.item),
+            SizedBox(
+              height: 152,
+              child: PageView.builder(
+                key: const Key('home_pending_carousel'),
+                controller: _pageController,
+                itemCount: okItems.length,
+                onPageChanged: (i) => setState(() => _index = i),
+                itemBuilder: (context, i) {
+                  final c = okItems[i];
+                  return AnimatedPadding(
+                    duration: const Duration(milliseconds: 160),
+                    padding: EdgeInsets.only(
+                      left: 2,
+                      right: i == okItems.length - 1 ? 0 : 8,
+                      bottom: 6,
+                    ),
+                    child: _HomePendingSlide(
+                      key: ValueKey('pending_slide_${c.id}'),
+                      capture: c,
+                      hide: widget.hide,
+                      busy: _busyId == c.id,
+                      onConfirm: () => _confirm(c),
+                      onIgnore: () => _ignore(c),
+                      onOpen: () => context.push('/home/pending?tab=pending'),
+                    ),
+                  );
+                },
+              ),
+            ),
+            if (okItems.length > 1)
+              Padding(
+                padding: const EdgeInsets.only(bottom: CentliSpacing.item),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    for (var i = 0; i < okItems.length; i++)
+                      Container(
+                        width: i == _index ? 14 : 6,
+                        height: 6,
+                        margin: const EdgeInsets.symmetric(horizontal: 3),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(3),
+                          color: i == _index
+                              ? scheme.primary
+                              : scheme.outlineVariant,
                         ),
                       ),
-                      const SizedBox(height: CentliSpacing.dense),
-                      Text(
-                        '左右滑动切换 · 点卡片填写并入账',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: scheme.onSurfaceVariant,
+                  ],
+                ),
+              ),
+          ],
+          if (failCount > 0) ...[
+            if (okItems.isNotEmpty) ...[
+              const Divider(height: 1),
+              const SizedBox(height: CentliSpacing.dense),
+            ],
+            Material(
+              key: const Key('home_parse_failed_banner'),
+              color: scheme.errorContainer.withValues(alpha: 0.55),
+              borderRadius: BorderRadius.circular(12),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                onTap: () =>
+                    context.push('/home/pending?tab=parse_failed'),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.error_outline_rounded,
+                        size: 20,
+                        color: scheme.onErrorContainer,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              onlyFailed
+                                  ? '解析失败 ($failCount)'
+                                  : '$failCount 条解析失败',
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: scheme.onErrorContainer,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              onlyFailed
+                                  ? '通知里没认出金额，点此补全或忽略'
+                                  : '未认出金额，点此补全或忽略',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: scheme.onErrorContainer
+                                    .withValues(alpha: 0.85),
+                              ),
+                            ),
+                          ],
                         ),
+                      ),
+                      Icon(
+                        Icons.chevron_right,
+                        color: scheme.onErrorContainer,
                       ),
                     ],
                   ),
                 ),
-                Icon(Icons.chevron_right, color: scheme.onSurfaceVariant),
-              ],
-            ),
-          ),
-          const SizedBox(height: CentliSpacing.item),
-          // 卡片横向轮播（相邻卡片露出一角，暗示可滑动）
-          SizedBox(
-            height: 152,
-            child: PageView.builder(
-              key: const Key('home_pending_carousel'),
-              controller: _pageController,
-              itemCount: items.length,
-              onPageChanged: (i) => setState(() => _index = i),
-              itemBuilder: (context, i) {
-                final c = items[i];
-                return AnimatedPadding(
-                  duration: const Duration(milliseconds: 160),
-                  padding: EdgeInsets.only(
-                    left: 2,
-                    right: i == items.length - 1 ? 0 : 8,
-                    bottom: 6,
-                  ),
-                  child: _HomePendingSlide(
-                    key: ValueKey('pending_slide_${c.id}'),
-                    capture: c,
-                    hide: widget.hide,
-                    busy: _busyId == c.id,
-                    onConfirm: () => _confirm(c),
-                    onIgnore: () => _ignore(c),
-                    onOpen: () => context.push('/home/pending'),
-                  ),
-                );
-              },
-            ),
-          ),
-          if (items.length > 1)
-            Padding(
-              padding: const EdgeInsets.only(bottom: CentliSpacing.item),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  for (var i = 0; i < items.length; i++)
-                    Container(
-                      width: i == _index ? 14 : 6,
-                      height: 6,
-                      margin: const EdgeInsets.symmetric(horizontal: 3),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(3),
-                        color: i == _index
-                            ? scheme.primary
-                            : scheme.outlineVariant,
-                      ),
-                    ),
-                ],
               ),
             ),
+            const SizedBox(height: CentliSpacing.dense),
+          ],
         ],
       ),
     );
   }
 
-  /// 就地弹出「确认入账」：填完金额 / 分类 / 账户即可落账。
   Future<void> _confirm(PendingCapture c) async {
     if (_busyId != null) return;
     final ok = await showPendingConfirmDialog(context, ref, capture: c);
     if (!ok || !mounted) return;
     ScaffoldMessenger.of(context)
         .showSnackBar(const SnackBar(content: Text('已入账')));
-    // 列表由 Drift 流刷新；把轮播前移到下一张（或回到第一张）。
-    final remaining = widget.items.length - 1;
+    final remaining = widget.okItems.length - 1;
     if (remaining > 0) {
       final next = _index.clamp(0, remaining - 1);
       if (_pageController.hasClients) {

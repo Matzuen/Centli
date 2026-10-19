@@ -96,4 +96,67 @@ void main() {
     // The pending card actually appeared.
     expect(find.byKey(const Key('home_pending_carousel')), findsOneWidget);
   });
+
+  testWidgets('parse-failed captures show banner but not the carousel',
+      (tester) async {
+    final ledger = await (db.select(db.ledgers)..limit(1)).getSingle();
+    await db.ingestParsedNotification(
+      ledgerId: ledger.id,
+      sourcePkg: 'com.eg.android.AlipayGphone',
+      rawTitle: '支付提醒',
+      rawText: '你有一笔待处理交易',
+      dedupeKey: 'pending-fail-only',
+      amountMinor: null,
+      parseOk: false,
+      direction: 'out',
+    );
+    await pumpHome(tester);
+    expect(find.byKey(const Key('home_pending_carousel')), findsNothing);
+    expect(find.byKey(const Key('home_parse_failed_banner')), findsOneWidget);
+    expect(find.textContaining('解析失败'), findsWidgets);
+  });
+
+  testWidgets('ok pending and parse-failed coexist without mixing slides',
+      (tester) async {
+    final ledger = await (db.select(db.ledgers)..limit(1)).getSingle();
+    await db.ingestParsedNotification(
+      ledgerId: ledger.id,
+      sourcePkg: 'com.eg.android.AlipayGphone',
+      rawTitle: '支付成功',
+      rawText: '向 星巴克 付款 ¥28.50',
+      dedupeKey: 'pending-ok-mix',
+      amountMinor: 2850,
+      parseOk: true,
+      direction: 'out',
+    );
+    await db.ingestParsedNotification(
+      ledgerId: ledger.id,
+      sourcePkg: 'com.tencent.mm',
+      rawTitle: '微信支付',
+      rawText: '交易提醒',
+      dedupeKey: 'pending-fail-mix',
+      amountMinor: null,
+      parseOk: false,
+      direction: 'out',
+    );
+    await pumpHome(tester);
+    expect(find.byKey(const Key('home_pending_carousel')), findsOneWidget);
+    expect(find.byKey(const Key('home_parse_failed_banner')), findsOneWidget);
+    expect(find.text('待确认 (1)'), findsOneWidget);
+    expect(find.textContaining('1 条解析失败'), findsOneWidget);
+  });
+
+  testWidgets('monthly total budget appears on the overview card',
+      (tester) async {
+    final ledger = await (db.select(db.ledgers)..limit(1)).getSingle();
+    await db.upsertBudget(
+      ledgerId: ledger.id,
+      yearMonth: budgetYearMonth(),
+      categoryId: '',
+      amountMinor: 300000,
+    );
+    await pumpHome(tester);
+    expect(find.text('本月预算'), findsOneWidget);
+    expect(find.textContaining('剩余'), findsOneWidget);
+  });
 }
