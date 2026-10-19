@@ -87,8 +87,12 @@ docs/grokbot/audit_input*/
 !docs/grokbot/audit_input/notes.md
 
 
-# Brand source: keep only adopted logo.png
-logo/logo1.png
-logo/logo2.png
-tools/_*.py
+# Brand source: keep only adopted logo.png (logo1/logo2/logo3 are drafts)
+logo/logo[0-9]*.png
+
+# 一次性工具的中间产物：`tools/_*` 前缀即「草稿」，任何扩展名都不入库
+# （图标转换时的 iconfont 批次、CDP dump、base64 分片、重命名清单等）
+tools/_*
+# 图标预览图（由脚本生成，供人工挑选，不是源文件）
+tools/bank_preview/
 tools/*_patch*.py
