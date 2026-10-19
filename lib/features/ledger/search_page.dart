@@ -816,7 +816,7 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
                 initialValue: _categoryId,
                 isExpanded: true,
                 decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
                   isDense: true,
                 ),
                 items: [
@@ -842,7 +842,7 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
                 initialValue: _accountId,
                 isExpanded: true,
                 decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
                   isDense: true,
                 ),
                 items: [

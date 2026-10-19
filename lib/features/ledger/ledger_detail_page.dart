@@ -380,14 +380,29 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
   Widget _accountRows(BuildContext context) {
     final theme = _rowTheme(context);
     if (!_isTransfer) {
-      return _EditRow(
-        key: const Key('ledger_detail_account'),
-        theme: theme,
-        icon: Icons.account_balance_wallet_outlined,
-        title: '账户',
-        value: _accountNameOf(_accountId),
-        emptyText: '—',
-        onTap: () => _editAccount(context),
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _EditRow(
+            key: const Key('ledger_detail_account'),
+            theme: theme,
+            icon: Icons.account_balance_wallet_outlined,
+            title: '账户',
+            value: _accountNameOf(_accountId),
+            emptyText: '—',
+            onTap: () => _editAccount(context),
+          ),
+          const Divider(height: 1, indent: 16, endIndent: 16),
+          _EditRow(
+            key: const Key('ledger_detail_category'),
+            theme: theme,
+            icon: Icons.local_offer_outlined,
+            title: '分类',
+            value: _categoryNameOf(_categoryId),
+            emptyText: '—',
+            onTap: () => _editCategory(context),
+          ),
+        ],
       );
     }
     return Column(
@@ -1094,7 +1109,7 @@ Future<String?> _promptAmount(
           decoration: const InputDecoration(
             prefixText: '¥ ',
             helperText: '支持 12+8 之类的算式',
-            border: OutlineInputBorder(),
+            border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
           ),
           validator: (v) {
             final major = evalAmountExpr((v ?? '').trim());
@@ -1149,7 +1164,7 @@ Future<bool?> _promptText(
         controller: controller,
         autofocus: true,
         maxLength: maxLength,
-        decoration: InputDecoration(hintText: hint, border: const OutlineInputBorder()),
+        decoration: InputDecoration(hintText: hint, border: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14)))),
         onSubmitted: (_) => Navigator.pop(ctx, true),
       ),
       actions: [
@@ -1218,7 +1233,7 @@ Future<List<String>?> showTagEditorDialog(
                     decoration: const InputDecoration(
                       labelText: '新标签',
                       hintText: '回车确认，最多 5 个',
-                      border: OutlineInputBorder(),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
                     ),
                     onSubmitted: addTag,
                   ),

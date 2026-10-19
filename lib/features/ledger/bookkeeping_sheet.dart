@@ -391,7 +391,7 @@ List<Account> _accounts = [];
                       ),
                       decoration: InputDecoration(
                         labelText: '\u8f6c\u5165\u91d1\u989d ($toCcy)',
-                        border: const OutlineInputBorder(),
+                        border: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
                       ),
                     )
                   else
@@ -402,7 +402,7 @@ List<Account> _accounts = [];
                       ),
                       decoration: InputDecoration(
                         labelText: '1 $fromCcy = ? $toCcy',
-                        border: const OutlineInputBorder(),
+                        border: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
                       ),
                     ),
                 ],
@@ -900,7 +900,7 @@ List<Account> _accounts = [];
                                             fontWeight: FontWeight.w700,
                                             letterSpacing: -0.8,
                                             height: 1.0,
-                                            fontSize: 32,
+                                            fontSize: 26,
                                           ),
                                     ),
                                     const SizedBox(width: 8),
