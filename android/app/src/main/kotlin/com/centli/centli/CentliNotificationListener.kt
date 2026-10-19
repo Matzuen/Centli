@@ -23,6 +23,9 @@ class CentliNotificationListener : NotificationListenerService() {
         super.onListenerConnected()
         connected = true
         Log.i(TAG, "onListenerConnected")
+        if (isAutoCaptureEnabled(this)) {
+            CentliCaptureKeeper.start(this)
+        }
     }
 
     override fun onListenerDisconnected() {

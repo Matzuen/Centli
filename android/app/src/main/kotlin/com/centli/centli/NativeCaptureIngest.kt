@@ -87,16 +87,17 @@ object NativeCaptureIngest {
                 """
                 INSERT INTO pending_captures(
                   id, ledger_id, source_pkg, raw_title, raw_text,
-                  amount_minor, currency, merchant, happen_at,
+                  amount_minor, currency, note, happen_at,
                   suggested_category_id, suggested_account_id,
-                  status, dedupe_key, parse_ok, created_at, updated_at
-                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                  status, dedupe_key, parse_ok, direction,
+                  created_at, updated_at
+                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """.trimIndent(),
                 arrayOf<Any?>(
                     id, ledgerId, pkg, title.ifBlank { null }, text,
                     amountMinor, currency, merchant, whenMs,
                     null, null, "pending", dedupe,
-                    if (parseOk) 1 else 0, now, now,
+                    if (parseOk) 1 else 0, direction, now, now,
                 ),
             )
 
@@ -207,12 +208,13 @@ object NativeCaptureIngest {
         }
         for (rule in forPkg) {
             try {
+                val keyword = if (rule.matchOn == "body") body else title
                 val exclude = rule.exclude
-                if (!exclude.isNullOrBlank() && Pattern.compile(exclude).matcher(body).find()) {
+                if (!exclude.isNullOrBlank() && Pattern.compile(exclude).matcher(keyword).find()) {
                     continue
                 }
                 val must = rule.must
-                if (!must.isNullOrBlank() && !Pattern.compile(must).matcher(body).find()) {
+                if (!must.isNullOrBlank() && !Pattern.compile(must).matcher(keyword).find()) {
                     continue
                 }
                 val dir = when (rule.direction) {
@@ -237,6 +239,7 @@ object NativeCaptureIngest {
         val amount: String?,
         val merchant: String?,
         val merchantFromTitle: Boolean,
+        val matchOn: String,
     )
 
     /** null = empty/corrupt → use hardcode fallback */
@@ -246,6 +249,20 @@ object NativeCaptureIngest {
         } catch (_: Exception) {
             null
         }
+        val fromPrefs = parseRulesArray(raw)
+        if (fromPrefs != null) return fromPrefs
+        // Flutter has not synced yet (process started by the system). Read the
+        // bundled templates so capture does not wait for the UI.
+        val asset = try {
+            context.assets.open("flutter_assets/assets/noti_templates.json")
+                .bufferedReader().use { it.readText() }
+        } catch (_: Exception) {
+            null
+        }
+        return parseTemplateDocument(asset)
+    }
+
+    private fun parseRulesArray(raw: String?): List<NativeRule>? {
         if (raw.isNullOrBlank()) return null
         return try {
             val arr = org.json.JSONArray(raw)
@@ -265,12 +282,49 @@ object NativeCaptureIngest {
                             amount = o.optString("amount").ifBlank { null },
                             merchant = o.optString("merchant").ifBlank { null },
                             merchantFromTitle = o.optBoolean("merchantFromTitle", false),
+                            matchOn = o.optString("matchOn").ifBlank { "title" },
                         ),
                     )
                 }
             }.ifEmpty { null }
         } catch (e: Exception) {
             Log.w(TAG, "rules_json parse failed; fallback hardcode", e)
+            null
+        }
+    }
+
+    /** assets/noti_templates.json: `{ "templates": [ NotiTemplate, ... ] }`. */
+    private fun parseTemplateDocument(raw: String?): List<NativeRule>? {
+        if (raw.isNullOrBlank()) return null
+        return try {
+            val root = org.json.JSONObject(raw)
+            val arr = root.optJSONArray("templates") ?: return null
+            buildList {
+                for (i in 0 until arr.length()) {
+                    val o = arr.optJSONObject(i) ?: continue
+                    val packages = o.optJSONArray("packages") ?: continue
+                    val matchOn = o.optString("matchOn").ifBlank { "title" }
+                    for (p in 0 until packages.length()) {
+                        val pkg = packages.optString(p)
+                        if (pkg.isBlank()) continue
+                        add(
+                            NativeRule(
+                                id = o.optString("id").ifBlank { null },
+                                pkg = pkg,
+                                direction = o.optString("direction").ifBlank { "out" },
+                                must = o.optString("mustContainRegex").ifBlank { null },
+                                exclude = o.optString("excludeTextRegex").ifBlank { null },
+                                amount = o.optString("amountRegex").ifBlank { null },
+                                merchant = o.optString("merchantRegex").ifBlank { null },
+                                merchantFromTitle = o.optBoolean("merchantFromTitle", false),
+                                matchOn = matchOn,
+                            ),
+                        )
+                    }
+                }
+            }.ifEmpty { null }
+        } catch (e: Exception) {
+            Log.w(TAG, "bundled templates unreadable", e)
             null
         }
     }

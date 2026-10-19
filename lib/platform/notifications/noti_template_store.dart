@@ -684,6 +684,7 @@ abstract final class NotiTemplateStore {
           'amount': t.amountRegex,
           'merchant': t.merchantRegex,
           'merchantFromTitle': t.merchantFromTitle,
+          'matchOn': t.matchOn,
           'id': t.id,
         });
       }

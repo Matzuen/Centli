@@ -61,6 +61,9 @@ class MainActivity : FlutterFragmentActivity() {
                     CentliNotificationListener.setAutoCaptureEnabled(this, enabled)
                     if (enabled && isNotificationAccessGranted()) {
                         CentliNotificationListener.ensureRebind(this)
+                        CentliCaptureKeeper.start(this)
+                    } else if (!enabled) {
+                        CentliCaptureKeeper.stop(this)
                     }
                     result.success(null)
                 }
@@ -151,7 +154,16 @@ class MainActivity : FlutterFragmentActivity() {
         mainHandler.post {
             deliverOpenRoute(intent)
             deliverPendingIntake(intent)
-            if (isNotificationAccessGranted() && !CentliNotificationListener.connected) {
+            if (isNotificationAccessGranted() &&
+                CentliNotificationListener.isAutoCaptureEnabled(this)
+            ) {
+                CentliCaptureKeeper.start(this)
+                if (!CentliNotificationListener.connected) {
+                    CentliNotificationListener.ensureRebind(this)
+                }
+            } else if (isNotificationAccessGranted() &&
+                !CentliNotificationListener.connected
+            ) {
                 CentliNotificationListener.ensureRebind(this)
             }
         }
