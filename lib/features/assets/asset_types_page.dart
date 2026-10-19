@@ -180,7 +180,7 @@ Future<void> _promptCreate(
         autofocus: true,
         decoration: const InputDecoration(
           labelText: '名称',
-          border: OutlineInputBorder(),
+          border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
         ),
       ),
       actions: [
@@ -223,7 +223,7 @@ Future<void> _promptRename(
         autofocus: true,
         decoration: const InputDecoration(
           labelText: '名称',
-          border: OutlineInputBorder(),
+          border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
         ),
       ),
       actions: [

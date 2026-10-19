@@ -266,50 +266,11 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                                       const SizedBox(
                                         height: CentliSpacing.section,
                                       ),
-                                      Row(
-                                        children: [
-                                          Expanded(
-                                            child: Row(
-                                              children: [
-                                                const Icon(
-                                                  Icons.circle,
-                                                  size: 8,
-                                                  color:
-                                                      CentliTheme.incomeGreen,
-                                                ),
-                                                const SizedBox(width: 6),
-                                                Flexible(
-                                                  child: Text(
-                                                    '总资产  ${formatMinor(base, assetSum, hide: hide)}',
-                                                    style: const TextStyle(
-                                                      fontSize: 13,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                          Expanded(
-                                            child: Row(
-                                              children: [
-                                                const Icon(
-                                                  Icons.circle,
-                                                  size: 8,
-                                                  color: CentliTheme.expenseRed,
-                                                ),
-                                                const SizedBox(width: 6),
-                                                Flexible(
-                                                  child: Text(
-                                                    '总负债  ${formatMinor(base, liabilitySum, hide: hide)}',
-                                                    style: const TextStyle(
-                                                      fontSize: 13,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ],
+                                      _AssetLiabilityLine(
+                                        assets:
+                                            '总资产  ${formatMinor(base, assetSum, hide: hide)}',
+                                        liabilities:
+                                            '总负债  ${formatMinor(base, liabilitySum, hide: hide)}',
                                       ),
                                       if (unconvertedHint != null) ...[
                                         const SizedBox(
@@ -656,6 +617,94 @@ List<AssetTypeSlice> assetTypeSlices({
   return out;
 }
 
+/// 净资产卡片底部：总资产靠左、总负债靠右，中间至少留 28。
+class _AssetLiabilityLine extends StatelessWidget {
+  const _AssetLiabilityLine({
+    required this.assets,
+    required this.liabilities,
+  });
+
+  final String assets;
+  final String liabilities;
+
+  static const _style = TextStyle(fontSize: 13);
+  static const _iconWidth = 14.0;
+  static const _minGap = 28.0;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final scaler = MediaQuery.textScalerOf(context);
+        final direction = Directionality.of(context);
+        // TextPainter 往往比实际渲染窄一点，多留 4 避免挤出卡片。
+        final leftNatural =
+            _iconWidth + _textWidth(assets, scaler, direction) + 4;
+        final rightNatural =
+            _iconWidth + _textWidth(liabilities, scaler, direction) + 4;
+        final spare = constraints.maxWidth - leftNatural - rightNatural;
+        var leftW = leftNatural;
+        var rightW = rightNatural;
+        if (spare < _minGap) {
+          final budget =
+              (constraints.maxWidth - _minGap).clamp(0.0, double.infinity);
+          final sum = leftNatural + rightNatural;
+          if (sum > budget && sum > 0) {
+            leftW = leftNatural * budget / sum;
+            rightW = budget - leftW;
+          }
+        }
+        return Row(
+          children: [
+            _side(CentliTheme.incomeGreen, assets, leftW),
+            if (spare >= _minGap)
+              const Spacer()
+            else
+              const SizedBox(width: _minGap),
+            _side(CentliTheme.expenseRed, liabilities, rightW),
+          ],
+        );
+      },
+    );
+  }
+
+  static double _textWidth(
+    String text,
+    TextScaler scaler,
+    TextDirection direction,
+  ) {
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: _style),
+      textDirection: direction,
+      textScaler: scaler,
+      maxLines: 1,
+    )..layout();
+    final width = painter.width;
+    painter.dispose();
+    return width;
+  }
+
+  Widget _side(Color color, String text, double width) {
+    return SizedBox(
+      width: width,
+      child: Row(
+        children: [
+          Icon(Icons.circle, size: 8, color: color),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: _style,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// 卡片 2：资产分析 —— 环形图（左）+ 图例（右，名称 + 金额 + 百分比）。
 class _AssetAnalysisCard extends StatelessWidget {
   const _AssetAnalysisCard({
@@ -971,7 +1020,7 @@ Future<void> showAccountEditor(
                     controller: nameCtrl,
                     decoration: const InputDecoration(
                       labelText: '名称',
-                      border: OutlineInputBorder(),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
                     ),
                     onChanged: (_) => setLocal(() {}),
                   ),
@@ -992,7 +1041,7 @@ Future<void> showAccountEditor(
                         : null,
                     decoration: const InputDecoration(
                       labelText: '币种',
-                      border: OutlineInputBorder(),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
                       helperText: '已有账户币种不建议修改',
                     ),
                   ),
@@ -1018,7 +1067,7 @@ Future<void> showAccountEditor(
                     },
                     decoration: const InputDecoration(
                       labelText: '分类',
-                      border: OutlineInputBorder(),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
                     ),
                   ),
                   const SizedBox(height: CentliSpacing.section),
@@ -1030,7 +1079,7 @@ Future<void> showAccountEditor(
                     ),
                     decoration: InputDecoration(
                       labelText: existing == null ? '期初余额' : '当前金额',
-                      border: const OutlineInputBorder(),
+                      border: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
                       helperText: existing == null
                           ? (decimals == 0
                               ? '无小数（$currency）'

@@ -428,7 +428,7 @@ class _AccountTxnTile extends ConsumerWidget {
                       style: TextStyle(
                         color: amountColor,
                         fontWeight: FontWeight.w700,
-                        fontSize: 16,
+                        fontSize: 13,
                         height: 1.2,
                       ),
                     ),
@@ -557,7 +557,7 @@ Future<void> _showAdjustBalance(
                 const TextInputType.numberWithOptions(decimal: true),
             decoration: InputDecoration(
               labelText: '\u76ee\u6807\u4f59\u989d',
-              border: const OutlineInputBorder(),
+              border: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
               helperText:
                   '\u5c06\u8bb0\u4e00\u7b14\u300c\u4f59\u989d\u6821\u6b63\u300d\uff0c\u4e0d\u4fee\u6539\u671f\u521d\uff0c\u4e0d\u8ba1\u5165\u7edf\u8ba1',
             ),
