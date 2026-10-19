@@ -32,17 +32,21 @@ Future<RecurringRunResult> runDueRecurring(
   var skippedBroken = 0;
   var truncatedTotal = 0;
 
+  final accountCache = <String, Account?>{};
+  final categoryCache = <String, Category?>{};
   for (final rule in rules) {
     try {
-      final account = await db.getAccount(rule.accountId);
+      final account = accountCache[rule.accountId] ??=
+          await db.getAccount(rule.accountId);
       if (account == null || account.archived == 1) {
         skippedBroken++;
         continue;
       }
       if (rule.categoryId != null) {
-        final cat = await (db.select(db.categories)
-              ..where((t) => t.id.equals(rule.categoryId!)))
-            .getSingleOrNull();
+        final cat = categoryCache[rule.categoryId!] ??=
+            await (db.select(db.categories)
+                  ..where((t) => t.id.equals(rule.categoryId!)))
+                .getSingleOrNull();
         if (cat == null || cat.archived == 1) {
           skippedBroken++;
           continue;
@@ -60,15 +64,23 @@ Future<RecurringRunResult> runDueRecurring(
       );
       truncatedTotal += due.truncatedCount;
 
+      final occurrenceKeys = [
+        for (final occ in due.occurrences)
+          'rec:${rule.id}:${occ.millisecondsSinceEpoch}',
+      ];
+      final already = occurrenceKeys.isEmpty
+          ? <String>{}
+          : {
+              for (final row in await (db.select(db.transactions)
+                    ..where((t) => t.occurrenceKey.isIn(occurrenceKeys)))
+                  .get())
+                if (row.occurrenceKey != null) row.occurrenceKey!,
+            };
       await db.transaction(() async {
         for (final occ in due.occurrences) {
           final key =
               'rec:${rule.id}:${occ.millisecondsSinceEpoch}';
-          final existing = await (db.select(db.transactions)
-                ..where((t) => t.occurrenceKey.equals(key))
-                ..limit(1))
-              .get();
-          if (existing.isNotEmpty) continue;
+          if (already.contains(key)) continue;
 
           final baseNote = rule.note?.trim();
           final note = baseNote == null || baseNote.isEmpty

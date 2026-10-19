@@ -46,6 +46,11 @@ class CentliDatabase extends _$CentliDatabase {
 
   CentliDatabase.forTesting(super.e);
 
+  /// Reused by the burst of home/stats aggregates that follow one write.
+  FxBook? _fxBookCache;
+
+  void _dropFxBookCache() => _fxBookCache = null;
+
   @override
   int get schemaVersion => 11;
 
@@ -212,6 +217,15 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
     await customStatement(
       'CREATE INDEX IF NOT EXISTS idx_txn_occurrence_key '
       'ON transactions(occurrence_key)',
+    );
+    // Live rows are what home / stats / balances actually scan.
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_txn_ledger_live_happen '
+      'ON transactions(ledger_id, happen_at) WHERE deleted_at IS NULL',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_pending_ledger_status '
+      'ON pending_captures(ledger_id, status)',
     );
   }
 
@@ -1091,35 +1105,52 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
   }
 
   /// balance = opening + in - out - transfer_out + transfer_in
+  ///
+  /// Aggregated in SQL. Active accounts keep their opening balance; any other
+  /// account id that appears on a row is included from zero, matching the
+  /// previous in-memory fold.
   Future<Map<String, int>> accountBalances(String ledgerId) async {
     final accs = await loadActiveAccounts(ledgerId);
     final balances = {for (final a in accs) a.id: a.openingBalanceMinor};
 
-    final rows = await (select(transactions)
-          ..where(
-            (t) => t.ledgerId.equals(ledgerId) & t.deletedAt.isNull(),
-          ))
-        .get();
-
-    for (final r in rows) {
-      if (r.type == 'in' || r.type == 'refund') {
-        balances[r.accountId] = (balances[r.accountId] ?? 0) + r.amountMinor;
-      } else if (r.type == 'out') {
-        balances[r.accountId] = (balances[r.accountId] ?? 0) - r.amountMinor;
-      } else if (r.type == 'transfer') {
-        balances[r.accountId] = (balances[r.accountId] ?? 0) - r.amountMinor;
-        final toId = r.toAccountId;
-        if (toId != null) {
-          final credit = r.toAmountMinor ?? r.amountMinor;
-          balances[toId] = (balances[toId] ?? 0) + credit;
-        }
-      }
+    final deltas = await customSelect(
+      '''
+      SELECT id, SUM(delta) AS delta FROM (
+        SELECT account_id AS id,
+               SUM(CASE
+                 WHEN type IN ('in', 'refund') THEN amount_minor
+                 WHEN type IN ('out', 'transfer') THEN -amount_minor
+                 ELSE 0
+               END) AS delta
+        FROM transactions
+        WHERE ledger_id = ? AND deleted_at IS NULL
+        GROUP BY account_id
+        UNION ALL
+        SELECT to_account_id AS id,
+               SUM(COALESCE(to_amount_minor, amount_minor)) AS delta
+        FROM transactions
+        WHERE ledger_id = ? AND deleted_at IS NULL
+          AND type = 'transfer' AND to_account_id IS NOT NULL
+        GROUP BY to_account_id
+      )
+      GROUP BY id
+      ''',
+      variables: [
+        Variable<String>(ledgerId),
+        Variable<String>(ledgerId),
+      ],
+      readsFrom: {transactions},
+    ).get();
+    for (final r in deltas) {
+      final id = r.read<String>('id');
+      balances[id] = (balances[id] ?? 0) + _sqlInt(r, 'delta');
     }
     return balances;
   }
 
   Stream<Map<String, int>> watchAccountBalances(String ledgerId) {
-    return watchRecentTransactions(ledgerId, limit: 100000).asyncMap((_) {
+    // Latest row is only a change signal. Do not materialize the ledger.
+    return watchRecentTransactions(ledgerId, limit: 1).asyncMap((_) {
       return accountBalances(ledgerId);
     });
   }
@@ -2301,8 +2332,10 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
   }
 
   Future<FxBook> loadFxBook() async {
+    final cached = _fxBookCache;
+    if (cached != null) return cached;
     final rows = await loadAllFxRates();
-    return FxBook([
+    final book = FxBook([
       for (final r in rows)
         FxQuote(
           day: r.day,
@@ -2311,6 +2344,8 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
           rate: r.rate,
         ),
     ]);
+    _fxBookCache = book;
+    return book;
   }
 
   /// Upsert one FX quote. [rate] means 1 [fromCcy] = [rate] [toCcy].
@@ -2321,6 +2356,7 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
     required double rate,
     String? source,
   }) async {
+    _dropFxBookCache();
     if (rate <= 0) {
       throw ArgumentError('汇率必须大于 0');
     }
@@ -2345,6 +2381,7 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
     required String fromCcy,
     required String toCcy,
   }) async {
+    _dropFxBookCache();
     await (delete(fxRates)
           ..where(
             (t) =>
@@ -2365,6 +2402,212 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
         .watch();
   }
 
+  int _sqlInt(QueryRow row, String name) {
+    final v = row.data[name];
+    if (v is int) return v;
+    if (v is BigInt) return v.toInt();
+    if (v is num) return v.toInt();
+    return 0;
+  }
+
+  /// Base-currency SUM(amount) grouped by [type]. Foreign rows are not included.
+  Future<Map<String, int>> _sumByType({
+    required String ledgerId,
+    required String currency,
+    int? startMs,
+    int? endMs,
+    bool statOnly = false,
+    bool budgetOnly = false,
+    String? type,
+    bool expenseSide = false,
+  }) async {
+    final where = <String>[
+      'ledger_id = ?',
+      'deleted_at IS NULL',
+      'currency = ?',
+    ];
+    final vars = <Variable<Object>>[
+      Variable<String>(ledgerId),
+      Variable<String>(currency),
+    ];
+    if (statOnly) where.add('include_in_stat = 1');
+    if (budgetOnly) where.add('include_in_budget = 1');
+    if (startMs != null) {
+      where.add('happen_at >= ?');
+      vars.add(Variable<int>(startMs));
+    }
+    if (endMs != null) {
+      where.add('happen_at < ?');
+      vars.add(Variable<int>(endMs));
+    }
+    if (type != null) {
+      where.add('type = ?');
+      vars.add(Variable<String>(type));
+    } else if (expenseSide) {
+      where.add("type IN ('out', 'refund')");
+    }
+    final rows = await customSelect(
+      'SELECT type, SUM(amount_minor) AS total FROM transactions '
+      'WHERE ${where.join(' AND ')} GROUP BY type',
+      variables: vars,
+      readsFrom: {transactions},
+    ).get();
+    return {for (final r in rows) r.read<String>('type'): _sqlInt(r, 'total')};
+  }
+
+  /// Non-base rows needed for happen-day FX. Base currency stays in SQL.
+  Future<List<({String type, String currency, int amount, int happenAt, String? categoryId, String? accountId})>>
+      _foreignStatRows({
+    required String ledgerId,
+    required String baseCurrency,
+    int? startMs,
+    int? endMs,
+    bool statOnly = false,
+    bool budgetOnly = false,
+    String? type,
+    bool expenseSide = false,
+    bool skipTransfer = false,
+  }) async {
+    final where = <String>[
+      'ledger_id = ?',
+      'deleted_at IS NULL',
+      'currency != ?',
+    ];
+    final vars = <Variable<Object>>[
+      Variable<String>(ledgerId),
+      Variable<String>(baseCurrency),
+    ];
+    if (statOnly) where.add('include_in_stat = 1');
+    if (budgetOnly) where.add('include_in_budget = 1');
+    if (startMs != null) {
+      where.add('happen_at >= ?');
+      vars.add(Variable<int>(startMs));
+    }
+    if (endMs != null) {
+      where.add('happen_at < ?');
+      vars.add(Variable<int>(endMs));
+    }
+    if (type != null) {
+      where.add('type = ?');
+      vars.add(Variable<String>(type));
+    } else if (expenseSide) {
+      where.add("type IN ('out', 'refund')");
+    }
+    if (skipTransfer) where.add("type != 'transfer'");
+    final rows = await customSelect(
+      'SELECT type, currency, amount_minor, happen_at, category_id, account_id '
+      'FROM transactions WHERE ${where.join(' AND ')}',
+      variables: vars,
+      readsFrom: {transactions},
+    ).get();
+    return [
+      for (final r in rows)
+        (
+          type: r.read<String>('type'),
+          currency: r.read<String>('currency'),
+          amount: _sqlInt(r, 'amount_minor'),
+          happenAt: _sqlInt(r, 'happen_at'),
+          categoryId: r.readNullable<String>('category_id'),
+          accountId: r.readNullable<String>('account_id'),
+        ),
+    ];
+  }
+
+  Future<int> _countTxns({
+    required String ledgerId,
+    int? startMs,
+    int? endMs,
+    bool statOnly = false,
+    bool budgetOnly = false,
+  }) async {
+    final where = <String>['ledger_id = ?', 'deleted_at IS NULL'];
+    final vars = <Variable<Object>>[Variable<String>(ledgerId)];
+    if (statOnly) where.add('include_in_stat = 1');
+    if (budgetOnly) where.add('include_in_budget = 1');
+    if (startMs != null) {
+      where.add('happen_at >= ?');
+      vars.add(Variable<int>(startMs));
+    }
+    if (endMs != null) {
+      where.add('happen_at < ?');
+      vars.add(Variable<int>(endMs));
+    }
+    final rows = await customSelect(
+      'SELECT COUNT(*) AS c FROM transactions WHERE ${where.join(' AND ')}',
+      variables: vars,
+      readsFrom: {transactions},
+    ).get();
+    if (rows.isEmpty) return 0;
+    return _sqlInt(rows.first, 'c');
+  }
+
+  Future<Map<String, int>> _sumByCategory({
+    required String ledgerId,
+    required String currency,
+    required String type,
+    required int startMs,
+    required int endMs,
+  }) async {
+    final rows = await customSelect(
+      '''
+      SELECT COALESCE(category_id, '_none') AS cid, SUM(amount_minor) AS total
+      FROM transactions
+      WHERE ledger_id = ? AND deleted_at IS NULL AND include_in_stat = 1
+        AND currency = ? AND type = ?
+        AND happen_at >= ? AND happen_at < ?
+      GROUP BY cid
+      ''',
+      variables: [
+        Variable<String>(ledgerId),
+        Variable<String>(currency),
+        Variable<String>(type),
+        Variable<int>(startMs),
+        Variable<int>(endMs),
+      ],
+      readsFrom: {transactions},
+    ).get();
+    return {for (final r in rows) r.read<String>('cid'): _sqlInt(r, 'total')};
+  }
+
+  Future<Map<int, int>> _sumByLocalDay({
+    required String ledgerId,
+    required String currency,
+    required String kind,
+    required int startMs,
+    required int endMs,
+    required int offsetMs,
+  }) async {
+    final rows = await customSelect(
+      '''
+      SELECT CAST((happen_at + ?) / 86400000 AS INTEGER) AS bucket,
+             SUM(amount_minor) AS total
+      FROM transactions
+      WHERE ledger_id = ? AND deleted_at IS NULL AND include_in_stat = 1
+        AND currency = ? AND type = ?
+        AND happen_at >= ? AND happen_at < ?
+      GROUP BY bucket
+      ''',
+      variables: [
+        Variable<int>(offsetMs),
+        Variable<String>(ledgerId),
+        Variable<String>(currency),
+        Variable<String>(kind),
+        Variable<int>(startMs),
+        Variable<int>(endMs),
+      ],
+      readsFrom: {transactions},
+    ).get();
+    return {for (final r in rows) _sqlInt(r, 'bucket'): _sqlInt(r, 'total')};
+  }
+
+  DateTime _localDayFromBucket(int bucket) {
+    final utc = DateTime.fromMillisecondsSinceEpoch(
+      bucket * 86400000,
+      isUtc: true,
+    );
+    return DateTime(utc.year, utc.month, utc.day);
+  }
+
   /// Income/expense in [baseCurrency], converting foreign txns by happen-day FX.
   /// Unconvertible foreign amounts stay in [BaseRangeSummary.unconverted].
   Future<BaseRangeSummary> rangeSummaryInBase(
@@ -2373,44 +2616,67 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
     int endMs,
     String baseCurrency,
   ) async {
-    final rows = await (select(transactions)
-          ..where(
-            (t) =>
-                t.ledgerId.equals(ledgerId) &
-                t.deletedAt.isNull() &
-                t.includeInStat.equals(1) &
-                t.happenAt.isBiggerOrEqualValue(startMs) &
-                t.happenAt.isSmallerThanValue(endMs),
-          ))
-        .get();
-    final book = await loadFxBook();
-    var income = 0;
-    var expense = 0;
+    final sums = await _sumByType(
+      ledgerId: ledgerId,
+      currency: baseCurrency,
+      startMs: startMs,
+      endMs: endMs,
+      statOnly: true,
+    );
+    final foreign = await _foreignStatRows(
+      ledgerId: ledgerId,
+      baseCurrency: baseCurrency,
+      startMs: startMs,
+      endMs: endMs,
+      statOnly: true,
+    );
+    final book = foreign.isEmpty ? null : await loadFxBook();
+    var income = sums['in'] ?? 0;
+    var expense = (sums['out'] ?? 0) - (sums['refund'] ?? 0);
     var converted = 0;
+    if ((sums['in'] ?? 0) != 0 ||
+        (sums['out'] ?? 0) != 0 ||
+        (sums['refund'] ?? 0) != 0 ||
+        sums.isNotEmpty) {
+      final baseCount = await customSelect(
+        '''
+        SELECT COUNT(*) AS c FROM transactions
+        WHERE ledger_id = ? AND deleted_at IS NULL AND include_in_stat = 1
+          AND currency = ? AND type IN ('in','out','refund')
+          AND happen_at >= ? AND happen_at < ?
+        ''',
+        variables: [
+          Variable<String>(ledgerId),
+          Variable<String>(baseCurrency),
+          Variable<int>(startMs),
+          Variable<int>(endMs),
+        ],
+        readsFrom: {transactions},
+      ).get();
+      converted = baseCount.isEmpty ? 0 : _sqlInt(baseCount.first, 'c');
+    }
     var unconverted = 0;
     final leftover = <String, ({int income, int expense})>{};
-
-    for (final r in rows) {
+    for (final r in foreign) {
       if (r.type != 'in' && r.type != 'out' && r.type != 'refund') continue;
-      final day = FxBook.dayFromHappenAtMs(r.happenAt);
-      final asBase = book.convertMinor(
+      final asBase = book!.convertMinor(
         fromCcy: r.currency,
         toCcy: baseCurrency,
-        amountMinor: r.amountMinor,
-        onDay: day,
+        amountMinor: r.amount,
+        onDay: FxBook.dayFromHappenAtMs(r.happenAt),
       );
       if (asBase == null) {
         unconverted += 1;
         final cur = leftover[r.currency] ?? (income: 0, expense: 0);
         if (r.type == 'in') {
           leftover[r.currency] =
-              (income: cur.income + r.amountMinor, expense: cur.expense);
+              (income: cur.income + r.amount, expense: cur.expense);
         } else if (r.type == 'refund') {
           leftover[r.currency] =
-              (income: cur.income, expense: cur.expense - r.amountMinor);
+              (income: cur.income, expense: cur.expense - r.amount);
         } else {
           leftover[r.currency] =
-              (income: cur.income, expense: cur.expense + r.amountMinor);
+              (income: cur.income, expense: cur.expense + r.amount);
         }
         continue;
       }
@@ -2440,28 +2706,35 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
     int endMs,
     String baseCurrency,
   ) async {
-    final rows = await (select(transactions)
-          ..where(
-            (t) =>
-                t.ledgerId.equals(ledgerId) &
-                t.deletedAt.isNull() &
-                t.includeInStat.equals(1) &
-                t.happenAt.isBiggerOrEqualValue(startMs) &
-                t.happenAt.isSmallerThanValue(endMs),
-          ))
-        .get();
-    final book = await loadFxBook();
-    var income = 0;
-    var expense = 0;
-    var count = 0;
-    for (final r in rows) {
-      // 转账也算一笔（笔数列），但不进入收入 / 支出。
-      count += 1;
+    final count = await _countTxns(
+      ledgerId: ledgerId,
+      startMs: startMs,
+      endMs: endMs,
+      statOnly: true,
+    );
+    final sums = await _sumByType(
+      ledgerId: ledgerId,
+      currency: baseCurrency,
+      startMs: startMs,
+      endMs: endMs,
+      statOnly: true,
+    );
+    final foreign = await _foreignStatRows(
+      ledgerId: ledgerId,
+      baseCurrency: baseCurrency,
+      startMs: startMs,
+      endMs: endMs,
+      statOnly: true,
+    );
+    final book = foreign.isEmpty ? null : await loadFxBook();
+    var income = sums['in'] ?? 0;
+    var expense = (sums['out'] ?? 0) - (sums['refund'] ?? 0);
+    for (final r in foreign) {
       if (r.type != 'in' && r.type != 'out' && r.type != 'refund') continue;
-      final asBase = book.convertMinor(
+      final asBase = book!.convertMinor(
         fromCcy: r.currency,
         toCcy: baseCurrency,
-        amountMinor: r.amountMinor,
+        amountMinor: r.amount,
         onDay: FxBook.dayFromHappenAtMs(r.happenAt),
       );
       if (asBase == null) continue;
@@ -2486,23 +2759,25 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
     String ledgerId,
     String baseCurrency,
   ) async {
-    final rows = await (select(transactions)
-          ..where(
-            (t) =>
-                t.ledgerId.equals(ledgerId) &
-                t.deletedAt.isNull() &
-                t.includeInStat.equals(1),
-          ))
-        .get();
-    final book = await loadFxBook();
-    var income = 0;
-    var expense = 0;
-    for (final r in rows) {
+    final sums = await _sumByType(
+      ledgerId: ledgerId,
+      currency: baseCurrency,
+      statOnly: true,
+    );
+    final foreign = await _foreignStatRows(
+      ledgerId: ledgerId,
+      baseCurrency: baseCurrency,
+      statOnly: true,
+    );
+    final book = foreign.isEmpty ? null : await loadFxBook();
+    var income = sums['in'] ?? 0;
+    var expense = sums['out'] ?? 0;
+    for (final r in foreign) {
       if (r.type != 'in' && r.type != 'out') continue;
-      final asBase = book.convertMinor(
+      final asBase = book!.convertMinor(
         fromCcy: r.currency,
         toCcy: baseCurrency,
-        amountMinor: r.amountMinor,
+        amountMinor: r.amount,
         onDay: FxBook.dayFromHappenAtMs(r.happenAt),
       );
       if (asBase == null) continue;
@@ -2554,37 +2829,65 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
     int endMs,
     String baseCurrency,
   ) async {
-    final rows = await (select(transactions)
-          ..where(
-            (t) =>
-                t.ledgerId.equals(ledgerId) &
-                t.deletedAt.isNull() &
-                t.includeInStat.equals(1) &
-                t.type.isNotValue('transfer') &
-                t.happenAt.isBiggerOrEqualValue(startMs) &
-                t.happenAt.isSmallerThanValue(endMs),
-          ))
-        .get();
+    final baseRows = await customSelect(
+      '''
+      SELECT account_id, type, SUM(amount_minor) AS total
+      FROM transactions
+      WHERE ledger_id = ? AND deleted_at IS NULL AND include_in_stat = 1
+        AND currency = ? AND type != 'transfer'
+        AND happen_at >= ? AND happen_at < ?
+      GROUP BY account_id, type
+      ''',
+      variables: [
+        Variable<String>(ledgerId),
+        Variable<String>(baseCurrency),
+        Variable<int>(startMs),
+        Variable<int>(endMs),
+      ],
+      readsFrom: {transactions},
+    ).get();
+    final foreign = await _foreignStatRows(
+      ledgerId: ledgerId,
+      baseCurrency: baseCurrency,
+      startMs: startMs,
+      endMs: endMs,
+      statOnly: true,
+      skipTransfer: true,
+    );
     final accounts = await loadAccountsIncludingArchived(ledgerId);
     final nameById = {for (final a in accounts) a.id: a.name};
-    final book = await loadFxBook();
+    final book = foreign.isEmpty ? null : await loadFxBook();
     final income = <String, int>{};
     final expense = <String, int>{};
-    for (final r in rows) {
+    for (final r in baseRows) {
+      final id = r.read<String>('account_id');
+      final type = r.read<String>('type');
+      final total = _sqlInt(r, 'total');
+      if (type == 'in') {
+        income[id] = (income[id] ?? 0) + total;
+      } else if (type == 'refund') {
+        expense[id] = (expense[id] ?? 0) - total;
+      } else if (type == 'out') {
+        expense[id] = (expense[id] ?? 0) + total;
+      }
+    }
+    for (final r in foreign) {
       if (r.type != 'in' && r.type != 'out' && r.type != 'refund') continue;
-      final asBase = book.convertMinor(
+      final id = r.accountId;
+      if (id == null) continue;
+      final asBase = book!.convertMinor(
         fromCcy: r.currency,
         toCcy: baseCurrency,
-        amountMinor: r.amountMinor,
+        amountMinor: r.amount,
         onDay: FxBook.dayFromHappenAtMs(r.happenAt),
       );
       if (asBase == null) continue;
       if (r.type == 'in') {
-        income[r.accountId] = (income[r.accountId] ?? 0) + asBase;
+        income[id] = (income[id] ?? 0) + asBase;
       } else if (r.type == 'refund') {
-        expense[r.accountId] = (expense[r.accountId] ?? 0) - asBase;
+        expense[id] = (expense[id] ?? 0) - asBase;
       } else {
-        expense[r.accountId] = (expense[r.accountId] ?? 0) + asBase;
+        expense[id] = (expense[id] ?? 0) + asBase;
       }
     }
     final ids = {...income.keys, ...expense.keys};
@@ -2613,29 +2916,30 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
     required String kind,
     required String baseCurrency,
   }) async {
-    final rows = await (select(transactions)
-          ..where(
-            (t) =>
-                t.ledgerId.equals(ledgerId) &
-                t.deletedAt.isNull() &
-                t.includeInStat.equals(1) &
-                t.type.equals(kind) &
-                t.happenAt.isBiggerOrEqualValue(startMs) &
-                t.happenAt.isSmallerThanValue(endMs),
-          ))
-        .get();
+    final totals = await _sumByCategory(
+      ledgerId: ledgerId,
+      currency: baseCurrency,
+      type: kind,
+      startMs: startMs,
+      endMs: endMs,
+    );
+    final foreign = await _foreignStatRows(
+      ledgerId: ledgerId,
+      baseCurrency: baseCurrency,
+      startMs: startMs,
+      endMs: endMs,
+      statOnly: true,
+      type: kind,
+    );
     final cats = await loadCategories(ledgerId, kind);
     final nameById = {for (final c in cats) c.id: c.name};
-    final book = await loadFxBook();
-    final totals = <String, int>{};
-
-    for (final r in rows) {
-      final day = FxBook.dayFromHappenAtMs(r.happenAt);
-      final asBase = book.convertMinor(
+    final book = foreign.isEmpty ? null : await loadFxBook();
+    for (final r in foreign) {
+      final asBase = book!.convertMinor(
         fromCcy: r.currency,
         toCcy: baseCurrency,
-        amountMinor: r.amountMinor,
-        onDay: day,
+        amountMinor: r.amount,
+        onDay: FxBook.dayFromHappenAtMs(r.happenAt),
       );
       if (asBase == null) continue;
       final cid = r.categoryId ?? '_none';
@@ -2704,26 +3008,36 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
     required String kind,
     required String baseCurrency,
   }) async {
-    final rows = await (select(transactions)
-          ..where(
-            (t) =>
-                t.ledgerId.equals(ledgerId) &
-                t.deletedAt.isNull() &
-                t.includeInStat.equals(1) &
-                t.type.equals(kind) &
-                t.happenAt.isBiggerOrEqualValue(startMs) &
-                t.happenAt.isSmallerThanValue(endMs),
-          ))
-        .get();
-    final book = await loadFxBook();
+    // China has no DST; the device offset is the local calendar day.
+    final offsetMs = DateTime.now().timeZoneOffset.inMilliseconds;
+    final buckets = await _sumByLocalDay(
+      ledgerId: ledgerId,
+      currency: baseCurrency,
+      kind: kind,
+      startMs: startMs,
+      endMs: endMs,
+      offsetMs: offsetMs,
+    );
+    final foreign = await _foreignStatRows(
+      ledgerId: ledgerId,
+      baseCurrency: baseCurrency,
+      startMs: startMs,
+      endMs: endMs,
+      statOnly: true,
+      type: kind,
+    );
+    final book = foreign.isEmpty ? null : await loadFxBook();
     final byDay = <String, int>{};
-
-    for (final r in rows) {
+    for (final e in buckets.entries) {
+      final day = _localDayFromBucket(e.key);
+      byDay[FxBook.formatDay(day)] = e.value;
+    }
+    for (final r in foreign) {
       final day = FxBook.dayFromHappenAtMs(r.happenAt);
-      final asBase = book.convertMinor(
+      final asBase = book!.convertMinor(
         fromCcy: r.currency,
         toCcy: baseCurrency,
-        amountMinor: r.amountMinor,
+        amountMinor: r.amount,
         onDay: day,
       );
       if (asBase == null) continue;
@@ -2901,33 +3215,54 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
       }
     }
 
-    final rows = await (select(transactions)
-          ..where(
-            (t) =>
-                t.ledgerId.equals(ledgerId) &
-                t.deletedAt.isNull() &
-                t.includeInBudget.equals(1) &
-                (t.type.equals('out') | t.type.equals('refund')) &
-                t.happenAt.isBiggerOrEqualValue(startMs) &
-                t.happenAt.isSmallerThanValue(endMs),
-          ))
-        .get();
-    final book = await loadFxBook();
+    final baseCats = await customSelect(
+      '''
+      SELECT COALESCE(category_id, '') AS cid, type, SUM(amount_minor) AS total
+      FROM transactions
+      WHERE ledger_id = ? AND deleted_at IS NULL AND include_in_budget = 1
+        AND currency = ? AND type IN ('out', 'refund')
+        AND happen_at >= ? AND happen_at < ?
+      GROUP BY cid, type
+      ''',
+      variables: [
+        Variable<String>(ledgerId),
+        Variable<String>(baseCurrency),
+        Variable<int>(startMs),
+        Variable<int>(endMs),
+      ],
+      readsFrom: {transactions},
+    ).get();
+    final foreign = await _foreignStatRows(
+      ledgerId: ledgerId,
+      baseCurrency: baseCurrency,
+      startMs: startMs,
+      endMs: endMs,
+      budgetOnly: true,
+      expenseSide: true,
+    );
+    final book = foreign.isEmpty ? null : await loadFxBook();
     var spentTotal = 0;
     final spentByCat = <String, int>{};
     final leftover = <String, int>{};
-
-    for (final r in rows) {
-      final day = FxBook.dayFromHappenAtMs(r.happenAt);
-      final asBase = book.convertMinor(
+    for (final r in baseCats) {
+      final type = r.read<String>('type');
+      final total = _sqlInt(r, 'total');
+      final signed = type == 'refund' ? -total : total;
+      spentTotal += signed;
+      final cid = r.read<String>('cid');
+      if (cid.isNotEmpty) {
+        spentByCat[cid] = (spentByCat[cid] ?? 0) + signed;
+      }
+    }
+    for (final r in foreign) {
+      final asBase = book!.convertMinor(
         fromCcy: r.currency,
         toCcy: baseCurrency,
-        amountMinor: r.amountMinor,
-        onDay: day,
+        amountMinor: r.amount,
+        onDay: FxBook.dayFromHappenAtMs(r.happenAt),
       );
       if (asBase == null) {
-        // Still exclude from spent (do not invent FX); surface for UI tip.
-        final signedRaw = r.type == 'refund' ? -r.amountMinor : r.amountMinor;
+        final signedRaw = r.type == 'refund' ? -r.amount : r.amount;
         leftover[r.currency] = (leftover[r.currency] ?? 0) + signedRaw;
         continue;
       }
@@ -3056,6 +3391,7 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
       await (delete(assetTypes)..where((t) => t.ledgerId.equals(lid))).go();
       await (delete(ledgers)..where((t) => t.id.equals(lid))).go();
       if (replaceFxRates) {
+        _dropFxBookCache();
         await delete(fxRates).go();
       }
 
@@ -3109,8 +3445,13 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
       for (final b in budgetRows) {
         await into(budgets).insert(b.toCompanion(true));
       }
-      for (final t in txnRows) {
-        await into(transactions).insert(t.toCompanion(true));
+      if (txnRows.isNotEmpty) {
+        await batch((b) {
+          b.insertAll(
+            transactions,
+            [for (final t in txnRows) t.toCompanion(true)],
+          );
+        });
       }
       for (final r in ruleRows) {
         await into(merchantRules).insert(r.toCompanion(true));

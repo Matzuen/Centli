@@ -35,6 +35,7 @@ class _CentliAppState extends ConsumerState<CentliApp> {
   StreamSubscription<int>? _pendingCountSub;
   StreamSubscription<dynamic>? _todayTxSub;
   String? _pendingWatchLedgerId;
+  Timer? _widgetSyncDebounce;
 
   @override
   void initState() {
@@ -61,6 +62,7 @@ class _CentliAppState extends ConsumerState<CentliApp> {
     _widgetClickSub?.cancel();
     _pendingCountSub?.cancel();
     _todayTxSub?.cancel();
+    _widgetSyncDebounce?.cancel();
     if (NotificationCaptureStub.onOpenRoute == _onOpenRoute) {
       NotificationCaptureStub.onOpenRoute = null;
     }
@@ -148,6 +150,13 @@ class _CentliAppState extends ConsumerState<CentliApp> {
     unawaited(_handleInitialWidgetLaunch());
   }
 
+  void _scheduleHomeWidgetSync() {
+    _widgetSyncDebounce?.cancel();
+    _widgetSyncDebounce = Timer(const Duration(milliseconds: 700), () {
+      unawaited(_syncHomeWidget());
+    });
+  }
+
   Future<void> _syncHomeWidget() async {
     if (!CentliHomeWidgetSync.supported) return;
     final db = ref.read(databaseProvider);
@@ -177,12 +186,12 @@ class _CentliAppState extends ConsumerState<CentliApp> {
     _pendingWatchLedgerId = ledgerId;
     final today = DateRangeWindow.lastDays(days: 1);
     _pendingCountSub = db.watchPendingCount(ledgerId).listen((_) {
-      unawaited(CentliHomeWidgetSync.sync(db));
+      _scheduleHomeWidgetSync();
     });
     _todayTxSub = db
         .watchTransactionsInRange(ledgerId, today.startMs, today.endMs)
         .listen((_) {
-      unawaited(CentliHomeWidgetSync.sync(db));
+      _scheduleHomeWidgetSync();
     });
   }
 
@@ -223,10 +232,10 @@ class _CentliAppState extends ConsumerState<CentliApp> {
       _refresh.ping();
     });
     ref.listen(currentLedgerProvider, (previous, next) {
-      unawaited(_syncHomeWidget());
+      _scheduleHomeWidgetSync();
     });
     ref.listen(hideAmountProvider, (previous, next) {
-      unawaited(_syncHomeWidget());
+      _scheduleHomeWidgetSync();
     });
     ref.watch(appLockEnabledProvider);
     ref.watch(appLockUnlockedProvider);

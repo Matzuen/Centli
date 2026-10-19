@@ -1,5 +1,11 @@
 import '../../core/utils/money.dart';
 
+final _notiRegexCache = <String, RegExp>{};
+
+/// Compiled once per pattern. A bad pattern throws and is not cached.
+RegExp notiRegex(String source) =>
+    _notiRegexCache.putIfAbsent(source, () => RegExp(source));
+
 class NotiTemplate {
   const NotiTemplate({
     required this.id,
@@ -355,17 +361,17 @@ ParseResult parseNotification(
   for (final t in matched) {
     try {
       if (t.titleRegex != null &&
-          !RegExp(t.titleRegex!).hasMatch(raw.title)) {
+          !notiRegex(t.titleRegex!).hasMatch(raw.title)) {
         continue;
       }
       // 标题模式下只检查标题：正文里有任何词都不再影响是否解析。
       final keywordText = t.keywordText(raw);
       if (t.excludeTextRegex != null &&
-          RegExp(t.excludeTextRegex!).hasMatch(keywordText)) {
+          notiRegex(t.excludeTextRegex!).hasMatch(keywordText)) {
         continue;
       }
       if (t.mustContainRegex != null &&
-          !RegExp(t.mustContainRegex!).hasMatch(keywordText)) {
+          !notiRegex(t.mustContainRegex!).hasMatch(keywordText)) {
         continue;
       }
       final body = raw.fullText;
@@ -375,11 +381,11 @@ ParseResult parseNotification(
       if (t.merchantFromTitle && raw.title.trim().isNotEmpty) {
         merchant = raw.title.trim();
         if (t.merchantRegex != null) {
-          final m = RegExp(t.merchantRegex!).firstMatch(raw.title);
+          final m = notiRegex(t.merchantRegex!).firstMatch(raw.title);
           if (m != null) merchant = (m.group(1) ?? merchant).trim();
         }
       } else if (t.merchantRegex != null) {
-        final m = RegExp(t.merchantRegex!).firstMatch(body);
+        final m = notiRegex(t.merchantRegex!).firstMatch(body);
         if (m != null) merchant = (m.group(1) ?? '').trim();
       }
 
@@ -448,19 +454,19 @@ ParseExplainResult explainNotificationParse(
   for (final t in matchedPkgs) {
     final label = t.displayName;
     if (t.titleRegex != null &&
-        !RegExp(t.titleRegex!).hasMatch(raw.title)) {
+        !notiRegex(t.titleRegex!).hasMatch(raw.title)) {
       steps.add('「$label」标题未匹配 titleRegex');
       continue;
     }
     final keywordText = t.keywordText(raw);
     final where = t.matchesTitleOnly ? '标题' : '标题+正文';
     if (t.excludeTextRegex != null &&
-        RegExp(t.excludeTextRegex!).hasMatch(keywordText)) {
+        notiRegex(t.excludeTextRegex!).hasMatch(keywordText)) {
       steps.add('「$label」$where命中排除词 excludeTextRegex');
       continue;
     }
     if (t.mustContainRegex != null &&
-        !RegExp(t.mustContainRegex!).hasMatch(keywordText)) {
+        !notiRegex(t.mustContainRegex!).hasMatch(keywordText)) {
       steps.add('「$label」$where未含必须关键词 mustContainRegex（只看标题）');
       continue;
     }
@@ -471,11 +477,11 @@ ParseExplainResult explainNotificationParse(
     if (t.merchantFromTitle && raw.title.trim().isNotEmpty) {
       merchant = raw.title.trim();
       if (t.merchantRegex != null) {
-        final m = RegExp(t.merchantRegex!).firstMatch(raw.title);
+        final m = notiRegex(t.merchantRegex!).firstMatch(raw.title);
         if (m != null) merchant = (m.group(1) ?? merchant).trim();
       }
     } else if (t.merchantRegex != null) {
-      final m = RegExp(t.merchantRegex!).firstMatch(body);
+      final m = notiRegex(t.merchantRegex!).firstMatch(body);
       if (m != null) merchant = (m.group(1) ?? '').trim();
     }
 
