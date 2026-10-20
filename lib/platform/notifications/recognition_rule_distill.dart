@@ -85,6 +85,7 @@ String fuseMustPattern({
   required String mustHint,
   required String? existingPattern,
   required Iterable<String> sceneFragments,
+  int? maxAlts,
 }) {
   final literals = <String>[];
   final seen = <String>{};
@@ -116,9 +117,8 @@ String fuseMustPattern({
     final byLen = a.length.compareTo(b.length);
     return byLen != 0 ? byLen : a.compareTo(b);
   });
-  final capped = literals.length <= _kMaxMustAlts
-      ? literals
-      : literals.sublist(0, _kMaxMustAlts);
+  final cap = maxAlts ?? _kMaxMustAlts;
+  final capped = literals.length <= cap ? literals : literals.sublist(0, cap);
 
   if (capped.length == 1) return escapeForNotiRegex(capped.first);
   return [for (final s in capped) escapeForNotiRegex(s)].join('|');
@@ -142,9 +142,8 @@ NotiTemplate? findDistillRule({
 NotiTemplate? findDistillExcludeRule({
   required List<NotiTemplate> userRules,
   required String pkg,
-  required String mustHint,
 }) {
-  final id = distilledExcludeRuleId(pkg, mustHint);
+  final id = distilledExcludeRuleId(pkg);
   for (final t in userRules) {
     if (t.id == id) return t;
   }
@@ -284,9 +283,12 @@ Future<String?> distillRecognitionRuleFromAi({
   return id;
 }
 
-/// Fuse into the single rule named `软件名-排除-验证码` (shared mustHint).
+/// Fuse AI "not a payment" verdicts into **one** rule per app: `微信-排除`.
 ///
-/// Same mustHint → one drop rule; must OR-merges so all scenes are skipped.
+/// 匹配片段只取**实际通知里足够具体**的文字（联系人名、群名、场景词），按
+/// 应用合成一条、分支上限 64。这样：
+/// - 宽泛词（「微信」「通知」）不会进 must，永远不可能吞掉真实支付；
+/// - 每学到一个新场景就并进同一条规则，AI 调用次数随之下降（循环收敛）。
 Future<String?> distillExcludeRecognitionRuleFromAi({
   required RawNotification raw,
   String? mustHint,
@@ -294,26 +296,34 @@ Future<String?> distillExcludeRecognitionRuleFromAi({
   final pkg = raw.pkg.trim();
   if (pkg.isEmpty) return null;
 
-  final hint = (mustHint != null && mustHint.trim().isNotEmpty)
-      ? mustHint.trim()
-      : _fallbackExcludeMust(raw);
-  if (hint == null || hint.isEmpty) return null;
+  // 候选片段：AI 给的关键词 + 实际标题（标题太长时退正文开头）。
+  final candidates = <String>[
+    if (mustHint != null && mustHint.trim().isNotEmpty) mustHint.trim(),
+    ...sceneFragmentsForFusion(raw, mustHint ?? ''),
+  ];
+  final fragments = <String>[];
+  final seen = <String>{};
+  for (final c in candidates) {
+    if (!isExcludeSafeFragment(c)) continue;
+    final key = normalizeDistillHint(c);
+    if (key.isEmpty || seen.contains(key)) continue;
+    seen.add(key);
+    fragments.add(c.trim());
+  }
+  // 没有足够具体的片段就不学：宁可下次再问模型，也不能误伤。
+  if (fragments.isEmpty) return null;
 
   await NotiTemplateStore.load();
   final users = NotiTemplateStore.peekUser();
-  final id = distilledExcludeRuleId(pkg, hint);
-  final name = distilledExcludeRuleDisplayName(pkg, hint);
-  final fragments = sceneFragmentsForFusion(raw, hint);
-  final prev = findDistillExcludeRule(
-    userRules: users,
-    pkg: pkg,
-    mustHint: hint,
-  );
+  final id = distilledExcludeRuleId(pkg);
+  final name = distilledExcludeRuleDisplayName(pkg);
+  final prev = findDistillExcludeRule(userRules: users, pkg: pkg);
 
   final must = fuseMustPattern(
-    mustHint: hint,
+    mustHint: fragments.first,
     existingPattern: prev?.mustContainRegex,
-    sceneFragments: fragments,
+    sceneFragments: fragments.skip(1),
+    maxAlts: 64,
   );
   final matchOn = _pickMatchOn(must, raw);
 
@@ -343,27 +353,6 @@ Future<String?> distillExcludeRecognitionRuleFromAi({
 
   await NotiTemplateStore.upsertUserTemplate(template);
   return id;
-}
-
-String? _fallbackExcludeMust(RawNotification raw) {
-  final title = raw.title.trim();
-  const needles = [
-    '验证码',
-    '登录',
-    '朋友圈',
-    '微信消息',
-    '发来一条',
-    '拍了拍',
-    '互动消息',
-    '服务通知',
-    '群聊',
-  ];
-  for (final n in needles) {
-    if (title.contains(n) || raw.fullText.contains(n)) return n;
-  }
-  if (title.isEmpty) return '排除';
-  if (title.length <= 16) return title;
-  return title.substring(0, 12);
 }
 
 String? _fallbackMust(RawNotification raw, String direction) {

@@ -58,15 +58,22 @@ abstract final class NotificationIngestBridge {
 
     final templates = await NotiTemplateStore.load();
 
-    // Learned exclude rules win before AI / capture templates.
+    // AI 学到的排除规则优先：命中即丢弃，不再问模型（这正是"循环往复"里
+    // 越用越省的那一半）。但排除规则绝不能吞掉真实支付——本地捕获模板若能
+    // 匹配出金额，就以捕获为准，宁可多问一次模型。
     final excl = matchDistillExcludeRule(notification, templates);
     if (excl != null) {
-      await NotificationCaptureStub.recordDroppedNotification(
-        pkg: notification.pkg,
-        title: notification.title,
-        reason: 'exclude_rule',
-      );
-      return null;
+      final localCapture = parseNotification(notification, templates);
+      final realPayment = localCapture.templateId != null &&
+          localCapture.amountMinor != null;
+      if (!realPayment) {
+        await NotificationCaptureStub.recordDroppedNotification(
+          pkg: notification.pkg,
+          title: notification.title,
+          reason: 'exclude_rule',
+        );
+        return null;
+      }
     }
 
     final resolved = await _resolveParse(db, notification, templates);

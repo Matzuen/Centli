@@ -7,23 +7,24 @@ void main() {
   group('exclude distill naming', () {
     test('软件名-排除-场景 + stable id', () {
       expect(
-        distilledExcludeRuleDisplayName('com.tencent.mm', '验证码'),
-        '微信-排除-验证码',
+        distilledExcludeRuleDisplayName('com.tencent.mm'),
+        '微信-排除',
       );
       expect(
-        distilledExcludeRuleDisplayName('com.eg.android.AlipayGphone', ''),
+        distilledExcludeRuleDisplayName('com.eg.android.AlipayGphone'),
         '支付宝-排除',
       );
+      // 每个应用只有一条排除规则（场景并进去，才能真正收敛）
       expect(
-        distilledExcludeRuleId('com.tencent.mm', '验证码'),
-        distilledExcludeRuleId('com.tencent.mm', '验证码'),
+        distilledExcludeRuleId('com.tencent.mm'),
+        distilledExcludeRuleId('com.tencent.mm'),
       );
       expect(
-        distilledExcludeRuleId('com.tencent.mm', '验证码'),
-        isNot(distilledExcludeRuleId('com.tencent.mm', '登录')),
+        distilledExcludeRuleId('com.tencent.mm'),
+        isNot(distilledExcludeRuleId('com.eg.android.AlipayGphone')),
       );
       expect(
-        isDistillExcludeRuleId(distilledExcludeRuleId('com.tencent.mm', '验证码')),
+        isDistillExcludeRuleId(distilledExcludeRuleId('com.tencent.mm')),
         isTrue,
       );
       expect(
@@ -50,8 +51,8 @@ void main() {
 
     test('matchDistillExcludeRule hits drop template', () {
       final t = NotiTemplate(
-        id: distilledExcludeRuleId('com.tencent.mm', '验证码'),
-        name: distilledExcludeRuleDisplayName('com.tencent.mm', '验证码'),
+        id: distilledExcludeRuleId('com.tencent.mm'),
+        name: distilledExcludeRuleDisplayName('com.tencent.mm'),
         packages: const ['com.tencent.mm'],
         mustContainRegex: escapeForNotiRegex('验证码'),
         amountRegex: kAmountRegex,
@@ -82,8 +83,8 @@ void main() {
 
     test('parseNotification skips distill_excl_ templates', () {
       final excl = NotiTemplate(
-        id: distilledExcludeRuleId('com.tencent.mm', '验证码'),
-        name: '微信-排除-验证码',
+        id: distilledExcludeRuleId('com.tencent.mm'),
+        name: '微信-排除',
         packages: const ['com.tencent.mm'],
         mustContainRegex: escapeForNotiRegex('验证码'),
         amountRegex: kAmountRegex,
@@ -163,31 +164,82 @@ void main() {
     });
   });
 
-  group('AI 预筛与限频', () {
-    RawNotification raw(String title, [String text = '']) => RawNotification(
-          pkg: 'com.tencent.mm',
-          title: title,
-          text: text,
-          whenMs: 0,
+  group('排除规则：循环收敛与安全边界', () {
+    test('只有具体、且不含支付词的片段才可作为排除依据', () {
+      // 太短 / 含支付词 / 含金额 → 一律拒绝（否则会吞掉真实账单）
+      for (final bad in [
+        '微信', '通知', '账单', '支付', '收款', '支付通知', '微信支付成功',
+        '还款提醒', '转账给张三', '收入 12.00', '消费\u00a512.00',
+      ]) {
+        expect(
+          isExcludeSafeFragment(bad),
+          isFalse,
+          reason: '「$bad」不能作为排除片段',
         );
-
-    test('支付类通知进 AI', () {
-      expect(looksLikePaymentCandidate(raw('支付成功', '￥12.00')), isTrue);
-      expect(looksLikePaymentCandidate(raw('微信支付', '向商户付款')), isTrue);
-      expect(looksLikePaymentCandidate(raw('收款到账', '0.01元')), isTrue);
-      expect(looksLikePaymentCandidate(raw('账单提醒', '本期应还')), isTrue);
-      // 没有关键词但有金额
-      expect(looksLikePaymentCandidate(raw('某银行', '12.50元')), isTrue);
-      expect(looksLikePaymentCandidate(raw('某银行', 'CNY 12')), isTrue);
+      }
+      for (final ok in ['张三', '家人群', '登录验证', '朋友圈点赞', '群聊消息（营销）']) {
+        expect(isExcludeSafeFragment(ok), isTrue, reason: '「$ok」应可用于排除');
+      }
     });
 
-    test('聊天 / 验证码 / 系统消息不进 AI', () {
-      expect(looksLikePaymentCandidate(raw('张三', '明天见')), isFalse);
-      expect(looksLikePaymentCandidate(raw('朋友圈', '点赞了你的照片')), isFalse);
-      expect(looksLikePaymentCandidate(raw('登录验证', '123456')), isFalse);
-      expect(looksLikePaymentCandidate(raw('', '')), isFalse);
+    test('同一场景的多个标题融进一条规则（越用越省）', () {
+      var pattern = fuseMustPattern(
+        mustHint: '张三',
+        existingPattern: null,
+        sceneFragments: const [],
+        maxAlts: 64,
+      );
+      for (final name in ['李四', '王五', '赵六']) {
+        pattern = fuseMustPattern(
+          mustHint: '张三',
+          existingPattern: pattern,
+          sceneFragments: [name],
+          maxAlts: 64,
+        );
+      }
+      final re = RegExp(pattern);
+      for (final name in ['张三', '李四', '王五', '赵六']) {
+        expect(re.hasMatch(name), isTrue, reason: '$name 应被同一条规则命中');
+      }
+      // 支付类标题不会被这条规则命中
+      expect(re.hasMatch('支付成功'), isFalse);
     });
 
+    test('排除分支上限比捕获分支更宽', () {
+      // 8 个以上的分支只有在 maxAlts 放宽后才保留
+      var narrow = fuseMustPattern(
+        mustHint: '场景种子',
+        existingPattern: null,
+        sceneFragments: const [],
+      );
+      var wide = narrow;
+      for (var i = 0; i < 12; i++) {
+        narrow = fuseMustPattern(
+          mustHint: '场景种子',
+          existingPattern: narrow,
+          sceneFragments: ['场景$i'],
+        );
+        wide = fuseMustPattern(
+          mustHint: '场景种子',
+          existingPattern: wide,
+          sceneFragments: ['场景$i'],
+          maxAlts: 64,
+        );
+      }
+      expect(
+        splitMustAlternatives(narrow).length,
+        lessThanOrEqualTo(8),
+        reason: '捕获规则仍限制在 8 个分支',
+      );
+      expect(
+        splitMustAlternatives(wide).length,
+        greaterThan(8),
+        reason: '排除规则应能容纳更多场景（64 上限）',
+      );
+    });
+  });
+
+  group('限频', () {
     test('每分钟调用上限', () {
       resetLlmParseRateLimit();
       final t0 = DateTime(2026, 10, 20, 12, 0, 0);
@@ -198,9 +250,7 @@ void main() {
           reason: 'call $i should pass',
         );
       }
-      // 第 N+1 次超限
       expect(noteLlmParseCall(now: t0.add(const Duration(seconds: 59))), isFalse);
-      // 一分钟后窗口滑出，恢复
       expect(
         noteLlmParseCall(now: t0.add(const Duration(seconds: 61))),
         isTrue,

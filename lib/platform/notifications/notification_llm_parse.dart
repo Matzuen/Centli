@@ -77,11 +77,13 @@ String distilledRuleId(String pkg, String? direction, String mustHint) {
   return '$kDistillCaptureIdPrefix${safe}_${bucket}_$key';
 }
 
-/// Stable id for one **exclude** scenario (pkg + mustHint).
-String distilledExcludeRuleId(String pkg, String mustHint) {
+/// Stable id for the **exclude** rule of one app.
+///
+/// 按应用一条（而不是按场景一条）：排除规则的价值是"这个应用的这类通知以后
+/// 别再问模型了"，把场景都并进同一条规则才能真正收敛。
+String distilledExcludeRuleId(String pkg) {
   final safe = pkg.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
-  final key = _scenarioKey(mustHint);
-  return '$kDistillExcludeIdPrefix${safe}_$key';
+  return '$kDistillExcludeIdPrefix$safe';
 }
 
 /// Display name: `支付宝-支出-支付成功`.
@@ -93,12 +95,9 @@ String distilledRuleDisplayName(String pkg, String? direction, String mustHint) 
   return '$app-$label-$scene';
 }
 
-/// Display name: `微信-排除` / `微信-排除-验证码`.
-String distilledExcludeRuleDisplayName(String pkg, String mustHint) {
-  final app = notificationAppLabel(pkg);
-  final scene = mustHint.trim();
-  if (scene.isEmpty) return '$app-排除';
-  return '$app-排除-$scene';
+/// Display name: `微信-排除`.
+String distilledExcludeRuleDisplayName(String pkg) {
+  return '${notificationAppLabel(pkg)}-排除';
 }
 
 String _scenarioKey(String hint) {
@@ -110,30 +109,35 @@ String _scenarioKey(String hint) {
   return h.toRadixString(16);
 }
 
-/// 是否是**值得问一次 AI** 的通知。
+/// 这段文字能否作为排除规则的匹配片段。
 ///
-/// native 会把监听应用（微信 / 支付宝）的每一条通知都转发上来，包括聊天、
-/// 朋友圈、登录提醒。若不加筛选，每条微信消息都会打一次模型接口——费用、
-/// 延迟和限流都不可接受，而且会把聊天正文发出去。这里先用本地关键字做一次
-/// 极宽松的预筛：只要像"钱"，才交给 AI 判断；不像的直接走本地解析（本地
-/// 也不会收）。
-@visibleForTesting
-bool looksLikePaymentCandidate(RawNotification raw) {
-  final head = '${raw.title}\n${raw.text}';
-  if (head.trim().isEmpty) return false;
-  const needles = [
+/// 排除规则命中即丢弃、且发生在问模型之前，所以片段必须**足够具体**：
+/// - 太短（<4 字，如「微信」「通知」）会误伤一大片；
+/// - 含支付类词（支付/收款/退款…）更危险，会把真实账单一起吞掉；
+/// - 含金额/币种同理。
+///
+/// 片段通常取实际通知的标题（如联系人名、群名），天然具体。
+bool isExcludeSafeFragment(String fragment) {
+  final t = fragment.trim();
+  // 单字太短，几乎必然误伤。
+  if (t.length < 2) return false;
+  if (RegExp(r'[¥￥$€]|\d+(?:[.,]\d{1,2})?\s*元').hasMatch(t)) return false;
+  const paymentWords = [
     '支付', '付款', '收款', '到账', '退款', '还款', '转账', '转帐',
-    '消费', '扣款', '交易', '支出', '收入', '账单', '缴费', '充值',
-    '提现', '余额', '红包', '激励', '结算', '代扣', '分期',
+    '消费', '扣款', '交易', '支出', '收入', '缴费', '充值', '提现',
   ];
-  for (final n in needles) {
-    if (head.contains(n)) return true;
+  for (final w in paymentWords) {
+    if (t.contains(w)) return false;
   }
-  // 没有关键词但有金额（¥12.00 / 12.00元 / CNY 12）也算候选。
-  if (RegExp(r'[¥￥$€]\s*\d').hasMatch(head)) return true;
-  if (RegExp(r'\d+(?:[.,]\d{1,2})?\s*元').hasMatch(head)) return true;
-  if (RegExp(r'\b(?:CNY|USD|HKD|EUR|JPY)\s*\d').hasMatch(head)) return true;
-  return false;
+  // 通用容器词：本身不具体，拿它排除等于整片丢掉。
+  const genericWords = [
+    '微信', '支付宝', '云闪付', '消息', '通知', '提醒', '服务', '账单',
+    '系统', '官方', '群聊', '聊天', '新消息', '订阅号', '服务号',
+  ];
+  for (final w in genericWords) {
+    if (t == w) return false;
+  }
+  return true;
 }
 
 /// 每分钟最多问几次 AI：通知密集时（群聊刷屏）宁可回落本地解析。
@@ -166,8 +170,7 @@ Future<NotificationLlmParseOutcome?> parseNotificationWithLlm(
 }) async {
   if (!config.isReady) return null;
   if (raw.title.trim().isEmpty && raw.text.trim().isEmpty) return null;
-  // 只问"像钱"的通知，并限制频率；任何一项不过都返回 null 走本地解析。
-  if (!looksLikePaymentCandidate(raw)) return null;
+  // 频率上限：通知密集时宁可这一条回落本地解析，也不把额度打满。
   if (!noteLlmParseCall()) return null;
 
   final base = config.normalizedBaseUrl;
@@ -247,7 +250,7 @@ Future<NotificationLlmParseOutcome?> parseNotificationWithLlm(
           ok: false,
           happenAt: when,
           currency: 'CNY',
-          templateId: distilledExcludeRuleId(raw.pkg, scene),
+          templateId: distilledExcludeRuleId(raw.pkg),
         ),
       );
     }

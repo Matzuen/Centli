@@ -318,8 +318,11 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
                 ),
                 const SizedBox(height: CentliSpacing.section),
                 Text(
-                  '本地解析始终可用。开启并保存 API Key 后：文字填单、支付通知（AI→失败回落本地）、'
-                  '资产截图识别才会调用大模型；AI 识别成功的通知会蒸馏成「软件名-支出/收入」规则。',
+                  '本地解析始终可用。开启并保存 API Key 后：文字填单、支付通知、资产截图识别'
+                  '才会调用大模型。\n'
+                  '通知的处理顺序是「先查本地排除规则 → 再问 AI → 最后本地解析」：'
+                  'AI 判为非收付款的场景会在本机学成排除规则，同类通知以后不再外发；'
+                  '判为收付款的场景会蒸馏成「软件名-支出/收入」规则，供后台保活时直接入账。',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
