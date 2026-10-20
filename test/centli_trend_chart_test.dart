@@ -162,6 +162,31 @@ void main() {
     });
   });
 
+  group('formatTrendYAxisLabel', () {
+    test('narrow swing around 1万 keeps every tick text unique', () {
+      // Home screenshot: net worth ~¥9973 with a small drop — old labels
+      // collapsed to four identical "1.0万".
+      final axis = trendYAxis([10000.0, 10000.0, 9973.67, 9973.67]);
+      final labels = [
+        for (final t in axis.ticks)
+          formatTrendYAxisLabel(t, interval: axis.interval),
+      ];
+      expect(labels.toSet().length, labels.length, reason: labels.join(','));
+      expect(labels.where((s) => s == '1.0万').length, lessThan(2));
+    });
+
+    test('coarse intervals may still use compact 万/千', () {
+      expect(
+        formatTrendYAxisLabel(20000, interval: 10000),
+        '2万',
+      );
+      expect(
+        formatTrendYAxisLabel(5000, interval: 1000),
+        '5千',
+      );
+    });
+  });
+
 
 
   group('trendYAxis (4 to 6 tick marks)', () {
