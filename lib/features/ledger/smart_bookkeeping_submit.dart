@@ -37,7 +37,7 @@ Future<SmartBookkeepingOutcome> submitSmartBookkeepingText({
     return SmartBookkeepingOutcome.fail('请输入一句话或换种说法');
   }
   if (accounts.isEmpty) {
-    return SmartBookkeepingOutcome.fail('请先添加账户后再记账');
+    return SmartBookkeepingOutcome.fail('请先添加资产账户后再记账');
   }
 
   final outCats = await db.loadCategories(ledgerId, 'out');
@@ -179,10 +179,10 @@ Future<SmartBookkeepingOutcome> submitSmartBookkeepingText({
 
   if (type == 'transfer') {
     if (toAccountId == null) {
-      return SmartBookkeepingOutcome.fail('未能识别转入账户，请用手动记账');
+      return SmartBookkeepingOutcome.fail('未能识别转入资产账户，请用手动记账');
     }
     if (toAccountId == accountId) {
-      return SmartBookkeepingOutcome.fail('转出与转入账户不能相同');
+      return SmartBookkeepingOutcome.fail('转出与转入资产账户不能相同');
     }
   } else if (!categoryResolved || categoryId == null) {
     return SmartBookkeepingOutcome.fail('未能识别分类，请换种说法或用手动记账');

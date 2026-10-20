@@ -152,7 +152,7 @@ void main() {
       'app_version': '1.0.0+1',
       'ledger': {
         'id': ledgerId,
-        'name': '导入账本',
+        'name': '导入记账本',
         'baseCurrency': 'CNY',
         'createdAt': ts,
         'archived': 0,

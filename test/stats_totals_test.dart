@@ -4,7 +4,7 @@ import 'package:centli/features/stats/stats_page.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// 统计页数据层：汇总（笔数 / 收入 / 支出 / 结余）、账户汇总（不含转账）、
+/// 统计页数据层：汇总（笔数 / 收入 / 支出 / 结余）、资产账户汇总（不含转账）、
 /// 环形图分组（支出 / 收入 / 全部）与区间文案。
 void main() {
   late CentliDatabase db;

@@ -453,7 +453,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
                 _kv('金额正则', t.amountRegex),
                 _kv('商户正则', t.merchantRegex ?? '—'),
                 _kv('商户取自标题', t.merchantFromTitle ? '是' : '否'),
-                _kv('账户提示', t.defaultAccountHint ?? '—'),
+                _kv('资产账户提示', t.defaultAccountHint ?? '—'),
                 _kv('默认币种', t.defaultCurrency),
                 const SizedBox(height: CentliSpacing.sectionLoose),
                 SwitchListTile(

@@ -3,12 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/deep_link.dart';
-
-import '../../data/db/database_provider.dart';
-import '../../platform/notifications/notification_listener_stub.dart';
 import '../../app/theme.dart';
+import '../../core/constants/currencies.dart';
+import '../../data/db/database_provider.dart';
 
-/// First-launch guide (skippable). Writes `onboarding_done=true` on finish.
+/// First-launch guide. Leads with 记账本 → 资产账户 → 记一笔.
 class OnboardingPage extends ConsumerStatefulWidget {
   const OnboardingPage({super.key});
 
@@ -28,16 +27,103 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     super.dispose();
   }
 
-  Future<void> _finish() async {
+  Future<void> _finish({String route = '/assets'}) async {
     await ref.read(databaseProvider).setSetting('onboarding_done', 'true');
     if (!mounted) return;
-    context.go(PendingDeepLink.take() ?? '/home');
+    context.go(PendingDeepLink.take() ?? route);
   }
 
-  Future<void> _openNotificationPermission() async {
-    // P1: permission explain page after settings return (wireframe §9).
+  Future<void> _setupLedger() async {
+    final db = ref.read(databaseProvider);
+    final ledgerId = await db.currentLedgerId();
+    final ledger =
+        ledgerId == null ? null : await db.getLedger(ledgerId);
     if (!mounted) return;
-    await context.push('/me/permission?open=1&onboarding=1');
+    final nameCtrl = TextEditingController(text: ledger?.name ?? '');
+    var base = ledger?.baseCurrency ?? 'CNY';
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setLocal) {
+            return AlertDialog(
+              title: const Text('设置我的记账本'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameCtrl,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      labelText: '记账本名称',
+                      hintText: '例如：个人、家庭、出差',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.all(Radius.circular(14)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: CentliSpacing.section),
+                  DropdownButtonFormField<String>(
+                    initialValue: base,
+                    items: [
+                      for (final c in supportedCurrencies)
+                        DropdownMenuItem(
+                          value: c,
+                          child: Text(currencyLabel(c)),
+                        ),
+                    ],
+                    onChanged: (v) {
+                      if (v != null) setLocal(() => base = v);
+                    },
+                    decoration: const InputDecoration(
+                      labelText: '本位币',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.all(Radius.circular(14)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('取消'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('保存'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    final name = nameCtrl.text.trim();
+    nameCtrl.dispose();
+    if (ok != true || !mounted) return;
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请输入记账本名称')),
+      );
+      return;
+    }
+    if (ledger != null) {
+      await db.updateLedger(id: ledger.id, name: name, baseCurrency: base);
+    } else {
+      await db.createLedgerWithDefaults(
+        name: name,
+        baseCurrency: base,
+        switchTo: true,
+      );
+    }
+    ref.invalidate(currentLedgerIdProvider);
+    ref.invalidate(currentLedgerProvider);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('记账本已设为「$name」')),
+    );
+    _next();
   }
 
   void _next() {
@@ -58,7 +144,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         automaticallyImplyLeading: false,
         actions: [
           TextButton(
-            onPressed: _finish,
+            onPressed: () => _finish(),
             child: const Text('跳过'),
           ),
         ],
@@ -70,24 +156,29 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
               child: PageView(
                 controller: _controller,
                 onPageChanged: (i) => setState(() => _index = i),
-                children: const [
+                children: [
                   _OnboardSlide(
+                    icon: Icons.menu_book_outlined,
+                    title: '先建记账本',
+                    body: '记账本把个人 / 家庭 / 出差的账分开。'
+                        '起个名字、选好本位币，之后的资产账户和流水都归在这里。',
+                    sketch: _LedgerSketch(onSetup: _setupLedger),
+                  ),
+                  const _OnboardSlide(
+                    icon: Icons.account_balance_wallet_outlined,
+                    title: '再建资产账户',
+                    body: '到「资产」页点右上角 +「新建资产账户」，'
+                        '添加现金、银行卡、电子钱包等，也可截图识别余额。'
+                        '资产账户清楚了，收支才知道钱从哪来、到哪去。',
+                    sketch: _AssetsSketch(),
+                  ),
+                  const _OnboardSlide(
                     icon: Icons.calculate_outlined,
-                    title: '记一笔',
-                    body: '半屏计算器面板，拇指优先：选支出/收入/转账，点分类与账户，一键落库。',
+                    title: '然后记一笔',
+                    body: '底部中间「记一笔」记下支出 / 收入 / 转账。'
+                        '支付通知会进待确认，确认后才入账；'
+                        '需要藏金额时，可在「我的 · 安全」开启资产锁。',
                     sketch: _CalcSketch(),
-                  ),
-                  _OnboardSlide(
-                    icon: Icons.notifications_active_outlined,
-                    title: '通知待确认',
-                    body: '支付通知进来先排队，猜分类后一键入账——默认不静默入账。',
-                    sketch: _PendingSketch(),
-                  ),
-                  _OnboardSlide(
-                    icon: Icons.security_outlined,
-                    title: '开启通知权限',
-                    body: '仅用于读取支付成功类通知以辅助记账，需你确认后才会写入流水。',
-                    sketch: _PermissionSketch(),
                   ),
                 ],
               ),
@@ -120,21 +211,21 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         FilledButton(
-                          onPressed: _openNotificationPermission,
-                          child: const Text('去开启'),
+                          onPressed: () => _finish(route: '/assets'),
+                          child: const Text('去资产页开始'),
                         ),
                         const SizedBox(height: CentliSpacing.item),
                         TextButton(
-                          onPressed: _finish,
-                          child: const Text('稍后再说'),
+                          onPressed: () => _finish(route: '/home'),
+                          child: const Text('先逛逛首页'),
                         ),
                       ],
                     )
                   : SizedBox(
                       width: double.infinity,
                       child: FilledButton(
-                        onPressed: _next,
-                        child: const Text('下一步'),
+                        onPressed: _index == 0 ? _setupLedger : _next,
+                        child: Text(_index == 0 ? '设置记账本' : '下一步'),
                       ),
                     ),
             ),
@@ -195,7 +286,112 @@ class _OnboardSlide extends StatelessWidget {
   }
 }
 
-/// Wireframe-ish calculator panel sketch.
+class _LedgerSketch extends StatelessWidget {
+  const _LedgerSketch({required this.onSetup});
+
+  final VoidCallback onSetup;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return CentliSoftCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            '记账本',
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+          const SizedBox(height: CentliSpacing.item),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: scheme.primaryContainer.withValues(alpha: 0.45),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.menu_book_rounded, color: scheme.primary),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text(
+                    '给记账本起个名字\n选好本位币',
+                    style: TextStyle(height: 1.35),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Spacer(),
+          FilledButton.tonal(
+            onPressed: onSetup,
+            child: const Text('现在设置'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AssetsSketch extends StatelessWidget {
+  const _AssetsSketch();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    Widget chip(String label, IconData icon) => Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerHighest.withValues(alpha: 0.7),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, size: 18, color: scheme.primary),
+              const SizedBox(width: 8),
+              Text(label),
+            ],
+          ),
+        );
+    return CentliSoftCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Text(
+                '资产',
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+              const Spacer(),
+              Icon(Icons.add_rounded, color: scheme.primary),
+              const SizedBox(width: 4),
+              Text(
+                '新建资产账户',
+                style: TextStyle(
+                  color: scheme.primary,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: CentliSpacing.section),
+          chip('现金', Icons.payments_outlined),
+          const SizedBox(height: 8),
+          chip('银行卡', Icons.credit_card_outlined),
+          const SizedBox(height: 8),
+          chip('电子钱包', Icons.account_balance_wallet_outlined),
+        ],
+      ),
+    );
+  }
+}
+
 class _CalcSketch extends StatelessWidget {
   const _CalcSketch();
 
@@ -203,234 +399,55 @@ class _CalcSketch extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return CentliSoftCard(
-      child: Padding(
-        padding: const EdgeInsets.all(CentliSpacing.cardPad),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                _chip(context, '支出', selected: true),
-                const SizedBox(width: 8),
-                _chip(context, '收入'),
-                const SizedBox(width: 8),
-                _chip(context, '转账'),
-              ],
-            ),
-            const SizedBox(height: CentliSpacing.sectionLoose),
-            Text(
-              '¥ 0',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-            ),
-            const SizedBox(height: CentliSpacing.section),
-            Wrap(
-              spacing: 8,
-              children: [
-                for (final label in ['餐饮', '交通', '日用', '更多'])
-                  Chip(
-                    label: Text(label),
-                    visualDensity: VisualDensity.compact,
-                    backgroundColor: scheme.surfaceContainerHighest,
-                  ),
-              ],
-            ),
-            const Spacer(),
-            GridView.count(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisCount: 4,
-              mainAxisSpacing: 8,
-              crossAxisSpacing: 8,
-              childAspectRatio: 1.4,
-              children: [
-                for (final k in [
-                  '1',
-                  '2',
-                  '3',
-                  '⌫',
-                  '4',
-                  '5',
-                  '6',
-                  '+',
-                  '7',
-                  '8',
-                  '9',
-                  '-',
-                  '.',
-                  '0',
-                  '00',
-                  '✓',
-                ])
-                  Container(
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: k == '✓'
-                          ? scheme.primary
-                          : scheme.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      k,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: k == '✓' ? scheme.onPrimary : null,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _chip(BuildContext context, String label, {bool selected = false}) {
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: selected ? scheme.primary : scheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: selected ? scheme.onPrimary : scheme.onSurface,
-          fontWeight: FontWeight.w600,
-          fontSize: 13,
-        ),
-      ),
-    );
-  }
-}
-
-/// Wireframe: notification → pending card → post.
-class _PendingSketch extends StatelessWidget {
-  const _PendingSketch();
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Column(
-      children: [
-        _stepCard(
-          context,
-          icon: Icons.notifications_outlined,
-          title: '支付通知',
-          subtitle: '支付宝 · ¥28.50 · 某餐厅',
-        ),
-        Icon(Icons.arrow_downward, color: scheme.outline),
-        _stepCard(
-          context,
-          icon: Icons.pending_actions_outlined,
-          title: '待确认卡片',
-          subtitle: '猜「餐饮」· 账户：支付宝',
-        ),
-        Icon(Icons.arrow_downward, color: scheme.outline),
-        _stepCard(
-          context,
-          icon: Icons.check_circle_outline,
-          title: '一键入账',
-          subtitle: '确认后写入流水并学习商户规则',
-          highlight: true,
-        ),
-      ],
-    );
-  }
-
-  Widget _stepCard(
-    BuildContext context, {
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    bool highlight = false,
-  }) {
-    final scheme = Theme.of(context).colorScheme;
-    return CentliSoftCard(
-      color: highlight ? scheme.primaryContainer : null,
-      child: ListTile(
-        leading: Icon(
-          icon,
-          color: highlight ? scheme.onPrimaryContainer : scheme.primary,
-        ),
-        title: Text(
-          title,
-          style: TextStyle(
-            fontWeight: FontWeight.w600,
-            color: highlight ? scheme.onPrimaryContainer : null,
-          ),
-        ),
-        subtitle: Text(
-          subtitle,
-          style: TextStyle(
-            color: highlight
-                ? scheme.onPrimaryContainer.withValues(alpha: 0.85)
-                : null,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PermissionSketch extends StatelessWidget {
-  const _PermissionSketch();
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final granted = NotificationCaptureStub.supported;
-    return CentliSoftCard(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.privacy_tip_outlined, color: scheme.primary),
-                const SizedBox(width: 10),
-                Text(
-                  '通知使用权',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            '记一笔',
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
                 ),
-              ],
-            ),
-            const SizedBox(height: CentliSpacing.sectionLoose),
-            Text(
-              '用途：解析支付成功类通知 → 待确认队列',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-            const SizedBox(height: CentliSpacing.item),
-            Text(
-              '不会静默入账；可随时在「我的 · 自动记账」关闭。',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: scheme.onSurfaceVariant,
+          ),
+          const SizedBox(height: CentliSpacing.item),
+          Text(
+            '¥ 0.00',
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+          const SizedBox(height: CentliSpacing.section),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final t in ['支出', '收入', '转账'])
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: t == '支出'
+                        ? scheme.primaryContainer
+                        : scheme.surfaceContainerHighest.withValues(alpha: 0.7),
+                    borderRadius: BorderRadius.circular(20),
                   ),
-            ),
-            const Spacer(),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: scheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                granted
-                    ? '当前平台可申请系统通知使用权'
-                    : 'Android 可跳转系统「通知使用权」；其他平台可稍后在「我的」查看说明',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ),
-          ],
-        ),
+                  child: Text(
+                    t,
+                    style: TextStyle(
+                      fontWeight:
+                          t == '支出' ? FontWeight.w700 : FontWeight.w500,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const Spacer(),
+          Text(
+            '选好资产账户后再落库，流水才清楚。',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+          ),
+        ],
       ),
     );
   }

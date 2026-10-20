@@ -354,7 +354,7 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
           ..where((t) => t.ledgerId.equals(ledgerId) & t.name.equals(trimmed)))
         .get();
     if (existing.isNotEmpty) {
-      throw StateError('同账本已有同名分类');
+      throw StateError('同记账本已有同名分类');
     }
     final maxOrder = await customSelect(
       'SELECT COALESCE(MAX(sort_order), -1) AS m FROM asset_types WHERE ledger_id = ?',
@@ -392,7 +392,7 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
               t.name.equals(trimmed) &
               t.id.equals(id).not()))
         .get();
-    if (clash.isNotEmpty) throw StateError('同账本已有同名分类');
+    if (clash.isNotEmpty) throw StateError('同记账本已有同名分类');
     await (update(assetTypes)..where((t) => t.id.equals(id))).write(
       AssetTypesCompanion(name: Value(trimmed), updatedAt: Value(nowMs())),
     );
@@ -440,7 +440,7 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
     }
     final inUse = await (select(accounts)..where((t) => t.type.equals(id))).get();
     if (inUse.isNotEmpty) {
-      throw StateError('有 ${inUse.length} 个账户在用，无法删除（可先归档）');
+      throw StateError('有 ${inUse.length} 个资产账户在用，无法删除（可先归档）');
     }
     await (delete(assetTypes)..where((t) => t.id.equals(id))).go();
   }
@@ -719,7 +719,7 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
   }) async {
     final trimmed = name.trim();
     if (trimmed.isEmpty) {
-      throw ArgumentError('请填写账本名称');
+      throw ArgumentError('请填写记账本名称');
     }
     final ts = nowMs();
     final ledgerId = newId();
@@ -2819,10 +2819,10 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
     return (expenses: out, incomes: inc);
   }
 
-  /// 统计页「账户」卡：按账户汇总收入 / 支出（**不含转账**）。
+  /// 统计页「资产账户」卡：按资产账户汇总收入 / 支出（**不含转账**）。
   ///
-  /// 收入记到 `accountId`，支出也记到 `accountId`（付款账户）；退款冲减支出。
-  /// 账户名来自账户表，已归档账户也保留（有历史数据就会显示）。
+  /// 收入记到 `accountId`，支出也记到 `accountId`（付款资产账户）；退款冲减支出。
+  /// 资产账户名来自资产账户表，已归档资产账户也保留（有历史数据就会显示）。
   Future<List<StatsAccountRow>> statsByAccountInBase(
     String ledgerId,
     int startMs,
@@ -3712,7 +3712,7 @@ class StatsTotals {
   int get netMinor => incomeMinor - expenseMinor;
 }
 
-/// 账户维度汇总（转账完全排除）。
+/// 资产账户维度汇总（转账完全排除）。
 class StatsAccountRow {
   const StatsAccountRow({
     required this.accountId,

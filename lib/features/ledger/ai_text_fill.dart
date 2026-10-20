@@ -426,10 +426,10 @@ AiTextFillResult parseBookkeepingText(
       accountName = foundAccounts[0];
       toAccountName = foundAccounts[1];
     }
-    hits.add('账户:$accountName→$toAccountName');
+    hits.add('资产账户:$accountName→$toAccountName');
   } else if (foundAccounts.isNotEmpty) {
     accountName = foundAccounts.first;
-    hits.add('账户:$accountName');
+    hits.add('资产账户:$accountName');
   }
 
   // --- category (synonyms + ledger names, with confidence) ---

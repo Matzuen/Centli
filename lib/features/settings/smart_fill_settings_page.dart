@@ -219,22 +219,21 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
           : ListView(
               padding: CentliSpacing.pagePadding,
               children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(CentliSpacing.cardPad),
-              child: Text(
-                '默认使用 deepseek-flash（支持图片）。截图识别会把图片发送到已配置的大模型服务；也可改用其它 OpenAI 兼容接口。',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ),
-          ),
-
                 CentliSoftCard(
                   key: const Key('bk_effective_llm_config'),
                   padding: const EdgeInsets.all(CentliSpacing.cardPad),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      Text(
+                        '默认使用 deepseek-flash（支持图片）。截图识别会把图片发送到已配置的大模型服务；也可改用其它 OpenAI 兼容接口。',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                            ),
+                      ),
+                      const SizedBox(height: CentliSpacing.section),
                       Text(
                         '当前生效配置',
                         style: Theme.of(context).textTheme.titleSmall,
@@ -306,9 +305,11 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
                 const SizedBox(height: CentliSpacing.section),
                 CentliSoftCard(
                   child: SwitchListTile(
-                    title: const Text('用大模型增强文字填单'),
+                    title: const Text('启用大模型增强'),
                     subtitle: const Text(
-                      '开启后，记账页「智能填单」会优先调用你配置的大模型兼容接口；失败时自动回退本地解析，不阻塞保存。',
+                      '开启后，可用大模型增强文字填单与支付通知解析；'
+                      '资产页截图识别余额也需打开此项。'
+                      '失败时自动回退本地解析，不阻塞保存。',
                     ),
                     value: _enabled,
                     onChanged: (v) => setState(() => _enabled = v),
@@ -316,7 +317,7 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
                 ),
                 const SizedBox(height: CentliSpacing.section),
                 Text(
-                  '本地解析始终可用；大模型为可选增强。',
+                  '本地解析始终可用。开启上方开关并保存 API Key 后，文字增强与截图识别才会调用大模型。',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
@@ -461,8 +462,8 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
                         const SizedBox(height: CentliSpacing.item),
                         const Text(
                           '1. 在记账页展开「智能填单」，输入话术后点「填入」。\n'
-                          '2. 未开启或未配置密钥时，仅用本地关键词/分类匹配。\n'
-                          '3. 兼容常见大模型对话补全接口（含代理）。\n'
+                          '2. 未开启或未配置密钥时，文字填单与通知解析仅用本地规则；资产截图识别也不可用。\n'
+                          '3. 兼容常见大模型对话补全接口（含代理）；截图识别需支持视觉的模型。\n'
                           '4. 分类不确定时不会强行猜错类；备注只保留结构化抽取后的剩余文字。',
                         ),
                       ],

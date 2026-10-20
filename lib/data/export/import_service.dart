@@ -133,11 +133,11 @@ class ImportService {
 
     final ledgerRaw = map['ledger'];
     if (ledgerRaw is! Map) {
-      throw StateError('缺少账本信息');
+      throw StateError('缺少记账本信息');
     }
     final ledger = _normalizeLedger(Map<String, dynamic>.from(ledgerRaw));
     if ('${ledger['id']}'.isEmpty) {
-      throw StateError('账本 ID 不能为空');
+      throw StateError('记账本 ID 不能为空');
     }
 
     // Missing required arrays must fail before wipe (null != empty).
@@ -435,10 +435,10 @@ class ImportService {
     }
 
     final ledgerId = summaryMap['ledger_id'] ?? '';
-    final ledgerName = summaryMap['ledger_name'] ?? '导入账本';
+    final ledgerName = summaryMap['ledger_name'] ?? '导入记账本';
     final baseCurrency = summaryMap['base_currency'] ?? 'CNY';
     if (ledgerId.isEmpty) {
-      throw StateError('摘要缺少账本 ID，无法还原');
+      throw StateError('摘要缺少记账本 ID，无法还原');
     }
 
     final ts = DateTime.now().millisecondsSinceEpoch;

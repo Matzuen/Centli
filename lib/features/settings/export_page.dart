@@ -87,7 +87,7 @@ class _ExportPageState extends ConsumerState<ExportPage> {
         padding: CentliSpacing.pagePadding,
         children: [
           Text(
-            '导出当前账本为文件并打开系统分享。还原请到「我的 → 导入」。本页仅导出并分享，不会清空本机数据。',
+            '导出当前记账本为文件并打开系统分享。还原请到「我的 → 导入」。本页仅导出并分享，不会清空本机数据。',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                   height: 1.4,
@@ -110,7 +110,7 @@ class _ExportPageState extends ConsumerState<ExportPage> {
                 SwitchListTile(
                   title: const Text('Excel 表格（.xlsx）'),
                   subtitle: const Text(
-                    '含摘要、账户、分类、流水、待确认、商户规则、预算等工作表',
+                    '含摘要、资产账户、分类、流水、待确认、商户规则、预算等工作表',
                   ),
                   value: _wantExcel,
                   onChanged: _busy ? null : (v) => setState(() => _wantExcel = v),

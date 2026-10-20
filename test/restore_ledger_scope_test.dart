@@ -133,7 +133,7 @@ void main() {
     // Install ledger A
     final bundleA1 = svc.parseJsonString(jsonEncode(_bundle(
       ledgerId: 'ledA',
-      ledgerName: '账本A',
+      ledgerName: '记账本A',
       accounts: [_account(id: 'accA', ledgerId: 'ledA', name: '现金A')],
       categories: [_category(id: 'catA', ledgerId: 'ledA', name: '餐饮A')],
       transactions: [
@@ -152,7 +152,7 @@ void main() {
     // Install ledger B (independent)
     final bundleB = svc.parseJsonString(jsonEncode(_bundle(
       ledgerId: 'ledB',
-      ledgerName: '账本B',
+      ledgerName: '记账本B',
       accounts: [_account(id: 'accB', ledgerId: 'ledB', name: '现金B')],
       categories: [_category(id: 'catB', ledgerId: 'ledB', name: '交通B')],
       transactions: [
@@ -181,7 +181,7 @@ void main() {
     // Re-restore A with different data
     final bundleA2 = svc.parseJsonString(jsonEncode(_bundle(
       ledgerId: 'ledA',
-      ledgerName: '账本A',
+      ledgerName: '记账本A',
       accounts: [_account(id: 'accA2', ledgerId: 'ledA', name: '现金A2')],
       categories: [_category(id: 'catA2', ledgerId: 'ledA', name: '日用A2')],
       transactions: [
@@ -225,7 +225,7 @@ void main() {
     // B exists locally first
     await svc.restore(svc.parseJsonString(jsonEncode(_bundle(
       ledgerId: 'ledB',
-      ledgerName: '账本B',
+      ledgerName: '记账本B',
       accounts: [_account(id: 'accB', ledgerId: 'ledB', name: '现金B')],
       categories: [_category(id: 'catB', ledgerId: 'ledB', name: '交通B')],
       transactions: [],
@@ -234,7 +234,7 @@ void main() {
     // Bundle top-level A, but transaction.ledgerId wrongly says B
     final bundle = svc.parseJsonString(jsonEncode(_bundle(
       ledgerId: 'ledA',
-      ledgerName: '账本A',
+      ledgerName: '记账本A',
       accounts: [_account(id: 'accA', ledgerId: 'ledA', name: '现金A')],
       categories: [_category(id: 'catA', ledgerId: 'ledA', name: '餐饮A')],
       transactions: [

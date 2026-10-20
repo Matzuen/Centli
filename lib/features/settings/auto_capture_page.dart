@@ -177,7 +177,7 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
       if (!mounted) return;
       setState(() => _accountMap = map);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(accountId == null ? '已清除映射' : '已保存默认账户')),
+        SnackBar(content: Text(accountId == null ? '已清除映射' : '已保存默认资产账户')),
       );
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -222,7 +222,7 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('清空待确认'),
-        content: Text('将删除当前账本下 $_pendingCount 条待确认记录（不影响已入账流水）。此操作不可撤销。'),
+        content: Text('将删除当前记账本下 $_pendingCount 条待确认记录（不影响已入账流水）。此操作不可撤销。'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -458,12 +458,12 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
                 ),
                 const SizedBox(height: CentliSpacing.sectionLoose),
                 Text(
-                  '应用 → 默认账户',
+                  '应用 → 默认资产账户',
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 const SizedBox(height: CentliSpacing.dense),
                 Text(
-                  '解析成功后预填账户；仍需在待确认页点「入账」。',
+                  '解析成功后预填资产账户；仍需在待确认页点「入账」。',
                   style: Theme.of(context).textTheme.bodySmall
                       ?.copyWith(color: scheme.onSurfaceVariant),
                 ),
@@ -500,12 +500,12 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
                               decoration: const InputDecoration(
                                 isDense: true,
                                 border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
-                                labelText: '默认账户',
+                                labelText: '默认资产账户',
                               ),
                               items: [
                                 const DropdownMenuItem<String?>(
                                   value: null,
-                                  child: Text('自动（按账户名）'),
+                                  child: Text('自动（按资产账户名）'),
                                 ),
                                 for (final a in _accounts)
                                   DropdownMenuItem<String?>(

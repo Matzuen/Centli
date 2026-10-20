@@ -147,7 +147,7 @@ class _RecurringWizardPageState extends ConsumerState<RecurringWizardPage> {
     }
     if (_accountId == null || _categoryId == null || _ledgerId == null) {
       ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('请选择账户和分类')));
+          .showSnackBar(const SnackBar(content: Text('请选择资产账户和分类')));
       return;
     }
     final n = _catchUpCount;
@@ -335,7 +335,7 @@ class _RecurringWizardPageState extends ConsumerState<RecurringWizardPage> {
           key: ValueKey('acc-$_accountId'),
           initialValue: _accountId,
           decoration: const InputDecoration(
-            labelText: '账户',
+            labelText: '资产账户',
             border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
           ),
           items: [

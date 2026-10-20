@@ -85,7 +85,7 @@ class _ImportPageState extends ConsumerState<ImportPage> {
       builder: (ctx) => AlertDialog(
         title: const Text('\u786e\u8ba4\u8fd8\u539f\uff1f'),
         content: Text(
-          '\u5c06\u6e05\u7a7a\u672c\u673a\u5168\u90e8\u8d26\u672c\u6570\u636e\uff08\u8d26\u6237/\u5206\u7c7b/\u6d41\u6c34/\u5f85\u786e\u8ba4/\u89c4\u5219/\u9884\u7b97/\u6c47\u7387\u7f13\u5b58\uff09\uff0c'
+          '\u5c06\u6e05\u7a7a\u672c\u673a\u5168\u90e8\u8d26\u672c\u6570\u636e\uff08\u8d44\u4ea7\u8d26\u6237/\u5206\u7c7b/\u6d41\u6c34/\u5f85\u786e\u8ba4/\u89c4\u5219/\u9884\u7b97/\u6c47\u7387\u7f13\u5b58\uff09\uff0c'
           '\u5e76\u5199\u5165\u5907\u4efd\u4e2d\u7684\u8d26\u672c\u300c${b.ledgerName}\u300d\u3002\n\n'
           '\u4e0d\u4f1a\u6539\u52a8\u672c\u673a PIN\uff08\u5e94\u7528\u9501\u5f00\u5173\u4e5f\u4e0d\u4f1a\u4ece\u5907\u4efd\u8986\u76d6\uff09\u3002\n\n'
           '\u6b64\u64cd\u4f5c\u4e0d\u53ef\u64a4\u9500\u3002',
@@ -124,7 +124,7 @@ class _ImportPageState extends ConsumerState<ImportPage> {
           content: Text(
             '\u5df2\u8fd8\u539f\u300c${result.ledgerName}\u300d\uff1a'
             '${result.transactions} \u7b14\u6d41\u6c34 / '
-            '${result.accounts} \u8d26\u6237 / '
+            '${result.accounts} \u8d44\u4ea7\u8d26\u6237 / '
             '${result.categories} \u5206\u7c7b / '
             '${result.budgets} \u9884\u7b97',
           ),
@@ -231,7 +231,7 @@ class _ImportPageState extends ConsumerState<ImportPage> {
                   ListTile(
                     title: const Text('\u5185\u5bb9\u7edf\u8ba1'),
                     subtitle: Text(
-                      '\u8d26\u6237 ${preview.bundle.accounts.length} \u00b7 '
+                      '\u8d44\u4ea7\u8d26\u6237 ${preview.bundle.accounts.length} \u00b7 '
                       '\u5206\u7c7b ${preview.bundle.categories.length} \u00b7 '
                       '\u6d41\u6c34 ${preview.bundle.transactions.length}\n'
                       '\u5f85\u786e\u8ba4 ${preview.bundle.pendingCaptures.length} \u00b7 '

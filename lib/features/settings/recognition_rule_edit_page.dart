@@ -264,9 +264,9 @@ class _RecognitionRuleEditPageState extends State<RecognitionRuleEditPage> {
                   DropdownButtonFormField<String?>(
                     initialValue: _accountHint,
                     decoration: const InputDecoration(
-                      labelText: '建议账户提示',
+                      labelText: '建议资产账户提示',
                       border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
-                      helperText: '用于映射到「应用 → 默认账户」',
+                      helperText: '用于映射到「应用 → 默认资产账户」',
                     ),
                     items: const [
                       DropdownMenuItem(value: 'alipay', child: Text('支付宝')),

@@ -32,12 +32,7 @@ class _SplashPageState extends ConsumerState<SplashPage> {
     final started = DateTime.now();
     final db = ref.read(databaseProvider);
     // Parallel settings reads; first touch also opens Drift (LazyDatabase).
-    final results = await Future.wait<String?>([
-      db.getSetting('onboarding_done'),
-      db.getSetting('app_lock'),
-    ]);
-    final done = results[0];
-    final lockOn = results[1] == 'true';
+    final done = await db.getSetting('onboarding_done');
 
     // FX + ledger lookup are not needed to choose the first route — defer.
     unawaited(_scheduleFxDeferred(db));
@@ -50,16 +45,12 @@ class _SplashPageState extends ConsumerState<SplashPage> {
       await Future<void>.delayed(minShow - elapsed);
     }
     if (!mounted) return;
+    // 资产锁只藏金额，进 App 不再拦全屏解锁。
+    ref.read(appLockUnlockedProvider.notifier).unlock();
+    ref.read(amountsRevealedProvider.notifier).conceal();
     if (done == 'true') {
-      if (lockOn) {
-        // Keep PendingDeepLink for after unlock — do not take() here.
-        ref.read(appLockUnlockedProvider.notifier).lock();
-        context.go('/lock');
-      } else {
-        ref.read(appLockUnlockedProvider.notifier).unlock();
-        final deep = PendingDeepLink.take();
-        context.go(deep ?? '/home');
-      }
+      final deep = PendingDeepLink.take();
+      context.go(deep ?? '/home');
     } else {
       // Keep PendingDeepLink until onboarding finishes — do not take() here.
       context.go('/onboarding');
@@ -122,7 +113,7 @@ class _SplashPageState extends ConsumerState<SplashPage> {
               ),
               const SizedBox(height: CentliSpacing.item),
               Text(
-                'Centli · 厘清每一笔账',
+                'Centli · 厘清资产，安心记账',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: scheme.onSurfaceVariant,
                     ),

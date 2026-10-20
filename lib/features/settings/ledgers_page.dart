@@ -23,7 +23,7 @@ class LedgersPage extends ConsumerWidget {
 
     return CentliGradientScaffold(
       appBar: AppBar(
-        title: const Text('账本管理'),
+        title: const Text('记账本管理'),
       ),
       body: listAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -32,12 +32,12 @@ class LedgersPage extends ConsumerWidget {
           if (ledgers.isEmpty) {
             return CentliEmptyState(
               icon: Icons.menu_book_outlined,
-              title: '暂无账本',
-              message: '创建第一个账本开始记账。点右下角 + 即可。',
+              title: '暂无记账本',
+              message: '创建第一个记账本开始记账。点右下角 + 即可。',
               action: FilledButton.tonalIcon(
                 onPressed: () => _create(context, ref),
                 icon: const Icon(Icons.add),
-                label: const Text('新建账本'),
+                label: const Text('新建记账本'),
               ),
             );
           }
@@ -47,7 +47,7 @@ class LedgersPage extends ConsumerWidget {
             padding: CentliSpacing.pagePadding,
             children: [
               Text(
-                '可创建多个账本并切换当前账本。归档后不再出现在首页，可随时恢复。',
+                '可创建多个记账本并切换当前记账本。归档后不再出现在首页，可随时恢复。',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                       height: 1.4,
@@ -96,7 +96,7 @@ class LedgersPage extends ConsumerWidget {
         },
       ),
       floatingActionButton: FloatingActionButton(
-        tooltip: '新建账本',
+        tooltip: '新建记账本',
         onPressed: () => _create(context, ref),
         child: const Icon(Icons.add),
       ),
@@ -125,7 +125,7 @@ class LedgersPage extends ConsumerWidget {
       if (active.length <= 1) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('至少保留一个未归档账本')),
+            const SnackBar(content: Text('至少保留一个未归档记账本')),
           );
         }
         return;
@@ -150,7 +150,7 @@ class LedgersPage extends ConsumerWidget {
         return StatefulBuilder(
           builder: (ctx, setLocal) {
             return AlertDialog(
-              title: const Text('新建账本'),
+              title: const Text('新建记账本'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -158,7 +158,7 @@ class LedgersPage extends ConsumerWidget {
                     controller: nameCtrl,
                     autofocus: true,
                     decoration: const InputDecoration(
-                      labelText: '账本名称',
+                      labelText: '记账本名称',
                       border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
                     ),
                   ),
@@ -200,7 +200,7 @@ class LedgersPage extends ConsumerWidget {
     if (name.isEmpty) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('请输入账本名称')),
+          const SnackBar(content: Text('请输入记账本名称')),
         );
       }
       return;

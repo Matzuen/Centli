@@ -68,7 +68,7 @@ class ExportService {
   }) async {
     final ledger = await db.getLedger(ledgerId);
     if (ledger == null) {
-      throw StateError('找不到账本: $ledgerId');
+      throw StateError('找不到记账本: $ledgerId');
     }
 
     final accounts = await db.loadAllAccounts(ledgerId);

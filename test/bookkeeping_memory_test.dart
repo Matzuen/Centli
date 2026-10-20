@@ -2,7 +2,7 @@ import 'package:centli/data/db/centli_database.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// 记账记忆：上次使用的账户 / 分类（last_bookkeeping）与「备注 → 分类」
+/// 记账记忆：上次使用的资产账户 / 分类（last_bookkeeping）与「备注 → 分类」
 /// （note_category_map）。都是 app_settings 里的 JSON，不进导出。
 void main() {
   late CentliDatabase db;

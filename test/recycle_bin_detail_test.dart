@@ -80,7 +80,7 @@ void main() {
 
     for (final label in const [
       '时间',
-      '账户',
+      '资产账户',
       '分类',
       '备注',
       '标签',
@@ -128,7 +128,7 @@ class _FakeRecycleDb implements CentliDatabase {
   Stream<Ledger?> watchCurrentLedger() => Stream.value(
         const Ledger(
           id: 'L',
-          name: '我的账本',
+          name: '我的记账本',
           baseCurrency: 'CNY',
           archived: 0,
           createdAt: 0,

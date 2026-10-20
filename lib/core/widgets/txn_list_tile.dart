@@ -18,7 +18,7 @@ const Color kKeywordHighlight = Color(0xFF7C4DFF);
 const Color kTxnExpenseRed = Color(0xFFE53935);
 const Color kTxnIncomeGreen = Color(0xFF43A047);
 
-/// Shared transaction row: category icon · name / 账户·备注 · amount+time.
+/// Shared transaction row: category icon · name / 资产账户·备注 · amount+time.
 /// Used by home, search, stats drill-down (and mirrored on account detail).
 ///
 /// Pass [lookups] from the list level so category/account names resolve
@@ -215,7 +215,7 @@ class TxnListTile extends ConsumerWidget {
     return base;
   }
 
-  /// 账户、备注、标签同一行，样式一致，用「 · 」隔开。
+  /// 资产账户、备注、标签同一行，样式一致，用「 · 」隔开。
   String _detailLine() {
     final parts = <String>[
       _accountPart(),

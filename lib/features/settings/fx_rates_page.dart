@@ -298,35 +298,51 @@ Future<void> _showEditor(
                       Expanded(
                         child: DropdownButtonFormField<String>(
                           initialValue: from,
+                          isExpanded: true,
                           items: [
                             for (final c in supportedCurrencies)
-                              DropdownMenuItem(value: c, child: Text(currencyLabel(c))),
+                              DropdownMenuItem(
+                                value: c,
+                                child: Text(
+                                  currencyLabel(c),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
                           ],
                           onChanged: (v) {
                             if (v != null) setLocal(() => from = v);
                           },
                           decoration: const InputDecoration(
                             labelText: '原币',
+                            isDense: true,
                             border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
                           ),
                         ),
                       ),
                       const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 8),
-                        child: Icon(Icons.arrow_forward),
+                        padding: EdgeInsets.symmetric(horizontal: 6),
+                        child: Icon(Icons.arrow_forward, size: 20),
                       ),
                       Expanded(
                         child: DropdownButtonFormField<String>(
                           initialValue: to,
+                          isExpanded: true,
                           items: [
                             for (final c in supportedCurrencies)
-                              DropdownMenuItem(value: c, child: Text(currencyLabel(c))),
+                              DropdownMenuItem(
+                                value: c,
+                                child: Text(
+                                  currencyLabel(c),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
                           ],
                           onChanged: (v) {
                             if (v != null) setLocal(() => to = v);
                           },
                           decoration: const InputDecoration(
                             labelText: '目标币',
+                            isDense: true,
                             border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
                           ),
                         ),

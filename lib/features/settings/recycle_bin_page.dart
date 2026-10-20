@@ -56,7 +56,7 @@ class RecycleBinPage extends ConsumerWidget {
         error: (e, _) => CentliErrorState(error: e),
         data: (ledger) {
           if (ledger == null) {
-            return const Center(child: Text('账本未初始化'));
+            return const Center(child: Text('记账本未初始化'));
           }
           final lookups = ref.watch(_recycleLookupsProvider(ledger.id))
                   .valueOrNull ??
@@ -347,7 +347,7 @@ class _DeletedDetailSheet extends StatelessWidget {
             const SizedBox(height: CentliSpacing.item),
             const Divider(),
             row('时间', happen),
-            row('账户', txn.type == 'transfer'
+            row('资产账户', txn.type == 'transfer'
                 ? '${from ?? '—'} → ${to ?? '—'}'
                 : (from ?? '—')),
             row('分类', cat?.name ?? (txn.type == 'transfer' ? '转账' : '未分类')),

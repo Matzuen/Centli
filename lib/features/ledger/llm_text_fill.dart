@@ -50,8 +50,12 @@ class SmartFillLlmConfig {
   final String model;
   final String apiKey;
 
-  bool get isReady =>
-      enabled && baseUrl.trim().isNotEmpty && apiKey.trim().isNotEmpty;
+  /// Credentials only — enough for an explicit vision tap (截图识别).
+  bool get hasCredentials =>
+      baseUrl.trim().isNotEmpty && apiKey.trim().isNotEmpty;
+
+  /// Smart-fill auto path: needs the toggle on + credentials.
+  bool get isReady => enabled && hasCredentials;
 
   String get normalizedBaseUrl {
     var u = baseUrl.trim();
@@ -167,11 +171,11 @@ Future<AiTextFillResult?> parseBookkeepingTextWithLlm(
 - type: "out"|"in"|"transfer"|null
 - categoryHint: string|null 分类名（尽量使用用户分类列表中的名称）
 - merchant: string|null 商家/收款方
-- note: string|null 去掉金额/分类/商家/账户后的剩余备注；没有则 null
-- accountHint: string|null 付款账户
-- toAccountHint: string|null 转入账户（仅转账）
+- note: string|null 去掉金额/分类/商家/资产账户后的剩余备注；没有则 null
+- accountHint: string|null 付款资产账户
+- toAccountHint: string|null 转入资产账户（仅转账）
 用户分类：$catList
-用户账户：$accList
+用户资产账户：$accList
 规则：不要把整句原文放进 note；不确定的 categoryHint 置 null。
 ''';
 
@@ -266,8 +270,8 @@ Future<AiTextFillResult?> parseBookkeepingTextWithLlm(
     }
     if (amount != null) hits.add('金额:$amount');
     if (mappedCat != null) hits.add('分类:$mappedCat');
-    if (accountName != null) hits.add('账户:$accountName');
-    if (toAccountName != null) hits.add('账户→$toAccountName');
+    if (accountName != null) hits.add('资产账户:$accountName');
+    if (toAccountName != null) hits.add('资产账户→$toAccountName');
     if (merchant != null) hits.add('商家:$merchant');
     if (safeNote != null) hits.add('备注:$safeNote');
 
@@ -440,7 +444,11 @@ Future<AiTextFillResult?> parseBookkeepingImageWithLlm(
       '请识别这张账单截图，返回与文本填单相同字段的 JSON。',
 }) async {
   if (!config.isReady) {
-    throw LlmVisionException('请先在智能填单里启用大模型并填写 API Key');
+    throw LlmVisionException(
+      config.enabled
+          ? '请先在「我的 · 智能填单」填写 API Key'
+          : '请先在「我的 · 智能填单」启用大模型',
+    );
   }
   final names = categories.isNotEmpty
       ? categories.map((c) => c.name).toList()
@@ -458,7 +466,7 @@ Future<AiTextFillResult?> parseBookkeepingImageWithLlm(
 - accountHint: string|null
 - toAccountHint: string|null
 用户分类：$catList
-用户账户：$accList
+用户资产账户：$accList
 ''';
 
   final dataUrl = 'data:image/jpeg;base64,${base64Encode(jpegBytes)}';

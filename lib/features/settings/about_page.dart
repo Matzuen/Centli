@@ -69,7 +69,7 @@ class _AboutPageState extends State<AboutPage> {
               ),
               const SizedBox(height: CentliSpacing.dense),
               Text(
-                '厘清每一笔账单',
+                '厘清资产，安心记账',
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
@@ -105,7 +105,7 @@ class _AboutPageState extends State<AboutPage> {
                           context: context,
                           applicationName: 'Centli',
                           applicationVersion: appVersion,
-                          applicationLegalese: '厘记 · 厘清每一笔账单',
+                          applicationLegalese: '厘记 · 厘清资产，安心记账',
                         );
                       },
                     ),

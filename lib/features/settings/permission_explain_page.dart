@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../app/deep_link.dart';
+import '../../app/theme.dart';
 import '../../data/db/database_provider.dart';
 import '../../platform/notifications/notification_listener_stub.dart';
-import '../../app/theme.dart';
 
 /// Shown after (or while) returning from system notification-listener settings.
 /// Wireframe §9: 权限说明页 — 系统设置返回后说明 [P1].
@@ -18,7 +19,7 @@ class PermissionExplainPage extends ConsumerStatefulWidget {
   /// When true, jump to system settings once after first frame (e.g. from「去开启」).
   final bool openSettingsOnEntry;
 
-  /// When true, write onboarding_done and go `/home` on continue.
+  /// When true, write onboarding_done and go `/assets` on continue.
   final bool finishOnboarding;
 
   @override
@@ -97,7 +98,8 @@ class _PermissionExplainPageState extends ConsumerState<PermissionExplainPage>
     if (widget.finishOnboarding) {
       await ref.read(databaseProvider).setSetting('onboarding_done', 'true');
       if (!mounted) return;
-      context.go('/home');
+      // New users land on assets to set up 资产账户 before 记一笔.
+      context.go(PendingDeepLink.take() ?? '/assets');
       return;
     }
     if (context.canPop()) {

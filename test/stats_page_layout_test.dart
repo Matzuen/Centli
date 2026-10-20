@@ -8,7 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// 统计页四张卡片：时间范围 / 分类环形图 + 图例 / 汇总 / 账户。
+/// 统计页四张卡片：时间范围 / 分类环形图 + 图例 / 汇总 / 资产账户。
 ///
 /// 只做渲染与结构校验（不 pumpAndSettle：页面挂的是 Drift 流）。
 void main() {
@@ -201,7 +201,7 @@ void main() {
     await pump(tester);
     expect(find.byKey(const Key('stats_accounts_note')), findsOneWidget);
     expect(find.text('不包含转账数据'), findsOneWidget);
-    expect(find.text('账户'), findsOneWidget);
+    expect(find.text('资产账户'), findsOneWidget);
     expect(find.text('名称'), findsOneWidget);
   });
 }

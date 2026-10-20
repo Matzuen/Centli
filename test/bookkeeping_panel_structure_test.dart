@@ -77,7 +77,7 @@ void main() {
       final chips = src.substring(chipsIdx, noteIdx);
       expect(chips.contains("_happenAtLabel"), isTrue);
       expect(chips.contains("'分类'"), isTrue);
-      expect(chips.contains("'账户'") || chips.contains("'转出'"), isTrue);
+      expect(chips.contains("'资产账户'") || chips.contains("'转出'"), isTrue);
       expect(chips.contains("'标签'"), isTrue);
       expect(chips.contains("'成员'"), isFalse);
     });

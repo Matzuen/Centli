@@ -218,7 +218,7 @@ IconData _iconFallback(String n) {
   return icons[n.hashCode.abs() % icons.length];
 }
 
-/// Soft pastel pair for chips (shared with CentliIconChip).
+/// Soft chip colors (shared with CentliIconChip).
 (Color, Color) colorsForName(String n) {
   const pairs = <(Color, Color)>[
     (Color(0xFFFFF3E0), Color(0xFFE65100)),

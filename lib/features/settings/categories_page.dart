@@ -111,7 +111,7 @@ class _CategoriesPageState extends ConsumerState<CategoriesPage>
         error: (e, _) => Center(child: Text('$e')),
         data: (ledgerId) {
           if (ledgerId == null) {
-            return const Center(child: Text('尚未初始化账本'));
+            return const Center(child: Text('尚未初始化记账本'));
           }
           return TabBarView(
             controller: _tabs,

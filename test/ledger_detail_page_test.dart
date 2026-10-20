@@ -3,6 +3,7 @@ import 'package:centli/data/db/centli_database.dart';
 import 'package:centli/data/db/database_provider.dart';
 import 'package:centli/features/ledger/bookkeeping_sheet.dart';
 import 'package:centli/features/ledger/ledger_detail_page.dart';
+import 'package:centli/features/security/app_lock_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -56,7 +57,11 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [databaseProvider.overrideWithValue(db)],
+        overrides: [
+          databaseProvider.overrideWithValue(db),
+          hideAmountProvider.overrideWith((ref) => false),
+          appLockEnabledProvider.overrideWith((ref) => Stream.value(false)),
+        ],
         child: MaterialApp(
           theme: CentliTheme.light(),
           localizationsDelegates: GlobalMaterialLocalizations.delegates,
@@ -188,9 +193,6 @@ class _FakeDb implements CentliDatabase {
 
   @override
   Stream<Transaction?> watchTransaction(String id) => Stream.value(row);
-
-  @override
-  Stream<bool> watchHideAmount() => Stream.value(false);
 
   @override
   Future<List<Account>> loadAccountsIncludingArchived(String ledgerId) async =>
