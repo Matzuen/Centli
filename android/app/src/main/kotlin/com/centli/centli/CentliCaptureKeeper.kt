@@ -16,9 +16,11 @@ import android.os.SystemClock
 import android.util.Log
 
 /**
- * Keeps the process alive after the UI is swiped away so
- * [CentliNotificationListener] stays bound. A quiet ongoing notification is
- * required for a foreground service; the listener itself still does the work.
+ * Dual insurance with [CentliNotificationListener] + [NativeCaptureIngest]:
+ *
+ * 1. NLS receives payment notices → native SQLite write + 「待确认」push
+ * 2. This foreground keeper keeps the process (and therefore the bound NLS)
+ *    alive after the UI is swiped away. Android requires an ongoing bar for FGS.
  */
 class CentliCaptureKeeper : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
@@ -92,6 +94,10 @@ class CentliCaptureKeeper : Service() {
         private const val WATCHDOG_REQUEST = 71002
 
         fun start(context: Context) {
+            if (!CentliNotificationListener.isAutoCaptureEnabled(context)) {
+                stop(context)
+                return
+            }
             val intent = Intent(context, CentliCaptureKeeper::class.java)
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -108,7 +114,14 @@ class CentliCaptureKeeper : Service() {
         }
 
         fun stop(context: Context) {
-            context.stopService(Intent(context, CentliCaptureKeeper::class.java))
+            try {
+                context.stopService(Intent(context, CentliCaptureKeeper::class.java))
+            } catch (_: Exception) {
+            }
+            try {
+                context.getSystemService(NotificationManager::class.java).cancel(NOTIF_ID)
+            } catch (_: Exception) {
+            }
         }
 
         fun ensureChannel(context: Context) {
@@ -146,7 +159,7 @@ class CentliCaptureKeeper : Service() {
     }
 }
 
-/** Restarts capture after boot, and on the 15-minute watchdog. */
+/** Restarts capture after boot, package replace, and the 15-minute watchdog. */
 class CentliBootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         if (!CentliNotificationListener.isAutoCaptureEnabled(context)) return

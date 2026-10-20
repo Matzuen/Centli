@@ -30,7 +30,7 @@ String pendingSourceLabel(String pkg) {
   return pkg;
 }
 
-/// 打开「确认入账」弹窗：填写金额 / 分类 / 账户 / 备注后直接入账。
+/// 打开「确认入账」弹窗：填写金额 / 分类 / 资产账户 / 备注后直接入账。
 ///
 /// 返回 true 表示已入账（调用方可以据此刷新或前移轮播）。
 Future<bool> showPendingConfirmDialog(
@@ -39,7 +39,7 @@ Future<bool> showPendingConfirmDialog(
   required PendingCapture capture,
 }) async {
   final db = ref.read(databaseProvider);
-  // 分类 / 账户选项：只加载一次，交给弹窗同步渲染。
+  // 分类 / 资产账户选项：只加载一次，交给弹窗同步渲染。
   final out = await db.loadCategories(capture.ledgerId, 'out');
   final inn = await db.loadCategories(capture.ledgerId, 'in');
   final accounts = await db.loadActiveAccounts(capture.ledgerId);
@@ -155,7 +155,7 @@ class _ConfirmPendingSheetState extends ConsumerState<_ConfirmPendingSheet> {
       return;
     }
     if (_accountId == null) {
-      _toast('请选择账户');
+      _toast('请选择资产账户');
       return;
     }
     if (_categoryId == null) {
@@ -318,7 +318,7 @@ class _ConfirmPendingSheetState extends ConsumerState<_ConfirmPendingSheet> {
                         ? null
                         : (v) => setState(() => _accountId = v),
                     decoration: const InputDecoration(
-                      labelText: '账户',
+                      labelText: '资产账户',
                       isDense: true,
                     ),
                   ),

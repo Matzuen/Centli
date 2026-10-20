@@ -163,7 +163,7 @@ class _PendingPageBodyState extends ConsumerState<PendingPage> {
         error: (e, _) => Center(child: Text('加载失败: $e')),
         data: (ledger) {
           if (ledger == null) {
-            return const Center(child: Text('尚未初始化账本'));
+            return const Center(child: Text('尚未初始化记账本'));
           }
           final listAsync = ref.watch(
             _pendingListProvider((ledgerId: ledger.id, status: filter)),
@@ -350,7 +350,7 @@ class _PendingPageBodyState extends ConsumerState<PendingPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('全部忽略'),
-        content: Text('将忽略当前账本下 $count 条待确认记录（可在「已忽略」查看）。'),
+        content: Text('将忽略当前记账本下 $count 条待确认记录（可在「已忽略」查看）。'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -535,11 +535,11 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
 
   String get _accountName {
     final id = _accountId;
-    if (id == null) return '未选账户';
+    if (id == null) return '未选资产账户';
     for (final a in widget.accounts) {
       if (a.id == id) return a.name;
     }
-    return '未选账户';
+    return '未选资产账户';
   }
 
   /// Prefer persisted direction; fall back to re-parse.
@@ -669,7 +669,7 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
                     child: Text(
                       [
                         if (_categoryFallback) '分类已回落第一项',
-                        if (_accountFallback) '账户已回落第一项',
+                        if (_accountFallback) '资产账户已回落第一项',
                       ].join(' · '),
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color: scheme.error,
@@ -779,7 +779,7 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
                     _accountFallback = false;
                   }),
                   decoration: InputDecoration(
-                    labelText: '账户',
+                    labelText: '资产账户',
                     border: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
                     isDense: true,
                     enabledBorder: _accountFallback
@@ -884,7 +884,7 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
     }
     if (_accountId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请选择账户')),
+        const SnackBar(content: Text('请选择资产账户')),
       );
       return;
     }

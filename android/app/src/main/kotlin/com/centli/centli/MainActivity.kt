@@ -157,6 +157,7 @@ class MainActivity : FlutterFragmentActivity() {
             if (isNotificationAccessGranted() &&
                 CentliNotificationListener.isAutoCaptureEnabled(this)
             ) {
+                // Dual insurance: rebind NLS + keep process via foreground keeper.
                 CentliCaptureKeeper.start(this)
                 if (!CentliNotificationListener.connected) {
                     CentliNotificationListener.ensureRebind(this)
@@ -165,6 +166,8 @@ class MainActivity : FlutterFragmentActivity() {
                 !CentliNotificationListener.connected
             ) {
                 CentliNotificationListener.ensureRebind(this)
+            } else if (!CentliNotificationListener.isAutoCaptureEnabled(this)) {
+                CentliCaptureKeeper.stop(this)
             }
         }
     }

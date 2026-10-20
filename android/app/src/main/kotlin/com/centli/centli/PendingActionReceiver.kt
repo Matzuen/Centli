@@ -15,24 +15,41 @@ import java.util.regex.Pattern
 
 /**
  * Notification action receiver: 入账 / 改金额 (RemoteInput) / 忽略 without opening App (G29.2).
+ *
+ * Schema note: pending_captures stores merchant text in [note] (v8 removed the
+ * merchant column). Selecting `merchant` silently failed every 入账 tap.
  */
 class PendingActionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         if (intent == null) return
-        val pendingId = intent.getStringExtra(EXTRA_PENDING_ID) ?: return
-        when (intent.action) {
-            ACTION_CONFIRM -> confirm(context, pendingId, amountOverride = null)
-            ACTION_IGNORE -> ignore(context, pendingId)
-            ACTION_SET_AMOUNT -> {
-                val results: Bundle? = RemoteInput.getResultsFromIntent(intent)
-                val raw = results?.getCharSequence(KEY_AMOUNT_INPUT)?.toString().orEmpty()
-                val minor = parseAmountMinor(raw)
-                if (minor == null) {
-                    Toast.makeText(context, "没看懂金额", Toast.LENGTH_SHORT).show()
-                    return
+        val pendingId = intent.getStringExtra(EXTRA_PENDING_ID)
+        if (pendingId.isNullOrBlank()) {
+            Log.w(TAG, "missing pendingId action=${intent.action}")
+            return
+        }
+        // DB work can exceed the default 10s broadcast budget on cold start.
+        val pending = goAsync()
+        try {
+            when (intent.action) {
+                ACTION_CONFIRM -> confirm(context, pendingId, amountOverride = null)
+                ACTION_IGNORE -> ignore(context, pendingId)
+                ACTION_SET_AMOUNT -> {
+                    val results: Bundle? = RemoteInput.getResultsFromIntent(intent)
+                    val raw = results?.getCharSequence(KEY_AMOUNT_INPUT)?.toString().orEmpty()
+                    val minor = parseAmountMinor(raw)
+                    if (minor == null) {
+                        Toast.makeText(context, "没看懂金额", Toast.LENGTH_SHORT).show()
+                        return
+                    }
+                    confirm(context, pendingId, amountOverride = minor)
                 }
-                confirm(context, pendingId, amountOverride = minor)
+                else -> Log.w(TAG, "unknown action=${intent.action}")
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "action failed", e)
+            Toast.makeText(context, "操作失败", Toast.LENGTH_SHORT).show()
+        } finally {
+            pending.finish()
         }
     }
 
@@ -58,7 +75,10 @@ class PendingActionReceiver : BroadcastReceiver() {
 
         private fun openDb(context: Context): SQLiteDatabase? {
             val dbFile = File(context.applicationContext.getDir("flutter", Context.MODE_PRIVATE), DB_NAME)
-            if (!dbFile.exists()) return null
+            if (!dbFile.exists()) {
+                Log.e(TAG, "DB missing at ${dbFile.absolutePath}")
+                return null
+            }
             return try {
                 SQLiteDatabase.openDatabase(dbFile.absolutePath, null, SQLiteDatabase.OPEN_READWRITE).also {
                     it.rawQuery("PRAGMA busy_timeout=3000", null).close()
@@ -70,46 +90,76 @@ class PendingActionReceiver : BroadcastReceiver() {
         }
 
         private fun ignore(context: Context, pendingId: String) {
-            val db = openDb(context) ?: return
+            val db = openDb(context)
+            if (db == null) {
+                Toast.makeText(context, "忽略失败：数据库不可用", Toast.LENGTH_SHORT).show()
+                return
+            }
             try {
                 val now = System.currentTimeMillis()
-                db.execSQL(
-                    "UPDATE pending_captures SET status=?, updated_at=? WHERE id=?",
-                    arrayOf<Any?>("ignored", now, pendingId),
-                )
+                val updated = db.compileStatement(
+                    "UPDATE pending_captures SET status=?, updated_at=? WHERE id=? AND status=?",
+                ).use { stmt ->
+                    stmt.bindString(1, "ignored")
+                    stmt.bindLong(2, now)
+                    stmt.bindString(3, pendingId)
+                    stmt.bindString(4, "pending")
+                    stmt.executeUpdateDelete()
+                }
                 PendingConfirmNotifier.cancel(context, pendingId)
+                Toast.makeText(
+                    context,
+                    if (updated > 0) "已忽略" else "记录已处理",
+                    Toast.LENGTH_SHORT,
+                ).show()
             } catch (e: Exception) {
                 Log.e(TAG, "ignore failed", e)
+                Toast.makeText(context, "忽略失败", Toast.LENGTH_SHORT).show()
             } finally {
                 db.close()
             }
         }
 
         private fun confirm(context: Context, pendingId: String, amountOverride: Int?) {
-            val db = openDb(context) ?: return
+            val db = openDb(context)
+            if (db == null) {
+                Toast.makeText(context, "入账失败：数据库不可用", Toast.LENGTH_SHORT).show()
+                return
+            }
             try {
                 val c = db.rawQuery(
                     """
-                    SELECT ledger_id, amount_minor, currency, merchant, happen_at,
-                           suggested_account_id, suggested_category_id, source_pkg, raw_title
+                    SELECT ledger_id, amount_minor, currency, note, happen_at,
+                           suggested_account_id, suggested_category_id, source_pkg, raw_title,
+                           direction, status
                     FROM pending_captures WHERE id=? LIMIT 1
                     """.trimIndent(),
                     arrayOf(pendingId),
                 )
                 if (!c.moveToFirst()) {
                     c.close()
+                    PendingConfirmNotifier.cancel(context, pendingId)
+                    Toast.makeText(context, "记录不存在", Toast.LENGTH_SHORT).show()
                     return
                 }
+                val status = c.getString(10)
                 val ledgerId = c.getString(0)
                 var amountMinor = if (c.isNull(1)) null else c.getInt(1)
                 val currency = c.getString(2) ?: "CNY"
-                val merchant = if (c.isNull(3)) null else c.getString(3)
+                val note = if (c.isNull(3)) null else c.getString(3)
                 val happenAt = if (c.isNull(4)) System.currentTimeMillis() else c.getLong(4)
                 val accountHintId = if (c.isNull(5)) null else c.getString(5)
                 val categoryHintId = if (c.isNull(6)) null else c.getString(6)
                 val sourcePkg = if (c.isNull(7)) null else c.getString(7)
                 val rawTitle = if (c.isNull(8)) null else c.getString(8)
+                val direction = if (c.isNull(9)) null else c.getString(9)
                 c.close()
+
+                if (status != null && status != "pending") {
+                    PendingConfirmNotifier.cancel(context, pendingId)
+                    Toast.makeText(context, "记录已处理", Toast.LENGTH_SHORT).show()
+                    return
+                }
 
                 if (amountOverride != null) {
                     amountMinor = amountOverride
@@ -124,17 +174,26 @@ class PendingActionReceiver : BroadcastReceiver() {
                         context,
                         pendingId,
                         "金额未知，点「改金额」",
-                        merchant ?: rawTitle,
+                        note ?: rawTitle,
                     )
+                    Toast.makeText(context, "请先填写金额", Toast.LENGTH_SHORT).show()
                     return
                 }
 
-                val type = "out" // pending confirm from pay notifs defaults out; direction not always stored
+                val type = txnType(direction)
+                // Refunds reduce expense, so they take an expense category —
+                // same rule as the Dart sheet (_catsForDirection: only 'in'
+                // when direction == "in").
+                val categoryKind = if (type == "in") "in" else "out"
+                val include = if (direction == "repay") 0 else 1
                 val accountId = resolveAccountId(db, ledgerId, accountHintId, sourcePkg)
-                val categoryId = resolveCategoryId(db, ledgerId, type, categoryHintId)
+                if (accountId == null) {
+                    Toast.makeText(context, "入账失败：没有可用账户", Toast.LENGTH_SHORT).show()
+                    return
+                }
+                val categoryId = resolveCategoryId(db, ledgerId, categoryKind, categoryHintId)
                 val now = System.currentTimeMillis()
                 val txnId = UUID.randomUUID().toString()
-                val note = merchant
                 val values = ContentValues().apply {
                     put("id", txnId)
                     put("ledger_id", ledgerId)
@@ -142,22 +201,28 @@ class PendingActionReceiver : BroadcastReceiver() {
                     put("amount_minor", amountMinor)
                     put("currency", currency)
                     put("account_id", accountId)
-                    put("category_id", categoryId)
+                    if (categoryId != null) put("category_id", categoryId) else putNull("category_id")
                     put("happen_at", happenAt)
                     put("note", note)
                     put("source", "noti_action")
                     putNull("occurrence_key")
-                    put("include_in_stat", 1)
-                    put("include_in_budget", 1)
+                    put("include_in_stat", include)
+                    put("include_in_budget", include)
                     put("created_at", now)
                     put("updated_at", now)
                     put("pending_id", pendingId)
                 }
-                db.insertOrThrow("transactions", null, values)
-                db.execSQL(
-                    "UPDATE pending_captures SET status=?, updated_at=? WHERE id=?",
-                    arrayOf<Any?>("confirmed", now, pendingId),
-                )
+                db.beginTransaction()
+                try {
+                    db.insertOrThrow("transactions", null, values)
+                    db.execSQL(
+                        "UPDATE pending_captures SET status=?, amount_minor=?, updated_at=? WHERE id=?",
+                        arrayOf<Any?>("confirmed", amountMinor, now, pendingId),
+                    )
+                    db.setTransactionSuccessful()
+                } finally {
+                    db.endTransaction()
+                }
                 PendingConfirmNotifier.cancel(context, pendingId)
                 Toast.makeText(
                     context,
@@ -166,9 +231,16 @@ class PendingActionReceiver : BroadcastReceiver() {
                 ).show()
             } catch (e: Exception) {
                 Log.e(TAG, "confirm failed", e)
+                Toast.makeText(context, "入账失败", Toast.LENGTH_SHORT).show()
             } finally {
                 db.close()
             }
+        }
+
+        private fun txnType(direction: String?): String = when (direction) {
+            "in" -> "in"
+            "refund" -> "refund"
+            else -> "out" // out / repay / null
         }
 
         private fun resolveAccountId(
@@ -176,18 +248,14 @@ class PendingActionReceiver : BroadcastReceiver() {
             ledgerId: String,
             hintId: String?,
             sourcePkg: String?,
-        ): String {
+        ): String? {
             if (!hintId.isNullOrBlank()) {
-                val c = db.rawQuery(
+                db.rawQuery(
                     "SELECT id FROM accounts WHERE id=? AND ledger_id=? AND archived=0 LIMIT 1",
                     arrayOf(hintId, ledgerId),
-                )
-                if (c.moveToFirst()) {
-                    val id = c.getString(0)
-                    c.close()
-                    return id
+                ).use { c ->
+                    if (c.moveToFirst()) return c.getString(0)
                 }
-                c.close()
             }
             val nameHint = when {
                 sourcePkg?.contains("Alipay", true) == true ||
@@ -196,62 +264,45 @@ class PendingActionReceiver : BroadcastReceiver() {
                 else -> null
             }
             if (nameHint != null) {
-                val c = db.rawQuery(
+                db.rawQuery(
                     "SELECT id FROM accounts WHERE ledger_id=? AND name=? AND archived=0 LIMIT 1",
                     arrayOf(ledgerId, nameHint),
-                )
-                if (c.moveToFirst()) {
-                    val id = c.getString(0)
-                    c.close()
-                    return id
+                ).use { c ->
+                    if (c.moveToFirst()) return c.getString(0)
                 }
-                c.close()
             }
-            val c = db.rawQuery(
+            db.rawQuery(
                 "SELECT id FROM accounts WHERE ledger_id=? AND archived=0 ORDER BY sort_order ASC LIMIT 1",
                 arrayOf(ledgerId),
-            )
-            if (c.moveToFirst()) {
-                val id = c.getString(0)
-                c.close()
-                return id
+            ).use { c ->
+                if (c.moveToFirst()) return c.getString(0)
             }
-            c.close()
-            // Last resort: any account
-            val c2 = db.rawQuery(
-                "SELECT id FROM accounts WHERE ledger_id=? AND archived=0 LIMIT 1",
-                arrayOf(ledgerId),
-            )
-            val id = if (c2.moveToFirst()) c2.getString(0) else "missing-account"
-            c2.close()
-            return id
+            return null
         }
 
         private fun resolveCategoryId(
             db: SQLiteDatabase,
             ledgerId: String,
-            type: String,
+            kind: String,
             hintId: String?,
         ): String? {
             if (!hintId.isNullOrBlank()) {
-                val c = db.rawQuery(
-                    "SELECT id FROM categories WHERE id=? AND ledger_id=? LIMIT 1",
-                    arrayOf(hintId, ledgerId),
-                )
-                if (c.moveToFirst()) {
-                    val id = c.getString(0)
-                    c.close()
-                    return id
+                // The hint must also match the direction's kind, otherwise an
+                // income id could be attached to an expense (or the reverse).
+                db.rawQuery(
+                    "SELECT id FROM categories WHERE id=? AND ledger_id=? AND kind=? LIMIT 1",
+                    arrayOf(hintId, ledgerId, kind),
+                ).use { c ->
+                    if (c.moveToFirst()) return c.getString(0)
                 }
-                c.close()
             }
-            val c = db.rawQuery(
+            db.rawQuery(
                 "SELECT id FROM categories WHERE ledger_id=? AND kind=? ORDER BY sort_order ASC LIMIT 1",
-                arrayOf(ledgerId, type),
-            )
-            val id = if (c.moveToFirst()) c.getString(0) else null
-            c.close()
-            return id
+                arrayOf(ledgerId, kind),
+            ).use { c ->
+                if (c.moveToFirst()) return c.getString(0)
+            }
+            return null
         }
     }
 }

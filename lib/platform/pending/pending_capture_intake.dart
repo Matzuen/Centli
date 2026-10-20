@@ -123,7 +123,7 @@ abstract final class PendingCaptureIntake {
     if (ledgerId == null || ledgerId.isEmpty) {
       return const ManualIngestResult(
         ok: false,
-        message: '尚未初始化账本',
+        message: '尚未初始化记账本',
       );
     }
 
@@ -285,9 +285,13 @@ abstract final class PendingCaptureIntake {
       final prepared = prepareImageForLlm(raw);
       final cfg = await SmartFillLlmSettings().load(db);
       if (!cfg.isReady) {
-        return const ManualIngestResult(
+        return ManualIngestResult(
           ok: false,
-          message: '请先在智能填单里启用大模型并配置 API Key',
+          message: !cfg.enabled
+              ? '请先在「我的 · 智能填单」启用大模型并保存'
+              : cfg.apiKey.trim().isEmpty
+                  ? '请先在「我的 · 智能填单」填写并保存 API Key'
+                  : '请先在「我的 · 智能填单」填写服务地址',
         );
       }
       final filled = await parseBookkeepingImageWithLlm(
@@ -303,7 +307,7 @@ abstract final class PendingCaptureIntake {
       }
       final ledgerId = await db.currentLedgerId();
       if (ledgerId == null || ledgerId.isEmpty) {
-        return const ManualIngestResult(ok: false, message: '尚未初始化账本');
+        return const ManualIngestResult(ok: false, message: '尚未初始化记账本');
       }
       final amountMinor = filled.amount == null
           ? null

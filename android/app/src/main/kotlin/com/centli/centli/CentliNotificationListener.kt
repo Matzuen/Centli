@@ -82,13 +82,16 @@ class CentliNotificationListener : NotificationListenerService() {
             "channelId" to channelId,
         )
 
-        // Native SQLite path first — survives process kill / no Flutter engine.
+        // Dual insurance:
+        // 1) Native SQLite + 「待确认」push — works without Flutter UI.
+        // 2) Foreground keeper — keeps this NLS bound after the app is swiped.
         try {
             NativeCaptureIngest.ingestAndNotify(this, payload)
         } catch (e: Exception) {
             Log.e(TAG, "native ingest error", e)
             enqueue(this, payload)
         }
+        CentliCaptureKeeper.start(this)
         // Flutter path for live UI (Dart dedupes if native already wrote).
         MainActivity.emitNotificationCapture(this, payload)
     }
