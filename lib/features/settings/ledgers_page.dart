@@ -150,7 +150,7 @@ class LedgersPage extends ConsumerWidget {
       builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx, setLocal) {
-            return AlertDialog(
+            return CentliGlassDialog(
               title: const Text('新建记账本'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,

@@ -543,7 +543,7 @@ Future<void> _showAdjustBalance(
 
   final ok = await showGlassDialog<bool>(
     context: context,
-    builder: (ctx) => AlertDialog(
+    builder: (ctx) => CentliGlassDialog(
       title: const Text('\u8c03\u6574\u4f59\u989d'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
@@ -614,7 +614,7 @@ Future<void> _confirmArchive(
 ) async {
   final ok = await showGlassDialog<bool>(
     context: context,
-    builder: (ctx) => AlertDialog(
+    builder: (ctx) => CentliGlassDialog(
       title: const Text('\u5f52\u6863\u8d44\u4ea7\u8d26\u6237'),
       content: Text(
         '\u786e\u5b9a\u5f52\u6863\u300c${account.name}\u300d\uff1f\u5f52\u6863\u540e\u4e0d\u518d\u51fa\u73b0\u5728\u8d44\u4ea7\u5217\u8868\uff0c\u5386\u53f2\u6d41\u6c34\u4fdd\u7559\u3002',
@@ -648,7 +648,7 @@ Future<void> _confirmUnarchive(
 ) async {
   final ok = await showGlassDialog<bool>(
     context: context,
-    builder: (ctx) => AlertDialog(
+    builder: (ctx) => CentliGlassDialog(
       title: const Text('\u53d6\u6d88\u5f52\u6863'),
       content: Text(
         '\u786e\u5b9a\u53d6\u6d88\u5f52\u6863\u300c${account.name}\u300d\uff1f\u5c06\u91cd\u65b0\u51fa\u73b0\u5728\u8d44\u4ea7\u5217\u8868\u4e0e\u8bb0\u8d26\u9762\u677f\u3002',

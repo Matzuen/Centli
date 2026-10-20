@@ -4,22 +4,27 @@ import 'package:flutter/material.dart';
 
 import '../../app/theme.dart';
 
-/// 毛玻璃基础组件：模糊「已经画在下面」的内容，再盖一层半透明色。
+/// 毛玻璃基础组件。
 ///
 /// 只新增半透明的玻璃色，**不改任何渐变色**（`CentliTheme.gradientTop/Mid/
-/// Bottom` 与 `scaffoldGradient` 保持原样），所以页面底色仍是原来的渐变。
+/// Bottom` 与 `scaffoldGradient` 保持原样）。
 ///
 /// 结构（顺序很重要）：
 /// 1. 外层承担阴影（阴影要被圆角裁掉就看不见了）
-/// 2. `ClipRRect` 限制模糊的作用范围，避免整屏模糊
+/// 2. `ClipRRect` 限制模糊的作用范围
 /// 3. `BackdropFilter` 采样下方像素并模糊
-/// 4. 最内层是半透明填充 + 1px 高光描边，形成玻璃质感
+/// 4. 最内层是半透明填充 + 1px 高光描边
+///
+/// [blur] 为 false 时只保留半透明 + 描边：卡片这类「背后只有一层平滑渐变」
+/// 的表面用不着模糊（视觉上没有差别，却要付出真实的 GPU 开销），弹窗这类
+/// 「背后是页面内容」的表面才需要真模糊。
 class CentliGlass extends StatelessWidget {
   const CentliGlass({
     super.key,
     required this.child,
     this.borderRadius,
     this.sigma = CentliTheme.glassSigma,
+    this.blur = true,
     this.tint,
     this.borderColor,
     this.shadow = true,
@@ -30,15 +35,18 @@ class CentliGlass extends StatelessWidget {
 
   final Widget child;
 
-  /// 全局模糊开关：`BackdropFilter` 在低端机上是实打实的开销。
-  /// 置 false 后所有玻璃表面退化成「半透明 + 高光边」，观感仍统一，只是不模糊。
+  /// 全局模糊开关：`BackdropFilter` 是实打实的 GPU 开销。
+  /// 置 false 后所有玻璃表面退化成「半透明 + 高光边」，观感仍统一。
   static bool blurEnabled = true;
 
   /// 默认按卡片圆角；底部弹层可传只圆上面的角。
   final BorderRadius? borderRadius;
 
-  /// 模糊半径。0 表示只做半透明（低端机或测试里可以直接关掉）。
+  /// 模糊半径。
   final double sigma;
+
+  /// 是否真的模糊；false 时只有半透明 + 描边。
+  final bool blur;
 
   /// 玻璃底色；默认浅色白 / 深色炭灰的半透明版本。
   final Color? tint;
@@ -57,6 +65,7 @@ class CentliGlass extends StatelessWidget {
     final radius = borderRadius ?? BorderRadius.circular(CentliTheme.cardRadius);
     final fill = tint ?? CentliTheme.glassTint(context, dark: dark);
     final hairline = borderColor ?? CentliTheme.glassBorder(context, dark: dark);
+    final doBlur = blur && sigma > 0 && CentliGlass.blurEnabled;
 
     // 半透明填充 + 高光描边；画在模糊层之上。
     Widget surface = DecoratedBox(
@@ -70,23 +79,13 @@ class CentliGlass extends StatelessWidget {
           : Padding(padding: padding!, child: child),
     );
 
-    if (sigma > 0 && CentliGlass.blurEnabled) {
-      surface = ClipRRect(
-        clipBehavior: clipBehavior,
-        borderRadius: radius,
-        child: BackdropFilter(
-          filter: ImageFilter.blur(
-            sigmaX: sigma,
-            sigmaY: sigma,
-            tileMode: TileMode.clamp,
-          ),
-          child: surface,
+    if (doBlur) {
+      surface = BackdropFilter(
+        filter: ImageFilter.blur(
+          sigmaX: sigma,
+          sigmaY: sigma,
+          tileMode: TileMode.clamp,
         ),
-      );
-    } else {
-      surface = ClipRRect(
-        clipBehavior: clipBehavior,
-        borderRadius: radius,
         child: surface,
       );
     }
@@ -97,37 +96,10 @@ class CentliGlass extends StatelessWidget {
         borderRadius: radius,
         boxShadow: shadow ? CentliTheme.glassShadow(context, dark: dark) : null,
       ),
-      child: surface,
-    );
-  }
-}
-
-/// 弹窗 / 菜单背后的整屏磨砂底：全屏模糊 + 一层很薄的色纱。
-///
-/// 单独抽出来是因为「弹窗自己的圆角表面」和「它背后那面磨砂墙」是两件事：
-/// 只有把整屏都模糊掉，半透明的弹窗看起来才像玻璃，而不是一块灰板。
-class CentliGlassBackdrop extends StatelessWidget {
-  const CentliGlassBackdrop({
-    super.key,
-    this.sigma = CentliTheme.glassBackdropSigma,
-  });
-
-  final double sigma;
-
-  @override
-  Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    if (sigma <= 0 || !CentliGlass.blurEnabled) {
-      return const SizedBox.shrink();
-    }
-    return IgnorePointer(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(
-          sigmaX: sigma,
-          sigmaY: sigma,
-          tileMode: TileMode.clamp,
-        ),
-        child: ColoredBox(color: CentliTheme.glassVeil(context, dark: dark)),
+      child: ClipRRect(
+        clipBehavior: clipBehavior,
+        borderRadius: radius,
+        child: surface,
       ),
     );
   }
@@ -135,15 +107,16 @@ class CentliGlassBackdrop extends StatelessWidget {
 
 /// `showDialog` 的毛玻璃版本：调用点只需换函数名，其余参数逐一透传。
 ///
-/// 实现方式是给弹窗背后铺一层 [CentliGlassBackdrop]，弹窗表面本身通过
-/// `dialogTheme.backgroundColor` 换成半透明，于是玻璃感来自「背后被磨砂 +
-/// 表面半透明」，弹窗内部的排版与行为完全不变。
+/// 玻璃感来自**弹窗自身的半透明表面**（见 [CentliGlassDialog] 里的那层
+/// `BackdropFilter`）：它模糊的是自己身后的页面内容，而不是给整页再加一层
+/// 模糊。系统遮罩只做轻微压暗，避免与玻璃叠加成一片灰。
 Future<T?> showGlassDialog<T>({
   required BuildContext context,
   required WidgetBuilder builder,
   bool barrierDismissible = true,
   Color? barrierColor,
   String? barrierLabel,
+  bool useSafeArea = true,
   bool useRootNavigator = true,
   RouteSettings? routeSettings,
   Offset? anchorPoint,
@@ -156,11 +129,9 @@ Future<T?> showGlassDialog<T>({
   return showDialog<T>(
     context: context,
     barrierDismissible: barrierDismissible,
-    // 磨砂层自己会压暗画面，系统遮罩再压一次就糊成一团。
-    barrierColor: barrierColor ?? Colors.black.withValues(alpha: 0.16),
+    barrierColor: barrierColor ?? Colors.black.withValues(alpha: 0.18),
     barrierLabel: barrierLabel,
-    // 关掉 route 级 SafeArea，改用自己的一层，让磨砂能铺到屏幕边缘。
-    useSafeArea: false,
+    useSafeArea: useSafeArea,
     useRootNavigator: useRootNavigator,
     routeSettings: routeSettings,
     anchorPoint: anchorPoint,
@@ -168,24 +139,17 @@ Future<T?> showGlassDialog<T>({
     fullscreenDialog: fullscreenDialog,
     requestFocus: requestFocus,
     animationStyle: animationStyle,
-    builder: (ctx) => Stack(
-      fit: StackFit.expand,
-      children: [
-        const CentliGlassBackdrop(),
-        SafeArea(child: Builder(builder: builder)),
-      ],
-    ),
+    builder: builder,
   );
 }
 
 /// `showModalBottomSheet` 的毛玻璃版本：同样只换函数名。
 ///
-/// 底部弹层只占屏幕下方一块，所以不需要整屏磨砂；把弹层自己的表面换成
-/// [CentliGlass]，模糊的就是它正下方那块页面内容。
+/// 底部弹层只占屏幕下方一块，不需要整屏处理；玻璃表面就是弹层自己，模糊的
+/// 是它正下方那块页面内容。
 ///
 /// 调用点传进来的 `backgroundColor` 会被当作玻璃底色（不传则用默认雾面），
-/// 这样原本传白色的弹层不会突然变成透明白；`elevation` 保留但不参与玻璃
-/// 层次（玻璃的投影由 [CentliGlass] 统一处理）。
+/// 这样原本传白色的弹层不会突然变成透明白。
 Future<T?> showGlassSheet<T>({
   required BuildContext context,
   required WidgetBuilder builder,
@@ -231,7 +195,8 @@ Future<T?> showGlassSheet<T>({
     clipBehavior: clipBehavior,
     // 让 route 的材质透明，玻璃表面由 builder 里的 CentliGlass 自己画。
     backgroundColor: Colors.transparent,
-    shape: shape ??
+    shape:
+        shape ??
         const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
@@ -241,6 +206,87 @@ Future<T?> showGlassSheet<T>({
       child: Builder(builder: builder),
     ),
   );
+}
+
+/// 毛玻璃弹窗面板：`AlertDialog` 的等价替代。
+///
+/// 只覆盖项目里实际用到的 `title` / `content` / `actions` / `insetPadding`
+/// 四个参数，内部布局与 `AlertDialog` 对齐（24 边距、按钮右对齐），但表面是
+/// 一层真正模糊身后内容的玻璃，而不是给整页加模糊。
+class CentliGlassDialog extends StatelessWidget {
+  const CentliGlassDialog({
+    super.key,
+    required this.title,
+    required this.content,
+    this.actions,
+    this.insetPadding,
+  });
+
+  final Widget title;
+  final Widget content;
+  final List<Widget>? actions;
+
+  /// 与 `AlertDialog` 同义；不传时沿用 M3 默认（左右 40 / 上下 24）。
+  final EdgeInsets? insetPadding;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
+    return Dialog(
+      // 表面全部由 CentliGlass 负责，route 自己的材质保持全透明。
+      backgroundColor: Colors.transparent,
+      shadowColor: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
+      elevation: 0,
+      insetPadding:
+          insetPadding ??
+          const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 280, maxWidth: 560),
+        child: CentliGlass(
+          borderRadius: BorderRadius.circular(CentliTheme.cardRadius),
+          tint: CentliTheme.glassSurface(context, dark: dark),
+          sigma: CentliTheme.glassDialogSigma,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+                child: DefaultTextStyle(
+                  // 与 AlertDialog 的标题样式保持一致（主题里的 headlineSmall）。
+                  style: theme.textTheme.headlineSmall!,
+                  child: title,
+                ),
+              ),
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                  child: DefaultTextStyle(
+                    style: theme.textTheme.bodyMedium!.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                    child: content,
+                  ),
+                ),
+              ),
+              if (actions != null && actions!.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+                  child: OverflowBar(
+                    alignment: MainAxisAlignment.end,
+                    spacing: 8,
+                    overflowSpacing: 4,
+                    children: actions!,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 // 与 SDK 内部常量保持一致，避免两条路径的默认高度比例不同。

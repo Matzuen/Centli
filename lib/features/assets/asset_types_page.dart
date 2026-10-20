@@ -174,7 +174,7 @@ Future<void> _promptCreate(
   final ctrl = TextEditingController();
   final ok = await showGlassDialog<bool>(
     context: context,
-    builder: (ctx) => AlertDialog(
+    builder: (ctx) => CentliGlassDialog(
       title: const Text('新增资产分类'),
       content: TextField(
         controller: ctrl,
@@ -217,7 +217,7 @@ Future<void> _promptRename(
   final ctrl = TextEditingController(text: type.name);
   final ok = await showGlassDialog<bool>(
     context: context,
-    builder: (ctx) => AlertDialog(
+    builder: (ctx) => CentliGlassDialog(
       title: const Text('重命名分类'),
       content: TextField(
         controller: ctrl,
@@ -261,7 +261,7 @@ Future<void> _promptDelete(
   if (count > 0) {
     await showGlassDialog<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => CentliGlassDialog(
         title: const Text('无法删除'),
         content: Text('有 $count 个资产账户在用「${type.name}」，请先改到其他分类或归档。'),
         actions: [
@@ -276,7 +276,7 @@ Future<void> _promptDelete(
   }
   final ok = await showGlassDialog<bool>(
     context: context,
-    builder: (ctx) => AlertDialog(
+    builder: (ctx) => CentliGlassDialog(
       title: const Text('删除分类'),
       content: Text('确定删除「${type.name}」？此操作不可撤销。'),
       actions: [

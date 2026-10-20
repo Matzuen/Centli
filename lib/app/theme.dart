@@ -170,8 +170,8 @@ abstract final class CentliTheme {
   /// 模糊半径：卡片 / 弹层表面。
   static const double glassSigma = 18;
 
-  /// 模糊半径：弹窗背后那面整屏磨砂。
-  static const double glassBackdropSigma = 26;
+  /// 模糊半径：弹窗自身的玻璃面板（它模糊身后的页面内容）。
+  static const double glassDialogSigma = 24;
 
   /// 玻璃填充色（半透明）：浅色是透白的雾面，深色是透炭灰的雾面。
   static Color glassTint(BuildContext context, {bool? dark}) {
@@ -181,12 +181,12 @@ abstract final class CentliTheme {
         : Colors.white.withValues(alpha: 0.70);
   }
 
-  /// 弹窗 / 弹层表面：比卡片实一点，保证正文可读。
+  /// 弹窗 / 弹层表面：比卡片略实，保证正文可读，但仍要能透出身后的磨砂内容。
   static Color glassSurface(BuildContext context, {bool? dark}) {
     final d = dark ?? Theme.of(context).brightness == Brightness.dark;
     return d
-        ? const Color(0xFF1B1F24).withValues(alpha: 0.84)
-        : Colors.white.withValues(alpha: 0.88);
+        ? const Color(0xFF1B1F24).withValues(alpha: 0.72)
+        : Colors.white.withValues(alpha: 0.68);
   }
 
   /// 磨砂底的色纱：很薄，只把对比度抬一点，避免纯模糊发灰。
@@ -697,6 +697,9 @@ class CentliSoftCard extends StatelessWidget {
       borderRadius: radius,
       clipBehavior: clipBehavior,
       tint: color,
+      // 卡片背后只有一层平滑渐变，模糊看不出差别却要付真实开销，
+      // 所以卡片只保留半透明 + 高光边；真模糊留给弹窗 / 弹层。
+      blur: false,
       child: content,
     );
   }

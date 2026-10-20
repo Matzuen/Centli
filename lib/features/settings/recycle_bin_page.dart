@@ -124,7 +124,7 @@ class RecycleBinPage extends ConsumerWidget {
     } else if (action == 'purge') {
       final ok = await showGlassDialog<bool>(
         context: context,
-        builder: (ctx) => AlertDialog(
+        builder: (ctx) => CentliGlassDialog(
           title: const Text('永久删除？'),
           content: const Text('此操作不可撤销。'),
           actions: [
@@ -165,7 +165,7 @@ class RecycleBinPage extends ConsumerWidget {
     if (!context.mounted) return;
     final ok = await showGlassDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => CentliGlassDialog(
         title: const Text('清空回收站？'),
         content: Text('将永久删除 $count 条流水，不可撤销。'),
         actions: [

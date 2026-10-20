@@ -250,7 +250,7 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
     if (!mounted) return;
     final ok = await showGlassDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => CentliGlassDialog(
         title: const Text('清空待确认'),
         content: Text('将删除当前记账本下 $_pendingCount 条待确认记录（不影响已入账流水）。此操作不可撤销。'),
         actions: [
@@ -293,7 +293,7 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
     showGlassDialog<void>(
       context: context,
       builder: (ctx) {
-        return AlertDialog(
+        return CentliGlassDialog(
           title: const Text('解析模板'),
           content: SingleChildScrollView(
             child: Column(

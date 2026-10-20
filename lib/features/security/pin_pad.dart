@@ -207,7 +207,7 @@ class _SetPinDialogState extends State<_SetPinDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
+    return CentliGlassDialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
       title: Text(_confirming ? '确认 PIN' : '设置 $_pinLength 位 PIN'),
       content: SizedBox(
@@ -321,7 +321,7 @@ class _VerifyPinDialogState extends State<_VerifyPinDialog> {
   @override
   Widget build(BuildContext context) {
     final len = _pinLength;
-    return AlertDialog(
+    return CentliGlassDialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
       title: Text(widget.title),
       content: SizedBox(

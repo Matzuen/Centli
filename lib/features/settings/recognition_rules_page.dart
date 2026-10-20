@@ -88,7 +88,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
   Future<void> _deleteUser(NotiTemplate t) async {
     final ok = await showGlassDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => CentliGlassDialog(
         title: const Text('删除规则'),
         content: Text('确定删除「${t.displayName}」？'),
         actions: [
@@ -189,7 +189,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
     );
     final url = await showGlassDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => CentliGlassDialog(
         title: const Text('从网络导入官方规则'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -244,7 +244,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
   Future<void> _rollbackOfficial() async {
     final ok = await showGlassDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => CentliGlassDialog(
         title: const Text('恢复内置官方规则'),
         content: const Text('将用 App 内置模板覆盖本地官方规则（不影响「我的规则」）。确定？'),
         actions: [
@@ -295,7 +295,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
 
       final merge = await showGlassDialog<bool>(
         context: context,
-        builder: (ctx) => AlertDialog(
+        builder: (ctx) => CentliGlassDialog(
           title: const Text('导入我的规则'),
           content: const Text('合并到现有规则，还是完全替换？'),
           actions: [
@@ -338,7 +338,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
     final urlCtrl = TextEditingController();
     final url = await showGlassDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => CentliGlassDialog(
         title: const Text('从网络导入我的规则'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -380,7 +380,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
 
     final merge = await showGlassDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => CentliGlassDialog(
         title: const Text('导入方式'),
         content: Text('从\n$pasted\n下载后，合并到现有规则，还是完全替换？'),
         actions: [

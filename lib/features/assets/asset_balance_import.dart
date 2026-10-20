@@ -52,7 +52,7 @@ Future<void> importAssetBalancesFromScreenshot(
     if (!context.mounted) return;
     final ok = await showGlassDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => CentliGlassDialog(
         title: const Text('截图识别说明'),
         content: const Text(
           '资产截图识别会把图片发送到 DeepSeek（或你配置的大模型服务），是否继续？',

@@ -139,7 +139,7 @@ class _RuleTile extends ConsumerWidget {
         onLongPress: () async {
           final ok = await showGlassDialog<bool>(
             context: context,
-            builder: (ctx) => AlertDialog(
+            builder: (ctx) => CentliGlassDialog(
               title: const Text('删除周期规则？'),
               content: const Text('已生成的流水不受影响。'),
               actions: [
@@ -192,7 +192,7 @@ class _RuleTile extends ConsumerWidget {
                       Navigator.pop(ctx);
                       final ok = await showGlassDialog<bool>(
                         context: context,
-                        builder: (dCtx) => AlertDialog(
+                        builder: (dCtx) => CentliGlassDialog(
                           title: const Text('删除周期规则？'),
                           content: const Text('已生成的流水不受影响。'),
                           actions: [

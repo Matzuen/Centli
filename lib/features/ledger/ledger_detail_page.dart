@@ -665,7 +665,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
   Future<bool> _confirmDiscard(BuildContext context) async {
     final leave = await showGlassDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => CentliGlassDialog(
         title: const Text('放弃修改？'),
         content: const Text('这笔账单还有未保存的修改，离开后会丢失。'),
         actions: [
@@ -884,7 +884,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
   Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
     final ok = await showGlassDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => CentliGlassDialog(
         title: const Text('删除账单'),
         content: const Text('确定删除这笔账单？可在「回收站」恢复。'),
         actions: [
@@ -1095,7 +1095,7 @@ Future<String?> _promptAmount(
   final formKey = GlobalKey<FormState>();
   final done = showGlassDialog<String>(
     context: context,
-    builder: (ctx) => AlertDialog(
+    builder: (ctx) => CentliGlassDialog(
       title: Text('修改金额 ($currency)'),
       content: Form(
         key: formKey,
@@ -1159,7 +1159,7 @@ Future<bool?> _promptText(
 }) {
   final done = showGlassDialog<bool>(
     context: context,
-    builder: (ctx) => AlertDialog(
+    builder: (ctx) => CentliGlassDialog(
       title: Text(title),
       content: TextField(
         key: const Key('ledger_detail_text_field'),
@@ -1210,7 +1210,7 @@ Future<List<String>?> showTagEditorDialog(
             ctrl.clear();
           }
 
-          return AlertDialog(
+          return CentliGlassDialog(
             title: Text(title),
             content: SizedBox(
               width: 360,

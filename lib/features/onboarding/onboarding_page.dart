@@ -47,7 +47,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
       builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx, setLocal) {
-            return AlertDialog(
+            return CentliGlassDialog(
               title: const Text('设置我的记账本'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,

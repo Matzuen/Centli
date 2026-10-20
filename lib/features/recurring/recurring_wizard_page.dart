@@ -155,7 +155,7 @@ class _RecurringWizardPageState extends ConsumerState<RecurringWizardPage> {
     if (n > 1) {
       final ok = await showGlassDialog<bool>(
         context: context,
-        builder: (ctx) => AlertDialog(
+        builder: (ctx) => CentliGlassDialog(
           title: const Text('将补记多期'),
           content: Text('起始日较早，保存后约会补记 $n 笔。确认？'),
           actions: [

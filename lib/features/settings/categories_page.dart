@@ -621,7 +621,7 @@ Future<void> promptArchiveCategory(
       : '确定归档「${cat.name}」？';
   final ok = await showGlassDialog<bool>(
     context: context,
-    builder: (ctx) => AlertDialog(
+    builder: (ctx) => CentliGlassDialog(
       title: const Text('归档分类'),
       content: Text(msg),
       actions: [
@@ -652,7 +652,7 @@ Future<void> promptUnarchiveCategory(
 ) async {
   final ok = await showGlassDialog<bool>(
     context: context,
-    builder: (ctx) => AlertDialog(
+    builder: (ctx) => CentliGlassDialog(
       title: const Text('取消归档'),
       content: Text(
         '确定取消归档「${cat.name}」？将重新出现在分类管理与记账面板。'
@@ -699,7 +699,7 @@ Future<_CategoryEditorResult?> _promptCategoryEditor(
     builder: (ctx) {
       return StatefulBuilder(
         builder: (ctx, setLocal) {
-          return AlertDialog(
+          return CentliGlassDialog(
             title: Text(title),
             content: SingleChildScrollView(
               child: Column(

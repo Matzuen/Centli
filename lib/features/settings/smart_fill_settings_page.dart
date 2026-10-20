@@ -120,7 +120,7 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
   Future<void> _clearKey() async {
     final ok = await showGlassDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => CentliGlassDialog(
         title: const Text('清除接口密钥？'),
         content: const Text('清除后将无法调用大模型，AI 增强会回退到本地解析。'),
         actions: [

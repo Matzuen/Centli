@@ -363,7 +363,7 @@ List<Account> _accounts = [];
       builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx, setLocal) {
-            return AlertDialog(
+            return CentliGlassDialog(
               title: Text('\u8de8\u5e01\u8f6c\u8d26 ($fromCcy \u2192 $toCcy)'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -729,7 +729,7 @@ List<Account> _accounts = [];
         : (_noteCtrl.text.trim().isNotEmpty ? '备注' : '标签');
     final ok = await showGlassDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => CentliGlassDialog(
         title: const Text('放弃这笔记账？'),
         content: Text('已输入 $label，确定放弃？'),
         actions: [

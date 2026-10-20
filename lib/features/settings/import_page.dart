@@ -83,7 +83,7 @@ class _ImportPageState extends ConsumerState<ImportPage> {
     final b = preview.bundle;
     final ok = await showGlassDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => CentliGlassDialog(
         title: const Text('\u786e\u8ba4\u8fd8\u539f\uff1f'),
         content: Text(
           '\u5c06\u6e05\u7a7a\u672c\u673a\u5168\u90e8\u8d26\u672c\u6570\u636e\uff08\u8d44\u4ea7\u8d26\u6237/\u5206\u7c7b/\u6d41\u6c34/\u5f85\u786e\u8ba4/\u89c4\u5219/\u9884\u7b97/\u6c47\u7387\u7f13\u5b58\uff09\uff0c'

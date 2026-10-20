@@ -1130,7 +1130,7 @@ Future<void> showAccountEditor(
       return StatefulBuilder(
         builder: (ctx, setLocal) {
           final decimals = currencyDecimals[currency] ?? 2;
-          return AlertDialog(
+          return CentliGlassDialog(
             title: Text(existing == null ? '新建资产账户' : '编辑资产账户'),
             content: SingleChildScrollView(
               child: Column(

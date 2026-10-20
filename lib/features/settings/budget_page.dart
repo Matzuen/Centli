@@ -397,7 +397,7 @@ Future<void> _showAmountEditor(
   final ok = await showGlassDialog<bool>(
     context: context,
     builder: (ctx) {
-      return AlertDialog(
+      return CentliGlassDialog(
         title: Text(title),
         content: TextField(
           controller: ctrl,
@@ -504,7 +504,7 @@ Future<void> _showCategoryBudgetEditor(
     builder: (ctx) {
       return StatefulBuilder(
         builder: (ctx, setLocal) {
-          return AlertDialog(
+          return CentliGlassDialog(
             title: const Text('\u5206\u7c7b\u9884\u7b97'),
             content: Column(
               mainAxisSize: MainAxisSize.min,

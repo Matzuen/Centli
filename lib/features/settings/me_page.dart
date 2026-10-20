@@ -393,7 +393,7 @@ Future<void> showLedgerEditor(
     builder: (ctx) {
       return StatefulBuilder(
         builder: (ctx, setLocal) {
-          return AlertDialog(
+          return CentliGlassDialog(
             title: const Text('记账本设置'),
             content: SingleChildScrollView(
               child: Column(

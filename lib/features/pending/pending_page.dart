@@ -401,7 +401,7 @@ class _PendingPageBodyState extends ConsumerState<PendingPage> {
     if (!context.mounted) return;
     final ok = await showGlassDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => CentliGlassDialog(
         title: const Text('全部忽略'),
         content: Text('将忽略当前记账本下 $count 条待确认记录（可在「已忽略」查看）。'),
         actions: [
@@ -446,7 +446,7 @@ class _PendingPageBodyState extends ConsumerState<PendingPage> {
     if (!context.mounted) return;
     final ok = await showGlassDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => CentliGlassDialog(
         title: const Text('清空已忽略'),
         content: Text('将永久删除 $count 条已忽略记录，不可撤销。'),
         actions: [

@@ -280,7 +280,7 @@ Future<void> _showEditor(
     builder: (ctx) {
       return StatefulBuilder(
         builder: (ctx, setLocal) {
-          return AlertDialog(
+          return CentliGlassDialog(
             title: Text(existing == null ? '添加汇率' : '编辑汇率'),
             content: SingleChildScrollView(
               child: Column(
