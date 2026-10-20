@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 
-/// Soft pastel theme: Centli chrome + Finch polish (cards/gradient/radii).
+/// Centli 绿紫渐变主题（薄荷绿 → 淡紫 → 丁香紫）+ 统一圆角 / 卡片。
 /// Shared layout density tokens — prefer these over one-off magic numbers.
 abstract final class CentliSpacing {
   /// Horizontal page inset (ListView / column).
@@ -54,34 +54,40 @@ abstract final class CentliSpacing {
 }
 
 abstract final class CentliTheme {
-  static const seed = Color(0xFF5B8DEF);
+  /// Brand purple — primary chrome / CTAs（偏淡、低饱和）。
+  static const seed = Color(0xFF8B84D6);
+  static const brandPrimary = Color(0xFF8B84D6);
+  /// Soft mint accent (pairs with purple in the gradient).
+  static const brandGreen = Color(0xFF6BB89A);
 
-  static const gradientTop = Color(0xFFE8F1FF);
-  static const gradientMid = Color(0xFFF3ECFF);
-  static const gradientBottom = Color(0xFFFFF0F5);
+  // 背景渐变更淡：近白的薄荷绿 → 淡紫 → 丁香紫。
+  static const gradientTop = Color(0xFFF4FAF7);
+  static const gradientMid = Color(0xFFF7F4FB);
+  static const gradientBottom = Color(0xFFFAF5FC);
 
   static const cardRadius = 22.0;
   static const pillRadius = 28.0;
 
   static const expenseRed = Color(0xFFE53935);
   static const incomeGreen = Color(0xFF43A047);
-  static const softBlue = Color(0xFF5B8DEF);
+  /// Legacy name kept for call sites; value is [brandPrimary].
+  static const softBlue = brandPrimary;
   static const coral = Color(0xFFFF8A80);
-  // Light keypad — B3/T6 contract measured hex.
-  static const keypadNumBgLight = Color(0xFFEAEDF4);
-  static const keypadOpBgLight = Color(0xFFD4E5F5);
+  // Light keypad — muted green / purple chrome.
+  static const keypadNumBgLight = Color(0xFFF1F3F5);
+  static const keypadOpBgLight = Color(0xFFE5F3EC);
   static const keypadAcBgLight = Color(0xFFFEDBD7);
-  static const keypadConfirmLight = Color(0xFF1F98F5);
-  static const keypadOpFgLight = Color(0xFF2A7BD4);
+  static const keypadConfirmLight = Color(0xFF8B84D6);
+  static const keypadOpFgLight = Color(0xFF4A9A7A);
   static const keypadAcFgLight = Color(0xFFA45D61);
   static const keypadNumFgLight = Color(0xFF1F2229);
   static const chipBorderLight = Color(0xFFE5E7EB);
 
   // Dark keypad — deep tones coordinated with dark ColorScheme surfaces.
   static const keypadNumBgDark = Color(0xFF2A2F3A);
-  static const keypadOpBgDark = Color(0xFF2E3A52);
+  static const keypadOpBgDark = Color(0xFF2A3A34);
   static const keypadAcBgDark = Color(0xFF432E2E);
-  static const keypadConfirmDark = Color(0xFF4C7DFF);
+  static const keypadConfirmDark = Color(0xFF9B94E0);
 
   /// Brightness-aware keypad backgrounds (prefer these over Light/Dark consts).
   static Color keypadNumBg(BuildContext context) =>
@@ -127,7 +133,8 @@ abstract final class CentliTheme {
 
   static List<Color> scaffoldGradientColors({bool dark = false}) {
     if (dark) {
-      return const [Color(0xFF1A1F2E), Color(0xFF221F2E), Color(0xFF2A1F28)];
+      // 深色同样压低饱和，避免绿/紫发闷。
+      return const [Color(0xFF161C1A), Color(0xFF1A1822), Color(0xFF1E1A24)];
     }
     return const [gradientTop, gradientMid, gradientBottom];
   }
@@ -144,7 +151,7 @@ abstract final class CentliTheme {
 
   static List<BoxShadow> get softCardShadow => [
     BoxShadow(
-      color: const Color(0xFF6B7A99).withValues(alpha: 0.08),
+      color: const Color(0xFF5A6B7A).withValues(alpha: 0.08),
       blurRadius: 18,
       offset: const Offset(0, 6),
     ),
@@ -252,8 +259,8 @@ abstract final class CentliTheme {
       scaffoldBackgroundColor: gradientTop,
       appBarTheme: AppBarTheme(
         centerTitle: false,
-        // Match gradient top so transparent routes never show a black AppBar strip.
-        backgroundColor: gradientTop,
+        // Transparent so CentliGradientScaffold / shell 绿紫渐变能透上来。
+        backgroundColor: Colors.transparent,
         foregroundColor: scheme.onSurface,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
@@ -283,21 +290,29 @@ abstract final class CentliTheme {
       ),
       navigationBarTheme: NavigationBarThemeData(
         height: 68,
-        backgroundColor: Colors.white.withValues(alpha: 0.92),
-        indicatorColor: softBlue.withValues(alpha: 0.16),
+        elevation: 0,
+        shadowColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        // 与卡片同色纯白，贴在粉紫渐变底上，避免发灰发闷。
+        backgroundColor: Colors.white,
+        indicatorColor: softBlue.withValues(alpha: 0.10),
+        indicatorShape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           final selected = states.contains(WidgetState.selected);
           return TextStyle(
             fontSize: 11,
             fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+            color: selected ? softBlue : const Color(0xFF9AA3B5),
           );
         }),
         iconTheme: WidgetStateProperty.resolveWith((states) {
           final selected = states.contains(WidgetState.selected);
           return IconThemeData(
             size: 24,
-            color: selected ? softBlue : const Color(0xFF6B7280),
+            color: selected ? softBlue : const Color(0xFF9AA3B5),
           );
         }),
       ),
@@ -424,7 +439,7 @@ abstract final class CentliTheme {
       ),
       appBarTheme: AppBarTheme(
         centerTitle: false,
-        backgroundColor: const Color(0xFF1A1F2E),
+        backgroundColor: Colors.transparent,
         foregroundColor: scheme.onSurface,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
@@ -454,8 +469,30 @@ abstract final class CentliTheme {
       ),
       navigationBarTheme: NavigationBarThemeData(
         height: 68,
-        indicatorColor: scheme.primaryContainer,
+        elevation: 0,
+        shadowColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        backgroundColor: scheme.surfaceContainerHighest,
+        indicatorColor: softBlue.withValues(alpha: 0.16),
+        indicatorShape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          final selected = states.contains(WidgetState.selected);
+          return TextStyle(
+            fontSize: 11,
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+            color: selected ? softBlue : scheme.onSurfaceVariant,
+          );
+        }),
+        iconTheme: WidgetStateProperty.resolveWith((states) {
+          final selected = states.contains(WidgetState.selected);
+          return IconThemeData(
+            size: 24,
+            color: selected ? softBlue : scheme.onSurfaceVariant,
+          );
+        }),
       ),
       cardTheme: CardThemeData(
         elevation: 0,
@@ -483,7 +520,7 @@ abstract final class CentliTheme {
   }
 }
 
-/// Soft pastel gradient behind page content.
+/// 绿紫渐变底，铺在页面内容后方。
 class CentliGradientScaffold extends StatelessWidget {
   const CentliGradientScaffold({
     super.key,
@@ -503,17 +540,15 @@ class CentliGradientScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
-    return Scaffold(
-      extendBody: extendBody,
-      // Fill AppBar strip; body DecoratedBox still paints the full gradient.
-      backgroundColor:
-          dark ? const Color(0xFF1A1F2E) : CentliTheme.gradientTop,
-      appBar: appBar,
-      floatingActionButton: floatingActionButton,
-      bottomNavigationBar: bottomNavigationBar,
-      body: DecoratedBox(
-        decoration: CentliTheme.scaffoldGradient(dark: dark),
-        child: body,
+    return DecoratedBox(
+      decoration: CentliTheme.scaffoldGradient(dark: dark),
+      child: Scaffold(
+        extendBody: extendBody,
+        backgroundColor: Colors.transparent,
+        appBar: appBar,
+        floatingActionButton: floatingActionButton,
+        bottomNavigationBar: bottomNavigationBar,
+        body: body,
       ),
     );
   }

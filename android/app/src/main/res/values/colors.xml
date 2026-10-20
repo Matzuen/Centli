@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Match CentliTheme.gradientTop / softBlue splash feel -->
-    <color name="centli_launch_bg">#FFE8F1FF</color>
-    <color name="centli_launch_bg_dark">#FF1A1F2E</color>
+    <!-- Match CentliTheme.gradientTop splash feel -->
+    <color name="centli_launch_bg">#FFF4FAF7</color>
+    <color name="centli_launch_bg_dark">#FF161C1A</color>
 </resources>
