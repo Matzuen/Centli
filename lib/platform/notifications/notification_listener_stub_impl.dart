@@ -26,6 +26,8 @@ abstract final class NotificationCaptureStub {
 
   static Future<void> ensureListenerRebind() async {}
 
+  static Future<void> forceListenerRebind() async {}
+
   static Future<void> openPermissionSettings() async {
     // No-op on platforms without NotificationListenerService.
   }

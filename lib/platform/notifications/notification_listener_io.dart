@@ -1,6 +1,7 @@
+import 'dart:async';
 import 'dart:io' show Platform;
 
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:flutter/services.dart';
 
 import 'dropped_notification.dart';
@@ -61,7 +62,7 @@ abstract final class NotificationCaptureStub {
     }
   }
 
-  /// Ask the system to re-bind the notification listener service.
+  /// Soft rebind: no-op when already connected. Safe for page reload / resume.
   static Future<void> ensureListenerRebind() async {
     if (!supported) return;
     try {
@@ -70,6 +71,32 @@ abstract final class NotificationCaptureStub {
       // no-op
     } on PlatformException {
       // no-op
+    }
+  }
+
+  /// Hard disable/enable of the NLS component. Only for explicit「重新连接」—
+  /// calling this on every reload drops live notifications.
+  static Future<void> forceListenerRebind() async {
+    if (!supported) return;
+    try {
+      await _channel.invokeMethod<void>('forceListenerRebind');
+    } on MissingPluginException {
+      // Older builds: fall back to soft.
+      await ensureListenerRebind();
+    } on PlatformException {
+      // no-op
+    }
+  }
+
+  /// 让 native 自己处理这条通知（Dart 侧失败时的兜底）。
+  static Future<void> _fallbackToNativeIngest(Map<String, dynamic> raw) async {
+    if (!supported) return;
+    try {
+      await _channel.invokeMethod<String>('nativeIngestCapture', raw);
+    } on MissingPluginException {
+      // 旧版本没有这个通道，只能记录。
+    } on PlatformException {
+      // ignore
     }
   }
 
@@ -173,7 +200,16 @@ abstract final class NotificationCaptureStub {
         final raw = Map<String, dynamic>.from(args);
         final handler = _onCapture;
         if (handler != null) {
-          await handler(raw);
+          // Do not await AI/network here — blocking the MethodChannel makes
+          // subsequent captures stall and feels like「开了 AI 就没反应」.
+          unawaited(
+            handler(raw).catchError((Object e, StackTrace st) {
+              debugPrint('notification_capture handler failed: $e\n$st');
+              // 处理失败时把 payload 交回 native：它会自己写库并推送待确认，
+              // 否则这条通知会在「已交给 Dart」之后静默丢失。
+              return _fallbackToNativeIngest(raw);
+            }),
+          );
         }
       }
       return null;

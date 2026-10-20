@@ -21,7 +21,7 @@ class CentliNotificationListener : NotificationListenerService() {
 
     override fun onCreate() {
         super.onCreate()
-        // Process may start from NLS bind with no Activity — keep FGS up.
+        // Process may start from NLS bind with no Activity — schedule heartbeat.
         if (isAutoCaptureEnabled(this)) {
             CentliResurrect.ensureAlive(this)
         }
@@ -97,7 +97,9 @@ class CentliNotificationListener : NotificationListenerService() {
 
         // Single writer inside emitNotificationCapture: Flutter when bridge is
         // ready, otherwise native SQLite + push (no dual insert).
-        CentliResurrect.ensureAlive(this)
+        // Do NOT call ensureAlive/ensureRebind here — soft rebind is a no-op
+        // when connected, but thrashing requestRebind on every post can make
+        // OEMs drop the binding. Heartbeat is CentliResurrect's job.
         MainActivity.emitNotificationCapture(this, payload)
     }
 

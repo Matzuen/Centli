@@ -166,6 +166,13 @@ bool noteLlmParseCall({DateTime? now}) {
   return true;
 }
 
+/// Peek without consuming a slot (for UI / trace before calling).
+bool isLlmParseRateLimited({DateTime? now}) {
+  final t = (now ?? DateTime.now()).millisecondsSinceEpoch;
+  _llmCallStamps.removeWhere((s) => t - s > 60000);
+  return _llmCallStamps.length >= kLlmParsePerMinuteCap;
+}
+
 @visibleForTesting
 void resetLlmParseRateLimit() => _llmCallStamps.clear();
 

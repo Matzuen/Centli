@@ -36,7 +36,18 @@ class MainActivity : FlutterFragmentActivity() {
                 }
                 "ensureListenerRebind" -> {
                     try {
-                        // Settings UI: hard toggle; timers use soft ensureRebind.
+                        // Soft: no-op when already connected. Safe for page reload /
+                        // app resume — hard toggle would drop live notifications.
+                        CentliNotificationListener.ensureRebind(this)
+                        CentliResurrect.ensureAlive(this)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("rebind_failed", e.message, null)
+                    }
+                }
+                "forceListenerRebind" -> {
+                    try {
+                        // Hard disable/enable — only for explicit「重新连接」.
                         CentliNotificationListener.forceRebind(this)
                         CentliResurrect.ensureAlive(this)
                         result.success(true)
@@ -110,6 +121,17 @@ class MainActivity : FlutterFragmentActivity() {
                     PendingConfirmNotifier.cancelAll(this)
                     result.success(null)
                 }
+                "nativeIngestCapture" -> {
+                    // Dart 处理失败（异常/DB 不可用）时的兜底：由 native 自己写库 + 推送。
+                    @Suppress("UNCHECKED_CAST")
+                    val payload = (call.arguments as? Map<*, *>)?.entries
+                        ?.associate { it.key.toString() to it.value } as? Map<String, Any?>
+                    if (payload == null) {
+                        result.success(null)
+                    } else {
+                        result.success(NativeCaptureIngest.ingestAndNotify(this, payload))
+                    }
+                }
                 "isResurrectScheduled" -> {
                     result.success(CentliResurrect.isScheduled(this))
                 }
@@ -160,7 +182,7 @@ class MainActivity : FlutterFragmentActivity() {
             if (isNotificationAccessGranted() &&
                 CentliNotificationListener.isAutoCaptureEnabled(this)
             ) {
-                // Dual insurance: rebind NLS + keep process via foreground keeper.
+                // Soft rebind NLS + schedule resurrect heartbeat (no FGS).
                 CentliResurrect.ensureAlive(this)
                 if (!CentliNotificationListener.connected) {
                     CentliNotificationListener.ensureRebind(this)

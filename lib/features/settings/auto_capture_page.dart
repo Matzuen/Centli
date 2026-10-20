@@ -4,7 +4,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
+import '../../platform/notifications/ai_noti_trace.dart';
 import '../../platform/notifications/notification_listener_stub.dart';
+import '../../platform/notifications/notification_llm_parse.dart';
 import '../../platform/notifications/notification_parse.dart';
 import '../../platform/notifications/noti_template_store.dart';
 import '../../app/theme.dart';
@@ -34,6 +36,7 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
   Map<String, String> _accountMap = {};
   List<Account> _accounts = const [];
   List<DroppedNotification> _dropped = const [];
+  String _aiTraceHint = '';
 
   @override
   void initState() {
@@ -60,7 +63,9 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
     final db = ref.read(databaseProvider);
     final enabled = (await db.getSetting('auto_capture_enabled')) == 'true';
     final granted = await NotificationCaptureStub.isPermissionGranted();
-    if (granted) {
+    // Soft only — hard forceRebind on every reload/resume was disconnecting
+    // the listener and made「打开软件也无法实时监听」.
+    if (granted && enabled) {
       await NotificationCaptureStub.ensureListenerRebind();
     }
     final connected = await NotificationCaptureStub.isListenerConnected();
@@ -83,6 +88,17 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
     final updatedAt = NotiTemplateStore.updatedAt;
     final source = NotiTemplateStore.source;
     final dropped = await NotificationCaptureStub.getDroppedNotifications();
+    final aiRules = [
+      for (final t in templates)
+        if (isDistillRuleId(t.id)) t,
+    ];
+    final trace = await AiNotiTrace.load(force: true);
+    final latest = trace.isEmpty ? null : trace.first;
+    final hint = latest == null
+        ? (aiRules.isEmpty
+            ? '官方 v$version · 尚无 AI 反写，点进查看处理记录'
+            : '官方 v$version · AI 规则 ${aiRules.length} 条')
+        : 'AI 规则 ${aiRules.length} 条 · 最近：${latest.kindLabel}';
 
     await db.setSetting('notification_template_version', '$version');
 
@@ -100,10 +116,9 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
       _accountMap = accountMap;
       _accounts = accounts;
       _dropped = dropped;
+      _aiTraceHint = hint;
       _loading = false;
     });
-    // Touch templates so analyzer keeps import used in mapping labels.
-    assert(templates.isNotEmpty || templates.isEmpty);
   }
 
   Future<void> _setEnabled(bool wantOn) async {
@@ -136,6 +151,7 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
           await NotificationCaptureStub.openBatteryOptimizationSettings();
           await Future<void>.delayed(const Duration(milliseconds: 400));
         }
+        // Soft rebind is enough after enabling; hard toggle drops the bind.
         await NotificationCaptureStub.ensureListenerRebind();
       }
       if (!mounted) return;
@@ -166,13 +182,16 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
 
   Future<void> _openPermission() async {
     if (_granted && !_listenerConnected) {
-      await NotificationCaptureStub.ensureListenerRebind();
+      // Explicit user action — hard rebind OK here.
+      await NotificationCaptureStub.forceListenerRebind();
+      // Give the system a moment to fire onListenerConnected.
+      await Future<void>.delayed(const Duration(milliseconds: 600));
       final connected = await NotificationCaptureStub.isListenerConnected();
       if (!mounted) return;
       setState(() => _listenerConnected = connected);
       if (connected) {
         ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('已请求重新连接通知监听')));
+            .showSnackBar(const SnackBar(content: Text('已重新连接通知监听')));
         return;
       }
     }
@@ -187,7 +206,7 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
     await _reload(soft: true);
   }
 
-  /// 「重新安排」：立即请求重绑并把后台复活任务排上（native 侧同时生效）。
+  /// 「重新安排」：软重绑 + 排上后台复活任务（勿硬 toggle，否则会打断正在监听）。
   Future<void> _rescheduleResurrect() async {
     setState(() => _busy = true);
     try {
@@ -455,9 +474,16 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
                   child: ListTile(
                     leading: const Icon(Icons.rule_outlined),
                     title: const Text('识别规则'),
-                    subtitle: Text('官方 v$_templateVersion · 自定义解析模板'),
+                    subtitle: Text(
+                      _aiTraceHint.isEmpty
+                          ? '官方 v$_templateVersion · 含 AI 反写规则与最近处理记录'
+                          : _aiTraceHint,
+                    ),
                     trailing: const Icon(Icons.chevron_right),
-                    onTap: () => context.push('/me/auto/rules'),
+                    onTap: () async {
+                      await context.push('/me/auto/rules');
+                      if (mounted) await _reload(soft: true);
+                    },
                   ),
                 ),
                 const SizedBox(height: CentliSpacing.section),

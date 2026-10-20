@@ -4,8 +4,8 @@ import android.app.Application
 import android.util.Log
 
 /**
- * Starts the capture foreground keeper as soon as the process is born
- * (NLS bind, boot, alarm, FGS restart) — not only when [MainActivity] opens.
+ * Soft-revive notification listening as soon as the process is born
+ * (NLS bind, boot, JobScheduler) — not only when [MainActivity] opens.
  */
 class CentliApplication : Application() {
     override fun onCreate() {

@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/utils/money.dart';
+import '../../platform/notifications/ai_noti_trace.dart';
 import '../../platform/notifications/notification_llm_parse.dart';
 import '../../platform/notifications/notification_parse.dart';
 import '../../platform/notifications/noti_template_store.dart';
@@ -43,6 +44,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
   String? _loadError;
   List<NotiTemplate> _staleDistill = const [];
   int _mergePruned = 0;
+  List<AiNotiTraceEvent> _aiTrace = const [];
 
   @override
   void initState() {
@@ -68,6 +70,8 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
       userRules: NotiTemplateStore.peekUser(),
       meta: NotiTemplateStore.peekDistillMeta(),
     );
+    final trace = await AiNotiTrace.load(force: true);
+    if (!mounted) return;
     setState(() {
       _official = NotiTemplateStore.peekOfficial();
       _user = NotiTemplateStore.peekUser();
@@ -78,8 +82,80 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
       _loadError = NotiTemplateStore.lastLoadError;
       _staleDistill = stale;
       _mergePruned = merged;
+      _aiTrace = trace;
       _loading = false;
     });
+  }
+
+  List<NotiTemplate> get _aiRules =>
+      [for (final t in _user) if (isDistillRuleId(t.id)) t];
+
+  List<NotiTemplate> get _manualRules =>
+      [for (final t in _user) if (!isDistillRuleId(t.id)) t];
+
+  String _relTrace(int whenMs) {
+    if (whenMs <= 0) return '';
+    final diff = DateTime.now().millisecondsSinceEpoch - whenMs;
+    if (diff < 60 * 1000) return '刚刚';
+    if (diff < 60 * 60 * 1000) return '${diff ~/ (60 * 1000)} 分钟前';
+    if (diff < 24 * 60 * 60 * 1000) {
+      return '${diff ~/ (60 * 60 * 1000)} 小时前';
+    }
+    return '${diff ~/ (24 * 60 * 60 * 1000)} 天前';
+  }
+
+  Future<void> _clearAiTrace() async {
+    await AiNotiTrace.clear();
+    if (!mounted) return;
+    setState(() => _aiTrace = const []);
+  }
+
+  Widget _userRuleTile(NotiTemplate t, ColorScheme scheme) {
+    return CentliSoftCard(
+      child: ListTile(
+        leading: Icon(
+          isDistillExcludeRuleId(t.id)
+              ? Icons.block_outlined
+              : isDistillCaptureRuleId(t.id)
+                  ? Icons.auto_awesome_outlined
+                  : Icons.edit_note,
+          color: scheme.primary,
+        ),
+        title: Text(t.displayName),
+        subtitle: Text(
+          [
+            t.packages.map(_pkgLabel).join('、'),
+            if (isDistillRuleId(t.id)) _distillActivityLabel(t),
+            if (t.mustContainRegex != null && t.mustContainRegex!.isNotEmpty)
+              '关键词 ${t.mustContainRegex}',
+          ].where((s) => s.isNotEmpty).join(' · '),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+        trailing: PopupMenuButton<String>(
+          onSelected: (v) async {
+            if (v == 'edit') {
+              final changed = await context.push<bool>(
+                '/me/auto/rules/edit?id=${Uri.encodeComponent(t.id)}',
+              );
+              if (changed == true) await _reload();
+            } else if (v == 'delete') {
+              await _deleteUser(t);
+            }
+          },
+          itemBuilder: (_) => const [
+            PopupMenuItem(value: 'edit', child: Text('编辑')),
+            PopupMenuItem(value: 'delete', child: Text('删除')),
+          ],
+        ),
+        onTap: () async {
+          final changed = await context.push<bool>(
+            '/me/auto/rules/edit?id=${Uri.encodeComponent(t.id)}',
+          );
+          if (changed == true) await _reload();
+        },
+      ),
+    );
   }
 
   Future<void> _purgeStaleDistill() async {
@@ -710,20 +786,107 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
                     const SizedBox(height: CentliSpacing.item),
                   ],
                 const SizedBox(height: CentliSpacing.item),
+                Text(
+                  '最近 AI 处理',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: CentliSpacing.dense),
+                Text(
+                  '打开「我的 → AI 增强 → AI 识别通知」后，每条监听通知会记一条决策。'
+                  '微信/支付宝支付会先本地入账，再后台问 AI 反写规则（约数秒后出现在下方）。',
+                  style: Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(color: scheme.onSurfaceVariant),
+                ),
+                const SizedBox(height: CentliSpacing.item),
+                CentliSoftCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      ListTile(
+                        dense: true,
+                        title: Text(
+                          _aiTrace.isEmpty
+                              ? '尚无记录'
+                              : '最近 ${_aiTrace.length} 条',
+                        ),
+                        trailing: _aiTrace.isEmpty
+                            ? null
+                            : TextButton(
+                                onPressed: _clearAiTrace,
+                                child: const Text('清空'),
+                              ),
+                      ),
+                      if (_aiTrace.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                          child: Text(
+                            '还没有处理记录。请确认：① 自动记账已开；②「AI 识别通知」已开并保存；'
+                            '③ 用真实支付/聊天通知测一次，再下拉刷新本页。',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: scheme.onSurfaceVariant),
+                          ),
+                        )
+                      else
+                        for (final e in _aiTrace.take(12))
+                          ListTile(
+                            dense: true,
+                            leading: Icon(
+                              e.kind.contains('distill')
+                                  ? Icons.auto_awesome
+                                  : e.kind.contains('exclude')
+                                      ? Icons.block_outlined
+                                      : Icons.smart_toy_outlined,
+                              size: 20,
+                              color: scheme.primary,
+                            ),
+                            title: Text(
+                              e.kindLabel,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            subtitle: Text(
+                              [
+                                _pkgLabel(e.pkg),
+                                e.titleShort,
+                                if (e.ruleName != null &&
+                                    e.ruleName!.isNotEmpty)
+                                  e.ruleName!,
+                                if (e.detail != null && e.detail!.isNotEmpty)
+                                  e.detail!,
+                                _relTrace(e.atMs),
+                              ].where((s) => s.isNotEmpty).join(' · '),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: CentliSpacing.sectionLoose),
                 Row(
                   children: [
                     Expanded(
                       child: Text(
-                        '我的规则',
+                        'AI 反写规则',
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
                     ),
                     Text(
-                      '${_user.length} 条',
+                      '${_aiRules.length} 条',
                       style: Theme.of(context).textTheme.bodySmall
                           ?.copyWith(color: scheme.onSurfaceVariant),
                     ),
+                    IconButton(
+                      tooltip: '刷新',
+                      onPressed: _busy ? null : _reload,
+                      icon: const Icon(Icons.refresh),
+                    ),
                   ],
+                ),
+                Text(
+                  '命名如「微信-支出-支付成功」「微信-排除」。捕获规则用于入账，排除规则用于丢弃。',
+                  style: Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(color: scheme.onSurfaceVariant),
                 ),
                 if (_mergePruned > 0) ...[
                   const SizedBox(height: CentliSpacing.item),
@@ -797,59 +960,53 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
                   ),
                 ],
                 const SizedBox(height: CentliSpacing.item),
-                if (_user.isEmpty)
+                if (_aiRules.isEmpty)
                   CentliSoftCard(
                     padding: const EdgeInsets.all(CentliSpacing.cardPad),
                     child: CentliEmptyState(
-                      icon: Icons.playlist_add,
-                      title: '还没有自定义规则',
-                      message: '点右下角 + 添加，或右上角从文件/网络导入。解析时优先匹配我的规则。',
+                      icon: Icons.auto_awesome_outlined,
+                      title: '还没有 AI 反写规则',
+                      message:
+                          '看上方「最近 AI 处理」：若只有「本地模板已识别」而没有「已反写」，'
+                          '多半是未开「AI 识别通知」或后台调用失败；若有「已反写」却列表为空，点刷新。',
                       padding: EdgeInsets.zero,
                     ),
                   )
                 else
-                  for (final t in _user) ...[
-                    CentliSoftCard(
-                      child: ListTile(
-                        leading: Icon(
-                          isDistillExcludeRuleId(t.id)
-                              ? Icons.block_outlined
-                              : isDistillCaptureRuleId(t.id)
-                                  ? Icons.auto_awesome_outlined
-                                  : Icons.edit_note,
-                          color: scheme.primary,
-                        ),
-                        title: Text(t.displayName),
-                        subtitle: Text(
-                          [
-                            t.packages.map(_pkgLabel).join('、'),
-                            if (isDistillRuleId(t.id)) _distillActivityLabel(t),
-                          ].where((s) => s.isNotEmpty).join(' · '),
-                        ),
-                        trailing: PopupMenuButton<String>(
-                          onSelected: (v) async {
-                            if (v == 'edit') {
-                              final changed = await context.push<bool>(
-                                '/me/auto/rules/edit?id=${Uri.encodeComponent(t.id)}',
-                              );
-                              if (changed == true) await _reload();
-                            } else if (v == 'delete') {
-                              await _deleteUser(t);
-                            }
-                          },
-                          itemBuilder: (_) => const [
-                            PopupMenuItem(value: 'edit', child: Text('编辑')),
-                            PopupMenuItem(value: 'delete', child: Text('删除')),
-                          ],
-                        ),
-                        onTap: () async {
-                          final changed = await context.push<bool>(
-                            '/me/auto/rules/edit?id=${Uri.encodeComponent(t.id)}',
-                          );
-                          if (changed == true) await _reload();
-                        },
+                  for (final t in _aiRules) ...[
+                    _userRuleTile(t, scheme),
+                    const SizedBox(height: CentliSpacing.item),
+                  ],
+                const SizedBox(height: CentliSpacing.sectionLoose),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '手写规则',
+                        style: Theme.of(context).textTheme.titleMedium,
                       ),
                     ),
+                    Text(
+                      '${_manualRules.length} 条',
+                      style: Theme.of(context).textTheme.bodySmall
+                          ?.copyWith(color: scheme.onSurfaceVariant),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: CentliSpacing.item),
+                if (_manualRules.isEmpty)
+                  CentliSoftCard(
+                    padding: const EdgeInsets.all(CentliSpacing.cardPad),
+                    child: CentliEmptyState(
+                      icon: Icons.playlist_add,
+                      title: '还没有手写规则',
+                      message: '点右下角 + 添加，或右上角从文件/网络导入。',
+                      padding: EdgeInsets.zero,
+                    ),
+                  )
+                else
+                  for (final t in _manualRules) ...[
+                    _userRuleTile(t, scheme),
                     const SizedBox(height: CentliSpacing.item),
                   ],
                 const SizedBox(height: CentliSpacing.sectionLoose),
