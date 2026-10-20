@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -32,6 +34,8 @@ final _pendingFilterProvider = StateProvider<String>((ref) => 'pending');
 final _pendingListProvider =
     StreamProvider.family<List<PendingCapture>, ({String ledgerId, String status})>(
   (ref, args) {
+    // Re-subscribe after native SQLite writes that Drift streams miss.
+    ref.watch(pendingExternalWriteTickProvider);
     final db = ref.watch(databaseProvider);
     // Strict partition: pending(ok) / parse_failed / ignored / confirmed.
     // Legacy route tab=all maps to confirmed (see initState).
@@ -50,11 +54,22 @@ final _pendingListProvider =
 );
 
 class PendingPage extends ConsumerStatefulWidget {
-  const PendingPage({super.key, this.initialFilter});
+  const PendingPage({
+    super.key,
+    this.initialFilter,
+    this.focusPendingId,
+    this.openConfirm = false,
+  });
 
   /// Optional tab: pending | parse_failed | ignored | confirmed
   /// (`all` accepted as legacy alias for confirmed).
   final String? initialFilter;
+
+  /// Deep-link target from notification tap / 「确认」 action.
+  final String? focusPendingId;
+
+  /// When true, open [showPendingConfirmDialog] for [focusPendingId].
+  final bool openConfirm;
 
   @override
   ConsumerState<PendingPage> createState() => _PendingPageBodyState();
@@ -62,6 +77,7 @@ class PendingPage extends ConsumerStatefulWidget {
 
 class _PendingPageBodyState extends ConsumerState<PendingPage> {
   Future<({List<Category> cats, List<Account> accounts})>? _listsFuture;
+  String? _handledFocusId;
 
   Future<({List<Category> cats, List<Account> accounts})> _loadLists(
     String ledgerId,
@@ -90,6 +106,42 @@ class _PendingPageBodyState extends ConsumerState<PendingPage> {
         ref.read(_pendingFilterProvider.notifier).state = mapped;
       });
     }
+    final focus = widget.focusPendingId;
+    if (focus != null && focus.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        unawaited(_focusPending(focus, openConfirm: widget.openConfirm));
+      });
+    }
+  }
+
+  Future<void> _focusPending(String id, {required bool openConfirm}) async {
+    if (!mounted || _handledFocusId == id) return;
+    _handledFocusId = id;
+    // Native insert may land just before we open — tick + short retry.
+    ref.read(pendingExternalWriteTickProvider.notifier).state++;
+    final db = ref.read(databaseProvider);
+    PendingCapture? capture;
+    for (var i = 0; i < 6; i++) {
+      capture = await db.getPendingCapture(id);
+      if (capture != null) break;
+      await Future<void>.delayed(Duration(milliseconds: 120 * (i + 1)));
+      if (!mounted) return;
+    }
+    if (!mounted) return;
+    if (capture == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('未找到这条待确认，请下拉刷新或稍后再试')),
+      );
+      return;
+    }
+    final tab = capture.status == 'ignored'
+        ? 'ignored'
+        : capture.status == 'pending'
+            ? (capture.parseOk == 1 ? 'pending' : 'parse_failed')
+            : 'confirmed';
+    ref.read(_pendingFilterProvider.notifier).state = tab;
+    if (!openConfirm || capture.status != 'pending') return;
+    await showPendingConfirmDialog(context, ref, capture: capture);
   }
 
   @override

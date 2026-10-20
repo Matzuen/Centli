@@ -19,9 +19,6 @@ class MainActivity : FlutterFragmentActivity() {
 
     private val mainHandler = Handler(Looper.getMainLooper())
 
-    @Volatile
-    private var dartBridgeReady = false
-
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         val channel = MethodChannel(
@@ -39,7 +36,9 @@ class MainActivity : FlutterFragmentActivity() {
                 }
                 "ensureListenerRebind" -> {
                     try {
-                        CentliNotificationListener.ensureRebind(this)
+                        // Settings UI: hard toggle; timers use soft ensureRebind.
+                        CentliNotificationListener.forceRebind(this)
+                        CentliCaptureKeeper.start(this)
                         result.success(true)
                     } catch (e: Exception) {
                         result.error("rebind_failed", e.message, null)
@@ -123,9 +122,10 @@ class MainActivity : FlutterFragmentActivity() {
                     }
                 }
                 "bridgeReady" -> {
-                    dartBridgeReady = true
+                    dartBridgeReadyGlobal = true
                     flushQueuedCaptures()
                     flushQueuedPendingIntake()
+                    flushQueuedOpenRoute()
                     result.success(null)
                 }
                 "getDroppedNotifications" -> {
@@ -187,6 +187,7 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
     override fun onDestroy() {
+        dartBridgeReadyGlobal = false
         if (methodChannel != null) {
             methodChannel = null
         }
@@ -223,7 +224,7 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
     private fun flushQueuedCaptures() {
-        if (!dartBridgeReady) return
+        if (!dartBridgeReadyGlobal) return
         val queued = CentliNotificationListener.peekQueue(this)
         if (queued.isEmpty()) return
         val ch = methodChannel ?: return
@@ -241,19 +242,40 @@ class MainActivity : FlutterFragmentActivity() {
         if (intent == null) return
         val route = intent.getStringExtra(PendingConfirmNotifier.EXTRA_OPEN) ?: return
         val pendingId = intent.getStringExtra(PendingConfirmNotifier.EXTRA_PENDING_ID)
+        val review = intent.getBooleanExtra(PendingConfirmNotifier.EXTRA_REVIEW, false)
         // Consume so rotation / recreate does not re-navigate.
         intent.removeExtra(PendingConfirmNotifier.EXTRA_OPEN)
         intent.removeExtra(PendingConfirmNotifier.EXTRA_PENDING_ID)
-        val ch = methodChannel ?: return
+        intent.removeExtra(PendingConfirmNotifier.EXTRA_REVIEW)
         val payload = hashMapOf<String, Any?>(
             "route" to route,
             "pendingId" to pendingId,
+            "review" to review,
         )
+        // Cold start often delivers the intent before Dart binds the channel.
+        if (!dartBridgeReadyGlobal || methodChannel == null) {
+            queuedOpenRoute = payload
+            return
+        }
+        invokeOpenRoute(payload)
+    }
+
+    private fun flushQueuedOpenRoute() {
+        val payload = queuedOpenRoute ?: return
+        queuedOpenRoute = null
+        invokeOpenRoute(payload)
+    }
+
+    private fun invokeOpenRoute(payload: Map<String, Any?>) {
+        val ch = methodChannel ?: run {
+            queuedOpenRoute = payload
+            return
+        }
         mainHandler.post {
             try {
                 ch.invokeMethod("open_route", payload)
             } catch (_: Exception) {
-                // Engine may be tearing down.
+                queuedOpenRoute = payload
             }
         }
     }
@@ -282,7 +304,7 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
     private fun flushQueuedPendingIntake() {
-        if (!dartBridgeReady) return
+        if (!dartBridgeReadyGlobal) return
         val payload = PendingIntakeIntents.drain(this) ?: return
         val ch = methodChannel ?: run {
             PendingIntakeIntents.enqueue(this, payload)
@@ -336,6 +358,28 @@ class MainActivity : FlutterFragmentActivity() {
         @Volatile
         private var methodChannel: MethodChannel? = null
 
+        @Volatile
+        private var dartBridgeReadyGlobal = false
+
+        @Volatile
+        private var queuedOpenRoute: Map<String, Any?>? = null
+
+        @JvmStatic
+        fun isDartBridgeReady(): Boolean = dartBridgeReadyGlobal
+
+        /** Native SQLite wrote/ignored a pending row — refresh Drift watchers. */
+        @JvmStatic
+        fun notifyPendingDbChanged() {
+            val ch = methodChannel ?: return
+            Handler(Looper.getMainLooper()).post {
+                try {
+                    ch.invokeMethod("pending_db_changed", null)
+                } catch (e: Exception) {
+                    Log.w("CentliMain", "pending_db_changed failed", e)
+                }
+            }
+        }
+
         /**
          * Called from [CentliNotificationListener]. Delivers to Flutter when
          * the engine is attached; otherwise enqueues for later flush.
@@ -343,18 +387,27 @@ class MainActivity : FlutterFragmentActivity() {
         @JvmStatic
         fun emitNotificationCapture(context: android.content.Context, payload: Map<String, Any?>) {
             val ch = methodChannel
-            if (ch != null) {
+            if (ch != null && dartBridgeReadyGlobal) {
                 Handler(Looper.getMainLooper()).post {
                     try {
                         ch.invokeMethod("notification_capture", payload)
                     } catch (e: Exception) {
                         Log.w("CentliMain", "invoke notification_capture failed", e)
-                        // Native ingest already attempted; keep queue as backup.
                         CentliNotificationListener.enqueue(context, payload)
+                        try {
+                            NativeCaptureIngest.ingestAndNotify(context, payload)
+                        } catch (_: Exception) {
+                        }
                     }
                 }
             } else {
-                Log.d("CentliMain", "Flutter channel null; native path owns ingest")
+                Log.d("CentliMain", "Flutter not ready; native path owns ingest")
+                try {
+                    NativeCaptureIngest.ingestAndNotify(context, payload)
+                } catch (e: Exception) {
+                    Log.e("CentliMain", "native ingest fallback failed", e)
+                    CentliNotificationListener.enqueue(context, payload)
+                }
             }
         }
     }

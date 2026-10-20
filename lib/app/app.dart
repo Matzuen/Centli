@@ -48,6 +48,7 @@ class _CentliAppState extends ConsumerState<CentliApp> {
       redirect: _redirect,
     );
     NotificationCaptureStub.onOpenRoute = _onOpenRoute;
+    NotificationCaptureStub.onPendingDbChanged = _onPendingDbChanged;
     WidgetsBinding.instance.addPostFrameCallback((_) => _ensureBridge());
     _lifecycle = AppLifecycleListener(
       onStateChange: _onLifecycle,
@@ -65,6 +66,9 @@ class _CentliAppState extends ConsumerState<CentliApp> {
     _widgetSyncDebounce?.cancel();
     if (NotificationCaptureStub.onOpenRoute == _onOpenRoute) {
       NotificationCaptureStub.onOpenRoute = null;
+    }
+    if (NotificationCaptureStub.onPendingDbChanged == _onPendingDbChanged) {
+      NotificationCaptureStub.onPendingDbChanged = null;
     }
     super.dispose();
   }
@@ -93,9 +97,27 @@ class _CentliAppState extends ConsumerState<CentliApp> {
     return null;
   }
 
-  void _onOpenRoute(String route, String? pendingId) {
+  void _onPendingDbChanged() {
+    if (!mounted) return;
+    ref.read(pendingExternalWriteTickProvider.notifier).state++;
+  }
+
+  void _onOpenRoute(String route, String? pendingId, {bool review = false}) {
     final router = _router;
     if (router == null) return;
+    // Native may have written the row; force Drift watchers to re-query.
+    ref.read(pendingExternalWriteTickProvider.notifier).state++;
+    if (pendingId != null && pendingId.isNotEmpty) {
+      final params = <String, String>{
+        'focus': pendingId,
+        if (review) 'review': '1',
+      };
+      final q = params.entries
+          .map((e) => '${e.key}=${Uri.encodeQueryComponent(e.value)}')
+          .join('&');
+      router.go('/home/pending?$q');
+      return;
+    }
     router.go(route);
   }
 

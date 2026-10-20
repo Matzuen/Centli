@@ -19,6 +19,14 @@ import org.json.JSONObject
  */
 class CentliNotificationListener : NotificationListenerService() {
 
+    override fun onCreate() {
+        super.onCreate()
+        // Process may start from NLS bind with no Activity — keep FGS up.
+        if (isAutoCaptureEnabled(this)) {
+            CentliCaptureKeeper.start(this)
+        }
+    }
+
     override fun onListenerConnected() {
         super.onListenerConnected()
         connected = true
@@ -37,6 +45,11 @@ class CentliNotificationListener : NotificationListenerService() {
             } catch (e: Exception) {
                 Log.e(TAG, "requestRebind failed", e)
             }
+        }
+        // Ask AlarmManager / FGS to revive the process soon.
+        if (isAutoCaptureEnabled(this)) {
+            CentliCaptureKeeper.scheduleWatchdog(this, delayMs = 2_000L)
+            CentliCaptureKeeper.start(this)
         }
         super.onListenerDisconnected()
     }
@@ -82,17 +95,9 @@ class CentliNotificationListener : NotificationListenerService() {
             "channelId" to channelId,
         )
 
-        // Dual insurance:
-        // 1) Native SQLite + 「待确认」push — works without Flutter UI.
-        // 2) Foreground keeper — keeps this NLS bound after the app is swiped.
-        try {
-            NativeCaptureIngest.ingestAndNotify(this, payload)
-        } catch (e: Exception) {
-            Log.e(TAG, "native ingest error", e)
-            enqueue(this, payload)
-        }
+        // Single writer inside emitNotificationCapture: Flutter when bridge is
+        // ready, otherwise native SQLite + push (no dual insert).
         CentliCaptureKeeper.start(this)
-        // Flutter path for live UI (Dart dedupes if native already wrote).
         MainActivity.emitNotificationCapture(this, payload)
     }
 
@@ -276,7 +281,38 @@ class CentliNotificationListener : NotificationListenerService() {
             prefs(context).edit().remove(KEY_DROPS).apply()
         }
 
+        /**
+         * Soft rebind: if already connected, do nothing (toggling the component
+         * would drop live notifications). Otherwise ask the system to bind again.
+         */
         fun ensureRebind(context: Context) {
+            if (connected) return
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return
+            val cn = ComponentName(context, CentliNotificationListener::class.java)
+            try {
+                // Ensure component is enabled (may have been left disabled by an
+                // older force-rebind path).
+                val pm = context.packageManager
+                val state = pm.getComponentEnabledSetting(cn)
+                if (state == PackageManager.COMPONENT_ENABLED_STATE_DISABLED) {
+                    pm.setComponentEnabledSetting(
+                        cn,
+                        PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                        PackageManager.DONT_KILL_APP,
+                    )
+                }
+                requestRebind(cn)
+                Log.i(TAG, "ensureRebind (soft) for $cn")
+            } catch (e: Exception) {
+                Log.e(TAG, "ensureRebind failed", e)
+            }
+        }
+
+        /**
+         * Hard rebind for the settings UI "重新连接" button — disable/enable the
+         * component. Do **not** call this on a timer.
+         */
+        fun forceRebind(context: Context) {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return
             val cn = ComponentName(context, CentliNotificationListener::class.java)
             try {
@@ -292,9 +328,9 @@ class CentliNotificationListener : NotificationListenerService() {
                     PackageManager.DONT_KILL_APP,
                 )
                 requestRebind(cn)
-                Log.i(TAG, "ensureRebind requested for $cn")
+                Log.i(TAG, "forceRebind for $cn")
             } catch (e: Exception) {
-                Log.e(TAG, "ensureRebind failed", e)
+                Log.e(TAG, "forceRebind failed", e)
             }
         }
 

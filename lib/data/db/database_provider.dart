@@ -55,7 +55,12 @@ final themeModeProvider = StreamProvider<ThemeMode>((ref) {
   });
 });
 
+/// Bumped when native SQLite mutates pending_captures outside Drift
+/// (ignore from notification shade, etc.). Watchers should depend on this.
+final pendingExternalWriteTickProvider = StateProvider<int>((ref) => 0);
+
 final pendingCountProvider = StreamProvider.family<int, String>((ref, ledgerId) {
+  ref.watch(pendingExternalWriteTickProvider);
   return ref.watch(databaseProvider).watchPendingCount(ledgerId);
 });
 

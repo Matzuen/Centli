@@ -25,6 +25,7 @@ import '../pending/pending_confirm_sheet.dart';
 /// 首页轮播：只收「解析成功、可直接确认」的待入账。
 final _homePendingOkProvider =
     StreamProvider.family<List<PendingCapture>, String>((ref, ledgerId) {
+      ref.watch(pendingExternalWriteTickProvider);
       return ref.watch(databaseProvider).watchPendingOkCaptures(ledgerId);
     });
 
@@ -33,6 +34,7 @@ final _homeParseFailedCountProvider = StreamProvider.family<int, String>((
   ref,
   ledgerId,
 ) {
+  ref.watch(pendingExternalWriteTickProvider);
   return ref
       .watch(databaseProvider)
       .watchParseFailedCaptures(ledgerId)
@@ -321,6 +323,8 @@ class _HomePageState extends ConsumerState<HomePage> {
                     .watch(_homeParseFailedCountProvider(ledgerId))
                     .valueOrNull ??
                 0;
+            final pendingCount =
+                ref.watch(pendingCountProvider(ledgerId)).valueOrNull ?? 0;
             final budgetProgress = ref.watch(
               _homeBudgetProgressProvider((ledgerId: ledgerId, base: base)),
             );
@@ -357,6 +361,21 @@ class _HomePageState extends ConsumerState<HomePage> {
                         ),
                       ),
                       const Spacer(),
+                      IconButton(
+                        key: const Key('home_pending_entry'),
+                        tooltip: pendingCount > 0
+                            ? '待确认 ($pendingCount)'
+                            : '待确认',
+                        onPressed: () =>
+                            context.push('/home/pending?tab=pending'),
+                        icon: Badge(
+                          isLabelVisible: pendingCount > 0,
+                          label: Text(
+                            pendingCount > 99 ? '99+' : '$pendingCount',
+                          ),
+                          child: const Icon(Icons.pending_actions_outlined),
+                        ),
+                      ),
                       IconButton(
                         tooltip: '截图记账',
                         onPressed: () =>

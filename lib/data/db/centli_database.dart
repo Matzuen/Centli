@@ -1902,6 +1902,13 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
     return row != null;
   }
 
+  Future<PendingCapture?> getPendingCapture(String id) {
+    return (select(pendingCaptures)
+          ..where((t) => t.id.equals(id))
+          ..limit(1))
+        .getSingleOrNull();
+  }
+
   Future<MerchantRule?> findMerchantRule(
     String ledgerId,
     String merchantKey,

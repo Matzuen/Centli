@@ -12,9 +12,13 @@ abstract final class NotificationCaptureStub {
   static const int templateVersion = 3;
 
   /// Optional deep-link handler (local-push tap). Stub never invokes it.
-  static void Function(String route, String? pendingId)? onOpenRoute;
+  static void Function(String route, String? pendingId, {bool review})?
+      onOpenRoute;
 
   static void Function(Map<String, dynamic> payload)? onPendingIntake;
+
+  /// Native wrote pending_captures outside Drift — refresh UI lists.
+  static void Function()? onPendingDbChanged;
 
   static Future<bool> isPermissionGranted() async => false;
 

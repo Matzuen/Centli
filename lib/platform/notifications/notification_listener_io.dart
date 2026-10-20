@@ -20,10 +20,14 @@ abstract final class NotificationCaptureStub {
   static bool _bound = false;
 
   /// Deep-link from local-push tap (`open_route`).
-  static void Function(String route, String? pendingId)? onOpenRoute;
+  static void Function(String route, String? pendingId, {bool review})?
+      onOpenRoute;
 
   /// Share / deep-link payload (`pending_intake`).
   static void Function(Map<String, dynamic> payload)? onPendingIntake;
+
+  /// Native SQLite mutated pending_captures outside Drift.
+  static void Function()? onPendingDbChanged;
 
   static bool get supported => !kIsWeb && Platform.isAndroid;
 
@@ -180,10 +184,15 @@ abstract final class NotificationCaptureStub {
         final map = Map<String, dynamic>.from(args);
         final route = map['route'] as String?;
         final pendingId = map['pendingId'] as String?;
+        final review = map['review'] == true;
         if (route != null && route.isNotEmpty) {
-          onOpenRoute?.call(route, pendingId);
+          onOpenRoute?.call(route, pendingId, review: review);
         }
       }
+      return null;
+    }
+    if (call.method == 'pending_db_changed') {
+      onPendingDbChanged?.call();
       return null;
     }
     if (call.method == 'pending_intake') {

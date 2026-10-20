@@ -123,8 +123,37 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
       }
       await db.setSetting('auto_capture_enabled', wantOn ? 'true' : 'false');
       await NotificationCaptureStub.setAutoCaptureEnabled(wantOn);
+      if (wantOn) {
+        // Background listen dies under battery optimization on most OEMs.
+        final ignored =
+            await NotificationCaptureStub.isBatteryOptimizationIgnored();
+        if (!ignored) {
+          await NotificationCaptureStub.openBatteryOptimizationSettings();
+          await Future<void>.delayed(const Duration(milliseconds: 400));
+        }
+        await NotificationCaptureStub.ensureListenerRebind();
+      }
       if (!mounted) return;
-      setState(() => _enabled = wantOn);
+      final batteryIgnored =
+          await NotificationCaptureStub.isBatteryOptimizationIgnored();
+      final connected = await NotificationCaptureStub.isListenerConnected();
+      if (!mounted) return;
+      setState(() {
+        _enabled = wantOn;
+        _batteryIgnored = batteryIgnored;
+        _listenerConnected = connected;
+      });
+      if (wantOn && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              batteryIgnored
+                  ? '已开启。通知栏应出现「正在监听支付通知」；清后台后仍会捕获。'
+                  : '已开启，但未关闭电池优化时，清后台后可能丢通知，请在系统里允许无限制。',
+            ),
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -353,7 +382,8 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
               children: [
                 Text(
                   '开启后将读取支付宝/微信等支付成功类通知，生成待确认账单；'
-                  '不会自动入账或静默改账。',
+                  '不会自动入账。清后台后仍靠前台服务「正在监听支付通知」继续捕获——'
+                  '请关闭电池优化，并在厂商系统里允许自启动/后台运行。',
                   style: Theme.of(context).textTheme.bodyMedium
                       ?.copyWith(color: scheme.onSurfaceVariant),
                 ),

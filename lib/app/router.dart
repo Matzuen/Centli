@@ -76,7 +76,14 @@ GoRouter createRouter({
                     parentNavigatorKey: rootNavigatorKey,
                     builder: (context, state) {
                       final tab = state.uri.queryParameters['tab'];
-                      return PendingPage(initialFilter: tab);
+                      final focus = state.uri.queryParameters['focus'];
+                      final review =
+                          state.uri.queryParameters['review'] == '1';
+                      return PendingPage(
+                        initialFilter: tab,
+                        focusPendingId: focus,
+                        openConfirm: review || focus != null,
+                      );
                     },
                   ),
                   GoRoute(

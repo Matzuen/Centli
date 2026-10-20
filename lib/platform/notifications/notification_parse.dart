@@ -586,6 +586,11 @@ _ExtractedAmount? _extractAmount(
 }
 
 String dedupeKey(RawNotification raw, ParseResult r) {
+  // Same StatusBarNotification key → same event (align NativeCaptureIngest).
+  final nk = raw.key?.trim();
+  if (nk != null && nk.isNotEmpty) {
+    return '${raw.pkg}|nk|$nk';
+  }
   final amt = r.amountMinor?.toString() ?? 'na';
   final bucket = raw.whenMs ~/ 120000; // 2-minute window
   // Failed parses must not collapse all same-pkg notices in the window

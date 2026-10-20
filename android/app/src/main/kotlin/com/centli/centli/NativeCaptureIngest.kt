@@ -65,7 +65,8 @@ object NativeCaptureIngest {
 
             val ledgerId = querySetting(db, "current_ledger_id")
             if (ledgerId.isNullOrBlank()) {
-                Log.w(TAG, "no current_ledger_id")
+                Log.w(TAG, "no current_ledger_id; queueing")
+                CentliNotificationListener.enqueue(context, enriched)
                 return null
             }
 
@@ -74,7 +75,10 @@ object NativeCaptureIngest {
             val amountMinor = parsed.amountMinor
             val currency = parsed.currency
             val parseOk = amountMinor != null
-            val dedupe = buildDedupeKey(pkg, title, text, merchant, amountMinor, whenMs, parseOk)
+            val notifKey = (payload["key"] as? String)?.takeIf { it.isNotBlank() }
+            val dedupe = buildDedupeKey(
+                pkg, title, text, merchant, amountMinor, whenMs, parseOk, notifKey,
+            )
 
             if (existsDedupe(db, dedupe)) {
                 Log.i(TAG, "dedupe hit $dedupe")
@@ -107,6 +111,7 @@ object NativeCaptureIngest {
                 "待确认"
             }
             PendingConfirmNotifier.show(context, id, pushTitle, merchant)
+            MainActivity.notifyPendingDbChanged()
             Log.i(TAG, "inserted pending $id dedupe=$dedupe")
             return id
         } catch (e: Exception) {
@@ -145,7 +150,12 @@ object NativeCaptureIngest {
         amountMinor: Int?,
         whenMs: Long,
         parseOk: Boolean,
+        notifKey: String?,
     ): String {
+        // Same StatusBarNotification key → same event (updates / dual path).
+        if (!notifKey.isNullOrBlank()) {
+            return "$pkg|nk|$notifKey"
+        }
         val bucket = whenMs / 120000L
         if (!parseOk || amountMinor == null) {
             val tip = "$title\n$text".trim()
@@ -329,8 +339,14 @@ object NativeCaptureIngest {
         }
     }
 
+    /** Currency symbol / code prefix (align Dart [kAmountRegex]). */
     private val AMOUNT: Pattern = Pattern.compile(
         "(?:(?:USD|EUR|CNY|HKD|TWD|JPY)\\s*|(?:[¥￥]|\\$|€))\\s*([0-9]+(?:,[0-9]{3})*(?:\\.[0-9]{1,2})?)",
+    )
+
+    /** Number + 元 suffix (align Dart [kAmountRegexYuan], e.g. 抖音支付 24.70元). */
+    private val AMOUNT_YUAN: Pattern = Pattern.compile(
+        "([0-9]+(?:,[0-9]{3})*(?:\\.[0-9]{1,2})?)\\s*元",
     )
 
     private fun currencyDecimals(ccy: String): Int = when (ccy) {
@@ -345,7 +361,19 @@ object NativeCaptureIngest {
 
     private fun parseAmount(title: String, text: String): Parsed {
         val body = "$title\n$text"
-        val m = AMOUNT.matcher(body)
+        parseAmountWith(body, AMOUNT, title, text, symbolPrefix = true)?.let { return it }
+        parseAmountWith(body, AMOUNT_YUAN, title, text, symbolPrefix = false)?.let { return it }
+        return Parsed(null, "CNY", guessMerchant(title, text))
+    }
+
+    private fun parseAmountWith(
+        body: String,
+        pattern: Pattern,
+        title: String,
+        text: String,
+        symbolPrefix: Boolean,
+    ): Parsed? {
+        val m = pattern.matcher(body)
         while (m.find()) {
             val end = m.end()
             if (end < body.length) {
@@ -357,13 +385,15 @@ object NativeCaptureIngest {
                 }
             }
             val raw = (m.group(1) ?: "").replace(",", "")
-            val major = raw.toDoubleOrNull()
-            if (major == null) continue
-            val currency = detectCurrency(body, m.start(), m.end(), m.group(0) ?: "")
-            val minor = toMinor(currency, major)
-            return Parsed(minor, currency, guessMerchant(title, text))
+            val major = raw.toDoubleOrNull() ?: continue
+            val currency = if (symbolPrefix) {
+                detectCurrency(body, m.start(), m.end(), m.group(0) ?: "")
+            } else {
+                "CNY"
+            }
+            return Parsed(toMinor(currency, major), currency, guessMerchant(title, text))
         }
-        return Parsed(null, "CNY", guessMerchant(title, text))
+        return null
     }
 
     private fun detectCurrency(body: String, start: Int, end: Int, matched: String): String {
