@@ -318,7 +318,8 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
                 ),
                 const SizedBox(height: CentliSpacing.section),
                 Text(
-                  '本地解析始终可用。开启上方开关并保存 API Key 后，文字增强与截图识别才会调用大模型。',
+                  '本地解析始终可用。开启并保存 API Key 后：文字填单、支付通知（AI→失败回落本地）、'
+                  '资产截图识别才会调用大模型；AI 识别成功的通知会蒸馏成「软件名-支出/收入」规则。',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),

@@ -126,6 +126,7 @@ class NotiTemplate {
         'merchantFromTitle': merchantFromTitle,
         'defaultAccountHint': defaultAccountHint,
         'direction': direction,
+        'matchOn': matchOn,
       };
 
   NotiTemplate copyWith({
@@ -141,6 +142,7 @@ class NotiTemplate {
     bool? merchantFromTitle,
     String? defaultAccountHint,
     String? direction,
+    String? matchOn,
     bool clearTitleRegex = false,
     bool clearMustContain = false,
     bool clearExclude = false,
@@ -165,6 +167,7 @@ class NotiTemplate {
       defaultAccountHint:
           clearAccountHint ? null : (defaultAccountHint ?? this.defaultAccountHint),
       direction: normalizeDirection(direction ?? this.direction),
+      matchOn: matchOn ?? this.matchOn,
     );
   }
 }
@@ -355,7 +358,15 @@ ParseResult parseNotification(
   List<NotiTemplate>? templates,
 ]) {
   final list = templates ?? builtinNotiTemplates();
-  final matched = list.where((t) => t.packages.contains(raw.pkg)).toList();
+  // Capture templates only — distill_excl_* are handled by
+  // [matchDistillExcludeRule] / native `drop` before this runs.
+  final matched = list
+      .where(
+        (t) =>
+            t.packages.contains(raw.pkg) &&
+            !(t.id.startsWith('distill_excl_')),
+      )
+      .toList();
   final when = DateTime.fromMillisecondsSinceEpoch(raw.whenMs, isUtc: false);
 
   for (final t in matched) {
@@ -453,6 +464,26 @@ ParseExplainResult explainNotificationParse(
 
   for (final t in matchedPkgs) {
     final label = t.displayName;
+    if (t.id.startsWith('distill_excl_')) {
+      final keywordText = t.keywordText(raw);
+      final where = t.matchesTitleOnly ? '标题' : '标题+正文';
+      final must = t.mustContainRegex?.trim() ?? '';
+      if (must.isNotEmpty && notiRegex(must).hasMatch(keywordText)) {
+        steps.add('「$label」$where命中排除规则 mustContainRegex → 丢弃');
+        return ParseExplainResult(
+          result: ParseResult(
+            ok: false,
+            happenAt: when,
+            currency: 'CNY',
+            templateId: t.id,
+          ),
+          reason: '命中排除规则「$label」',
+          steps: steps,
+        );
+      }
+      steps.add('「$label」$where未命中排除关键词（继续）');
+      continue;
+    }
     if (t.titleRegex != null &&
         !notiRegex(t.titleRegex!).hasMatch(raw.title)) {
       steps.add('「$label」标题未匹配 titleRegex');

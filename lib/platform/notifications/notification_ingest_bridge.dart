@@ -1,12 +1,21 @@
+import 'dart:async';
+
 import '../../core/utils/money.dart';
 import '../../data/db/centli_database.dart';
+import '../../features/ledger/llm_text_fill.dart';
 import 'notification_listener_stub.dart';
+import 'notification_llm_parse.dart';
 import 'notification_noise.dart';
 import 'notification_parse.dart';
 import 'noti_template_store.dart';
+import 'recognition_rule_distill.dart';
 
 /// Wires native notification payloads → parse → [CentliDatabase.ingestParsedNotification]
 /// → local push 「待确认 ¥xx」.
+///
+/// Flutter-alive path: **包名已由 native 过滤** → 本地排除规则 → AI（若就绪）→
+/// 失败则本地捕获模板。AI 判支付则蒸馏「软件名-支出/收入」；判非支付则蒸馏
+/// 「软件名-排除」，供杀进程路径直接丢弃。
 abstract final class NotificationIngestBridge {
   static bool _started = false;
 
@@ -46,8 +55,41 @@ abstract final class NotificationIngestBridge {
     if (notification.title.isEmpty && notification.text.isEmpty) return null;
 
     final templates = await NotiTemplateStore.load();
-    final parsed = parseNotification(notification, templates);
+
+    // Learned exclude rules win before AI / capture templates.
+    final excl = matchDistillExcludeRule(notification, templates);
+    if (excl != null) {
+      await NotificationCaptureStub.recordDroppedNotification(
+        pkg: notification.pkg,
+        title: notification.title,
+        reason: 'exclude_rule',
+      );
+      return null;
+    }
+
+    final resolved = await _resolveParse(db, notification, templates);
+
+    if (resolved.exclude) {
+      // AI said non-payment — distill 软件名-排除 for next time / kill-path.
+      if (resolved.fromAi) {
+        unawaited(
+          distillExcludeRecognitionRuleFromAi(
+            raw: notification,
+            mustHint: resolved.mustHint,
+          ),
+        );
+      }
+      await NotificationCaptureStub.recordDroppedNotification(
+        pkg: notification.pkg,
+        title: notification.title,
+        reason: 'ai_exclude',
+      );
+      return null;
+    }
+
+    final parsed = resolved.parse;
     final matched = parsed.templateId != null;
+
     // G29.1: widened native gate + Dart noise filter → G28 drops (reason=weak).
     if (shouldDropAsWeakNoise(
           templateMatched: matched,
@@ -63,7 +105,6 @@ abstract final class NotificationIngestBridge {
       );
       return null;
     }
-    // No payment template matched but has amount → still try ingest as soft? keep prior: drop.
     if (!matched) {
       await NotificationCaptureStub.recordDroppedNotification(
         pkg: notification.pkg,
@@ -103,8 +144,73 @@ abstract final class NotificationIngestBridge {
         currency: currency,
         merchant: parsed.merchant,
       );
+      if (resolved.fromAi) {
+        // Distill after ingest so kill-path can match next time without AI.
+        unawaited(
+          distillRecognitionRuleFromAi(
+            raw: notification,
+            parsed: parsed,
+            mustHint: resolved.mustHint,
+          ),
+        );
+      }
     }
     return id;
+  }
+
+  /// AI first when ready; otherwise / on failure → local [parseNotification].
+  static Future<
+      ({
+        ParseResult parse,
+        bool fromAi,
+        bool exclude,
+        String? mustHint,
+      })> _resolveParse(
+    CentliDatabase db,
+    RawNotification notification,
+    List<NotiTemplate> templates,
+  ) async {
+    try {
+      final cfg = await SmartFillLlmSettings().load(db);
+      if (cfg.isReady) {
+        final llm = await parseNotificationWithLlm(notification, config: cfg);
+        if (llm != null) {
+          if (!llm.isPayment) {
+            return (
+              parse: llm.parse ??
+                  ParseResult(
+                    ok: false,
+                    happenAt: DateTime.fromMillisecondsSinceEpoch(
+                      notification.whenMs,
+                      isUtc: false,
+                    ),
+                    currency: 'CNY',
+                  ),
+              fromAi: true,
+              exclude: true,
+              mustHint: llm.mustHint,
+            );
+          }
+          if (llm.parse != null) {
+            return (
+              parse: llm.parse!,
+              fromAi: true,
+              exclude: false,
+              mustHint: llm.mustHint,
+            );
+          }
+        }
+      }
+    } catch (_) {
+      // Fall through to local templates.
+    }
+    final local = parseNotification(notification, templates);
+    return (
+      parse: local,
+      fromAi: false,
+      exclude: false,
+      mustHint: null,
+    );
   }
 
   /// Title: 待确认 ¥xx — body: merchant (plan §4.1 / parse doc).

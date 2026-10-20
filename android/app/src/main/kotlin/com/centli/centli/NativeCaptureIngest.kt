@@ -219,11 +219,21 @@ object NativeCaptureIngest {
         for (rule in forPkg) {
             try {
                 val keyword = if (rule.matchOn == "body") body else title
+                val must = rule.must
+                // AI-distilled exclude: must hit → drop (never soft-allow / capture).
+                if (rule.drop) {
+                    if (!must.isNullOrBlank() &&
+                        Pattern.compile(must).matcher(keyword).find()
+                    ) {
+                        Log.i(TAG, "drop by exclude rule id=${rule.id} pkg=$pkg")
+                        return null
+                    }
+                    continue
+                }
                 val exclude = rule.exclude
                 if (!exclude.isNullOrBlank() && Pattern.compile(exclude).matcher(keyword).find()) {
                     continue
                 }
-                val must = rule.must
                 if (!must.isNullOrBlank() && !Pattern.compile(must).matcher(keyword).find()) {
                     continue
                 }
@@ -250,6 +260,7 @@ object NativeCaptureIngest {
         val merchant: String?,
         val merchantFromTitle: Boolean,
         val matchOn: String,
+        val drop: Boolean = false,
     )
 
     /** null = empty/corrupt → use hardcode fallback */
@@ -282,9 +293,10 @@ object NativeCaptureIngest {
                     val o = arr.optJSONObject(i) ?: continue
                     val pkg = o.optString("pkg")
                     if (pkg.isBlank()) continue
+                    val id = o.optString("id").ifBlank { null }
                     add(
                         NativeRule(
-                            id = o.optString("id").ifBlank { null },
+                            id = id,
                             pkg = pkg,
                             direction = o.optString("direction").ifBlank { "out" },
                             must = o.optString("must").ifBlank { null },
@@ -293,6 +305,8 @@ object NativeCaptureIngest {
                             merchant = o.optString("merchant").ifBlank { null },
                             merchantFromTitle = o.optBoolean("merchantFromTitle", false),
                             matchOn = o.optString("matchOn").ifBlank { "title" },
+                            drop = o.optBoolean("drop", false) ||
+                                (id?.startsWith("distill_excl_") == true),
                         ),
                     )
                 }

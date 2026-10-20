@@ -676,16 +676,18 @@ abstract final class NotiTemplateStore {
     for (final t in peek()) {
       pkgs.addAll(t.packages);
       for (final pkg in t.packages) {
+        final drop = t.id.startsWith('distill_excl_');
         rules.add({
           'pkg': pkg,
           'direction': NotiTemplate.normalizeDirection(t.direction),
           'must': t.mustContainRegex,
-          'exclude': t.excludeTextRegex,
+          'exclude': drop ? null : t.excludeTextRegex,
           'amount': t.amountRegex,
           'merchant': t.merchantRegex,
           'merchantFromTitle': t.merchantFromTitle,
           'matchOn': t.matchOn,
           'id': t.id,
+          if (drop) 'drop': true,
         });
       }
     }
