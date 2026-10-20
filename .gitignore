@@ -99,3 +99,6 @@ tools/*_patch*.py
 
 # flutter_test 的 golden 失败产物（每次跑测试都会重新生成）
 test/failures/
+
+# Kotlin Gradle 插件的会话/错误日志目录（构建产物）
+android/.kotlin/

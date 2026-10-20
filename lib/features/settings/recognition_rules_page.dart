@@ -45,11 +45,64 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
   List<NotiTemplate> _staleDistill = const [];
   int _mergePruned = 0;
   List<AiNotiTraceEvent> _aiTrace = const [];
+  bool _officialExpanded = false;
+  bool _aiRulesExpanded = true;
+  bool _manualExpanded = true;
 
   @override
   void initState() {
     super.initState();
     _reload();
+  }
+
+  Widget _collapsibleRuleSection({
+    required String title,
+    required String subtitle,
+    required bool expanded,
+    required ValueChanged<bool> onExpanded,
+    required List<Widget> children,
+    Widget? trailing,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    return CentliSoftCard(
+      padding: EdgeInsets.zero,
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          // 不挂 PageStorageKey：展开状态已经由 _xxxExpanded 单一持有，
+          // 再让 PageStorage 恢复一次会出现「平铺已展开、图标却是收起」。
+          initiallyExpanded: expanded,
+          maintainState: true,
+          // 卡片本身是磨砂面，展开/收起都不要额外描边。
+          shape: const Border(),
+          collapsedShape: const Border(),
+          onExpansionChanged: onExpanded,
+          tilePadding: const EdgeInsets.symmetric(horizontal: 12),
+          childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+          title: Text(title, style: Theme.of(context).textTheme.titleMedium),
+          subtitle: Text(
+            subtitle,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+          ),
+          trailing: trailing == null
+              ? null
+              : Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    trailing,
+                    Icon(
+                      expanded
+                          ? Icons.expand_less
+                          : Icons.expand_more,
+                    ),
+                  ],
+                ),
+          children: children,
+        ),
+      ),
+    );
   }
 
   @override
@@ -736,56 +789,51 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
                   const SizedBox(height: CentliSpacing.section),
                 ],
                 Text(
-                  '官方规则只读，可单独启停；「我的规则」优先匹配。'
-                  '右上角可导入/导出规则；右下角添加自定义；底部「试一试」验证样例。',
+                  '官方 / AI / 我的规则可点标题展开或收起。'
+                  '右上角导入导出；右下角添加手写规则；底部「试一试」验证样例。',
                   style: Theme.of(context).textTheme.bodyMedium
                       ?.copyWith(color: scheme.onSurfaceVariant, height: 1.4),
                 ),
                 const SizedBox(height: CentliSpacing.sectionLoose),
-                Text('官方规则', style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: CentliSpacing.dense),
-                Text(
-                  'v$_version · $_source · ${_official.length} 条',
-                  style: Theme.of(context).textTheme.bodySmall
-                      ?.copyWith(color: scheme.onSurfaceVariant),
-                ),
-                const SizedBox(height: CentliSpacing.item),
-                if (_official.isEmpty)
-                  CentliSoftCard(
-                    padding: const EdgeInsets.all(CentliSpacing.cardPad),
-                    child: CentliEmptyState(
-                      icon: Icons.rule_folder_outlined,
-                      title: '暂无官方规则',
-                      message: '内置模板未加载时会出现这里；可从右上角导入规则包。',
-                      padding: EdgeInsets.zero,
-                    ),
-                  )
-                else
-                  for (final t in _official) ...[
-                    CentliSoftCard(
-                      child: ListTile(
-                        leading: Icon(
-                          _disabled.contains(t.id)
-                              ? Icons.rule_folder_outlined
-                              : Icons.verified_outlined,
-                          color: _disabled.contains(t.id)
-                              ? scheme.outline
-                              : scheme.primary,
+                _collapsibleRuleSection(
+                  title: '官方规则',
+                  subtitle: 'v$_version · $_source · ${_official.length} 条 · 只读可启停',
+                  expanded: _officialExpanded,
+                  onExpanded: (v) => setState(() => _officialExpanded = v),
+                  children: [
+                    if (_official.isEmpty)
+                      CentliEmptyState(
+                        icon: Icons.rule_folder_outlined,
+                        title: '暂无官方规则',
+                        message: '内置模板未加载时会出现这里；可从右上角导入规则包。',
+                        padding: EdgeInsets.zero,
+                      )
+                    else
+                      for (final t in _official) ...[
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: Icon(
+                            _disabled.contains(t.id)
+                                ? Icons.rule_folder_outlined
+                                : Icons.verified_outlined,
+                            color: _disabled.contains(t.id)
+                                ? scheme.outline
+                                : scheme.primary,
+                          ),
+                          title: Text(t.displayName),
+                          subtitle: Text(
+                            [
+                              t.packages.map(_pkgLabel).join('、'),
+                              if (_disabled.contains(t.id)) '已禁用',
+                            ].join(' · '),
+                          ),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () => _showOfficialDetail(t),
                         ),
-                        title: Text(t.displayName),
-                        subtitle: Text(
-                          [
-                            t.packages.map(_pkgLabel).join('、'),
-                            if (_disabled.contains(t.id)) '已禁用',
-                          ].join(' · '),
-                        ),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: () => _showOfficialDetail(t),
-                      ),
-                    ),
-                    const SizedBox(height: CentliSpacing.item),
+                      ],
                   ],
-                const SizedBox(height: CentliSpacing.item),
+                ),
+                const SizedBox(height: CentliSpacing.section),
                 Text(
                   '最近 AI 处理',
                   style: Theme.of(context).textTheme.titleMedium,
@@ -793,7 +841,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
                 const SizedBox(height: CentliSpacing.dense),
                 Text(
                   '打开「我的 → AI 增强 → AI 识别通知」后，每条监听通知会记一条决策。'
-                  '微信/支付宝支付会先本地入账，再后台问 AI 反写规则（约数秒后出现在下方）。',
+                  '微信/支付宝支付会先本地入账，再后台问 AI 反写规则。',
                   style: Theme.of(context).textTheme.bodySmall
                       ?.copyWith(color: scheme.onSurfaceVariant),
                 ),
@@ -821,7 +869,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
                           padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                           child: Text(
                             '还没有处理记录。请确认：① 自动记账已开；②「AI 识别通知」已开并保存；'
-                            '③ 用真实支付/聊天通知测一次，再下拉刷新本页。',
+                            '③ 用真实支付/聊天通知测一次，再点 AI 规则旁的刷新。',
                             style: Theme.of(context).textTheme.bodySmall
                                 ?.copyWith(color: scheme.onSurfaceVariant),
                           ),
@@ -862,43 +910,17 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
                     ],
                   ),
                 ),
-                const SizedBox(height: CentliSpacing.sectionLoose),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'AI 反写规则',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                    ),
-                    Text(
-                      '${_aiRules.length} 条',
-                      style: Theme.of(context).textTheme.bodySmall
-                          ?.copyWith(color: scheme.onSurfaceVariant),
-                    ),
-                    IconButton(
-                      tooltip: '刷新',
-                      onPressed: _busy ? null : _reload,
-                      icon: const Icon(Icons.refresh),
-                    ),
-                  ],
-                ),
-                Text(
-                  '命名如「微信-支出-支付成功」「微信-排除」。捕获规则用于入账，排除规则用于丢弃。',
-                  style: Theme.of(context).textTheme.bodySmall
-                      ?.copyWith(color: scheme.onSurfaceVariant),
-                ),
+                const SizedBox(height: CentliSpacing.section),
                 if (_mergePruned > 0) ...[
-                  const SizedBox(height: CentliSpacing.item),
                   Text(
                     'AI 捕获规则已超过 $kDistillCaptureMaxRules 条上限，刚才自动合并了 $_mergePruned 条。',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: scheme.onSurfaceVariant,
                         ),
                   ),
+                  const SizedBox(height: CentliSpacing.item),
                 ],
                 if (!_staleWarnDismissed && _staleDistill.isNotEmpty) ...[
-                  const SizedBox(height: CentliSpacing.item),
                   Card(
                     color: scheme.secondaryContainer,
                     margin: EdgeInsets.zero,
@@ -958,57 +980,57 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
                       ),
                     ),
                   ),
+                  const SizedBox(height: CentliSpacing.section),
                 ],
-                const SizedBox(height: CentliSpacing.item),
-                if (_aiRules.isEmpty)
-                  CentliSoftCard(
-                    padding: const EdgeInsets.all(CentliSpacing.cardPad),
-                    child: CentliEmptyState(
-                      icon: Icons.auto_awesome_outlined,
-                      title: '还没有 AI 反写规则',
-                      message:
-                          '看上方「最近 AI 处理」：若只有「本地模板已识别」而没有「已反写」，'
-                          '多半是未开「AI 识别通知」或后台调用失败；若有「已反写」却列表为空，点刷新。',
-                      padding: EdgeInsets.zero,
-                    ),
-                  )
-                else
-                  for (final t in _aiRules) ...[
-                    _userRuleTile(t, scheme),
-                    const SizedBox(height: CentliSpacing.item),
-                  ],
-                const SizedBox(height: CentliSpacing.sectionLoose),
-                Row(
+                _collapsibleRuleSection(
+                  title: 'AI 规则',
+                  subtitle:
+                      '${_aiRules.length} 条 · 如「微信-支出-支付成功」「微信-排除」',
+                  expanded: _aiRulesExpanded,
+                  onExpanded: (v) => setState(() => _aiRulesExpanded = v),
+                  trailing: IconButton(
+                    tooltip: '刷新',
+                    onPressed: _busy ? null : _reload,
+                    icon: const Icon(Icons.refresh),
+                  ),
                   children: [
-                    Expanded(
-                      child: Text(
-                        '手写规则',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                    ),
-                    Text(
-                      '${_manualRules.length} 条',
-                      style: Theme.of(context).textTheme.bodySmall
-                          ?.copyWith(color: scheme.onSurfaceVariant),
-                    ),
+                    if (_aiRules.isEmpty)
+                      CentliEmptyState(
+                        icon: Icons.auto_awesome_outlined,
+                        title: '还没有 AI 反写规则',
+                        message:
+                            '看上方「最近 AI 处理」：若只有「本地模板已识别」而没有「已反写」，'
+                            '多半是未开「AI 识别通知」或后台调用失败；若有「已反写」却列表为空，点刷新。',
+                        padding: EdgeInsets.zero,
+                      )
+                    else
+                      for (final t in _aiRules) ...[
+                        _userRuleTile(t, scheme),
+                        const SizedBox(height: CentliSpacing.item),
+                      ],
                   ],
                 ),
-                const SizedBox(height: CentliSpacing.item),
-                if (_manualRules.isEmpty)
-                  CentliSoftCard(
-                    padding: const EdgeInsets.all(CentliSpacing.cardPad),
-                    child: CentliEmptyState(
-                      icon: Icons.playlist_add,
-                      title: '还没有手写规则',
-                      message: '点右下角 + 添加，或右上角从文件/网络导入。',
-                      padding: EdgeInsets.zero,
-                    ),
-                  )
-                else
-                  for (final t in _manualRules) ...[
-                    _userRuleTile(t, scheme),
-                    const SizedBox(height: CentliSpacing.item),
+                const SizedBox(height: CentliSpacing.section),
+                _collapsibleRuleSection(
+                  title: '我的规则',
+                  subtitle: '${_manualRules.length} 条 · 手写 / 导入，解析时优先匹配',
+                  expanded: _manualExpanded,
+                  onExpanded: (v) => setState(() => _manualExpanded = v),
+                  children: [
+                    if (_manualRules.isEmpty)
+                      CentliEmptyState(
+                        icon: Icons.playlist_add,
+                        title: '还没有手写规则',
+                        message: '点右下角 + 添加，或右上角从文件/网络导入。',
+                        padding: EdgeInsets.zero,
+                      )
+                    else
+                      for (final t in _manualRules) ...[
+                        _userRuleTile(t, scheme),
+                        const SizedBox(height: CentliSpacing.item),
+                      ],
                   ],
+                ),
                 const SizedBox(height: CentliSpacing.sectionLoose),
                 Text('试一试', style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: CentliSpacing.dense),
