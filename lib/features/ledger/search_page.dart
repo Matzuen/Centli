@@ -8,6 +8,7 @@ import '../../core/widgets/date_range_control.dart';
 import '../../core/widgets/txn_grouped_list.dart';
 import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
+import '../security/app_lock_controller.dart';
 import '../../app/theme.dart';
 import '../../core/widgets/centli_error_state.dart';
 
@@ -276,7 +277,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
                   child: Text(
-                    '按账户筛选',
+                    '按资产账户筛选',
                     style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w700,
                         ),
@@ -291,7 +292,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                           Icons.apps,
                           color: scheme.onSurfaceVariant,
                         ),
-                        title: const Text('全部账户'),
+                        title: const Text('全部资产账户'),
                         onTap: () => Navigator.pop(ctx, ''),
                       ),
                       for (final a in _accounts)
@@ -409,7 +410,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
 
   @override
   Widget build(BuildContext context) {
-    final hide = ref.watch(hideAmountProvider).valueOrNull ?? false;
+    final hide = ref.watch(hideAmountProvider);
     final scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
@@ -499,7 +500,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                     : scheme.onSurfaceVariant,
               ),
               label: Text(
-                _accountId != null ? _accountName(_accountId) ?? '账户' : '账户',
+                _accountId != null ? _accountName(_accountId) ?? '资产账户' : '资产账户',
               ),
               selected: _accountId != null,
               onSelected: (_) => _pickAccount(),
@@ -600,7 +601,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     }
     if (_accountId != null) {
       chips.add(InputChip(
-        label: Text('账户: ${_accountName(_accountId) ?? ''}'),
+        label: Text('资产账户: ${_accountName(_accountId) ?? ''}'),
         onDeleted: () {
           setState(() => _accountId = null);
           _runSearch();
@@ -646,7 +647,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
         icon: Icons.search,
         title: '搜索账单',
         message: '输入备注 / 商户 / 金额，多个关键词用空格分开；'
-            '也可以用上面的分类、账户、日期快捷筛选。',
+            '也可以用上面的分类、资产账户、日期快捷筛选。',
       );
     }
     if (_loading && _results == null) {
@@ -659,7 +660,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
         title: '无匹配账单',
         message: _keywords.length > 1
             ? '同时满足 ${_keywords.map((k) => '「$k」').join('、')} 的账单不存在，试试减少关键词。'
-            : '试试换个关键词，或放宽类型 / 分类 / 账户 / 日期筛选。',
+            : '试试换个关键词，或放宽类型 / 分类 / 资产账户 / 日期筛选。',
         action: _hasFilters
             ? OutlinedButton(
                 onPressed: _clearFilters,
@@ -835,7 +836,7 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
                     : (v) => setState(() => _categoryId = v),
               ),
               const SizedBox(height: CentliSpacing.sectionLoose),
-              Text('账户', style: Theme.of(context).textTheme.labelLarge),
+              Text('资产账户', style: Theme.of(context).textTheme.labelLarge),
               const SizedBox(height: CentliSpacing.item),
               DropdownButtonFormField<String?>(
                 key: ValueKey('acc_$_accountId'),
@@ -848,7 +849,7 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
                 items: [
                   const DropdownMenuItem<String?>(
                     value: null,
-                    child: Text('全部账户'),
+                    child: Text('全部资产账户'),
                   ),
                   for (final a in widget.accounts)
                     DropdownMenuItem<String?>(

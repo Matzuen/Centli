@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/widgets/txn_grouped_list.dart';
 import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
+import '../security/app_lock_controller.dart';
 
 /// Filtered bill list for one category within a stats date range.
 class CategoryDrillPage extends ConsumerWidget {
@@ -28,7 +29,7 @@ class CategoryDrillPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final hide = ref.watch(hideAmountProvider).valueOrNull ?? false;
+    final hide = ref.watch(hideAmountProvider);
     final stream = ref.watch(databaseProvider).watchCategoryTransactionsInRange(
           ledgerId,
           startMs,

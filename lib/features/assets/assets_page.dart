@@ -12,6 +12,7 @@ import '../../core/utils/money.dart';
 import '../../core/utils/fx.dart';
 import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
+import '../security/app_lock_controller.dart';
 
 final _accountsProvider = StreamProvider.family<List<Account>, String>((
   ref,
@@ -89,7 +90,7 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
   @override
   Widget build(BuildContext context) {
     final ledgerAsync = ref.watch(currentLedgerProvider);
-    final hide = ref.watch(hideAmountProvider).valueOrNull ?? false;
+    final hide = ref.watch(hideAmountProvider);
     final dark = Theme.of(context).brightness == Brightness.dark;
     final scheme = Theme.of(context).colorScheme;
 
@@ -104,7 +105,7 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
             error: (e, _) => CentliErrorState(error: e, compact: true),
             data: (ledger) {
               if (ledger == null) {
-                return const Center(child: Text('尚未初始化账本'));
+                return const Center(child: Text('尚未初始化记账本'));
               }
               final ledgerId = ledger.id;
               final base = ledger.baseCurrency;
@@ -143,7 +144,7 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                               icon: const Icon(Icons.category_outlined),
                             ),
                             IconButton(
-                              tooltip: '添加账户',
+                              tooltip: '新建资产账户',
                               onPressed: () async {
                                 await showAccountEditor(
                                   context,
@@ -215,8 +216,8 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                                   );
                             final assetSum = split?.assetMinor ?? 0;
                             final liabilitySum = split?.liabilityMinor ?? 0;
-                            // 资产分析按**账户类型**汇总（银行 / 线上 / 信用卡 …），
-                            // 金额折算成本位币；负余额的账户类型也计入，占比带负号。
+                            // 资产分析按**资产账户类型**汇总（银行 / 线上 / 信用卡 …），
+                            // 金额折算成本位币；负余额的资产账户类型也计入，占比带负号。
                             final typeSlices = assetTypeSlices(
                               accounts: cardAccounts,
                               balances: balances,
@@ -305,11 +306,11 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                             icon: _showArchived
                                 ? Icons.inventory_2_outlined
                                 : Icons.account_balance_wallet_outlined,
-                            title: _showArchived ? '暂无已归档账户' : '暂无账户',
+                            title: _showArchived ? '暂无已归档资产账户' : '暂无资产账户',
                             message: _showArchived
-                                ? '归档账户不计入总资产，可在详情中恢复。'
-                                : '还没有账户。先记一笔，Centli 会自动使用默认账户；'
-                                    '也可以点下面的按钮添加现金 / 银行卡 / 信用账户。',
+                                ? '归档资产账户不计入总资产，可在详情中恢复。'
+                                : '先新建现金 / 银行卡 / 电子钱包等资产账户，'
+                                    '再去记收支会更清楚。也可点右上角「截图识别资产」。',
                             padding: const EdgeInsets.all(CentliSpacing.cardPad),
                             action: _showArchived
                                 ? null
@@ -323,7 +324,7 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                                       );
                                     },
                                     icon: const Icon(Icons.add, size: 18),
-                                    label: const Text('添加第一个账户'),
+                                    label: const Text('新建资产账户'),
                                   ),
                           ),
                         )
@@ -343,8 +344,8 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                         padding: const EdgeInsets.only(top: 16, bottom: 8),
                         child: Text(
                           _showArchived
-                              ? '已归档账户不计入总资产，可点进详情取消归档。'
-                              : '找不到账户？可到「已归档」查看；归档账户不计入总资产。',
+                              ? '已归档资产账户不计入总资产，可点进详情取消归档。'
+                              : '找不到资产账户？可到「已归档」查看；归档资产账户不计入总资产。',
                           style: Theme.of(context).textTheme.bodySmall
                               ?.copyWith(color: scheme.onSurfaceVariant),
                         ),
@@ -524,7 +525,7 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
   }
 }
 
-/// 资产分析的一个扇区：按账户类型汇总（本位币）。
+/// 资产分析的一个扇区：按资产账户类型汇总（本位币）。
 typedef AssetTypeSlice = ({String name, int totalMinor, String pct});
 
 /// 百分比文字：`80%` / `0%` / `−24.6%`（负号在括号内，与设计稿一致）。
@@ -544,11 +545,11 @@ String assetTypePctLabel(int part, int denominator) {
   return '$sign$trimmed%';
 }
 
-/// 按账户类型汇总余额（折算成本位币），返回按类型顺序排列的扇区。
+/// 按资产账户类型汇总余额（折算成本位币），返回按类型顺序排列的扇区。
 ///
-/// - 分母是**全部**账户的绝对额之和（含负债），所以负余额类型会得到负的
+/// - 分母是**全部**资产账户的绝对额之和（含负债），所以负余额类型会得到负的
 ///   百分比（钱包 −200 在总和 800 时是 −24.6%）。
-/// - 没有账户的类型跳过；有账户但余额为 0 的类型保留（显示 0%）。
+/// - 没有资产账户的类型跳过；有资产账户但余额为 0 的类型保留（显示 0%）。
 @visibleForTesting
 List<AssetTypeSlice> assetTypeSlices({
   required List<Account> accounts,
@@ -1090,8 +1091,8 @@ Future<void> showAccountEditor(
 }) async {
   final nameCtrl = TextEditingController(text: existing?.name ?? '');
   final db = ref.read(databaseProvider);
-  // 编辑已有账户时，这个输入框表示**当前金额**（余额），保存时写一笔
-  // 「余额校正」把余额调到输入值；新建账户时它才是期初余额。
+  // 编辑已有资产账户时，这个输入框表示**当前金额**（余额），保存时写一笔
+  // 「余额校正」把余额调到输入值；新建资产账户时它才是期初余额。
   final String? currency0 = existing?.currency;
   final currentBalanceMinor = existing == null
       ? 0
@@ -1133,7 +1134,7 @@ Future<void> showAccountEditor(
         builder: (ctx, setLocal) {
           final decimals = currencyDecimals[currency] ?? 2;
           return AlertDialog(
-            title: Text(existing == null ? '新建账户' : '编辑账户'),
+            title: Text(existing == null ? '新建资产账户' : '编辑资产账户'),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -1154,7 +1155,7 @@ Future<void> showAccountEditor(
                       children: [
                         CentliIconChip(
                           name: nameCtrl.text.trim().isEmpty
-                              ? '账户'
+                              ? '资产账户'
                               : nameCtrl.text.trim(),
                           iconKey: iconKey,
                           size: 56,
@@ -1197,7 +1198,7 @@ Future<void> showAccountEditor(
                     decoration: const InputDecoration(
                       labelText: '币种',
                       border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
-                      helperText: '已有账户币种不建议修改',
+                      helperText: '已有资产账户币种不建议修改',
                     ),
                   ),
                   const SizedBox(height: CentliSpacing.section),
@@ -1277,7 +1278,7 @@ Future<void> showAccountEditor(
   if (name.isEmpty) {
     if (context.mounted) {
       ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('请输入账户名称')));
+          .showSnackBar(const SnackBar(content: Text('请输入资产账户名称')));
     }
     return;
   }

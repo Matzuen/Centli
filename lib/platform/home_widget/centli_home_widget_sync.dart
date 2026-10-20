@@ -36,7 +36,8 @@ abstract final class CentliHomeWidgetSync {
         return;
       }
 
-      final hide = (await db.getSetting('hide_amount')) == 'true';
+      // 资产锁开启时小组件始终藏金额（会话内「开眼」不写回设置）。
+      final hide = (await db.getSetting('app_lock')) == 'true';
       final today = DateRangeWindow.lastDays(days: 1);
       final summary = await db.rangeSummaryInBase(
         ledger.id,

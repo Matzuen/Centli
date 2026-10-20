@@ -57,7 +57,7 @@ class _QuickBookkeepingSheetState extends ConsumerState<QuickBookkeepingSheet> {
     if (ledgerId == null) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请先选择账本')),
+        const SnackBar(content: Text('请先选择记账本')),
       );
       return;
     }

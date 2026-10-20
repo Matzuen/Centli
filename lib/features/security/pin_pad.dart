@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-
 import 'app_lock_service.dart';
 import '../../app/theme.dart';
 
-/// Dot display + numeric keypad for [kAppLockPinLength]-digit PIN.
+/// Dot display + numeric keypad for a [pinLength]-digit PIN (4 or 6).
 class PinPad extends StatelessWidget {
   const PinPad({
     super.key,
     required this.value,
     required this.onChanged,
+    this.pinLength = kDefaultAppLockPinLength,
     this.enabled = true,
     this.errorText,
     this.subtitle,
@@ -18,6 +18,7 @@ class PinPad extends StatelessWidget {
 
   final String value;
   final ValueChanged<String> onChanged;
+  final int pinLength;
   final bool enabled;
   final String? errorText;
   final String? subtitle;
@@ -25,6 +26,9 @@ class PinPad extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final len = kAppLockPinLengths.contains(pinLength)
+        ? pinLength
+        : kDefaultAppLockPinLength;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -40,12 +44,12 @@ class PinPad extends StatelessWidget {
         ],
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(kAppLockPinLength, (i) {
+          children: List.generate(len, (i) {
             final filled = i < value.length;
             return Container(
               width: 14,
               height: 14,
-              margin: const EdgeInsets.symmetric(horizontal: 8),
+              margin: EdgeInsets.symmetric(horizontal: len == 4 ? 10 : 8),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: filled ? scheme.primary : Colors.transparent,
@@ -69,7 +73,7 @@ class PinPad extends StatelessWidget {
           enabled: enabled,
           onDigit: (d) {
             if (!enabled) return;
-            if (value.length >= kAppLockPinLength) return;
+            if (value.length >= len) return;
             HapticFeedback.selectionClick();
             onChanged('$value$d');
           },
@@ -98,21 +102,22 @@ class _Keypad extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Widget key(String label, {VoidCallback? onTap, IconData? icon}) {
-      return SizedBox(
-        width: 84,
-        height: 64,
-        child: InkWell(
-          onTap: enabled ? onTap : null,
-          borderRadius: BorderRadius.circular(40),
-          child: Center(
-            child: icon != null
-                ? Icon(icon, size: 28)
-                : Text(
-                    label,
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.w500,
-                        ),
-                  ),
+      return Expanded(
+        child: SizedBox(
+          height: 56,
+          child: InkWell(
+            onTap: enabled ? onTap : null,
+            borderRadius: BorderRadius.circular(40),
+            child: Center(
+              child: icon != null
+                  ? Icon(icon, size: 26)
+                  : Text(
+                      label,
+                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.w500,
+                          ),
+                    ),
+            ),
           ),
         ),
       );
@@ -126,15 +131,13 @@ class _Keypad extends StatelessWidget {
           ['7', '8', '9'],
         ])
           Row(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               for (final d in row) key(d, onTap: () => onDigit(d)),
             ],
           ),
         Row(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const SizedBox(width: 84, height: 64),
+            const Expanded(child: SizedBox(height: 56)),
             key('0', onTap: () => onDigit('0')),
             key('', icon: Icons.backspace_outlined, onTap: onBackspace),
           ],
@@ -144,7 +147,7 @@ class _Keypad extends StatelessWidget {
   }
 }
 
-/// Full-screen dialog flow: enter PIN → confirm PIN. Returns PIN or null.
+/// Enter PIN → confirm PIN. Returns PIN or null. User picks 4 or 6 digits.
 Future<String?> showSetPinDialog(BuildContext context) async {
   return showDialog<String>(
     context: context,
@@ -161,22 +164,33 @@ class _SetPinDialog extends StatefulWidget {
 }
 
 class _SetPinDialogState extends State<_SetPinDialog> {
+  int _pinLength = kDefaultAppLockPinLength;
   String _first = '';
   String _second = '';
   bool _confirming = false;
   String? _error;
+
+  void _onLengthChanged(int length) {
+    if (_confirming || length == _pinLength) return;
+    setState(() {
+      _pinLength = length;
+      _first = '';
+      _second = '';
+      _error = null;
+    });
+  }
 
   void _onChanged(String v) {
     setState(() {
       _error = null;
       if (!_confirming) {
         _first = v;
-        if (v.length == kAppLockPinLength) {
+        if (v.length == _pinLength) {
           _confirming = true;
         }
       } else {
         _second = v;
-        if (v.length == kAppLockPinLength) {
+        if (v.length == _pinLength) {
           if (v == _first) {
             Navigator.pop(context, v);
           } else {
@@ -193,14 +207,32 @@ class _SetPinDialogState extends State<_SetPinDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(_confirming ? '确认 PIN' : '设置 6 位 PIN'),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      title: Text(_confirming ? '确认 PIN' : '设置 $_pinLength 位 PIN'),
       content: SizedBox(
-        width: 320,
-        child: PinPad(
-          value: _confirming ? _second : _first,
-          onChanged: _onChanged,
-          errorText: _error,
-          subtitle: _confirming ? '请再输入一次' : '用于解锁应用',
+        width: 280,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (!_confirming) ...[
+              SegmentedButton<int>(
+                segments: const [
+                  ButtonSegment(value: 4, label: Text('4 位')),
+                  ButtonSegment(value: 6, label: Text('6 位')),
+                ],
+                selected: {_pinLength},
+                onSelectionChanged: (s) => _onLengthChanged(s.first),
+              ),
+              const SizedBox(height: CentliSpacing.section),
+            ],
+            PinPad(
+              value: _confirming ? _second : _first,
+              pinLength: _pinLength,
+              onChanged: _onChanged,
+              errorText: _error,
+              subtitle: _confirming ? '请再输入一次' : '用于查看金额时验证',
+            ),
+          ],
         ),
       ),
       actions: [
@@ -217,21 +249,31 @@ class _SetPinDialogState extends State<_SetPinDialog> {
 Future<bool> showVerifyPinDialog(
   BuildContext context, {
   required Future<bool> Function(String pin) verify,
+  required Future<int> Function() resolvePinLength,
   String title = '输入 PIN',
 }) async {
   final ok = await showDialog<bool>(
     context: context,
     barrierDismissible: false,
-    builder: (ctx) => _VerifyPinDialog(title: title, verify: verify),
+    builder: (ctx) => _VerifyPinDialog(
+      title: title,
+      verify: verify,
+      resolvePinLength: resolvePinLength,
+    ),
   );
   return ok == true;
 }
 
 class _VerifyPinDialog extends StatefulWidget {
-  const _VerifyPinDialog({required this.title, required this.verify});
+  const _VerifyPinDialog({
+    required this.title,
+    required this.verify,
+    required this.resolvePinLength,
+  });
 
   final String title;
   final Future<bool> Function(String pin) verify;
+  final Future<int> Function() resolvePinLength;
 
   @override
   State<_VerifyPinDialog> createState() => _VerifyPinDialogState();
@@ -241,13 +283,26 @@ class _VerifyPinDialogState extends State<_VerifyPinDialog> {
   String _pin = '';
   String? _error;
   bool _busy = false;
+  int? _pinLength;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final len = await widget.resolvePinLength();
+      if (!mounted) return;
+      setState(() => _pinLength = len);
+    });
+  }
 
   Future<void> _onChanged(String v) async {
+    final len = _pinLength;
+    if (len == null) return;
     setState(() {
       _pin = v;
       _error = null;
     });
-    if (v.length != kAppLockPinLength || _busy) return;
+    if (v.length != len || _busy) return;
     setState(() => _busy = true);
     final ok = await widget.verify(v);
     if (!mounted) return;
@@ -264,16 +319,24 @@ class _VerifyPinDialogState extends State<_VerifyPinDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final len = _pinLength;
     return AlertDialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
       title: Text(widget.title),
       content: SizedBox(
-        width: 320,
-        child: PinPad(
-          value: _pin,
-          onChanged: _onChanged,
-          enabled: !_busy,
-          errorText: _error,
-        ),
+        width: 280,
+        child: len == null
+            ? const SizedBox(
+                height: 120,
+                child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+              )
+            : PinPad(
+                value: _pin,
+                pinLength: len,
+                onChanged: _onChanged,
+                enabled: !_busy,
+                errorText: _error,
+              ),
       ),
       actions: [
         TextButton(

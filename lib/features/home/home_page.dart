@@ -16,6 +16,8 @@ import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
 import '../capture/capture_intake_actions.dart';
 import '../ledger/bookkeeping_sheet.dart';
+import '../security/app_lock_controller.dart';
+import '../security/pin_pad.dart';
 import '../../platform/notifications/notification_listener_stub.dart';
 import '../../platform/notifications/notification_parse.dart';
 import '../../platform/notifications/noti_template_store.dart';
@@ -196,8 +198,8 @@ class _HomePageState extends ConsumerState<HomePage> {
   @override
   Widget build(BuildContext context) {
     final ledgerAsync = ref.watch(currentLedgerProvider);
-    final hideAsync = ref.watch(hideAmountProvider);
-    final hide = hideAsync.valueOrNull ?? false;
+    final hide = ref.watch(hideAmountProvider);
+    final lockOn = ref.watch(appLockEnabledProvider).valueOrNull ?? false;
     final range = ref.watch(homeRangeProvider);
     final scheme = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
@@ -213,7 +215,7 @@ class _HomePageState extends ConsumerState<HomePage> {
             error: (e, _) => CentliErrorState(error: e, compact: true),
             data: (ledger) {
               if (ledger == null) {
-                return const Center(child: Text('尚未初始化账本'));
+                return const Center(child: Text('尚未初始化记账本'));
               }
               final ledgerId = ledger.id;
               final base = ledger.baseCurrency;
@@ -366,17 +368,6 @@ class _HomePageState extends ConsumerState<HomePage> {
                           onPressed: () => context.push('/home/search'),
                           icon: const Icon(Icons.search_rounded),
                         ),
-                        IconButton(
-                          tooltip: hide ? '显示金额' : '隐藏金额',
-                          onPressed: () async {
-                            await ref.read(databaseProvider).toggleHideAmount();
-                          },
-                          icon: Icon(
-                            hide
-                                ? Icons.visibility_off_outlined
-                                : Icons.visibility_outlined,
-                          ),
-                        ),
                       ],
                     ),
                   ),
@@ -456,6 +447,14 @@ class _HomePageState extends ConsumerState<HomePage> {
                               ledgerName: ledger.name,
                               base: base,
                               hide: hide,
+                              showAmountEye: true,
+                              onToggleAmountVisibility: () =>
+                                  _toggleHomeAmountVisibility(
+                                context,
+                                ref,
+                                currentlyHidden: hide,
+                                lockOn: lockOn,
+                              ),
                               range: range,
                               netWorth: nw,
                               summary: summary,
@@ -539,7 +538,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                                                 height: CentliSpacing.dense,
                                               ),
                                               Text(
-                                                '点底部「记一笔」记下第一笔',
+                                                '建议先到「资产」建好资产账户，再点底部「记一笔」',
                                                 style: Theme.of(context)
                                                     .textTheme
                                                     .bodySmall,
@@ -788,10 +787,61 @@ class _ModeTab extends StatelessWidget {
   }
 }
 
+Future<void> _toggleHomeAmountVisibility(
+  BuildContext context,
+  WidgetRef ref, {
+  required bool currentlyHidden,
+  required bool lockOn,
+}) async {
+  if (!lockOn) {
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('设置密码保护？'),
+        content: const Text(
+          '开启资产锁后可隐藏全部金额；'
+          '之后点眼睛可临时查看（需验证），关掉眼睛不用验证。',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('暂不'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('去设置'),
+          ),
+        ],
+      ),
+    );
+    if (go != true || !context.mounted) return;
+    final pin = await showSetPinDialog(context);
+    if (pin == null || !context.mounted) return;
+    final svc = ref.read(appLockServiceProvider);
+    final db = ref.read(databaseProvider);
+    await svc.setPin(pin);
+    await db.setAppLockEnabled(true);
+    ref.read(appLockUnlockedProvider.notifier).unlock();
+    ref.read(amountsRevealedProvider.notifier).conceal();
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('资产锁已开启，金额已隐藏')),
+      );
+    }
+    return;
+  }
+  if (!currentlyHidden) {
+    ref.read(amountsRevealedProvider.notifier).conceal();
+    return;
+  }
+  final ok = await authenticateSensitiveAction(context, ref);
+  if (ok) ref.read(amountsRevealedProvider.notifier).reveal();
+}
+
 /// 概览卡：
 ///
 /// ```
-/// 账本名
+/// 记账本名                            👁
 /// ¥ 3,375.20                ▲ ¥ 3,375.20
 /// ─────────────────────────────
 /// 资产  ¥5,010.00      负债  ¥1,634.80
@@ -803,6 +853,8 @@ class _LedgerSummaryCard extends StatelessWidget {
     required this.ledgerName,
     required this.base,
     required this.hide,
+    required this.showAmountEye,
+    required this.onToggleAmountVisibility,
     required this.range,
     required this.netWorth,
     required this.summary,
@@ -815,6 +867,8 @@ class _LedgerSummaryCard extends StatelessWidget {
   final String ledgerName;
   final String base;
   final bool hide;
+  final bool showAmountEye;
+  final VoidCallback onToggleAmountVisibility;
   final DateRangeWindow range;
   final AsyncValue<BaseNetWorth> netWorth;
   final AsyncValue<BaseRangeSummary> summary;
@@ -946,12 +1000,36 @@ class _LedgerSummaryCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 账本名
-          Text(
-            ledgerName,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: labelSmall,
+          // 记账本名 +（资产锁开启时）眼睛
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  ledgerName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: labelSmall,
+                ),
+              ),
+              if (showAmountEye)
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(
+                    minWidth: 32,
+                    minHeight: 32,
+                  ),
+                  tooltip: hide ? '验证后显示金额' : '隐藏金额',
+                  onPressed: onToggleAmountVisibility,
+                  icon: Icon(
+                    hide
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                    size: 20,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+            ],
           ),
           const SizedBox(height: CentliSpacing.dense),
           // 净资产 + 区间涨跌

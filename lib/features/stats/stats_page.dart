@@ -8,6 +8,7 @@ import '../../core/widgets/centli_error_state.dart';
 import '../../core/widgets/date_range_control.dart';
 import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
+import '../security/app_lock_controller.dart';
 import 'category_drill_page.dart';
 import '../../app/theme.dart';
 
@@ -125,20 +126,20 @@ String statsRangeText(DateRangeWindow range) {
   return '${d(range.startLocal)} — ${d(last)}';
 }
 
-/// 统计页：时间范围 / 分类环形图 / 汇总 / 账户。
+/// 统计页：时间范围 / 分类环形图 / 汇总 / 资产账户。
 class StatsPage extends ConsumerWidget {
   const StatsPage({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final ledgerAsync = ref.watch(currentLedgerProvider);
-    final hide = ref.watch(hideAmountProvider).valueOrNull ?? false;
+    final hide = ref.watch(hideAmountProvider);
     final range = ref.watch(statsRangeProvider);
     final mode = ref.watch(statsRangeModeProvider);
     final kind = ref.watch(statsBreakdownKindProvider);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('\u7edf\u8ba1')),
+    return CentliGradientScaffold(
+      appBar: AppBar(title: const Text('统计')),
       body: ledgerAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => CentliErrorState(
@@ -148,7 +149,7 @@ class StatsPage extends ConsumerWidget {
         data: (ledger) {
           if (ledger == null) {
             return const Center(
-              child: Text('\u5c1a\u672a\u521d\u59cb\u5316\u8d26\u672c'),
+              child: Text('尚未初始化记账本'),
             );
           }
           final ledgerId = ledger.id;
@@ -739,7 +740,7 @@ class _SummaryCard extends StatelessWidget {
   }
 }
 
-/// 卡片 4：账户（名称 / 收入 / 支出 / 结余），右上角注明不含转账。
+/// 卡片 4：资产账户（名称 / 收入 / 支出 / 结余），右上角注明不含转账。
 class _AccountsCard extends StatelessWidget {
   const _AccountsCard({
     required this.rows,
@@ -765,7 +766,7 @@ class _AccountsCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  '\u8d26\u6237',
+                  '\u8d44\u4ea7\u8d26\u6237',
                   style: theme.textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
@@ -790,7 +791,7 @@ class _AccountsCard extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   child: Center(
                     child: Text(
-                      '\u8be5\u533a\u95f4\u6ca1\u6709\u8d26\u6237\u6d41\u6c34',
+                      '\u8be5\u533a\u95f4\u6ca1\u6709\u8d44\u4ea7\u8d26\u6237\u6d41\u6c34',
                       style: TextStyle(color: scheme.onSurfaceVariant),
                     ),
                   ),

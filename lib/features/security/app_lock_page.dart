@@ -25,6 +25,7 @@ class _AppLockPageState extends ConsumerState<AppLockPage> {
   bool _usePin = false;
   bool _bioAvailable = false;
   bool _bioPreferred = false;
+  int _pinLength = kDefaultAppLockPinLength;
 
   @override
   void initState() {
@@ -37,10 +38,12 @@ class _AppLockPageState extends ConsumerState<AppLockPage> {
     final bioHw = await svc.isBiometricHardwareAvailable();
     final bioPref =
         ref.read(appLockBiometricProvider).valueOrNull ?? false;
+    final pinLen = await svc.pinLength();
     if (!mounted) return;
     setState(() {
       _bioAvailable = bioHw;
       _bioPreferred = bioPref;
+      _pinLength = pinLen;
       _usePin = !(bioHw && bioPref);
     });
     if (bioHw && bioPref) {
@@ -72,7 +75,7 @@ class _AppLockPageState extends ConsumerState<AppLockPage> {
       _pin = v;
       _error = null;
     });
-    if (v.length != kAppLockPinLength || _busy) return;
+    if (v.length != _pinLength || _busy) return;
     setState(() => _busy = true);
     final svc = ref.read(appLockServiceProvider);
       final locked = await svc.lockoutRemaining();
@@ -131,14 +134,14 @@ class _AppLockPageState extends ConsumerState<AppLockPage> {
                   ),
                   const SizedBox(height: CentliSpacing.sectionLoose),
                   Text(
-                    'Centli 已锁定',
+                    '资产已锁定',
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                           fontWeight: FontWeight.w700,
                         ),
                   ),
                   const SizedBox(height: CentliSpacing.item),
                   Text(
-                    _usePin ? '请输入 6 位 PIN' : '使用生物识别解锁',
+                    _usePin ? '请输入 $_pinLength 位 PIN' : '使用生物识别解锁',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: scheme.onSurfaceVariant,
                         ),
@@ -167,6 +170,7 @@ class _AppLockPageState extends ConsumerState<AppLockPage> {
                   ] else ...[
                     PinPad(
                       value: _pin,
+                      pinLength: _pinLength,
                       onChanged: _onPinChanged,
                       enabled: !_busy,
                       errorText: _error,

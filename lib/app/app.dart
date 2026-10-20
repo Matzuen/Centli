@@ -82,42 +82,20 @@ class _CentliAppState extends ConsumerState<CentliApp> {
   }
 
   Future<void> _relockIfNeeded() async {
-    final router = _router;
-    if (router == null) return;
     final enabled = await ref.read(databaseProvider).getSetting('app_lock');
     if (enabled != 'true') return;
-    final unlocked = ref.read(appLockUnlockedProvider);
-    if (!unlocked) return;
-    ref.read(appLockUnlockedProvider.notifier).lock();
-    final loc = router.state.uri.path;
-    if (loc == '/lock' || loc == '/splash' || loc == '/onboarding') return;
-    router.go('/lock');
+    // 资产锁：回前台只重新藏金额，不弹全屏解锁。
+    ref.read(amountsRevealedProvider.notifier).conceal();
   }
 
   String? _redirect(BuildContext context, GoRouterState state) {
-    final path = state.uri.path;
-    if (path == '/splash' || path == '/onboarding' || path == '/lock') {
-      return null;
-    }
-    final lockAsync = ref.read(appLockEnabledProvider);
-    final lockOn = lockAsync.valueOrNull;
-    // While loading, do not bounce; splash already gates cold start.
-    if (lockOn != true) return null;
-    final unlocked = ref.read(appLockUnlockedProvider);
-    if (!unlocked) return '/lock';
+    // 资产锁不再拦截路由；/lock 仅保留兼容，正常流程不会进入。
     return null;
   }
 
   void _onOpenRoute(String route, String? pendingId) {
     final router = _router;
     if (router == null) return;
-    // Local-push tap → pending list (pendingId reserved for future scroll-to).
-    final lockOn = ref.read(appLockEnabledProvider).valueOrNull ?? false;
-    final unlocked = ref.read(appLockUnlockedProvider);
-    if (lockOn && !unlocked) {
-      router.go('/lock');
-      return;
-    }
     router.go(route);
   }
 
@@ -136,12 +114,6 @@ class _CentliAppState extends ConsumerState<CentliApp> {
       navigate: (route) {
         final router = _router;
         if (router == null) return;
-        final lockOn = ref.read(appLockEnabledProvider).valueOrNull ?? false;
-        final unlocked = ref.read(appLockUnlockedProvider);
-        if (lockOn && !unlocked) {
-          router.go('/lock');
-          return;
-        }
         router.go(route);
       },
     );

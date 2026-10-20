@@ -6,8 +6,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:local_auth/local_auth.dart';
 
-/// PIN length for app lock (6 digits).
-const int kAppLockPinLength = 6;
+/// Allowed PIN lengths for 资产锁.
+const Set<int> kAppLockPinLengths = {4, 6};
+
+/// Default when creating a new PIN (user can switch to 4 in the dialog).
+const int kDefaultAppLockPinLength = 6;
 
 /// Secure PIN hashing + biometric helpers. Never stores plaintext PIN in Drift.
 class AppLockService {
@@ -19,6 +22,7 @@ class AppLockService {
 
   static const _keySalt = 'centli_pin_salt';
   static const _keyHash = 'centli_pin_hash';
+  static const _keyLength = 'centli_pin_length';
   static const _keyFailCount = 'centli_pin_fail_count';
   static const _keyLockUntil = 'centli_pin_lock_until_ms';
   static const _maxFails = 5;
@@ -32,12 +36,21 @@ class AppLockService {
     return hash != null && hash.isNotEmpty;
   }
 
+  /// Digits required for the currently saved PIN (defaults to 6 for older installs).
+  Future<int> pinLength() async {
+    final raw = await _storage.read(key: _keyLength);
+    final n = int.tryParse(raw ?? '');
+    if (n != null && kAppLockPinLengths.contains(n)) return n;
+    return kDefaultAppLockPinLength;
+  }
+
   Future<void> setPin(String pin) async {
     _assertPinFormat(pin);
     final salt = _randomSalt();
     final hash = _hashPin(pin, salt);
     await _storage.write(key: _keySalt, value: salt);
     await _storage.write(key: _keyHash, value: hash);
+    await _storage.write(key: _keyLength, value: '${pin.length}');
   }
 
   Future<Duration?> lockoutRemaining() async {
@@ -53,7 +66,8 @@ class AppLockService {
   }
 
   Future<bool> verifyPin(String pin) async {
-    if (!_looksLikePin(pin)) return false;
+    final len = await pinLength();
+    if (!_looksLikePin(pin, length: len)) return false;
     final remaining = await lockoutRemaining();
     if (remaining != null) return false;
     final salt = await _storage.read(key: _keySalt);
@@ -79,6 +93,7 @@ class AppLockService {
   Future<void> clearPin() async {
     await _storage.delete(key: _keySalt);
     await _storage.delete(key: _keyHash);
+    await _storage.delete(key: _keyLength);
     await _storage.delete(key: _keyFailCount);
     await _storage.delete(key: _keyLockUntil);
   }
@@ -119,12 +134,16 @@ class AppLockService {
 
   static void _assertPinFormat(String pin) {
     if (!_looksLikePin(pin)) {
-      throw ArgumentError('PIN 须为 $kAppLockPinLength 位数字');
+      throw ArgumentError('PIN 须为 4 或 6 位数字');
     }
   }
 
-  static bool _looksLikePin(String pin) =>
-      RegExp(r'^\d{6}$').hasMatch(pin);
+  static bool _looksLikePin(String pin, {int? length}) {
+    if (length != null) {
+      return RegExp('^\\d{$length}\$').hasMatch(pin);
+    }
+    return RegExp(r'^\d{4}$').hasMatch(pin) || RegExp(r'^\d{6}$').hasMatch(pin);
+  }
 
   static String _randomSalt() {
     final rng = Random.secure();

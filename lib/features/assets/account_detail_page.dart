@@ -13,6 +13,7 @@ import '../../core/widgets/txn_list_tile.dart';
 import '../../core/widgets/date_range_control.dart';
 import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
+import '../security/app_lock_controller.dart';
 import 'assets_page.dart';
 import '../../app/theme.dart';
 
@@ -52,23 +53,23 @@ class AccountDetailPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(_accountProvider(accountId));
-    final hide = ref.watch(hideAmountProvider).valueOrNull ?? false;
+    final hide = ref.watch(hideAmountProvider);
 
     return async.when(
       loading: () => Scaffold(
-        appBar: AppBar(title: const Text('\u8d26\u6237')),
+        appBar: AppBar(title: const Text('\u8d44\u4ea7\u8d26\u6237')),
         body: const Center(child: CircularProgressIndicator()),
       ),
       error: (e, _) => Scaffold(
-        appBar: AppBar(title: const Text('\u8d26\u6237')),
+        appBar: AppBar(title: const Text('\u8d44\u4ea7\u8d26\u6237')),
         body: Center(child: Text('\u52a0\u8f7d\u5931\u8d25: $e')),
       ),
       data: (account) {
         if (account == null) {
           return Scaffold(
-            appBar: AppBar(title: const Text('\u8d26\u6237')),
+            appBar: AppBar(title: const Text('\u8d44\u4ea7\u8d26\u6237')),
             body: const Center(
-              child: Text('\u8d26\u6237\u4e0d\u5b58\u5728'),
+              child: Text('\u8d44\u4ea7\u8d26\u6237\u4e0d\u5b58\u5728'),
             ),
           );
         }
@@ -158,7 +159,7 @@ class _AccountDetailBody extends ConsumerWidget {
                 ),
                 PopupMenuItem(
                   value: 'archive',
-                  child: Text('\u5f52\u6863\u8d26\u6237'),
+                  child: Text('\u5f52\u6863\u8d44\u4ea7\u8d26\u6237'),
                 ),
               ],
             ),
@@ -177,7 +178,7 @@ class _AccountDetailBody extends ConsumerWidget {
                   color: scheme.onSecondaryContainer,
                 ),
                 title: Text(
-                  '\u6b64\u8d26\u6237\u5df2\u5f52\u6863',
+                  '\u6b64\u8d44\u4ea7\u8d26\u6237\u5df2\u5f52\u6863',
                   style: TextStyle(color: scheme.onSecondaryContainer),
                 ),
                 subtitle: Text(
@@ -613,7 +614,7 @@ Future<void> _confirmArchive(
   final ok = await showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
-      title: const Text('\u5f52\u6863\u8d26\u6237'),
+      title: const Text('\u5f52\u6863\u8d44\u4ea7\u8d26\u6237'),
       content: Text(
         '\u786e\u5b9a\u5f52\u6863\u300c${account.name}\u300d\uff1f\u5f52\u6863\u540e\u4e0d\u518d\u51fa\u73b0\u5728\u8d44\u4ea7\u5217\u8868\uff0c\u5386\u53f2\u6d41\u6c34\u4fdd\u7559\u3002',
       ),

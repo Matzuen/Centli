@@ -6,7 +6,7 @@ import '../../data/db/database_provider.dart';
 import '../security/app_lock_controller.dart';
 import '../security/pin_pad.dart';
 
-/// Security settings: app lock, biometric, hide-amount default.
+/// Security settings: 资产锁, biometric, PIN.
 class SecurityPage extends ConsumerStatefulWidget {
   const SecurityPage({super.key});
 
@@ -28,18 +28,12 @@ class _SecurityPageState extends ConsumerState<SecurityPage> {
   }
 
   Future<bool> _authToChange() async {
-    final svc = ref.read(appLockServiceProvider);
-    final bioOn =
-        ref.read(appLockBiometricProvider).valueOrNull ?? false;
-    if (bioOn && (_bioHw ?? false)) {
-      final ok = await svc.authenticateBiometric(reason: '验证身份以更改安全设置');
-      if (ok) return true;
-    }
     if (!mounted) return false;
-    return showVerifyPinDialog(
+    return authenticateSensitiveAction(
       context,
-      verify: svc.verifyPin,
-      title: '输入当前 PIN',
+      ref,
+      reason: '验证身份以更改安全设置',
+      pinTitle: '输入当前 PIN',
     );
   }
 
@@ -52,9 +46,10 @@ class _SecurityPageState extends ConsumerState<SecurityPage> {
       await svc.setPin(pin);
       await db.setAppLockEnabled(true);
       ref.read(appLockUnlockedProvider.notifier).unlock();
+      ref.read(amountsRevealedProvider.notifier).conceal();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('应用锁已开启')),
+          const SnackBar(content: Text('资产锁已开启，金额默认隐藏')),
         );
       }
     } else {
@@ -64,9 +59,10 @@ class _SecurityPageState extends ConsumerState<SecurityPage> {
       await db.setAppLockEnabled(false);
       await db.setAppLockBiometric(false);
       ref.read(appLockUnlockedProvider.notifier).unlock();
+      ref.read(amountsRevealedProvider.notifier).conceal();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('应用锁已关闭')),
+          const SnackBar(content: Text('资产锁已关闭')),
         );
       }
     }
@@ -101,10 +97,8 @@ class _SecurityPageState extends ConsumerState<SecurityPage> {
   Widget build(BuildContext context) {
     final lockAsync = ref.watch(appLockEnabledProvider);
     final bioAsync = ref.watch(appLockBiometricProvider);
-    final hideAsync = ref.watch(hideAmountProvider);
     final lockOn = lockAsync.valueOrNull ?? false;
     final bioOn = bioAsync.valueOrNull ?? false;
-    final hideOn = hideAsync.valueOrNull ?? false;
 
     return CentliGradientScaffold(
       appBar: AppBar(title: const Text('安全')),
@@ -116,8 +110,11 @@ class _SecurityPageState extends ConsumerState<SecurityPage> {
               children: [
                 SwitchListTile(
                   secondary: const Icon(Icons.lock_outline),
-                  title: const Text('应用锁'),
-                  subtitle: const Text('冷启动与回到前台时需解锁'),
+                  title: const Text('资产锁'),
+                  subtitle: const Text(
+                    '开启后隐藏全部金额。首页概览卡点眼睛可临时查看（需验证 PIN / 生物识别）；'
+                    '关掉眼睛不用验证。回到前台会重新隐藏。',
+                  ),
                   value: lockOn,
                   onChanged: lockAsync.isLoading ? null : _onLockChanged,
                 ),
@@ -125,7 +122,7 @@ class _SecurityPageState extends ConsumerState<SecurityPage> {
                 ListTile(
                   leading: const Icon(Icons.pin_outlined),
                   title: const Text('修改 PIN'),
-                  subtitle: const Text('6 位数字'),
+                  subtitle: const Text('可选 4 位或 6 位'),
                   enabled: lockOn,
                   trailing: const Icon(Icons.chevron_right),
                   onTap: lockOn ? _changePin : null,
@@ -138,7 +135,7 @@ class _SecurityPageState extends ConsumerState<SecurityPage> {
                     _bioHw == null
                         ? '检测中…'
                         : (_bioHw!
-                            ? '解锁时优先使用指纹 / Face ID'
+                            ? '查看金额时优先使用指纹 / Face ID'
                             : '当前设备不可用，将仅使用 PIN'),
                   ),
                   value: bioOn && lockOn && (_bioHw ?? false),
@@ -147,18 +144,6 @@ class _SecurityPageState extends ConsumerState<SecurityPage> {
                       : _onBiometricChanged,
                 ),
               ],
-            ),
-          ),
-          const SizedBox(height: CentliSpacing.section),
-          CentliSoftCard(
-            child: SwitchListTile(
-              secondary: const Icon(Icons.visibility_off_outlined),
-              title: const Text('隐藏金额默认'),
-              subtitle: const Text('与首页眼睛按钮同步'),
-              value: hideOn,
-              onChanged: hideAsync.isLoading
-                  ? null
-                  : (_) => ref.read(databaseProvider).toggleHideAmount(),
             ),
           ),
         ],

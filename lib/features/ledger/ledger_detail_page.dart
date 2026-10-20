@@ -13,6 +13,7 @@ import '../../core/widgets/centli_icon.dart';
 import '../../data/db/centli_database.dart';
 import '../../data/db/txn_tags.dart';
 import '../../data/db/database_provider.dart';
+import '../security/app_lock_controller.dart';
 import 'category_picker_sheet.dart';
 import '../../app/theme.dart';
 
@@ -34,7 +35,7 @@ class LedgerDetailPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(_txnProvider(transactionId));
-    final hide = ref.watch(hideAmountProvider).valueOrNull ?? false;
+    final hide = ref.watch(hideAmountProvider);
     final scheme = Theme.of(context).colorScheme;
 
     return async.when(
@@ -387,7 +388,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
             key: const Key('ledger_detail_account'),
             theme: theme,
             icon: Icons.account_balance_wallet_outlined,
-            title: '账户',
+            title: '资产账户',
             value: _accountNameOf(_accountId),
             emptyText: '—',
             onTap: () => _editAccount(context),
@@ -412,7 +413,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
           key: const Key('ledger_detail_account'),
           theme: theme,
           icon: Icons.south_west_rounded,
-          title: '转出账户',
+          title: '转出资产账户',
           value: _accountNameOf(_accountId),
           emptyText: '—',
           onTap: () => _editAccount(context),
@@ -422,7 +423,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
           key: const Key('ledger_detail_to_account'),
           theme: theme,
           icon: Icons.north_east_rounded,
-          title: '转入账户',
+          title: '转入资产账户',
           value: _accountNameOf(_toAccountId),
           emptyText: '—',
           onTap: () => _editToAccount(context),
@@ -725,7 +726,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       context,
       accounts: s.accounts,
       selectedId: _accountId,
-      title: _isTransfer ? '选择转出账户' : '选择账户',
+      title: _isTransfer ? '选择转出资产账户' : '选择资产账户',
     );
     if (id == null || id == _accountId) return;
     setState(() {
@@ -746,7 +747,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       context,
       accounts: s.accounts.where((a) => a.id != _accountId).toList(),
       selectedId: _toAccountId,
-      title: '选择转入账户',
+      title: '选择转入资产账户',
     );
     if (id == null || id == _toAccountId) return;
     setState(() => _pendingToAccountId = id);
@@ -1028,7 +1029,7 @@ Future<String?> _pickAccountSheet(
               child: accounts.isEmpty
                   ? Center(
                       child: Text(
-                        '暂无账户',
+                        '暂无资产账户',
                         style: TextStyle(color: scheme.onSurfaceVariant),
                       ),
                     )

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/utils/money.dart';
 import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
+import '../security/app_lock_controller.dart';
 import '../../app/theme.dart';
 
 final budgetMonthProvider = StateProvider<String>((ref) {
@@ -43,7 +44,7 @@ class BudgetPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final ledgerAsync = ref.watch(currentLedgerProvider);
     final ym = ref.watch(budgetMonthProvider);
-    final hide = ref.watch(hideAmountProvider).valueOrNull ?? false;
+    final hide = ref.watch(hideAmountProvider);
     final scheme = Theme.of(context).colorScheme;
 
     return CentliGradientScaffold(

@@ -21,10 +21,6 @@ final currentLedgerProvider = StreamProvider<Ledger?>((ref) {
   return ref.watch(databaseProvider).watchCurrentLedger();
 });
 
-final hideAmountProvider = StreamProvider<bool>((ref) {
-  return ref.watch(databaseProvider).watchHideAmount();
-});
-
 final onboardingDoneProvider = FutureProvider<bool>((ref) async {
   final db = ref.watch(databaseProvider);
   final v = await db.getSetting('onboarding_done');

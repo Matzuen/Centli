@@ -57,13 +57,13 @@ class MePage extends ConsumerWidget {
                     const SizedBox(width: 12),
                     Expanded(
                       child: ledgerAsync.when(
-                        loading: () => const Text('账本 …'),
-                        error: (e, _) => Text('账本 · $e'),
+                        loading: () => const Text('记账本 …'),
+                        error: (e, _) => Text('记账本 · $e'),
                         data: (ledger) => Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              ledger?.name ?? '账本',
+                              ledger?.name ?? '记账本',
                               style: const TextStyle(
                                 fontWeight: FontWeight.w800,
                                 fontSize: 15,
@@ -103,7 +103,7 @@ class MePage extends ConsumerWidget {
                     _tile(
                       context,
                       icon: Icons.menu_book_outlined,
-                      title: '账本管理',
+                      title: '记账本管理',
                       onTap: () => context.push('/me/ledgers'),
                     ),
                     const Divider(height: 1),
@@ -196,7 +196,7 @@ class MePage extends ConsumerWidget {
                       context,
                       icon: Icons.lock_outline,
                       title: '安全',
-                      subtitle: '应用锁 · 隐藏金额',
+                      subtitle: '资产锁 · PIN / 生物识别',
                       onTap: () => context.push('/me/security'),
                     ),
                     const Divider(height: 1),
@@ -396,7 +396,7 @@ Future<void> showLedgerEditor(
       return StatefulBuilder(
         builder: (ctx, setLocal) {
           return AlertDialog(
-            title: const Text('账本设置'),
+            title: const Text('记账本设置'),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -404,7 +404,7 @@ Future<void> showLedgerEditor(
                   TextField(
                     controller: nameCtrl,
                     decoration: const InputDecoration(
-                      labelText: '账本名称',
+                      labelText: '记账本名称',
                       border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
                     ),
                   ),
@@ -456,7 +456,7 @@ Future<void> showLedgerEditor(
   if (name.isEmpty) {
     if (context.mounted) {
       ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('请输入账本名称')));
+          .showSnackBar(const SnackBar(content: Text('请输入记账本名称')));
     }
     return;
   }

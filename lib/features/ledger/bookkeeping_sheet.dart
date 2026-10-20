@@ -12,6 +12,7 @@ import '../../core/widgets/centli_icon.dart';
 import '../../data/db/centli_database.dart';
 import '../../data/db/txn_tags.dart';
 import '../../data/db/database_provider.dart';
+import '../security/app_lock_controller.dart';
 import 'category_picker_sheet.dart';
 import 'ledger_detail_page.dart' show showTagEditorDialog;
 
@@ -23,7 +24,7 @@ int? pendingDetailAmountMinor;
 /// Opens the manual panel.
 ///
 /// - [existing]: edit that bill in place.
-/// - [template]: start a NEW bill pre-filled from [template] (账户 / 分类 /
+/// - [template]: start a NEW bill pre-filled from [template] (资产账户 / 分类 /
 ///   标签 / 备注，金额清零) — 「照着这笔再记一笔」.
 /// - [initialNote]: pre-fill only the note (used when the note recalls a
 ///   category before the panel opens).
@@ -217,7 +218,7 @@ List<Account> _accounts = [];
           _fxRateText = existing.fxRate.toString();
         }
       } else if (template != null) {
-        // 照着这笔再记一笔：复制分类 / 账户 / 标签 / 备注，金额留空。
+        // 照着这笔再记一笔：复制分类 / 资产账户 / 标签 / 备注，金额留空。
         _type = template.type;
         _accountId = template.accountId;
         _toAccountId = template.toAccountId;
@@ -469,7 +470,7 @@ List<Account> _accounts = [];
       if (_toAccountId == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('\u8bf7\u9009\u62e9\u8f6c\u5165\u8d26\u6237'),
+            content: Text('\u8bf7\u9009\u62e9\u8f6c\u5165\u8d44\u4ea7\u8d26\u6237'),
           ),
         );
         return;
@@ -478,7 +479,7 @@ List<Account> _accounts = [];
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              '\u8f6c\u51fa\u4e0e\u8f6c\u5165\u8d26\u6237\u4e0d\u80fd\u76f8\u540c',
+              '\u8f6c\u51fa\u4e0e\u8f6c\u5165\u8d44\u4ea7\u8d26\u6237\u4e0d\u80fd\u76f8\u540c',
             ),
           ),
         );
@@ -569,7 +570,7 @@ List<Account> _accounts = [];
           toAmountMinor: toAmountMinor,
         );
       }
-      // 记住这次的选择：下次「记一笔」直接沿用账户 / 分类。
+      // 记住这次的选择：下次「记一笔」直接沿用资产账户 / 分类。
       if (!mounted) return;
       if (_type != 'transfer' && _accountId != null && _categoryId != null) {
         final byType = Map<String, String>.from(_lastChoice?.categoryByType ?? {});
@@ -699,8 +700,8 @@ List<Account> _accounts = [];
           accounts: _accounts,
           selectedId: current,
           title: toAccount
-              ? '\u9009\u62e9\u8f6c\u5165\u8d26\u6237'
-              : '\u9009\u62e9\u8d26\u6237',
+              ? '\u9009\u62e9\u8f6c\u5165\u8d44\u4ea7\u8d26\u6237'
+              : '\u9009\u62e9\u8d44\u4ea7\u8d26\u6237',
         );
       },
     );
@@ -767,7 +768,7 @@ List<Account> _accounts = [];
     final maxHeight = MediaQuery.sizeOf(context).height * 0.92;
     final viewInsets = MediaQuery.viewInsetsOf(context).bottom;
     final safeBottom = MediaQuery.paddingOf(context).bottom;
-    final hide = ref.watch(hideAmountProvider).valueOrNull ?? false;
+    final hide = ref.watch(hideAmountProvider);
     final chipBorder = CentliTheme.chipBorder(context);
 
     return PopScope(
@@ -969,7 +970,7 @@ List<Account> _accounts = [];
                                             ? Icons
                                                 .account_balance_wallet_outlined
                                             : null,
-                                        label: acc?.name ?? '账户',
+                                        label: acc?.name ?? '资产账户',
                                         onTap: () =>
                                             _pickAccount(toAccount: false),
                                       );
