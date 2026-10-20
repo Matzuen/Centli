@@ -3,8 +3,10 @@
 /// **Capture** grouping key = 包名 + 支/收 + AI mustHint（如「支付成功」）。
 /// 同一组融成一条 `软件名-支出-支付成功`；mustContain 用 `|` OR 合并。
 ///
-/// **Exclude**（AI isPayment=false）grouping key = 包名 + mustHint。
-/// 融成一条 `软件名-排除-验证码`；命中后丢弃，不入账。
+/// **Exclude**（AI isPayment=false）按应用一条 `软件名-排除`。
+///
+/// Cleanup: capture rules auto-merge when over [kDistillCaptureMaxRules];
+/// stale rules (no hit for [kDistillStaleDays]) surface on the rules page.
 library;
 
 import 'package:flutter/foundation.dart' show visibleForTesting;
@@ -14,6 +16,12 @@ import 'notification_parse.dart';
 import 'noti_template_store.dart';
 
 const int _kMaxMustAlts = 8;
+
+/// Soft cap for AI **capture** distill rules (exclude rules not counted).
+const int kDistillCaptureMaxRules = 32;
+
+/// Days without a local hit before a distill rule is considered stale.
+const int kDistillStaleDays = 90;
 
 /// Escape a literal for use inside a Dart [RegExp] pattern.
 @visibleForTesting
@@ -171,6 +179,22 @@ NotiTemplate? matchDistillExcludeRule(
   return null;
 }
 
+/// 只用 **AI 反写的捕获规则** 解析（命中即复用，不再问模型）。
+///
+/// 这是"循环往复"里省钱的那一半：同一场景（同应用、同标题）重复出现时，
+/// 走已学的 `软件名-支出/收入-场景` 规则即可，不必再调用模型。
+/// 只有拿到金额才算命中——金额缺失时仍应交给模型补一次。
+ParseResult? matchDistilledCaptureRule(
+  RawNotification raw,
+  List<NotiTemplate> templates,
+) {
+  final distilled = templates.where(isDistillCaptureTemplate).toList();
+  if (distilled.isEmpty) return null;
+  final r = parseNotification(raw, distilled);
+  if (r.templateId == null || r.amountMinor == null) return null;
+  return r;
+}
+
 /// Title (or short body line) that characterizes this concrete notification.
 @visibleForTesting
 List<String> sceneFragmentsForFusion(RawNotification raw, String mustHint) {
@@ -280,6 +304,9 @@ Future<String?> distillRecognitionRuleFromAi({
   }
 
   await NotiTemplateStore.upsertUserTemplate(template);
+  await NotiTemplateStore.ensureDistillMeta(id);
+  // Cap growth when the model wobbles across mustHints.
+  await autoMergeDistillCaptureRulesIfNeeded();
   return id;
 }
 
@@ -352,7 +379,149 @@ Future<String?> distillExcludeRecognitionRuleFromAi({
   }
 
   await NotiTemplateStore.upsertUserTemplate(template);
+  await NotiTemplateStore.ensureDistillMeta(id);
   return id;
+}
+
+/// Group key for capture merge: pkg + 支/收 bucket.
+@visibleForTesting
+String distillCaptureGroupKey(NotiTemplate t) {
+  final pkg = t.packages.isNotEmpty ? t.packages.first : '';
+  final bucket =
+      notificationDirectionRuleLabel(t.direction) == '收入' ? 'in' : 'out';
+  return '$pkg|$bucket';
+}
+
+/// Pure planner: while capture distill count > [maxRules], fuse least-active
+/// into most-active within the same pkg+direction group.
+@visibleForTesting
+List<({NotiTemplate survivor, List<String> deleteIds})> planDistillCaptureMerge({
+  required List<NotiTemplate> userRules,
+  required Map<String, DistillRuleMeta> meta,
+  int maxRules = kDistillCaptureMaxRules,
+}) {
+  final captures = [
+    for (final t in userRules)
+      if (isDistillCaptureTemplate(t)) t,
+  ];
+  if (captures.length <= maxRules) return const [];
+
+  final byId = {for (final t in captures) t.id: t};
+  final plans = <({NotiTemplate survivor, List<String> deleteIds})>[];
+
+  int activity(String id) =>
+      meta[id]?.activityAtMs ?? 0;
+
+  while (byId.length > maxRules) {
+    final groups = <String, List<NotiTemplate>>{};
+    for (final t in byId.values) {
+      groups.putIfAbsent(distillCaptureGroupKey(t), () => []).add(t);
+    }
+    // Prefer the largest group that can still merge (≥2).
+    List<NotiTemplate>? group;
+    var bestSize = 1;
+    for (final g in groups.values) {
+      if (g.length > bestSize) {
+        bestSize = g.length;
+        group = g;
+      }
+    }
+    if (group == null || group.length < 2) {
+      // No pairable group left — stop rather than cross-app fuse.
+      break;
+    }
+    group.sort((a, b) {
+      final byAct = activity(a.id).compareTo(activity(b.id));
+      if (byAct != 0) return byAct;
+      return a.id.compareTo(b.id);
+    });
+    final victim = group.first;
+    final survivorPrev = group.last;
+    final survivorAlts = splitMustAlternatives(survivorPrev.mustContainRegex);
+    final mustHint = survivorAlts.isNotEmpty
+        ? unescapeNotiRegexLiteral(survivorAlts.first)
+        : '支付';
+    final fusedMust = fuseMustPattern(
+      mustHint: mustHint,
+      existingPattern: survivorPrev.mustContainRegex,
+      sceneFragments: [
+        for (final part in splitMustAlternatives(victim.mustContainRegex))
+          unescapeNotiRegexLiteral(part),
+      ],
+      maxAlts: _kMaxMustAlts,
+    );
+    final pkg = survivorPrev.packages.isNotEmpty
+        ? survivorPrev.packages.first
+        : '';
+    final name = distilledRuleDisplayName(
+      pkg,
+      survivorPrev.direction,
+      '', // drop scene — multi-hint survivor
+    );
+    final survivor = survivorPrev.copyWith(
+      name: name,
+      mustContainRegex: fusedMust,
+      excludeTextRegex:
+          survivorPrev.excludeTextRegex ?? victim.excludeTextRegex,
+      amountRegex: survivorPrev.amountRegex,
+      defaultAccountHint:
+          survivorPrev.defaultAccountHint ?? victim.defaultAccountHint,
+      merchantFromTitle: survivorPrev.merchantFromTitle,
+      matchOn: survivorPrev.matchOn,
+    );
+    byId.remove(victim.id);
+    byId[survivor.id] = survivor;
+    plans.add((survivor: survivor, deleteIds: [victim.id]));
+  }
+  return plans;
+}
+
+/// Persist planned merges until capture count ≤ [kDistillCaptureMaxRules].
+Future<int> autoMergeDistillCaptureRulesIfNeeded({
+  int maxRules = kDistillCaptureMaxRules,
+}) async {
+  await NotiTemplateStore.load();
+  final plans = planDistillCaptureMerge(
+    userRules: NotiTemplateStore.peekUser(),
+    meta: NotiTemplateStore.peekDistillMeta(),
+    maxRules: maxRules,
+  );
+  var merged = 0;
+  for (final p in plans) {
+    await NotiTemplateStore.applyDistillMerge(
+      survivor: p.survivor,
+      deleteIds: p.deleteIds,
+    );
+    merged += p.deleteIds.length;
+  }
+  return merged;
+}
+
+/// Distill rules with no local hit for [staleDays] (uses createdAt if never hit).
+List<NotiTemplate> listStaleDistillRules({
+  required List<NotiTemplate> userRules,
+  required Map<String, DistillRuleMeta> meta,
+  int staleDays = kDistillStaleDays,
+  DateTime? now,
+}) {
+  final cutoff = (now ?? DateTime.now())
+      .subtract(Duration(days: staleDays))
+      .millisecondsSinceEpoch;
+  final out = <NotiTemplate>[];
+  for (final t in userRules) {
+    if (!isDistillRuleId(t.id)) continue;
+    final m = meta[t.id];
+    final activity = m?.activityAtMs;
+    // No meta → treat as stale only if we can't prove freshness; skip unknown.
+    if (activity == null) continue;
+    if (activity < cutoff) out.add(t);
+  }
+  out.sort((a, b) {
+    final aa = meta[a.id]?.activityAtMs ?? 0;
+    final bb = meta[b.id]?.activityAtMs ?? 0;
+    return aa.compareTo(bb);
+  });
+  return out;
 }
 
 String? _fallbackMust(RawNotification raw, String direction) {

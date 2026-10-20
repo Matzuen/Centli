@@ -16,6 +16,10 @@ import 'ai_text_fill.dart';
 import '../settings/model_name_validation.dart';
 
 const String kLlmEnabledSettingKey = 'smart_fill_llm_enabled';
+/// Independent gate for AI notification parse (default off).
+const String kLlmNotifyAiEnabledSettingKey = 'smart_fill_llm_notify_ai_enabled';
+/// Independent gate for asset-balance screenshot vision (default off).
+const String kLlmAssetAiEnabledSettingKey = 'smart_fill_llm_asset_ai_enabled';
 const String kLlmBaseUrlSettingKey = 'smart_fill_llm_base_url';
 const String kLlmModelSettingKey = 'smart_fill_llm_model';
 const String kLlmApiKeyStorageKey = 'centli_smart_fill_llm_api_key';
@@ -40,25 +44,35 @@ const Set<String> kStaleOpenAiDefaultModels = {
 class SmartFillLlmConfig {
   const SmartFillLlmConfig({
     required this.enabled,
+    this.notifyAiEnabled = false,
+    this.assetAiEnabled = false,
     required this.baseUrl,
     required this.model,
     required this.apiKey,
   });
 
+  /// 文字填单 / 记账截图识别总开关。
   final bool enabled;
+  /// 通知 AI 解析（默认关；与 [enabled] 独立）。
+  final bool notifyAiEnabled;
+  /// 资产页余额截图识别（默认关；与 [enabled] 独立）。
+  final bool assetAiEnabled;
   final String baseUrl;
   final String model;
   final String apiKey;
 
-  /// 只看凭证是否齐全（服务地址 + API Key），不看总开关。
-  ///
-  /// 仅供 [isReady] 组合使用：截图识别、文本识别**都要求总开关打开**
-  /// （`isReady`），凭证齐全但开关关闭时仍然不可用。
+  /// 只看凭证是否齐全（服务地址 + API Key），不看各功能开关。
   bool get hasCredentials =>
       baseUrl.trim().isNotEmpty && apiKey.trim().isNotEmpty;
 
-  /// 可用 = 总开关打开 + 凭证齐全（文本 / 截图识别都走这一条）。
+  /// 文字填单 / 记账截图可用 = [enabled] + 凭证齐全。
   bool get isReady => enabled && hasCredentials;
+
+  /// 通知 AI 解析可用 = [notifyAiEnabled] + 凭证齐全。
+  bool get isNotifyAiReady => notifyAiEnabled && hasCredentials;
+
+  /// 资产截图识别可用 = [assetAiEnabled] + 凭证齐全。
+  bool get isAssetAiReady => assetAiEnabled && hasCredentials;
 
   String get normalizedBaseUrl {
     var u = baseUrl.trim();
@@ -84,6 +98,10 @@ class SmartFillLlmSettings {
     lastMigrationNotice = null;
     lastModelWarning = null;
     final enabled = (await db.getSetting(kLlmEnabledSettingKey)) == 'true';
+    final notifyAi =
+        (await db.getSetting(kLlmNotifyAiEnabledSettingKey)) == 'true';
+    final assetAi =
+        (await db.getSetting(kLlmAssetAiEnabledSettingKey)) == 'true';
     final base = (await db.getSetting(kLlmBaseUrlSettingKey))?.trim();
     var model = (await db.getSetting(kLlmModelSettingKey))?.trim();
     final key = (await _storage.read(key: kLlmApiKeyStorageKey)) ?? '';
@@ -109,6 +127,8 @@ class SmartFillLlmSettings {
 
     return SmartFillLlmConfig(
       enabled: enabled,
+      notifyAiEnabled: notifyAi,
+      assetAiEnabled: assetAi,
       baseUrl: baseUrl,
       model: model,
       apiKey: key,
@@ -118,12 +138,26 @@ class SmartFillLlmSettings {
   Future<void> save({
     required CentliDatabase db,
     required bool enabled,
+    bool? notifyAiEnabled,
+    bool? assetAiEnabled,
     required String baseUrl,
     required String model,
     String? apiKey,
     bool clearApiKey = false,
   }) async {
     await db.setSetting(kLlmEnabledSettingKey, enabled ? 'true' : 'false');
+    if (notifyAiEnabled != null) {
+      await db.setSetting(
+        kLlmNotifyAiEnabledSettingKey,
+        notifyAiEnabled ? 'true' : 'false',
+      );
+    }
+    if (assetAiEnabled != null) {
+      await db.setSetting(
+        kLlmAssetAiEnabledSettingKey,
+        assetAiEnabled ? 'true' : 'false',
+      );
+    }
     await db.setSetting(kLlmBaseUrlSettingKey, baseUrl.trim());
     await db.setSetting(kLlmModelSettingKey, model.trim());
     if (clearApiKey) {

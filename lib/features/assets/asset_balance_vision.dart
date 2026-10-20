@@ -50,11 +50,11 @@ Future<AssetBalanceVisionResult> parseAssetBalancesImageWithLlm(
   Duration timeout = const Duration(seconds: 45),
   CentliDatabase? settingsDb,
 }) async {
-  if (!config.isReady) {
+  if (!config.isAssetAiReady) {
     throw LlmVisionException(
-      config.enabled
+      config.assetAiEnabled
           ? '请先在「我的 · AI 增强」填写 API Key'
-          : '请先在「我的 · AI 增强」启用大模型',
+          : '请先在「我的 · AI 增强」打开「AI 资产识别」',
     );
   }
   final accList = accountNames.take(40).join('、');

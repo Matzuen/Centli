@@ -26,6 +26,8 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
   bool _loading = true;
   bool _saving = false;
   bool _enabled = false;
+  bool _notifyAiEnabled = false;
+  bool _assetAiEnabled = false;
   bool _hasKey = false;
   bool _obscureKey = true;
   bool _testing = false;
@@ -68,6 +70,8 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
     if (!mounted) return;
     setState(() {
       _enabled = cfg.enabled;
+      _notifyAiEnabled = cfg.notifyAiEnabled;
+      _assetAiEnabled = cfg.assetAiEnabled;
       _baseCtrl.text = cfg.baseUrl;
       _modelCtrl.text = cfg.model;
       _hasKey = hasKey;
@@ -95,6 +99,8 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
       await _settings.save(
         db: db,
         enabled: _enabled,
+        notifyAiEnabled: _notifyAiEnabled,
+        assetAiEnabled: _assetAiEnabled,
         baseUrl: _baseCtrl.text.trim().isEmpty
             ? kDefaultLlmBaseUrl
             : _baseCtrl.text.trim(),
@@ -140,6 +146,8 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
     await _settings.save(
       db: db,
       enabled: _enabled,
+      notifyAiEnabled: _notifyAiEnabled,
+      assetAiEnabled: _assetAiEnabled,
       baseUrl: _baseCtrl.text.trim(),
       model: _modelCtrl.text.trim(),
       clearApiKey: true,
@@ -227,7 +235,7 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '默认使用 deepseek-flash（支持图片）。截图识别会把图片发送到已配置的大模型服务；也可改用其它 OpenAI 兼容接口。',
+                        '默认使用 deepseek-flash（支持图片）。接口配置共用；文字填单、通知解析、资产识别各自独立开关，互不影响。',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color: Theme.of(context)
                                   .colorScheme
@@ -305,24 +313,44 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
                 ),
                 const SizedBox(height: CentliSpacing.section),
                 CentliSoftCard(
-                  child: SwitchListTile(
-                    title: const Text('启用大模型增强'),
-                    subtitle: const Text(
-                      '开启后，可用大模型增强文字填单与支付通知解析；'
-                      '资产页截图识别余额也需打开此项。'
-                      '失败时自动回退本地解析，不阻塞保存。',
-                    ),
-                    value: _enabled,
-                    onChanged: (v) => setState(() => _enabled = v),
+                  child: Column(
+                    children: [
+                      SwitchListTile(
+                        title: const Text('启用大模型增强'),
+                        subtitle: const Text(
+                          '文字填单与记账截图识别。失败时回退本地解析，不阻塞保存。',
+                        ),
+                        value: _enabled,
+                        onChanged: (v) => setState(() => _enabled = v),
+                      ),
+                      const Divider(height: 1),
+                      SwitchListTile(
+                        title: const Text('AI 识别通知'),
+                        subtitle: const Text(
+                          '开启后，监听应用的通知标题与正文会发送到你配置的模型判断是否为收付款。'
+                          '默认关闭；关闭时通知仅在本机解析，不会外发。',
+                        ),
+                        value: _notifyAiEnabled,
+                        onChanged: (v) => setState(() => _notifyAiEnabled = v),
+                      ),
+                      const Divider(height: 1),
+                      SwitchListTile(
+                        title: const Text('AI 资产识别'),
+                        subtitle: const Text(
+                          '开启后，资产页「截图识别余额」才会把图片发给大模型。默认关闭。',
+                        ),
+                        value: _assetAiEnabled,
+                        onChanged: (v) => setState(() => _assetAiEnabled = v),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: CentliSpacing.section),
                 Text(
-                  '本地解析始终可用。开启并保存 API Key 后：文字填单、支付通知、资产截图识别'
-                  '才会调用大模型。\n'
-                  '通知的处理顺序是「先查本地排除规则 → 再问 AI → 最后本地解析」：'
-                  'AI 判为非收付款的场景会在本机学成排除规则，同类通知以后不再外发；'
-                  '判为收付款的场景会蒸馏成「软件名-支出/收入」规则，供后台保活时直接入账。',
+                  '三项开关彼此独立：开文字填单不会自动外发通知或资产截图。'
+                  '均需先配置并保存 API Key。\n'
+                  '开启「AI 识别通知」后，顺序为「本地排除规则 → AI → 本地解析」：'
+                  '非收付款会学成「软件名-排除」规则；收付款会蒸馏「软件名-支出/收入」供后台复用。',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
@@ -466,9 +494,9 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
                         ),
                         const SizedBox(height: CentliSpacing.item),
                         const Text(
-                          '1. 在记账页展开「AI 增强」，输入话术后点「填入」。\n'
-                          '2. 未开启或未配置密钥时，文字填单与通知解析仅用本地规则；资产截图识别也不可用。\n'
-                          '3. 兼容常见大模型对话补全接口（含代理）；截图识别需支持视觉的模型。\n'
+                          '1. 在记账页展开「AI 增强」，输入话术后点「填入」（需打开「启用大模型增强」）。\n'
+                          '2. 支付通知默认只走本地规则；需要 AI 时再单独打开「AI 识别通知」。\n'
+                          '3. 资产页截图识别余额需单独打开「AI 资产识别」，且模型需支持视觉。\n'
                           '4. 分类不确定时不会强行猜错类；备注只保留结构化抽取后的剩余文字。',
                         ),
                       ],

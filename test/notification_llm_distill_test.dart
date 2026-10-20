@@ -1,5 +1,6 @@
 import 'package:centli/platform/notifications/notification_llm_parse.dart';
 import 'package:centli/platform/notifications/notification_parse.dart';
+import 'package:centli/platform/notifications/noti_template_store.dart';
 import 'package:centli/platform/notifications/recognition_rule_distill.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -239,6 +240,97 @@ void main() {
     });
   });
 
+  group('AI 反写的规则优先复用（不再问模型）', () {
+    NotiTemplate captureRule() => NotiTemplate(
+          id: distilledRuleId('com.tencent.mm', 'out', '支付成功'),
+          name: distilledRuleDisplayName('com.tencent.mm', 'out', '支付成功'),
+          packages: const ['com.tencent.mm'],
+          mustContainRegex: escapeForNotiRegex('支付成功'),
+          amountRegex: kAmountRegex,
+          direction: 'out',
+          matchOn: 'title',
+        );
+
+    test('命中蒸馏的支出规则 → 直接解析出金额', () {
+      final r = matchDistilledCaptureRule(
+        const RawNotification(
+          pkg: 'com.tencent.mm',
+          title: '微信支付成功',
+          text: '￥12.50',
+          whenMs: 0,
+        ),
+        [captureRule()],
+      );
+      expect(r, isNotNull);
+      expect(r!.amountMinor, 1250);
+      expect(r.templateId, captureRule().id);
+    });
+
+    test('排除规则不参与捕获复用', () {
+      final exclude = NotiTemplate(
+        id: distilledExcludeRuleId('com.tencent.mm'),
+        name: distilledExcludeRuleDisplayName('com.tencent.mm'),
+        packages: const ['com.tencent.mm'],
+        mustContainRegex: escapeForNotiRegex('张三'),
+        amountRegex: kAmountRegex,
+        matchOn: 'title',
+      );
+      final r = matchDistilledCaptureRule(
+        const RawNotification(
+          pkg: 'com.tencent.mm',
+          title: '张三',
+          text: '￥12.50',
+          whenMs: 0,
+        ),
+        [exclude],
+      );
+      expect(r, isNull, reason: '排除规则只能丢弃，不能当成入账依据');
+    });
+
+    test('金额缺失时不复用，交回模型补一次', () {
+      final rule = NotiTemplate(
+        id: distilledRuleId('com.tencent.mm', 'out', '支付成功'),
+        name: distilledRuleDisplayName('com.tencent.mm', 'out', '支付成功'),
+        packages: const ['com.tencent.mm'],
+        mustContainRegex: escapeForNotiRegex('支付成功'),
+        amountRegex: kAmountRegex,
+        direction: 'out',
+        matchOn: 'title',
+      );
+      final r = matchDistilledCaptureRule(
+        const RawNotification(
+          pkg: 'com.tencent.mm',
+          title: '支付成功',
+          text: '金额稍后显示',
+          whenMs: 0,
+        ),
+        [rule],
+      );
+      expect(r, isNull);
+    });
+
+    test('非蒸馏规则不参与复用（交给本地兜底或 AI 判断）', () {
+      final bundled = NotiTemplate(
+        id: 'wechat_pay_success_zh',
+        name: '微信支付成功',
+        packages: const ['com.tencent.mm'],
+        mustContainRegex: '支付成功',
+        amountRegex: kAmountRegex,
+        matchOn: 'title',
+      );
+      final r = matchDistilledCaptureRule(
+        const RawNotification(
+          pkg: 'com.tencent.mm',
+          title: '微信支付成功',
+          text: '￥9.90',
+          whenMs: 0,
+        ),
+        [bundled],
+      );
+      expect(r, isNull);
+    });
+  });
+
   group('限频', () {
     test('每分钟调用上限', () {
       resetLlmParseRateLimit();
@@ -272,6 +364,81 @@ void main() {
 
     test('escape round-trip', () {
       expect(unescapeNotiRegexLiteral(escapeForNotiRegex('a.b')), 'a.b');
+    });
+  });
+
+  group('distill cleanup', () {
+    NotiTemplate capture(String hint, {String dir = 'out'}) {
+      final pkg = 'com.tencent.mm';
+      return NotiTemplate(
+        id: distilledRuleId(pkg, dir, hint),
+        name: distilledRuleDisplayName(pkg, dir, hint),
+        packages: const ['com.tencent.mm'],
+        mustContainRegex: escapeForNotiRegex(hint),
+        amountRegex: kAmountRegex,
+        direction: dir,
+        matchOn: 'title',
+      );
+    }
+
+    test('planDistillCaptureMerge fuses least-active into most-active', () {
+      final rules = [
+        for (var i = 0; i < 5; i++) capture('场景$i'),
+      ];
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final meta = <String, DistillRuleMeta>{
+        for (var i = 0; i < 5; i++)
+          rules[i].id: DistillRuleMeta(
+            createdAtMs: now - (5 - i) * 86400000,
+            lastHitAtMs: i == 4 ? now : now - (5 - i) * 86400000,
+          ),
+      };
+      final plans = planDistillCaptureMerge(
+        userRules: rules,
+        meta: meta,
+        maxRules: 3,
+      );
+      expect(plans, isNotEmpty);
+      final deleted = plans.expand((p) => p.deleteIds).toSet();
+      expect(deleted.contains(rules[0].id), isTrue);
+      expect(deleted.contains(rules[4].id), isFalse);
+      final survivor = plans.last.survivor;
+      expect(RegExp(survivor.mustContainRegex!).hasMatch('场景0'), isTrue);
+    });
+
+    test('listStaleDistillRules uses activity cutoff', () {
+      final fresh = capture('新');
+      final stale = capture('旧');
+      final now = DateTime(2026, 10, 20);
+      final meta = {
+        fresh.id: DistillRuleMeta(
+          createdAtMs: now.millisecondsSinceEpoch,
+          lastHitAtMs: now.millisecondsSinceEpoch,
+        ),
+        stale.id: DistillRuleMeta(
+          createdAtMs: now
+              .subtract(const Duration(days: 120))
+              .millisecondsSinceEpoch,
+        ),
+      };
+      final listed = listStaleDistillRules(
+        userRules: [fresh, stale],
+        meta: meta,
+        staleDays: 90,
+        now: now,
+      );
+      expect(listed.map((t) => t.id), [stale.id]);
+    });
+
+    test('isDistillCaptureRuleId excludes excl prefix', () {
+      expect(
+        isDistillCaptureRuleId(distilledRuleId('com.tencent.mm', 'out', '付')),
+        isTrue,
+      );
+      expect(
+        isDistillCaptureRuleId(distilledExcludeRuleId('com.tencent.mm')),
+        isFalse,
+      );
     });
   });
 }

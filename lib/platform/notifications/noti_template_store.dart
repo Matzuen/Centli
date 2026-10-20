@@ -27,6 +27,8 @@ abstract final class NotiTemplateStore {
   static List<NotiTemplate> _official = const [];
   static List<NotiTemplate> _user = const [];
   static Set<String> _disabledOfficialIds = {};
+  /// Side table in user JSON: distill rule createdAt / lastHitAt.
+  static Map<String, DistillRuleMeta> _distillMeta = {};
   static int _version = kNotiTemplateFallbackVersion;
   static String _source = 'builtin';
   static String? _updatedAt;
@@ -63,6 +65,11 @@ abstract final class NotiTemplateStore {
 
   static Set<String> peekDisabledOfficialIds() =>
       Set<String>.unmodifiable(_disabledOfficialIds);
+
+  static Map<String, DistillRuleMeta> peekDistillMeta() =>
+      Map<String, DistillRuleMeta>.unmodifiable(_distillMeta);
+
+  static DistillRuleMeta? peekDistillMetaFor(String id) => _distillMeta[id];
 
   /// Active templates for the parser (user first, then enabled official).
   static List<NotiTemplate> peek() =>
@@ -136,6 +143,7 @@ abstract final class NotiTemplateStore {
         if (!_loaded) {
           _user = [];
           _disabledOfficialIds = {};
+          _distillMeta = {};
         }
         return;
       }
@@ -177,6 +185,9 @@ abstract final class NotiTemplateStore {
       _lastSkippedCount = skipped;
       _user = templates;
       _disabledOfficialIds = nextDisabled;
+      _distillMeta = _parseDistillMeta(map['distill_meta']);
+      _backfillDistillMetaLocked();
+      _pruneDistillMetaLocked();
     } catch (e) {
       // Keep previous _user / _disabledOfficialIds — never silently clear.
       _lastLoadError = '读取规则文件失败: $e';
@@ -499,6 +510,7 @@ abstract final class NotiTemplateStore {
       template,
     ];
     _user = next;
+    _ensureDistillMetaLocked(id);
     await _persistUserFile();
     _rebuildMerged();
     await syncWatchedPackagesToNative();
@@ -507,6 +519,7 @@ abstract final class NotiTemplateStore {
   static Future<void> deleteUserTemplate(String id) async {
     await load();
     _user = [for (final t in _user) if (t.id != id) t];
+    _distillMeta = {..._distillMeta}..remove(id);
     await _persistUserFile();
     _rebuildMerged();
     await syncWatchedPackagesToNative();
@@ -517,15 +530,137 @@ abstract final class NotiTemplateStore {
   static Future<void> replaceUserTemplates(
     List<NotiTemplate> templates, {
     Set<String>? disabledOfficialIds,
+    Map<String, DistillRuleMeta>? distillMeta,
   }) async {
     await load();
     _user = List<NotiTemplate>.from(templates);
     if (disabledOfficialIds != null) {
       _disabledOfficialIds = Set<String>.from(disabledOfficialIds);
     }
+    if (distillMeta != null) {
+      _distillMeta = Map<String, DistillRuleMeta>.from(distillMeta);
+    }
+    _pruneDistillMetaLocked();
     await _persistUserFile();
     _rebuildMerged();
     await syncWatchedPackagesToNative();
+  }
+
+  /// Record a local match for a distill rule (capture or exclude).
+  static Future<void> touchDistillHit(String id) async {
+    if (id.isEmpty) return;
+    await load();
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final prev = _distillMeta[id];
+    _distillMeta = {
+      ..._distillMeta,
+      id: DistillRuleMeta(
+        createdAtMs: prev?.createdAtMs ?? now,
+        lastHitAtMs: now,
+      ),
+    };
+    await _persistUserFile();
+  }
+
+  /// Ensure [id] has a createdAt entry (idempotent).
+  static Future<void> ensureDistillMeta(String id) async {
+    if (id.isEmpty) return;
+    await load();
+    if (_ensureDistillMetaLocked(id)) {
+      await _persistUserFile();
+    }
+  }
+
+  /// Apply in-memory template + meta changes from distill auto-merge.
+  static Future<void> applyDistillMerge({
+    required NotiTemplate survivor,
+    required List<String> deleteIds,
+  }) async {
+    await load();
+    final del = deleteIds.toSet();
+    final next = <NotiTemplate>[
+      for (final t in _user)
+        if (!del.contains(t.id) && t.id != survivor.id) t,
+      survivor,
+    ];
+    _user = next;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    var created = _distillMeta[survivor.id]?.createdAtMs ?? now;
+    var lastHit = _distillMeta[survivor.id]?.lastHitAtMs;
+    for (final id in deleteIds) {
+      final m = _distillMeta[id];
+      if (m == null) continue;
+      if (m.createdAtMs < created) created = m.createdAtMs;
+      final h = m.lastHitAtMs;
+      if (h != null && (lastHit == null || h > lastHit)) lastHit = h;
+    }
+    final meta = {..._distillMeta}..removeWhere((k, _) => del.contains(k));
+    meta[survivor.id] = DistillRuleMeta(
+      createdAtMs: created,
+      lastHitAtMs: lastHit,
+    );
+    _distillMeta = meta;
+    await _persistUserFile();
+    _rebuildMerged();
+    await syncWatchedPackagesToNative();
+  }
+
+  static bool _ensureDistillMetaLocked(String id) {
+    if (_distillMeta.containsKey(id)) return false;
+    // Only track AI-distilled ids.
+    if (!(id.startsWith('distill_'))) return false;
+    _distillMeta = {
+      ..._distillMeta,
+      id: DistillRuleMeta(
+        createdAtMs: DateTime.now().millisecondsSinceEpoch,
+      ),
+    };
+    return true;
+  }
+
+  static void _pruneDistillMetaLocked() {
+    final live = {for (final t in _user) t.id};
+    _distillMeta = {
+      for (final e in _distillMeta.entries)
+        if (live.contains(e.key)) e.key: e.value,
+    };
+  }
+
+  /// Existing distill rules without meta get createdAt=now (grace period).
+  static void _backfillDistillMetaLocked() {
+    for (final t in _user) {
+      final id = t.id;
+      if (!id.startsWith('distill_')) continue;
+      _ensureDistillMetaLocked(id);
+    }
+  }
+
+  static Map<String, DistillRuleMeta> _parseDistillMeta(Object? raw) {
+    if (raw is! Map) return {};
+    final out = <String, DistillRuleMeta>{};
+    for (final e in raw.entries) {
+      final id = '${e.key}';
+      if (id.isEmpty || e.value is! Map) continue;
+      final m = Map<String, dynamic>.from(e.value as Map);
+      final created = _readEpochMs(m['createdAt'] ?? m['createdAtMs']);
+      if (created == null) continue;
+      out[id] = DistillRuleMeta(
+        createdAtMs: created,
+        lastHitAtMs: _readEpochMs(m['lastHitAt'] ?? m['lastHitAtMs']),
+      );
+    }
+    return out;
+  }
+
+  static int? _readEpochMs(Object? v) {
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    if (v is String) {
+      final asInt = int.tryParse(v);
+      if (asInt != null) return asInt;
+      return DateTime.tryParse(v)?.millisecondsSinceEpoch;
+    }
+    return null;
   }
 
   static Future<String> exportUserRulesJson() async {
@@ -569,20 +704,25 @@ abstract final class NotiTemplateStore {
       };
     }
 
+    final importedMeta = _parseDistillMeta(map['distill_meta']);
+
     await load();
     if (merge) {
       final byId = <String, NotiTemplate>{
         for (final t in _user) t.id: t,
         for (final t in imported) t.id: t,
       };
+      final meta = {..._distillMeta, ...importedMeta};
       await replaceUserTemplates(
         byId.values.toList(),
         disabledOfficialIds: disabled ?? _disabledOfficialIds,
+        distillMeta: meta,
       );
     } else {
       await replaceUserTemplates(
         imported,
         disabledOfficialIds: disabled ?? _disabledOfficialIds,
+        distillMeta: importedMeta,
       );
     }
     return imported.length;
@@ -656,11 +796,26 @@ abstract final class NotiTemplateStore {
   }
 
   static String _encodeUserFile() {
+    final metaJson = <String, dynamic>{};
+    final keys = _distillMeta.keys.toList()..sort();
+    for (final id in keys) {
+      final m = _distillMeta[id]!;
+      metaJson[id] = {
+        'createdAt': DateTime.fromMillisecondsSinceEpoch(m.createdAtMs)
+            .toUtc()
+            .toIso8601String(),
+        if (m.lastHitAtMs != null)
+          'lastHitAt': DateTime.fromMillisecondsSinceEpoch(m.lastHitAtMs!)
+              .toUtc()
+              .toIso8601String(),
+      };
+    }
     final map = <String, dynamic>{
       'version': 1,
       'updated_at': DateTime.now().toIso8601String().split('T').first,
       'disabled_official_ids': _disabledOfficialIds.toList()..sort(),
       'templates': [for (final t in _user) t.toJson()],
+      if (metaJson.isNotEmpty) 'distill_meta': metaJson,
     };
     return const JsonEncoder.withIndent('  ').convert(map);
   }
@@ -814,3 +969,17 @@ class TemplateUpdateResult {
 
 /// Keep in sync with assets/noti_templates.json `version`.
 const int kNotiTemplateFallbackVersion = 9;
+
+/// Per-rule lifecycle for AI-distilled templates (side table in user JSON).
+class DistillRuleMeta {
+  const DistillRuleMeta({
+    required this.createdAtMs,
+    this.lastHitAtMs,
+  });
+
+  final int createdAtMs;
+  final int? lastHitAtMs;
+
+  /// Effective "freshness" for merge/stale: last hit, else created.
+  int get activityAtMs => lastHitAtMs ?? createdAtMs;
+}

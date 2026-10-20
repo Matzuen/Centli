@@ -69,6 +69,17 @@ bool isDistillExcludeRuleId(String? id) =>
 
 bool isDistillExcludeTemplate(NotiTemplate t) => isDistillExcludeRuleId(t.id);
 
+/// Capture distill id (`distill_…`) but not exclude (`distill_excl_…`).
+bool isDistillCaptureRuleId(String? id) =>
+    id != null &&
+    id.startsWith(kDistillCaptureIdPrefix) &&
+    !isDistillExcludeRuleId(id);
+
+bool isDistillCaptureTemplate(NotiTemplate t) => isDistillCaptureRuleId(t.id);
+
+bool isDistillRuleId(String? id) =>
+    isDistillCaptureRuleId(id) || isDistillExcludeRuleId(id);
+
 /// Stable id for one **capture** scenario (pkg + 支/收 + mustHint).
 String distilledRuleId(String pkg, String? direction, String mustHint) {
   final bucket = notificationDirectionRuleLabel(direction) == '收入' ? 'in' : 'out';
@@ -168,7 +179,7 @@ Future<NotificationLlmParseOutcome?> parseNotificationWithLlm(
   http.Client? client,
   Duration timeout = const Duration(seconds: 10),
 }) async {
-  if (!config.isReady) return null;
+  if (!config.isNotifyAiReady) return null;
   if (raw.title.trim().isEmpty && raw.text.trim().isEmpty) return null;
   // 频率上限：通知密集时宁可这一条回落本地解析，也不把额度打满。
   if (!noteLlmParseCall()) return null;

@@ -6,8 +6,10 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/utils/money.dart';
+import '../../platform/notifications/notification_llm_parse.dart';
 import '../../platform/notifications/notification_parse.dart';
 import '../../platform/notifications/noti_template_store.dart';
+import '../../platform/notifications/recognition_rule_distill.dart';
 import '../../app/theme.dart';
 import '../../core/widgets/glass.dart';
 
@@ -36,8 +38,11 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
   ParseExplainResult? _tryResult;
   bool _busy = false;
   bool _loadWarnDismissed = false;
+  bool _staleWarnDismissed = false;
   int _skippedCount = 0;
   String? _loadError;
+  List<NotiTemplate> _staleDistill = const [];
+  int _mergePruned = 0;
 
   @override
   void initState() {
@@ -56,7 +61,13 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
   Future<void> _reload() async {
     setState(() => _loading = true);
     await NotiTemplateStore.load(force: true);
+    final merged = await autoMergeDistillCaptureRulesIfNeeded();
+    await NotiTemplateStore.load(force: true);
     if (!mounted) return;
+    final stale = listStaleDistillRules(
+      userRules: NotiTemplateStore.peekUser(),
+      meta: NotiTemplateStore.peekDistillMeta(),
+    );
     setState(() {
       _official = NotiTemplateStore.peekOfficial();
       _user = NotiTemplateStore.peekUser();
@@ -65,8 +76,67 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
       _source = NotiTemplateStore.source;
       _skippedCount = NotiTemplateStore.lastSkippedCount;
       _loadError = NotiTemplateStore.lastLoadError;
+      _staleDistill = stale;
+      _mergePruned = merged;
       _loading = false;
     });
+  }
+
+  Future<void> _purgeStaleDistill() async {
+    if (_staleDistill.isEmpty) return;
+    final ok = await showGlassDialog<bool>(
+      context: context,
+      builder: (ctx) => CentliGlassDialog(
+        title: const Text('清理过期 AI 规则'),
+        content: Text(
+          '将删除 ${_staleDistill.length} 条超过 $kDistillStaleDays 天未命中的 AI 蒸馏规则。'
+          '手写规则不受影响。',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    setState(() => _busy = true);
+    try {
+      for (final t in List<NotiTemplate>.from(_staleDistill)) {
+        await NotiTemplateStore.deleteUserTemplate(t.id);
+      }
+      await _reload();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('已清理过期 AI 规则')),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  String _distillActivityLabel(NotiTemplate t) {
+    if (!isDistillRuleId(t.id)) return '';
+    final m = NotiTemplateStore.peekDistillMetaFor(t.id);
+    if (m == null) return 'AI 规则';
+    final hit = m.lastHitAtMs;
+    if (hit == null) {
+      final days = DateTime.now()
+          .difference(DateTime.fromMillisecondsSinceEpoch(m.createdAtMs))
+          .inDays;
+      if (days <= 0) return 'AI 规则 · 今日学成 · 尚未命中';
+      return 'AI 规则 · 学成 $days 天 · 尚未命中';
+    }
+    final days = DateTime.now()
+        .difference(DateTime.fromMillisecondsSinceEpoch(hit))
+        .inDays;
+    if (days <= 0) return 'AI 规则 · 今日命中';
+    return 'AI 规则 · $days 天前命中';
   }
 
   String _pkgLabel(String pkg) {
@@ -655,6 +725,77 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
                     ),
                   ],
                 ),
+                if (_mergePruned > 0) ...[
+                  const SizedBox(height: CentliSpacing.item),
+                  Text(
+                    'AI 捕获规则已超过 $kDistillCaptureMaxRules 条上限，刚才自动合并了 $_mergePruned 条。',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                  ),
+                ],
+                if (!_staleWarnDismissed && _staleDistill.isNotEmpty) ...[
+                  const SizedBox(height: CentliSpacing.item),
+                  Card(
+                    color: scheme.secondaryContainer,
+                    margin: EdgeInsets.zero,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                Icons.hourglass_empty,
+                                color: scheme.onSecondaryContainer,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  '有 ${_staleDistill.length} 条 AI 规则超过 $kDistillStaleDays 天未命中，可一键清理。',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium
+                                      ?.copyWith(
+                                        color: scheme.onSecondaryContainer,
+                                        height: 1.35,
+                                      ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: Wrap(
+                              spacing: 4,
+                              children: [
+                                TextButton(
+                                  onPressed: _busy
+                                      ? null
+                                      : () => setState(
+                                            () => _staleWarnDismissed = true,
+                                          ),
+                                  child: Text(
+                                    '稍后',
+                                    style: TextStyle(
+                                      color: scheme.onSecondaryContainer,
+                                    ),
+                                  ),
+                                ),
+                                FilledButton.tonal(
+                                  onPressed: _busy ? null : _purgeStaleDistill,
+                                  child: const Text('一键清理'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: CentliSpacing.item),
                 if (_user.isEmpty)
                   CentliSoftCard(
@@ -670,9 +811,21 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
                   for (final t in _user) ...[
                     CentliSoftCard(
                       child: ListTile(
-                        leading: Icon(Icons.edit_note, color: scheme.primary),
+                        leading: Icon(
+                          isDistillExcludeRuleId(t.id)
+                              ? Icons.block_outlined
+                              : isDistillCaptureRuleId(t.id)
+                                  ? Icons.auto_awesome_outlined
+                                  : Icons.edit_note,
+                          color: scheme.primary,
+                        ),
                         title: Text(t.displayName),
-                        subtitle: Text(t.packages.map(_pkgLabel).join('、')),
+                        subtitle: Text(
+                          [
+                            t.packages.map(_pkgLabel).join('、'),
+                            if (isDistillRuleId(t.id)) _distillActivityLabel(t),
+                          ].where((s) => s.isNotEmpty).join(' · '),
+                        ),
                         trailing: PopupMenuButton<String>(
                           onSelected: (v) async {
                             if (v == 'edit') {

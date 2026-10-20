@@ -75,10 +75,10 @@ Future<void> importAssetBalancesFromScreenshot(
 
   final llm = SmartFillLlmSettings();
   final config = await llm.load(db);
-  if (!config.isReady) {
+  if (!config.isAssetAiReady) {
     if (!context.mounted) return;
-    final message = !config.enabled
-        ? '请先在「我的 · AI 增强」启用大模型并保存'
+    final message = !config.assetAiEnabled
+        ? '请先在「我的 · AI 增强」打开「AI 资产识别」并保存'
         : config.apiKey.trim().isEmpty
             ? '请先在「我的 · AI 增强」填写并保存 API Key'
             : '请先在「我的 · AI 增强」填写服务地址';

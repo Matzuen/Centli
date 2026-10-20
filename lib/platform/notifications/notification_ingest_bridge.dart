@@ -15,9 +15,13 @@ import 'recognition_rule_distill.dart';
 /// Wires native notification payloads → parse → [CentliDatabase.ingestParsedNotification]
 /// → local push 「待确认 ¥xx」.
 ///
-/// Flutter-alive path: **包名已由 native 过滤** → 本地排除规则 → AI（若就绪）→
-/// 失败则本地捕获模板。AI 判支付则蒸馏「软件名-支出/收入」；判非支付则蒸馏
-/// 「软件名-排除」，供杀进程路径直接丢弃。
+/// Flutter-alive path: **包名已由 native 过滤** →
+/// ① AI 反写的排除规则 → 命中即丢弃；
+/// ② AI 反写的捕获规则 → 命中即入账（都不再问模型）；
+/// ③ 都没命中才问 AI；AI 不可用/超限/失败 → 本地模板解析。
+///
+/// AI 判支付则蒸馏「软件名-支出/收入」，判非支付则蒸馏「软件名-排除」，
+/// 于是下一个进程（甚至 native 侧）都能直接复用，调用次数随使用下降。
 abstract final class NotificationIngestBridge {
   static bool _started = false;
 
@@ -67,6 +71,7 @@ abstract final class NotificationIngestBridge {
       final realPayment = localCapture.templateId != null &&
           localCapture.amountMinor != null;
       if (!realPayment) {
+        _touchHitSafely(excl.id);
         await NotificationCaptureStub.recordDroppedNotification(
           pkg: notification.pkg,
           title: notification.title,
@@ -76,7 +81,16 @@ abstract final class NotificationIngestBridge {
       }
     }
 
-    final resolved = await _resolveParse(db, notification, templates);
+    // AI 反写的**捕获**规则优先复用：同场景重复出现时直接入账，不再问模型。
+    final reused = matchDistilledCaptureRule(notification, templates);
+    final resolved = reused != null
+        ? (
+            parse: reused,
+            fromAi: false,
+            exclude: false,
+            mustHint: null as String?,
+          )
+        : await _resolveParse(db, notification, templates);
 
     if (resolved.exclude) {
       // AI said non-payment — distill 软件名-排除 for next time / kill-path.
@@ -162,9 +176,21 @@ abstract final class NotificationIngestBridge {
             mustHint: resolved.mustHint,
           ),
         );
+      } else if (isDistillCaptureRuleId(parsed.templateId)) {
+        // Local distill capture hit — refresh lastHitAt for stale cleanup.
+        _touchHitSafely(parsed.templateId!);
       }
     }
     return id;
+  }
+
+  /// 记录一次 AI 规则命中（用于"过期规则"清理），失败不影响入账。
+  static void _touchHitSafely(String id) {
+    unawaited(
+      NotiTemplateStore.touchDistillHit(id).catchError((Object e) {
+        debugPrint('distill hit touch failed: $e');
+      }),
+    );
   }
 
   /// 蒸馏不阻塞入库（下一个进程里才用得上），但异常必须自己消化：
@@ -192,7 +218,7 @@ abstract final class NotificationIngestBridge {
   ) async {
     try {
       final cfg = await SmartFillLlmSettings().load(db);
-      if (cfg.isReady) {
+      if (cfg.isNotifyAiReady) {
         final llm = await parseNotificationWithLlm(notification, config: cfg);
         if (llm != null) {
           if (!llm.isPayment) {
