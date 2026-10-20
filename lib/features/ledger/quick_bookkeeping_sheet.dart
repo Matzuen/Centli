@@ -129,7 +129,7 @@ class _QuickBookkeepingSheetState extends ConsumerState<QuickBookkeepingSheet> {
                     ),
                   ),
                   IconButton(
-                    tooltip: '智能填单设置',
+                    tooltip: 'AI 增强设置',
                     onPressed: () {
                       Navigator.of(context).pop();
                       context.push('/me/smart-fill');

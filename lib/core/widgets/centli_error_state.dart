@@ -71,7 +71,7 @@ String errorTitle(Object? error) {
 String errorHint(Object? error) {
   switch (classifyError(error)) {
     case CentliErrorKind.network:
-      return '请检查网络连接后重试。如果是汇率 / 智能填单相关，网络恢复后会自动重新获取。';
+      return '请检查网络连接后重试。如果是汇率 / AI 增强相关，网络恢复后会自动重新获取。';
     case CentliErrorKind.database:
       return '读取本地数据时出错。可以点「重试」；若一直失败，请重启应用。';
     case CentliErrorKind.permission:

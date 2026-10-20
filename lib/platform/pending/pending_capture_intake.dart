@@ -288,10 +288,10 @@ abstract final class PendingCaptureIntake {
         return ManualIngestResult(
           ok: false,
           message: !cfg.enabled
-              ? '请先在「我的 · 智能填单」启用大模型并保存'
+              ? '请先在「我的 · AI 增强」启用大模型并保存'
               : cfg.apiKey.trim().isEmpty
-                  ? '请先在「我的 · 智能填单」填写并保存 API Key'
-                  : '请先在「我的 · 智能填单」填写服务地址',
+                  ? '请先在「我的 · AI 增强」填写并保存 API Key'
+                  : '请先在「我的 · AI 增强」填写服务地址',
         );
       }
       final filled = await parseBookkeepingImageWithLlm(

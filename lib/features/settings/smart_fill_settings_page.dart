@@ -7,7 +7,7 @@ import '../ledger/llm_text_fill.dart';
 import 'model_name_validation.dart';
 import '../../app/theme.dart';
 
-/// 智能填单 / 大模型增强配置（OpenAI 兼容接口）。
+/// AI 增强 / 大模型配置（OpenAI 兼容接口）。
 class SmartFillSettingsPage extends ConsumerStatefulWidget {
   const SmartFillSettingsPage({super.key});
 
@@ -109,7 +109,7 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
         if (keyText.isNotEmpty) _keyCtrl.clear();
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已保存智能填单设置')),
+        const SnackBar(content: Text('已保存 AI 增强设置')),
       );
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -121,7 +121,7 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('清除接口密钥？'),
-        content: const Text('清除后将无法调用大模型，智能填单会回退到本地解析。'),
+        content: const Text('清除后将无法调用大模型，AI 增强会回退到本地解析。'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -200,7 +200,7 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
   Widget build(BuildContext context) {
     return CentliGradientScaffold(
       appBar: AppBar(
-        title: const Text('智能填单'),
+        title: const Text('AI 增强'),
         actions: [
           TextButton(
             onPressed: _loading || _saving ? null : _save,
@@ -461,7 +461,7 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
                         ),
                         const SizedBox(height: CentliSpacing.item),
                         const Text(
-                          '1. 在记账页展开「智能填单」，输入话术后点「填入」。\n'
+                          '1. 在记账页展开「AI 增强」，输入话术后点「填入」。\n'
                           '2. 未开启或未配置密钥时，文字填单与通知解析仅用本地规则；资产截图识别也不可用。\n'
                           '3. 兼容常见大模型对话补全接口（含代理）；截图识别需支持视觉的模型。\n'
                           '4. 分类不确定时不会强行猜错类；备注只保留结构化抽取后的剩余文字。',

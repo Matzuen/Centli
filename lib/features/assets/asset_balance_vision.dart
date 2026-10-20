@@ -53,8 +53,8 @@ Future<AssetBalanceVisionResult> parseAssetBalancesImageWithLlm(
   if (!config.isReady) {
     throw LlmVisionException(
       config.enabled
-          ? '请先在「我的 · 智能填单」填写 API Key'
-          : '请先在「我的 · 智能填单」启用大模型',
+          ? '请先在「我的 · AI 增强」填写 API Key'
+          : '请先在「我的 · AI 增强」启用大模型',
     );
   }
   final accList = accountNames.take(40).join('、');

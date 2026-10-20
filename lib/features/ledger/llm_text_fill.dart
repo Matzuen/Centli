@@ -50,11 +50,14 @@ class SmartFillLlmConfig {
   final String model;
   final String apiKey;
 
-  /// Credentials only — enough for an explicit vision tap (截图识别).
+  /// 只看凭证是否齐全（服务地址 + API Key），不看总开关。
+  ///
+  /// 仅供 [isReady] 组合使用：截图识别、文本识别**都要求总开关打开**
+  /// （`isReady`），凭证齐全但开关关闭时仍然不可用。
   bool get hasCredentials =>
       baseUrl.trim().isNotEmpty && apiKey.trim().isNotEmpty;
 
-  /// Smart-fill auto path: needs the toggle on + credentials.
+  /// 可用 = 总开关打开 + 凭证齐全（文本 / 截图识别都走这一条）。
   bool get isReady => enabled && hasCredentials;
 
   String get normalizedBaseUrl {
@@ -446,8 +449,8 @@ Future<AiTextFillResult?> parseBookkeepingImageWithLlm(
   if (!config.isReady) {
     throw LlmVisionException(
       config.enabled
-          ? '请先在「我的 · 智能填单」填写 API Key'
-          : '请先在「我的 · 智能填单」启用大模型',
+          ? '请先在「我的 · AI 增强」填写 API Key'
+          : '请先在「我的 · AI 增强」启用大模型',
     );
   }
   final names = categories.isNotEmpty

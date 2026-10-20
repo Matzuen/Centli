@@ -152,7 +152,7 @@ class MePage extends ConsumerWidget {
                     _tile(
                       context,
                       icon: Icons.auto_awesome,
-                      title: '智能填单',
+                      title: 'AI 增强',
                       subtitle: '本地解析 · 可选大模型增强',
                       onTap: () => context.push('/me/smart-fill'),
                     ),

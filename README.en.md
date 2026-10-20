@@ -21,7 +21,7 @@ Local-first personal bookkeeping (**Chinese UI only**): **clear every bill**.
 - Android pending auto-capture from WeChat/Alipay **transaction** notifications (payment, debit, income, refund, repayment); **a foreground keeper service** keeps the listener alive after the UI is swiped away, rebinding automatically; capture-first design — false positives are filtered in 待确认
 - Recognition rules v8: loose "must contain" (any transaction word), trimmed exclusions (chat / OTP / login / reminders / you-initiated transfers stay out); `assets/noti_templates.json` mirrors the builtins and is covered by tests
 - Recognition rules: official read-only + user CRUD + try-parse (step-by-step reason) + import/export
-- Smart fill: local rules + optional LLM
+- AI enhance: local rules + optional LLM (also powers screenshot balance recognition)
 - FX rates; hide amounts; app lock; theme light/dark/system
 - Local backup only: full **JSON** restore (`schema_version: 4`); **Excel** human export + best-effort import (no cloud)
 - Android home widget (MVP); no iOS widget yet
