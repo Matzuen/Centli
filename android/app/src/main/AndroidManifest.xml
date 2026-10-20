@@ -2,11 +2,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
-    <uses-permission android:name="android.permission.WAKE_LOCK" />
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
@@ -68,15 +64,11 @@
                 <action android:name="com.centli.centli.action.SET_AMOUNT" />
             </intent-filter>
         </receiver>
+        <!-- 后台复活：周期任务把通知监听的绑定补回来（无前台服务、无常驻通知） -->
         <service
-            android:name=".CentliCaptureKeeper"
-            android:exported="false"
-            android:foregroundServiceType="specialUse"
-            android:stopWithTask="false">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Keep payment-notification listening alive after the app is closed" />
-        </service>
+            android:name=".CentliResurrectJobService"
+            android:permission="android.permission.BIND_JOB_SERVICE"
+            android:exported="false" />
         <!-- exported=true so system can deliver BOOT_COMPLETED -->
         <receiver
             android:name=".CentliBootReceiver"

@@ -30,6 +30,7 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
   int _pendingCount = 0;
   bool _busy = false;
   bool _batteryIgnored = false;
+  bool _resurrectScheduled = false;
   Map<String, String> _accountMap = {};
   List<Account> _accounts = const [];
   List<DroppedNotification> _dropped = const [];
@@ -65,6 +66,8 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
     final connected = await NotificationCaptureStub.isListenerConnected();
     final batteryIgnored =
         await NotificationCaptureStub.isBatteryOptimizationIgnored();
+    final resurrectScheduled =
+        await NotificationCaptureStub.isResurrectScheduled();
     final ledgerId = await db.currentLedgerId();
     var pending = 0;
     List<Account> accounts = const [];
@@ -89,6 +92,7 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
       _granted = granted;
       _listenerConnected = connected;
       _batteryIgnored = batteryIgnored;
+      _resurrectScheduled = resurrectScheduled;
       _templateVersion = version;
       _templateUpdatedAt = updatedAt;
       _templateSource = source;
@@ -149,7 +153,7 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
           SnackBar(
             content: Text(
               batteryIgnored
-                  ? '已开启。通知栏应出现「正在监听支付通知」；清后台后仍会捕获。'
+                  ? '已开启。清后台后仍会继续捕获（不显示常驻通知）。'
                   : '已开启，但未关闭电池优化时，清后台后可能丢通知，请在系统里允许无限制。',
             ),
           ),
@@ -181,6 +185,32 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
         : await NotificationCaptureStub.isPermissionGranted();
     setState(() => _granted = granted);
     await _reload(soft: true);
+  }
+
+  /// 「重新安排」：立即请求重绑并把后台复活任务排上（native 侧同时生效）。
+  Future<void> _rescheduleResurrect() async {
+    setState(() => _busy = true);
+    try {
+      await NotificationCaptureStub.ensureListenerRebind();
+      final scheduled = await NotificationCaptureStub.isResurrectScheduled();
+      final connected = await NotificationCaptureStub.isListenerConnected();
+      if (!mounted) return;
+      setState(() {
+        _resurrectScheduled = scheduled;
+        _listenerConnected = connected;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            scheduled
+                ? '后台复活任务已安排（约 15 分钟一次，无常驻通知）'
+                : '未能安排：请确认已开启自动记账，并允许自启动/后台运行',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _openBattery() async {
@@ -383,8 +413,8 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
               children: [
                 Text(
                   '开启后将读取支付宝/微信等支付成功类通知，生成待确认账单；'
-                  '不会自动入账。清后台后仍靠前台服务「正在监听支付通知」继续捕获——'
-                  '请关闭电池优化，并在厂商系统里允许自启动/后台运行。',
+                  '不会自动入账。清后台后由系统绑定 + 周期任务补回监听（不显示常驻通知）——'
+                  '请关闭电池优化，并在厂商系统里允许自启动/后台运行，否则可能被系统杀掉。',
                   style: Theme.of(context).textTheme.bodyMedium
                       ?.copyWith(color: scheme.onSurfaceVariant),
                 ),
@@ -483,6 +513,33 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
                         ? FilledButton.tonal(
                             onPressed: _busy ? null : _openBattery,
                             child: Text(_batteryIgnored ? '查看设置' : '去设置'),
+                          )
+                        : null,
+                  ),
+                ),
+                const SizedBox(height: CentliSpacing.section),
+                CentliSoftCard(
+                  child: ListTile(
+                    leading: Icon(
+                      _resurrectScheduled
+                          ? Icons.autorenew
+                          : Icons.error_outline,
+                      color:
+                          _resurrectScheduled ? scheme.primary : scheme.error,
+                    ),
+                    title: const Text('后台复活任务'),
+                    subtitle: Text(
+                      !supported
+                          ? '仅 Android 相关：用于被系统清理后补回监听'
+                          : _resurrectScheduled
+                              ? '已安排（约 15 分钟一次，无常驻通知）'
+                              : '未安排 · 点右侧重新安排；仍无效请允许自启动/后台运行',
+                    ),
+                    trailing: supported
+                        ? TextButton(
+                            onPressed: _busy ? null : _rescheduleResurrect,
+                            child:
+                                Text(_resurrectScheduled ? '重新安排' : '立即安排'),
                           )
                         : null,
                   ),

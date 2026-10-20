@@ -12,7 +12,7 @@ class CentliApplication : Application() {
         super.onCreate()
         try {
             if (CentliNotificationListener.isAutoCaptureEnabled(this)) {
-                CentliCaptureKeeper.start(this)
+                CentliResurrect.ensureAlive(this)
                 CentliNotificationListener.ensureRebind(this)
             }
         } catch (e: Exception) {

@@ -18,7 +18,7 @@ Local-first personal bookkeeping (**Chinese UI only**): **clear every bill**.
 - Multi-ledger, accounts, category tree; icons from assets or 1–2 hanzi fallback
 - Stats: range (month / year / custom), category donut + legend (name + amount; hold a slice to see the percentage), summary and per-account tables; category drill-down; monthly budgets
 - Bill detail: **保存** (save) + delete in the app bar; amount, account, category, type, time, tags, note and the include-in-stats/budget switches are each **tap-to-edit** (picks persist immediately, amount waits for 保存); only the edited columns are written, provenance is preserved
-- Android pending auto-capture from WeChat/Alipay **transaction** notifications (payment, debit, income, refund, repayment); **a foreground keeper service** keeps the listener alive after the UI is swiped away, rebinding automatically; capture-first design — false positives are filtered in 待确认
+- Android pending auto-capture from WeChat/Alipay **transaction** notifications (payment, debit, income, refund, repayment); **no ongoing notification**: after the UI is swiped away (or the process is killed) the listener is restored by system rebinding plus a 15-minute periodic job; capture-first design — false positives are filtered in 待确认
 - Recognition rules v8: loose "must contain" (any transaction word), trimmed exclusions (chat / OTP / login / reminders / you-initiated transfers stay out); `assets/noti_templates.json` mirrors the builtins and is covered by tests
 - Recognition rules: official read-only + user CRUD + try-parse (step-by-step reason) + import/export
 - AI enhance: local rules + optional LLM (also powers screenshot balance recognition)
@@ -57,7 +57,7 @@ Prefer JSON (`format: centli-export`). Excel import is best-effort (no fx/settin
 > released under this scheme. Fixes within a batch bump the patch digit
 > (`1.4.1` → `1.4.2`); the build number increments by 1 on every release.
 > **2.0.0** starts a new major line: the UI and icon set were overhauled, auto-capture
-> now runs behind a foreground service, and aggregates moved into SQL.
+> now keeps itself alive without an ongoing notification, and aggregates moved into SQL.
 
 ### 2.0.2 (2026-10-20)
 
@@ -67,7 +67,7 @@ UI
 - chart Y-axis labels use `k` / `m` compaction chosen per axis, so two neighbouring stops can no longer render the same text
 
 Notification capture
-- stronger keep-alive: the keeper starts with the process, rebinds when the listener drops, holds a wake lock plus a 2-minute watchdog, and restarts after boot/task removal
+- keep-alive without an ongoing notification: the foreground service is gone; system rebinding plus a 15-minute `JobScheduler` job (persisted across reboots) restore the listener, with one inexact alarm as a short-term retry. The auto-capture page gained a 后台复活任务 self-check and a re-schedule entry
 - parsing is **AI first**: when AI is off, times out or fails it falls back to local rules; AI verdicts are written back as `app-direction-scene` capture rules and `app-排除` exclude rules, so the same scene is served locally next time without another call
 - AI is split into three independent gates (text fill / AI notification parse / AI asset scan), all off by default
 - distilled rules stay bounded: capture rules auto-merge the least-active siblings within an app and direction, and rules idle for 90 days can be purged from the rules page
@@ -96,7 +96,7 @@ UI
 - Stats legend and summary tables re-laid out — the name takes its own width, the three money columns split the rest, and narrow screens shrink the font instead of truncating; hold a donut slice to see its detail above the ring
 
 Auto-capture
-- **Foreground keeper service** (`CentliCaptureKeeper`) keeps the notification listener bound after the UI is swiped away, and rebinds automatically if it drops
+- **Keep-alive**: originally a foreground keeper (`CentliCaptureKeeper`); since 2.0.2 it is system rebinding plus a periodic job, with no ongoing notification
 - Native side honours `matchOn=title` and falls back to the bundled templates when Flutter has not synced yet, so a cold start can still book
 - Native writes straight into the pending table instead of waiting for the Flutter engine
 

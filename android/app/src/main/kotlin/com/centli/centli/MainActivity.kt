@@ -38,7 +38,7 @@ class MainActivity : FlutterFragmentActivity() {
                     try {
                         // Settings UI: hard toggle; timers use soft ensureRebind.
                         CentliNotificationListener.forceRebind(this)
-                        CentliCaptureKeeper.start(this)
+                        CentliResurrect.ensureAlive(this)
                         result.success(true)
                     } catch (e: Exception) {
                         result.error("rebind_failed", e.message, null)
@@ -60,9 +60,9 @@ class MainActivity : FlutterFragmentActivity() {
                     CentliNotificationListener.setAutoCaptureEnabled(this, enabled)
                     if (enabled && isNotificationAccessGranted()) {
                         CentliNotificationListener.ensureRebind(this)
-                        CentliCaptureKeeper.start(this)
+                        CentliResurrect.ensureAlive(this)
                     } else if (!enabled) {
-                        CentliCaptureKeeper.stop(this)
+                        CentliResurrect.cancel(this)
                     }
                     result.success(null)
                 }
@@ -109,6 +109,9 @@ class MainActivity : FlutterFragmentActivity() {
                 "cancelAllPendingConfirm" -> {
                     PendingConfirmNotifier.cancelAll(this)
                     result.success(null)
+                }
+                "isResurrectScheduled" -> {
+                    result.success(CentliResurrect.isScheduled(this))
                 }
                 "isBatteryOptimizationIgnored" -> {
                     result.success(isBatteryOptimizationIgnored())
@@ -158,7 +161,7 @@ class MainActivity : FlutterFragmentActivity() {
                 CentliNotificationListener.isAutoCaptureEnabled(this)
             ) {
                 // Dual insurance: rebind NLS + keep process via foreground keeper.
-                CentliCaptureKeeper.start(this)
+                CentliResurrect.ensureAlive(this)
                 if (!CentliNotificationListener.connected) {
                     CentliNotificationListener.ensureRebind(this)
                 }
@@ -167,7 +170,7 @@ class MainActivity : FlutterFragmentActivity() {
             ) {
                 CentliNotificationListener.ensureRebind(this)
             } else if (!CentliNotificationListener.isAutoCaptureEnabled(this)) {
-                CentliCaptureKeeper.stop(this)
+                CentliResurrect.cancel(this)
             }
         }
     }

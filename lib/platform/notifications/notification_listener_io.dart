@@ -221,6 +221,19 @@ abstract final class NotificationCaptureStub {
   }
 
 
+  /// 后台复活（周期任务）是否已排上；详情见 native `CentliResurrect`。
+  static Future<bool> isResurrectScheduled() async {
+    if (!supported) return false;
+    try {
+      final v = await _channel.invokeMethod<bool>('isResurrectScheduled');
+      return v ?? false;
+    } on MissingPluginException {
+      return false;
+    } on PlatformException {
+      return false;
+    }
+  }
+
   static Future<bool> isBatteryOptimizationIgnored() async {
     if (!supported) return true;
     try {

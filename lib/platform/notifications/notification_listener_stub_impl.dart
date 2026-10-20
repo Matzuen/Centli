@@ -69,6 +69,8 @@ abstract final class NotificationCaptureStub {
   static Future<void> cancelAllPendingConfirm() async {}
 
   /// Desktop stub: treat as ignored (no OEM battery killer).
+  static Future<bool> isResurrectScheduled() async => false;
+
   static Future<bool> isBatteryOptimizationIgnored() async => true;
 
   static Future<void> openBatteryOptimizationSettings() async {}

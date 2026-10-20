@@ -23,7 +23,7 @@ class CentliNotificationListener : NotificationListenerService() {
         super.onCreate()
         // Process may start from NLS bind with no Activity — keep FGS up.
         if (isAutoCaptureEnabled(this)) {
-            CentliCaptureKeeper.start(this)
+            CentliResurrect.ensureAlive(this)
         }
     }
 
@@ -32,7 +32,7 @@ class CentliNotificationListener : NotificationListenerService() {
         connected = true
         Log.i(TAG, "onListenerConnected")
         if (isAutoCaptureEnabled(this)) {
-            CentliCaptureKeeper.start(this)
+            CentliResurrect.ensureAlive(this)
         }
     }
 
@@ -48,8 +48,8 @@ class CentliNotificationListener : NotificationListenerService() {
         }
         // Ask AlarmManager / FGS to revive the process soon.
         if (isAutoCaptureEnabled(this)) {
-            CentliCaptureKeeper.scheduleWatchdog(this, delayMs = 2_000L)
-            CentliCaptureKeeper.start(this)
+            CentliResurrect.scheduleRetry(this, delayMs = 30_000L)
+            CentliResurrect.ensureAlive(this)
         }
         super.onListenerDisconnected()
     }
@@ -97,7 +97,7 @@ class CentliNotificationListener : NotificationListenerService() {
 
         // Single writer inside emitNotificationCapture: Flutter when bridge is
         // ready, otherwise native SQLite + push (no dual insert).
-        CentliCaptureKeeper.start(this)
+        CentliResurrect.ensureAlive(this)
         MainActivity.emitNotificationCapture(this, payload)
     }
 
