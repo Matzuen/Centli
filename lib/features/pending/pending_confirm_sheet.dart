@@ -8,6 +8,7 @@ import '../../data/db/database_provider.dart';
 import '../../platform/notifications/notification_listener_stub.dart';
 import '../../platform/notifications/notification_parse.dart';
 import '../../platform/notifications/noti_template_store.dart';
+import '../../core/widgets/glass.dart';
 
 /// 一条待确认通知里，「方向」的显示名。
 String pendingDirectionLabel(String? direction) {
@@ -44,7 +45,7 @@ Future<bool> showPendingConfirmDialog(
   final inn = await db.loadCategories(capture.ledgerId, 'in');
   final accounts = await db.loadActiveAccounts(capture.ledgerId);
   if (!context.mounted) return false;
-  final saved = await showModalBottomSheet<bool>(
+  final saved = await showGlassSheet<bool>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,

@@ -6,6 +6,7 @@ import '../../app/deep_link.dart';
 import '../../app/theme.dart';
 import '../../core/constants/currencies.dart';
 import '../../data/db/database_provider.dart';
+import '../../core/widgets/glass.dart';
 
 /// First-launch guide. Leads with 记账本 → 资产账户 → 记一笔.
 class OnboardingPage extends ConsumerStatefulWidget {
@@ -41,7 +42,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     if (!mounted) return;
     final nameCtrl = TextEditingController(text: ledger?.name ?? '');
     var base = ledger?.baseCurrency ?? 'CNY';
-    final ok = await showDialog<bool>(
+    final ok = await showGlassDialog<bool>(
       context: context,
       builder: (ctx) {
         return StatefulBuilder(

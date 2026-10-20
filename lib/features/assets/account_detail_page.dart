@@ -16,6 +16,7 @@ import '../../data/db/database_provider.dart';
 import '../security/app_lock_controller.dart';
 import 'assets_page.dart';
 import '../../app/theme.dart';
+import '../../core/widgets/glass.dart';
 
 final _accountProvider =
     StreamProvider.family<Account?, String>((ref, id) {
@@ -540,7 +541,7 @@ Future<void> _showAdjustBalance(
         .toStringAsFixed(decimals),
   );
 
-  final ok = await showDialog<bool>(
+  final ok = await showGlassDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
       title: const Text('\u8c03\u6574\u4f59\u989d'),
@@ -611,7 +612,7 @@ Future<void> _confirmArchive(
   WidgetRef ref,
   Account account,
 ) async {
-  final ok = await showDialog<bool>(
+  final ok = await showGlassDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
       title: const Text('\u5f52\u6863\u8d44\u4ea7\u8d26\u6237'),
@@ -645,7 +646,7 @@ Future<void> _confirmUnarchive(
   WidgetRef ref,
   Account account,
 ) async {
-  final ok = await showDialog<bool>(
+  final ok = await showGlassDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
       title: const Text('\u53d6\u6d88\u5f52\u6863'),

@@ -11,6 +11,7 @@ import '../../data/db/database_provider.dart';
 import '../security/app_lock_controller.dart';
 import '../../app/theme.dart';
 import '../../core/widgets/centli_error_state.dart';
+import '../../core/widgets/glass.dart';
 
 /// Split "午餐 支付宝" into keywords (space / full-width space separated).
 @visibleForTesting
@@ -201,7 +202,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   Future<void> _pickCategory() async {
     final cats = _catsForType(_type);
     if (cats.isEmpty) return;
-    final id = await showModalBottomSheet<String>(
+    final id = await showGlassSheet<String>(
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
@@ -262,7 +263,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
 
   Future<void> _pickAccount() async {
     if (_accounts.isEmpty) return;
-    final id = await showModalBottomSheet<String>(
+    final id = await showGlassSheet<String>(
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
@@ -380,7 +381,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
 
   /// 「更多」: every filter in one sheet (power-user path).
   Future<void> _openFilterSheet() async {
-    final result = await showModalBottomSheet<_SearchFilters>(
+    final result = await showGlassSheet<_SearchFilters>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
@@ -542,7 +543,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   }
 
   Future<void> _showTypeMenu(BuildContext context) async {
-    final result = await showModalBottomSheet<String>(
+    final result = await showGlassSheet<String>(
       context: context,
       showDragHandle: true,
       builder: (ctx) => SafeArea(

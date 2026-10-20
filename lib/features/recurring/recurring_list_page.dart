@@ -9,6 +9,7 @@ import '../../app/theme.dart';
 import '../../core/utils/money.dart';
 import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
+import '../../core/widgets/glass.dart';
 
 final _recurringRulesProvider =
     StreamProvider.autoDispose<List<RecurringRule>>((ref) {
@@ -136,7 +137,7 @@ class _RuleTile extends ConsumerWidget {
           },
         ),
         onLongPress: () async {
-          final ok = await showDialog<bool>(
+          final ok = await showGlassDialog<bool>(
             context: context,
             builder: (ctx) => AlertDialog(
               title: const Text('删除周期规则？'),
@@ -160,7 +161,7 @@ class _RuleTile extends ConsumerWidget {
           }
         },
         onTap: () async {
-          await showModalBottomSheet<void>(
+          await showGlassSheet<void>(
             context: context,
             builder: (ctx) => SafeArea(
               child: Column(
@@ -189,7 +190,7 @@ class _RuleTile extends ConsumerWidget {
                     title: const Text('删除'),
                     onTap: () async {
                       Navigator.pop(ctx);
-                      final ok = await showDialog<bool>(
+                      final ok = await showGlassDialog<bool>(
                         context: context,
                         builder: (dCtx) => AlertDialog(
                           title: const Text('删除周期规则？'),

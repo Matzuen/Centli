@@ -15,6 +15,7 @@ import '../../data/db/database_provider.dart';
 import '../security/app_lock_controller.dart';
 import 'category_picker_sheet.dart';
 import 'ledger_detail_page.dart' show showTagEditorDialog;
+import '../../core/widgets/glass.dart';
 
 /// Set by the bill-detail page when 金额 was edited but not yet saved through
 /// 保存. The bookkeeping sheet applies it on next open (it only shows on
@@ -39,7 +40,7 @@ Future<bool?> showBookkeepingSheet(
   // everything when closed via ✓. Drop any unconsumed detail amount so the
   // sheet's visible (possibly stale) amount is not silently overridden.
   pendingDetailAmountMinor = null;
-  return showModalBottomSheet<bool>(
+  return showGlassSheet<bool>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
@@ -357,7 +358,7 @@ List<Account> _accounts = [];
     final rateCtrl = TextEditingController(text: _fxRateText ?? '');
     var useTo = _useToAmount;
 
-    final ok = await showDialog<bool>(
+    final ok = await showGlassDialog<bool>(
       context: context,
       builder: (ctx) {
         return StatefulBuilder(
@@ -687,7 +688,7 @@ List<Account> _accounts = [];
 
   Future<void> _pickAccount({required bool toAccount}) async {
     final current = toAccount ? _toAccountId : _accountId;
-    final id = await showModalBottomSheet<String>(
+    final id = await showGlassSheet<String>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
@@ -726,7 +727,7 @@ List<Account> _accounts = [];
     final label = major > 0
         ? formatMinor(_currency, toMinor(_currency, major))
         : (_noteCtrl.text.trim().isNotEmpty ? '备注' : '标签');
-    final ok = await showDialog<bool>(
+    final ok = await showGlassDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('放弃这笔记账？'),

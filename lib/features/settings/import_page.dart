@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/db/database_provider.dart';
 import '../../data/export/import_service.dart';
 import '../../app/theme.dart';
+import '../../core/widgets/glass.dart';
 
 class ImportPage extends ConsumerStatefulWidget {
   const ImportPage({super.key});
@@ -80,7 +81,7 @@ class _ImportPageState extends ConsumerState<ImportPage> {
     if (preview == null || _busy) return;
 
     final b = preview.bundle;
-    final ok = await showDialog<bool>(
+    final ok = await showGlassDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('\u786e\u8ba4\u8fd8\u539f\uff1f'),

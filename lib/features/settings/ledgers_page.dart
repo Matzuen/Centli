@@ -6,6 +6,7 @@ import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
 import 'me_page.dart';
 import '../../app/theme.dart';
+import '../../core/widgets/glass.dart';
 
 final _allLedgersProvider = StreamProvider<List<Ledger>>((ref) {
   return ref.watch(databaseProvider).watchAllLedgers(includeArchived: true);
@@ -144,7 +145,7 @@ class LedgersPage extends ConsumerWidget {
   Future<void> _create(BuildContext context, WidgetRef ref) async {
     final nameCtrl = TextEditingController();
     var base = 'CNY';
-    final ok = await showDialog<bool>(
+    final ok = await showGlassDialog<bool>(
       context: context,
       builder: (ctx) {
         return StatefulBuilder(

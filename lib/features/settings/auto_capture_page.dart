@@ -8,6 +8,7 @@ import '../../platform/notifications/notification_listener_stub.dart';
 import '../../platform/notifications/notification_parse.dart';
 import '../../platform/notifications/noti_template_store.dart';
 import '../../app/theme.dart';
+import '../../core/widgets/glass.dart';
 
 /// Full auto-capture settings at `/me/auto` (wireframe §8).
 class AutoCapturePage extends ConsumerStatefulWidget {
@@ -247,7 +248,7 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
     }
 
     if (!mounted) return;
-    final ok = await showDialog<bool>(
+    final ok = await showGlassDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('清空待确认'),
@@ -289,7 +290,7 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
       }
     }
 
-    showDialog<void>(
+    showGlassDialog<void>(
       context: context,
       builder: (ctx) {
         return AlertDialog(

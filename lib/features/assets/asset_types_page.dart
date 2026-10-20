@@ -5,6 +5,7 @@ import '../../app/theme.dart';
 import '../../core/widgets/centli_icon.dart';
 import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
+import '../../core/widgets/glass.dart';
 
 final _assetTypesManageProvider =
     StreamProvider.family<List<AssetType>, String>((ref, ledgerId) {
@@ -171,7 +172,7 @@ Future<void> _promptCreate(
   String ledgerId,
 ) async {
   final ctrl = TextEditingController();
-  final ok = await showDialog<bool>(
+  final ok = await showGlassDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
       title: const Text('新增资产分类'),
@@ -214,7 +215,7 @@ Future<void> _promptRename(
   AssetType type,
 ) async {
   final ctrl = TextEditingController(text: type.name);
-  final ok = await showDialog<bool>(
+  final ok = await showGlassDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
       title: const Text('重命名分类'),
@@ -258,7 +259,7 @@ Future<void> _promptDelete(
   int count,
 ) async {
   if (count > 0) {
-    await showDialog<void>(
+    await showGlassDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('无法删除'),
@@ -273,7 +274,7 @@ Future<void> _promptDelete(
     );
     return;
   }
-  final ok = await showDialog<bool>(
+  final ok = await showGlassDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
       title: const Text('删除分类'),

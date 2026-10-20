@@ -9,6 +9,7 @@ import '../../core/utils/money.dart';
 import '../../platform/notifications/notification_parse.dart';
 import '../../platform/notifications/noti_template_store.dart';
 import '../../app/theme.dart';
+import '../../core/widgets/glass.dart';
 
 /// Settings → 自动记账 → 识别规则.
 class RecognitionRulesPage extends StatefulWidget {
@@ -85,7 +86,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
   }
 
   Future<void> _deleteUser(NotiTemplate t) async {
-    final ok = await showDialog<bool>(
+    final ok = await showGlassDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('删除规则'),
@@ -186,7 +187,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
     final urlCtrl = TextEditingController(
       text: NotiTemplateStore.kDefaultOfficialRulesUrl,
     );
-    final url = await showDialog<String>(
+    final url = await showGlassDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('从网络导入官方规则'),
@@ -241,7 +242,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
   }
 
   Future<void> _rollbackOfficial() async {
-    final ok = await showDialog<bool>(
+    final ok = await showGlassDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('恢复内置官方规则'),
@@ -292,7 +293,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
       final fileText = utf8.decode(bytes);
       if (!mounted) return;
 
-      final merge = await showDialog<bool>(
+      final merge = await showGlassDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
           title: const Text('导入我的规则'),
@@ -335,7 +336,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
 
   Future<void> _importUserFromUrl() async {
     final urlCtrl = TextEditingController();
-    final url = await showDialog<String>(
+    final url = await showGlassDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('从网络导入我的规则'),
@@ -377,7 +378,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
     if (pasted.isEmpty) return;
     if (!mounted) return;
 
-    final merge = await showDialog<bool>(
+    final merge = await showGlassDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('导入方式'),
@@ -422,7 +423,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
 
   void _showOfficialDetail(NotiTemplate t) {
     final disabled = _disabled.contains(t.id);
-    showModalBottomSheet<void>(
+    showGlassSheet<void>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,

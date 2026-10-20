@@ -12,6 +12,7 @@ import '../../core/utils/recurring_calendar.dart';
 import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
 import 'recurring_runner.dart';
+import '../../core/widgets/glass.dart';
 
 class RecurringWizardArgs {
   const RecurringWizardArgs({
@@ -152,7 +153,7 @@ class _RecurringWizardPageState extends ConsumerState<RecurringWizardPage> {
     }
     final n = _catchUpCount;
     if (n > 1) {
-      final ok = await showDialog<bool>(
+      final ok = await showGlassDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
           title: const Text('将补记多期'),

@@ -15,6 +15,7 @@ import '../../platform/notifications/noti_template_store.dart';
 import '../capture/capture_intake_actions.dart';
 import 'pending_confirm_sheet.dart';
 import '../../app/theme.dart';
+import '../../core/widgets/glass.dart';
 
 
 /// Badge label for pending capture cards. Status takes priority over parseOk.
@@ -398,7 +399,7 @@ class _PendingPageBodyState extends ConsumerState<PendingPage> {
       return;
     }
     if (!context.mounted) return;
-    final ok = await showDialog<bool>(
+    final ok = await showGlassDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('全部忽略'),
@@ -443,7 +444,7 @@ class _PendingPageBodyState extends ConsumerState<PendingPage> {
       return;
     }
     if (!context.mounted) return;
-    final ok = await showDialog<bool>(
+    final ok = await showGlassDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('清空已忽略'),

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../app/theme.dart';
 import '../../core/widgets/centli_icon.dart';
 import '../../data/db/centli_database.dart';
+import '../../core/widgets/glass.dart';
 
 /// Finch-style category picker: left parent list + right subcategory icon grid.
 ///
@@ -13,7 +14,7 @@ Future<String?> showCategoryPickerSheet(
   required List<Category> categories,
   String? selectedId,
 }) {
-  return showModalBottomSheet<String>(
+  return showGlassSheet<String>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,

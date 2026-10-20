@@ -14,6 +14,7 @@ import '../../platform/pending/pending_capture_intake.dart';
 import '../ledger/llm_text_fill.dart';
 import 'asset_balance_recognize_sheet.dart';
 import 'asset_balance_vision.dart';
+import '../../core/widgets/glass.dart';
 
 Future<void> importAssetBalancesFromScreenshot(
   BuildContext context,
@@ -21,7 +22,7 @@ Future<void> importAssetBalancesFromScreenshot(
   required String ledgerId,
   required String baseCurrency,
 }) async {
-  final source = await showModalBottomSheet<ImageSource>(
+  final source = await showGlassSheet<ImageSource>(
     context: context,
     builder: (ctx) => SafeArea(
       child: Wrap(
@@ -49,7 +50,7 @@ Future<void> importAssetBalancesFromScreenshot(
   var consented = await PendingCaptureIntake.hasImageAiConsent(db);
   if (!consented) {
     if (!context.mounted) return;
-    final ok = await showDialog<bool>(
+    final ok = await showGlassDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('截图识别说明'),

@@ -21,6 +21,7 @@ import '../../platform/notifications/notification_listener_stub.dart';
 import '../../platform/notifications/notification_parse.dart';
 import '../../platform/notifications/noti_template_store.dart';
 import '../pending/pending_confirm_sheet.dart';
+import '../../core/widgets/glass.dart';
 
 /// 首页轮播：只收「解析成功、可直接确认」的待入账。
 final _homePendingOkProvider =
@@ -616,7 +617,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     required AsyncValue<List<Transaction>> monthTxns,
   }) async {
     final dayTxns = _txnsOnLocalDay(monthTxns.valueOrNull ?? const [], day);
-    await showModalBottomSheet<void>(
+    await showGlassSheet<void>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,

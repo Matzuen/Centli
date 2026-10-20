@@ -6,9 +6,10 @@ import '../../app/theme.dart';
 import '../../data/db/database_provider.dart';
 import 'smart_bookkeeping_submit.dart';
 import '../capture/capture_intake_actions.dart';
+import '../../core/widgets/glass.dart';
 
 Future<void> showQuickBookkeepingSheet(BuildContext context) {
-  return showModalBottomSheet<void>(
+  return showGlassSheet<void>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,

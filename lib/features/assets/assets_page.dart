@@ -14,6 +14,7 @@ import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
 import '../security/app_lock_controller.dart';
 import 'asset_balance_import.dart';
+import '../../core/widgets/glass.dart';
 
 final _accountsProvider = StreamProvider.family<List<Account>, String>((
   ref,
@@ -1123,7 +1124,7 @@ Future<void> showAccountEditor(
   String? iconKey = existing?.icon;
 
   if (!context.mounted) return;
-  final saved = await showDialog<bool>(
+  final saved = await showGlassDialog<bool>(
     context: context,
     builder: (ctx) {
       return StatefulBuilder(

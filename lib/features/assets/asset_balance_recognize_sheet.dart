@@ -6,6 +6,7 @@ import '../../core/utils/money.dart';
 import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
 import 'asset_balance_vision.dart';
+import '../../core/widgets/glass.dart';
 
 enum _RowAction { create, update, skip }
 
@@ -41,7 +42,7 @@ Future<bool> showAssetBalanceRecognizeSheet(
   required Map<String, int> balances,
   required List<AssetType> types,
 }) async {
-  final applied = await showModalBottomSheet<bool>(
+  final applied = await showGlassSheet<bool>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,

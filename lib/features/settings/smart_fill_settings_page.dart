@@ -6,6 +6,7 @@ import '../../data/db/database_provider.dart';
 import '../ledger/llm_text_fill.dart';
 import 'model_name_validation.dart';
 import '../../app/theme.dart';
+import '../../core/widgets/glass.dart';
 
 /// AI 增强 / 大模型配置（OpenAI 兼容接口）。
 class SmartFillSettingsPage extends ConsumerStatefulWidget {
@@ -117,7 +118,7 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
   }
 
   Future<void> _clearKey() async {
-    final ok = await showDialog<bool>(
+    final ok = await showGlassDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('清除接口密钥？'),

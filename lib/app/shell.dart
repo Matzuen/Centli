@@ -6,6 +6,7 @@ import '../data/db/database_provider.dart';
 import '../features/ledger/bookkeeping_sheet.dart' deferred as bookkeeping;
 import '../features/ledger/quick_bookkeeping_sheet.dart' deferred as quick_bk;
 import 'theme.dart';
+import '../core/widgets/glass.dart';
 
 /// Flat 5-tab shell: 首页 / 统计 / 记账(+) / 资产 / 我的
 class AppShell extends ConsumerWidget {
@@ -36,8 +37,6 @@ class AppShell extends ConsumerWidget {
     final pendingCount = ledgerId == null
         ? 0
         : (ref.watch(pendingCountProvider(ledgerId)).valueOrNull ?? 0);
-    final dark = Theme.of(context).brightness == Brightness.dark;
-
     // Branch 2 is the placeholder for 记一笔; keep prior tab highlighted while sheet is open.
     final selectedIndex = navigationShell.currentIndex == 2
         ? 0
@@ -45,21 +44,8 @@ class AppShell extends ConsumerWidget {
 
     return CentliGradientScaffold(
       body: navigationShell,
-      bottomNavigationBar: DecoratedBox(
-        decoration: BoxDecoration(
-          color: dark
-              ? Theme.of(context).colorScheme.surfaceContainerHighest
-              : Colors.white,
-          boxShadow: dark
-              ? null
-              : [
-                  BoxShadow(
-                    color: const Color(0xFF5A6B7A).withValues(alpha: 0.10),
-                    blurRadius: 20,
-                    offset: const Offset(0, -4),
-                  ),
-                ],
-        ),
+      bottomNavigationBar: CentliGlass(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
         child: NavigationBar(
           selectedIndex: selectedIndex,
           onDestinationSelected: (index) {

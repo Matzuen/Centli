@@ -9,6 +9,7 @@ import '../../data/db/txn_tags.dart';
 import '../../app/theme.dart';
 import '../../core/widgets/centli_error_state.dart';
 import '../../core/widgets/category_visuals.dart';
+import '../../core/widgets/glass.dart';
 
 final _deletedTxProvider =
     StreamProvider.family<List<Transaction>, String>((ref, ledgerId) {
@@ -102,7 +103,7 @@ class RecycleBinPage extends ConsumerWidget {
     Transaction t,
     TxnListLookups lookups,
   ) async {
-    final action = await showModalBottomSheet<String>(
+    final action = await showGlassSheet<String>(
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
@@ -121,7 +122,7 @@ class RecycleBinPage extends ConsumerWidget {
         );
       }
     } else if (action == 'purge') {
-      final ok = await showDialog<bool>(
+      final ok = await showGlassDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
           title: const Text('永久删除？'),
@@ -162,7 +163,7 @@ class RecycleBinPage extends ConsumerWidget {
       return;
     }
     if (!context.mounted) return;
-    final ok = await showDialog<bool>(
+    final ok = await showGlassDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('清空回收站？'),

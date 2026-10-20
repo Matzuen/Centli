@@ -7,6 +7,7 @@ import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
 import '../../data/fx/fx_remote_service.dart';
 import '../../app/theme.dart';
+import '../../core/widgets/glass.dart';
 
 final _fxRatesProvider = StreamProvider<List<FxRate>>((ref) {
   return ref.watch(databaseProvider).watchFxRates();
@@ -274,7 +275,7 @@ Future<void> _showEditor(
   );
   final sourceCtrl = TextEditingController(text: existing?.source ?? 'manual');
 
-  final saved = await showDialog<bool>(
+  final saved = await showGlassDialog<bool>(
     context: context,
     builder: (ctx) {
       return StatefulBuilder(

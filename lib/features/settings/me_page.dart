@@ -14,6 +14,7 @@ import '../../platform/home_widget/centli_home_widget_sync.dart';
 import '../../platform/notifications/notification_listener_stub.dart';
 
 import 'package:package_info_plus/package_info_plus.dart';
+import '../../core/widgets/glass.dart';
 
 class MePage extends ConsumerWidget {
   const MePage({super.key});
@@ -341,7 +342,7 @@ String _themeLabel(WidgetRef ref) {
 
 Future<void> _pickTheme(BuildContext context, WidgetRef ref) async {
   final cur = ref.read(themeModeProvider).valueOrNull ?? ThemeMode.system;
-  final picked = await showModalBottomSheet<ThemeMode>(
+  final picked = await showGlassSheet<ThemeMode>(
     context: context,
     showDragHandle: true,
     builder: (ctx) => SafeArea(
@@ -387,7 +388,7 @@ Future<void> showLedgerEditor(
     base = 'CNY';
   }
 
-  final saved = await showDialog<bool>(
+  final saved = await showGlassDialog<bool>(
     context: context,
     builder: (ctx) {
       return StatefulBuilder(

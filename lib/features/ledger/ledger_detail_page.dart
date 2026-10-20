@@ -16,6 +16,7 @@ import '../../data/db/database_provider.dart';
 import '../security/app_lock_controller.dart';
 import 'category_picker_sheet.dart';
 import '../../app/theme.dart';
+import '../../core/widgets/glass.dart';
 
 final _txnProvider =
     StreamProvider.family<Transaction?, String>((ref, id) {
@@ -662,7 +663,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
   }
 
   Future<bool> _confirmDiscard(BuildContext context) async {
-    final leave = await showDialog<bool>(
+    final leave = await showGlassDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('放弃修改？'),
@@ -881,7 +882,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
   }
 
   Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
-    final ok = await showDialog<bool>(
+    final ok = await showGlassDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('删除账单'),
@@ -945,7 +946,7 @@ Future<String?> _pickTransactionType(
     ('in', '收入', Icons.north_east_rounded),
     ('transfer', '转账', Icons.swap_horiz_rounded),
   ];
-  return showModalBottomSheet<String>(
+  return showGlassSheet<String>(
     context: context,
     showDragHandle: true,
     builder: (ctx) {
@@ -989,7 +990,7 @@ Future<String?> _pickAccountSheet(
   String? selectedId,
   required String title,
 }) {
-  return showModalBottomSheet<String>(
+  return showGlassSheet<String>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
@@ -1092,7 +1093,7 @@ Future<String?> _promptAmount(
       extentOffset: initial.length,
     );
   final formKey = GlobalKey<FormState>();
-  final done = showDialog<String>(
+  final done = showGlassDialog<String>(
     context: context,
     builder: (ctx) => AlertDialog(
       title: Text('修改金额 ($currency)'),
@@ -1156,7 +1157,7 @@ Future<bool?> _promptText(
   String? hint,
   int maxLength = 200,
 }) {
-  final done = showDialog<bool>(
+  final done = showGlassDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
       title: Text(title),
@@ -1195,7 +1196,7 @@ Future<List<String>?> showTagEditorDialog(
 }) {
   final current = List<String>.from(initial);
   final ctrl = TextEditingController();
-  final done = showDialog<List<String>>(
+  final done = showGlassDialog<List<String>>(
     context: context,
     builder: (ctx) {
       return StatefulBuilder(

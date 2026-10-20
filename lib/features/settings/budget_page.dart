@@ -7,6 +7,7 @@ import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
 import '../security/app_lock_controller.dart';
 import '../../app/theme.dart';
+import '../../core/widgets/glass.dart';
 
 final budgetMonthProvider = StateProvider<String>((ref) {
   return budgetYearMonth();
@@ -393,7 +394,7 @@ Future<void> _showAmountEditor(
       ? ''
       : fromMinor(baseCurrency, initialMinor).toString();
   final ctrl = TextEditingController(text: initialMajor);
-  final ok = await showDialog<bool>(
+  final ok = await showGlassDialog<bool>(
     context: context,
     builder: (ctx) {
       return AlertDialog(
@@ -498,7 +499,7 @@ Future<void> _showCategoryBudgetEditor(
     ctrl.dispose();
     return;
   }
-  final ok = await showDialog<bool>(
+  final ok = await showGlassDialog<bool>(
     context: context,
     builder: (ctx) {
       return StatefulBuilder(

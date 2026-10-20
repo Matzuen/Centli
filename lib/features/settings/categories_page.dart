@@ -6,6 +6,7 @@ import '../../core/widgets/icon_picker_sheet.dart';
 import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
 import '../../app/theme.dart';
+import '../../core/widgets/glass.dart';
 
 final _categoriesProvider =
     StreamProvider.family<List<Category>, (String, String)>((ref, key) {
@@ -618,7 +619,7 @@ Future<void> promptArchiveCategory(
   final msg = txnCount > 0
       ? '「${cat.name}」已有 $txnCount 笔流水，将归档（不再出现在记账面板），历史账单保留。'
       : '确定归档「${cat.name}」？';
-  final ok = await showDialog<bool>(
+  final ok = await showGlassDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
       title: const Text('归档分类'),
@@ -649,7 +650,7 @@ Future<void> promptUnarchiveCategory(
   WidgetRef ref,
   Category cat,
 ) async {
-  final ok = await showDialog<bool>(
+  final ok = await showGlassDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
       title: const Text('取消归档'),
@@ -693,7 +694,7 @@ Future<_CategoryEditorResult?> _promptCategoryEditor(
   final ctrl = TextEditingController(text: initialName);
   String? iconKey = initialIconKey;
 
-  final result = await showDialog<_CategoryEditorResult>(
+  final result = await showGlassDialog<_CategoryEditorResult>(
     context: context,
     builder: (ctx) {
       return StatefulBuilder(

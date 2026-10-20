@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import 'app_lock_service.dart';
 import '../../app/theme.dart';
+import '../../core/widgets/glass.dart';
 
 /// Dot display + numeric keypad for a [pinLength]-digit PIN (4 or 6).
 class PinPad extends StatelessWidget {
@@ -149,7 +150,7 @@ class _Keypad extends StatelessWidget {
 
 /// Enter PIN → confirm PIN. Returns PIN or null. User picks 4 or 6 digits.
 Future<String?> showSetPinDialog(BuildContext context) async {
-  return showDialog<String>(
+  return showGlassDialog<String>(
     context: context,
     barrierDismissible: false,
     builder: (ctx) => const _SetPinDialog(),
@@ -252,7 +253,7 @@ Future<bool> showVerifyPinDialog(
   required Future<int> Function() resolvePinLength,
   String title = '输入 PIN',
 }) async {
-  final ok = await showDialog<bool>(
+  final ok = await showGlassDialog<bool>(
     context: context,
     barrierDismissible: false,
     builder: (ctx) => _VerifyPinDialog(

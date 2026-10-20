@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../data/db/database_provider.dart';
 import '../../platform/pending/pending_capture_intake.dart';
+import '../../core/widgets/glass.dart';
 
 void _showResultSnackBar(BuildContext context, ManualIngestResult result) {
   ScaffoldMessenger.of(context).showSnackBar(
@@ -30,7 +31,7 @@ Future<void> importCaptureFromScreenshot(
   BuildContext context,
   WidgetRef ref,
 ) async {
-  final source = await showModalBottomSheet<ImageSource>(
+  final source = await showGlassSheet<ImageSource>(
     context: context,
     builder: (ctx) => SafeArea(
       child: Wrap(
@@ -57,7 +58,7 @@ Future<void> importCaptureFromScreenshot(
   var consented = await PendingCaptureIntake.hasImageAiConsent(db);
   if (!consented) {
     if (!context.mounted) return;
-    final ok = await showDialog<bool>(
+    final ok = await showGlassDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('截图识别说明'),
