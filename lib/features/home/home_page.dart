@@ -25,37 +25,41 @@ import '../pending/pending_confirm_sheet.dart';
 /// 首页轮播：只收「解析成功、可直接确认」的待入账。
 final _homePendingOkProvider =
     StreamProvider.family<List<PendingCapture>, String>((ref, ledgerId) {
-  return ref.watch(databaseProvider).watchPendingOkCaptures(ledgerId);
-});
+      return ref.watch(databaseProvider).watchPendingOkCaptures(ledgerId);
+    });
 
 /// 解析失败条数：首页用条幅入口，不和可确认项混在同一轮播里。
-final _homeParseFailedCountProvider =
-    StreamProvider.family<int, String>((ref, ledgerId) {
+final _homeParseFailedCountProvider = StreamProvider.family<int, String>((
+  ref,
+  ledgerId,
+) {
   return ref
       .watch(databaseProvider)
       .watchParseFailedCaptures(ledgerId)
       .map((rows) => rows.length);
 });
 
-final _homeMonthBudgetsProvider =
-    StreamProvider.family<List<Budget>, String>((ref, ledgerId) {
+final _homeMonthBudgetsProvider = StreamProvider.family<List<Budget>, String>((
+  ref,
+  ledgerId,
+) {
   return ref
       .watch(databaseProvider)
       .watchBudgetsForMonth(ledgerId, budgetYearMonth());
 });
 
-final _homeBudgetProgressProvider = FutureProvider.family<
-    MonthBudgetProgress,
-    ({String ledgerId, String base})>((ref, args) async {
-  await ref.watch(fxBookProvider.future);
-  await ref.watch(txnWriteSignalProvider(args.ledgerId).future);
-  await ref.watch(_homeMonthBudgetsProvider(args.ledgerId).future);
-  return ref.watch(databaseProvider).monthBudgetProgress(
-        args.ledgerId,
-        budgetYearMonth(),
-        args.base,
-      );
-});
+final _homeBudgetProgressProvider =
+    FutureProvider.family<
+      MonthBudgetProgress,
+      ({String ledgerId, String base})
+    >((ref, args) async {
+      await ref.watch(fxBookProvider.future);
+      await ref.watch(txnWriteSignalProvider(args.ledgerId).future);
+      await ref.watch(_homeMonthBudgetsProvider(args.ledgerId).future);
+      return ref
+          .watch(databaseProvider)
+          .monthBudgetProgress(args.ledgerId, budgetYearMonth(), args.base);
+    });
 
 final homeRangeProvider = StateProvider<DateRangeWindow>((ref) {
   return DateRangeWindow.lastDays(days: 30);
@@ -201,401 +205,386 @@ class _HomePageState extends ConsumerState<HomePage> {
     final lockOn = ref.watch(appLockEnabledProvider).valueOrNull ?? false;
     final range = ref.watch(homeRangeProvider);
     final scheme = Theme.of(context).colorScheme;
-    final dark = Theme.of(context).brightness == Brightness.dark;
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: DecoratedBox(
-        decoration: CentliTheme.scaffoldGradient(dark: dark),
-        child: SafeArea(
-          bottom: false,
-          child: ledgerAsync.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => CentliErrorState(error: e, compact: true),
-            data: (ledger) {
-              if (ledger == null) {
-                return const Center(child: Text('尚未初始化记账本'));
-              }
-              final ledgerId = ledger.id;
-              final base = ledger.baseCurrency;
-              final args = (
+    return CentliGradientScaffold(
+      body: SafeArea(
+        bottom: false,
+        child: ledgerAsync.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (e, _) => CentliErrorState(error: e, compact: true),
+          data: (ledger) {
+            if (ledger == null) {
+              return const Center(child: Text('尚未初始化记账本'));
+            }
+            final ledgerId = ledger.id;
+            final base = ledger.baseCurrency;
+            final args = (
+              ledgerId: ledgerId,
+              key: range.key,
+              startMs: range.startMs,
+              endMs: range.endMs,
+            );
+            final baseArgs = (
+              ledgerId: ledgerId,
+              key: range.key,
+              startMs: range.startMs,
+              endMs: range.endMs,
+              base: base,
+            );
+            final summary = ref.watch(_rangeBaseProvider(baseArgs));
+            final recent = ref.watch(_rangeTxProvider(args));
+            final nw = ref.watch(
+              _netWorthHomeProvider((ledgerId: ledgerId, base: base)),
+            );
+            final homeAccounts =
+                ref.watch(_homeAccountsProvider(ledgerId)).valueOrNull ??
+                const <Account>[];
+            final homeBalances =
+                ref.watch(_homeBalancesProvider(ledgerId)).valueOrNull ??
+                const <String, int>{};
+            final fxBook = ref.watch(fxBookProvider).valueOrNull;
+            final alSplit = fxBook == null
+                ? null
+                : assetLiabilityInBase(
+                    accounts: [
+                      for (final a in homeAccounts)
+                        (
+                          currency: a.currency,
+                          balanceMinor:
+                              homeBalances[a.id] ?? a.openingBalanceMinor,
+                        ),
+                    ],
+                    book: fxBook,
+                    baseCurrency: base,
+                    onDay: FxBook.todayLocal(),
+                  );
+            final expenseSeries = ref.watch(_dailyExpenseProvider(baseArgs));
+            final incomeSeries = ref.watch(_dailyIncomeProvider(baseArgs));
+            final nowLocal = DateTime.now();
+            final calMonth =
+                _calendarMonth ?? DateTime(nowLocal.year, nowLocal.month);
+            final calRange = DateRangeWindow.forMonth(
+              calMonth.year,
+              calMonth.month,
+            );
+            final calArgs = (
+              ledgerId: ledgerId,
+              key: calRange.key,
+              startMs: calRange.startMs,
+              endMs: calRange.endMs,
+            );
+            final calBaseArgs = (
+              ledgerId: ledgerId,
+              key: calRange.key,
+              startMs: calRange.startMs,
+              endMs: calRange.endMs,
+              base: base,
+            );
+            // 概览模式不订阅日历月的流水，避免和所选区间各扫一遍。
+            final calExpenseSeries = _mode == 1
+                ? ref.watch(_dailyExpenseProvider(calBaseArgs))
+                : AsyncValue<List<({DateTime dayLocal, int totalMinor})>>.data(
+                    const [],
+                  );
+            final calIncomeSeries = _mode == 1
+                ? ref.watch(_dailyIncomeProvider(calBaseArgs))
+                : AsyncValue<List<({DateTime dayLocal, int totalMinor})>>.data(
+                    const [],
+                  );
+            final calRecent = _mode == 1
+                ? ref.watch(_rangeTxProvider(calArgs))
+                : const AsyncValue<List<Transaction>>.data([]);
+            final lifetime = ref.watch(
+              _lifetimeTotalsProvider((ledgerId: ledgerId, base: base)),
+            );
+            final nowMonth = DateRangeWindow.forMonth(
+              nowLocal.year,
+              nowLocal.month,
+            );
+            final monthSummary = ref.watch(
+              _rangeBaseProvider((
                 ledgerId: ledgerId,
-                key: range.key,
-                startMs: range.startMs,
-                endMs: range.endMs,
-              );
-              final baseArgs = (
-                ledgerId: ledgerId,
-                key: range.key,
-                startMs: range.startMs,
-                endMs: range.endMs,
+                key: nowMonth.key,
+                startMs: nowMonth.startMs,
+                endMs: nowMonth.endMs,
                 base: base,
-              );
-              final summary = ref.watch(_rangeBaseProvider(baseArgs));
-              final recent = ref.watch(_rangeTxProvider(args));
-              final nw = ref.watch(
-                _netWorthHomeProvider((ledgerId: ledgerId, base: base)),
-              );
-              final homeAccounts =
-                  ref.watch(_homeAccountsProvider(ledgerId)).valueOrNull ??
-                  const <Account>[];
-              final homeBalances =
-                  ref.watch(_homeBalancesProvider(ledgerId)).valueOrNull ??
-                  const <String, int>{};
-              final fxBook = ref.watch(fxBookProvider).valueOrNull;
-              final alSplit = fxBook == null
-                  ? null
-                  : assetLiabilityInBase(
-                      accounts: [
-                        for (final a in homeAccounts)
-                          (
-                            currency: a.currency,
-                            balanceMinor:
-                                homeBalances[a.id] ?? a.openingBalanceMinor,
+              )),
+            );
+
+            // 待确认 / 解析失败：都为 0 时整块（含间距）不渲染，
+            // 保证概览卡→图表与图表→账单的间距完全一致。
+            final pendingOk =
+                ref.watch(_homePendingOkProvider(ledgerId)).valueOrNull ??
+                const <PendingCapture>[];
+            final parseFailedCount =
+                ref
+                    .watch(_homeParseFailedCountProvider(ledgerId))
+                    .valueOrNull ??
+                0;
+            final budgetProgress = ref.watch(
+              _homeBudgetProgressProvider((ledgerId: ledgerId, base: base)),
+            );
+
+            return Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
+                  child: Row(
+                    children: [
+                      InkWell(
+                        onTap: () => context.push('/me/ledgers'),
+                        borderRadius: BorderRadius.circular(8),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 4,
+                            horizontal: 2,
                           ),
-                      ],
-                      book: fxBook,
-                      baseCurrency: base,
-                      onDay: FxBook.todayLocal(),
-                    );
-              final expenseSeries = ref.watch(_dailyExpenseProvider(baseArgs));
-              final incomeSeries = ref.watch(_dailyIncomeProvider(baseArgs));
-              final nowLocal = DateTime.now();
-              final calMonth =
-                  _calendarMonth ?? DateTime(nowLocal.year, nowLocal.month);
-              final calRange = DateRangeWindow.forMonth(
-                calMonth.year,
-                calMonth.month,
-              );
-              final calArgs = (
-                ledgerId: ledgerId,
-                key: calRange.key,
-                startMs: calRange.startMs,
-                endMs: calRange.endMs,
-              );
-              final calBaseArgs = (
-                ledgerId: ledgerId,
-                key: calRange.key,
-                startMs: calRange.startMs,
-                endMs: calRange.endMs,
-                base: base,
-              );
-              // 概览模式不订阅日历月的流水，避免和所选区间各扫一遍。
-              final calExpenseSeries = _mode == 1
-                  ? ref.watch(_dailyExpenseProvider(calBaseArgs))
-                  : AsyncValue<
-                      List<({DateTime dayLocal, int totalMinor})>
-                    >.data(const []);
-              final calIncomeSeries = _mode == 1
-                  ? ref.watch(_dailyIncomeProvider(calBaseArgs))
-                  : AsyncValue<
-                      List<({DateTime dayLocal, int totalMinor})>
-                    >.data(const []);
-              final calRecent = _mode == 1
-                  ? ref.watch(_rangeTxProvider(calArgs))
-                  : const AsyncValue<List<Transaction>>.data([]);
-              final lifetime = ref.watch(
-                _lifetimeTotalsProvider((ledgerId: ledgerId, base: base)),
-              );
-              final nowMonth = DateRangeWindow.forMonth(
-                nowLocal.year,
-                nowLocal.month,
-              );
-              final monthSummary = ref.watch(
-                _rangeBaseProvider((
-                  ledgerId: ledgerId,
-                  key: nowMonth.key,
-                  startMs: nowMonth.startMs,
-                  endMs: nowMonth.endMs,
-                  base: base,
-                )),
-              );
-
-              // 待确认 / 解析失败：都为 0 时整块（含间距）不渲染，
-              // 保证概览卡→图表与图表→账单的间距完全一致。
-              final pendingOk =
-                  ref.watch(_homePendingOkProvider(ledgerId)).valueOrNull ??
-                      const <PendingCapture>[];
-              final parseFailedCount =
-                  ref.watch(_homeParseFailedCountProvider(ledgerId))
-                          .valueOrNull ??
-                      0;
-              final budgetProgress = ref.watch(
-                _homeBudgetProgressProvider((ledgerId: ledgerId, base: base)),
-              );
-
-              return Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                ledger.name,
+                                style: Theme.of(context).textTheme.titleLarge,
+                              ),
+                              const SizedBox(width: 4),
+                              Icon(
+                                Icons.unfold_more,
+                                size: 20,
+                                color: scheme.onSurfaceVariant,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        tooltip: '截图记账',
+                        onPressed: () =>
+                            importCaptureFromScreenshot(context, ref),
+                        icon: const Icon(Icons.document_scanner_outlined),
+                      ),
+                      IconButton(
+                        tooltip: '搜索账单',
+                        onPressed: () => context.push('/home/search'),
+                        icon: const Icon(Icons.search_rounded),
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  // 底部留白收窄：净资产卡片稍微上移。
+                  padding: const EdgeInsets.fromLTRB(
+                    CentliSpacing.pageH,
+                    CentliSpacing.item,
+                    CentliSpacing.pageH,
+                    CentliSpacing.dense,
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: scheme.surfaceContainerHighest.withValues(
+                        alpha: 0.55,
+                      ),
+                      borderRadius: BorderRadius.circular(22),
+                    ),
                     child: Row(
                       children: [
-                        InkWell(
-                          onTap: () => context.push('/me/ledgers'),
-                          borderRadius: BorderRadius.circular(8),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              vertical: 4,
-                              horizontal: 2,
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  ledger.name,
-                                  style: Theme.of(context).textTheme.titleLarge,
+                        Expanded(
+                          child: _ModeTab(
+                            label: '概览',
+                            selected: _mode == 0,
+                            onTap: () => setState(() {
+                              _mode = 0;
+                            }),
+                          ),
+                        ),
+                        Expanded(
+                          child: _ModeTab(
+                            label: '日历',
+                            selected: _mode == 1,
+                            onTap: () {
+                              final now = DateTime.now();
+                              setState(() {
+                                _mode = 1;
+                                _calendarDay = null;
+                                _calendarMonth ??= DateTime(
+                                  now.year,
+                                  now.month,
+                                );
+                              });
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: RefreshIndicator(
+                    onRefresh: () async {
+                      ref.invalidate(_rangeBaseProvider(baseArgs));
+                      ref.invalidate(_dailyExpenseProvider(baseArgs));
+                      ref.invalidate(_dailyIncomeProvider(baseArgs));
+                      ref.invalidate(currentLedgerProvider);
+                      ref.invalidate(
+                        _netWorthHomeProvider((ledgerId: ledgerId, base: base)),
+                      );
+                    },
+                    child: ListView(
+                      key: ValueKey(_mode),
+                      padding: const EdgeInsets.fromLTRB(
+                        CentliSpacing.pageH,
+                        0,
+                        CentliSpacing.pageH,
+                        CentliSpacing.pageBottomNav,
+                      ),
+                      children: [
+                        if (_mode == 0) ...[
+                          _LedgerSummaryCard(
+                            ledgerName: ledger.name,
+                            base: base,
+                            hide: hide,
+                            // 不开资产锁就不显示眼睛：没东西可藏。
+                            showAmountEye: lockOn,
+                            onToggleAmountVisibility: () =>
+                                _toggleHomeAmountVisibility(
+                                  context,
+                                  ref,
+                                  currentlyHidden: hide,
                                 ),
-                                const SizedBox(width: 4),
-                                Icon(
-                                  Icons.unfold_more,
-                                  size: 20,
-                                  color: scheme.onSurfaceVariant,
+                            range: range,
+                            netWorth: nw,
+                            summary: summary,
+                            assetLiability: alSplit,
+                            lifetime: lifetime,
+                            monthSummary: monthSummary,
+                            budgetProgress: budgetProgress,
+                          ),
+                          // 待确认 / 解析失败都空时「间距 + 卡片」整体不出现，
+                          // 概览卡到图表的距离才和图表到账单的一致。
+                          if (pendingOk.isNotEmpty || parseFailedCount > 0) ...[
+                            const SizedBox(height: CentliSpacing.sectionLoose),
+                            _HomePendingSection(
+                              okItems: pendingOk,
+                              parseFailedCount: parseFailedCount,
+                              hide: hide,
+                            ),
+                          ],
+                          const SizedBox(height: CentliSpacing.sectionLoose),
+                          _NetChangeChartCard(
+                            ledgerId: ledgerId,
+                            base: base,
+                            hide: hide,
+                            incomeSeries: incomeSeries,
+                            expenseSeries: expenseSeries,
+                            netWorth: nw,
+                          ),
+                          const SizedBox(height: CentliSpacing.sectionLoose),
+                          CentliSoftCard(
+                            padding: const EdgeInsets.all(
+                              CentliSpacing.cardPad,
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                DateRangeControl(
+                                  range: range,
+                                  onChanged: (next) {
+                                    ref.read(homeRangeProvider.notifier).state =
+                                        next;
+                                  },
+                                ),
+                                recent.when(
+                                  loading: () => const Padding(
+                                    padding: EdgeInsets.all(24),
+                                    child: Center(
+                                      child: CircularProgressIndicator(),
+                                    ),
+                                  ),
+                                  error: (e, _) =>
+                                      CentliErrorState(error: e, compact: true),
+                                  data: (txns) {
+                                    if (txns.isEmpty) {
+                                      return Padding(
+                                        padding: const EdgeInsets.all(24),
+                                        child: Column(
+                                          children: [
+                                            Icon(
+                                              Icons.receipt_long_outlined,
+                                              size: 40,
+                                              color: scheme.outline,
+                                            ),
+                                            const SizedBox(
+                                              height: CentliSpacing.item,
+                                            ),
+                                            Text(
+                                              '暂无账单',
+                                              style: TextStyle(
+                                                color: scheme.onSurfaceVariant,
+                                              ),
+                                            ),
+                                            const SizedBox(
+                                              height: CentliSpacing.dense,
+                                            ),
+                                            Text(
+                                              '建议先到「资产」建好资产账户，再点底部「记一笔」',
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .bodySmall,
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    }
+                                    return TxnGroupedSection(
+                                      txns: txns,
+                                      hide: hide,
+                                    );
+                                  },
                                 ),
                               ],
                             ),
                           ),
-                        ),
-                        const Spacer(),
-                        IconButton(
-                          tooltip: '截图记账',
-                          onPressed: () =>
-                              importCaptureFromScreenshot(context, ref),
-                          icon: const Icon(Icons.document_scanner_outlined),
-                        ),
-                        IconButton(
-                          tooltip: '搜索账单',
-                          onPressed: () => context.push('/home/search'),
-                          icon: const Icon(Icons.search_rounded),
-                        ),
+                        ] else ...[
+                          _CalendarCard(
+                            month: calMonth,
+                            hide: hide,
+                            base: base,
+                            selectedDay: _calendarDay,
+                            incomeSeries: calIncomeSeries,
+                            expenseSeries: calExpenseSeries,
+                            onMonthChanged: (m) {
+                              setState(() {
+                                _calendarMonth = m;
+                                _calendarDay = null;
+                              });
+                            },
+                            onSelectDay: (d) {
+                              setState(() => _calendarDay = d);
+                              _openCalendarDaySheet(
+                                day: d,
+                                hide: hide,
+                                base: base,
+                                monthTxns: calRecent,
+                              );
+                            },
+                          ),
+                          const SizedBox(height: CentliSpacing.section),
+                          _DailyTrendCard(
+                            month: calMonth,
+                            base: base,
+                            hide: hide,
+                            expenseSeries: calExpenseSeries,
+                            incomeSeries: calIncomeSeries,
+                          ),
+                        ],
                       ],
                     ),
                   ),
-                  Padding(
-                    // 底部留白收窄：净资产卡片稍微上移。
-                    padding: const EdgeInsets.fromLTRB(
-                      CentliSpacing.pageH,
-                      CentliSpacing.item,
-                      CentliSpacing.pageH,
-                      CentliSpacing.dense,
-                    ),
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: scheme.surfaceContainerHighest.withValues(
-                          alpha: 0.55,
-                        ),
-                        borderRadius: BorderRadius.circular(22),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: _ModeTab(
-                              label: '概览',
-                              selected: _mode == 0,
-                              onTap: () => setState(() {
-                                _mode = 0;
-                              }),
-                            ),
-                          ),
-                          Expanded(
-                            child: _ModeTab(
-                              label: '日历',
-                              selected: _mode == 1,
-                              onTap: () {
-                                final now = DateTime.now();
-                                setState(() {
-                                  _mode = 1;
-                                  _calendarDay = null;
-                                  _calendarMonth ??= DateTime(
-                                    now.year,
-                                    now.month,
-                                  );
-                                });
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: RefreshIndicator(
-                      onRefresh: () async {
-                        ref.invalidate(_rangeBaseProvider(baseArgs));
-                        ref.invalidate(_dailyExpenseProvider(baseArgs));
-                        ref.invalidate(_dailyIncomeProvider(baseArgs));
-                        ref.invalidate(currentLedgerProvider);
-                        ref.invalidate(
-                          _netWorthHomeProvider((
-                            ledgerId: ledgerId,
-                            base: base,
-                          )),
-                        );
-                      },
-                      child: ListView(
-                        key: ValueKey(_mode),
-                        padding: const EdgeInsets.fromLTRB(
-                          CentliSpacing.pageH,
-                          0,
-                          CentliSpacing.pageH,
-                          CentliSpacing.pageBottomNav,
-                        ),
-                        children: [
-                          if (_mode == 0) ...[
-                            _LedgerSummaryCard(
-                              ledgerName: ledger.name,
-                              base: base,
-                              hide: hide,
-                              // 不开资产锁就不显示眼睛：没东西可藏。
-                              showAmountEye: lockOn,
-                              onToggleAmountVisibility: () =>
-                                  _toggleHomeAmountVisibility(
-                                context,
-                                ref,
-                                currentlyHidden: hide,
-                              ),
-                              range: range,
-                              netWorth: nw,
-                              summary: summary,
-                              assetLiability: alSplit,
-                              lifetime: lifetime,
-                              monthSummary: monthSummary,
-                              budgetProgress: budgetProgress,
-                            ),
-                            // 待确认 / 解析失败都空时「间距 + 卡片」整体不出现，
-                            // 概览卡到图表的距离才和图表到账单的一致。
-                            if (pendingOk.isNotEmpty ||
-                                parseFailedCount > 0) ...[
-                              const SizedBox(
-                                height: CentliSpacing.sectionLoose,
-                              ),
-                              _HomePendingSection(
-                                okItems: pendingOk,
-                                parseFailedCount: parseFailedCount,
-                                hide: hide,
-                              ),
-                            ],
-                            const SizedBox(height: CentliSpacing.sectionLoose),
-                            _NetChangeChartCard(
-                              ledgerId: ledgerId,
-                              base: base,
-                              hide: hide,
-                              incomeSeries: incomeSeries,
-                              expenseSeries: expenseSeries,
-                              netWorth: nw,
-                            ),
-                            const SizedBox(height: CentliSpacing.sectionLoose),
-                            CentliSoftCard(
-                              padding: const EdgeInsets.all(
-                                CentliSpacing.cardPad,
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  DateRangeControl(
-                                    range: range,
-                                    onChanged: (next) {
-                                      ref
-                                              .read(homeRangeProvider.notifier)
-                                              .state =
-                                          next;
-                                    },
-                                  ),
-                                  recent.when(
-                                    loading: () => const Padding(
-                                      padding: EdgeInsets.all(24),
-                                      child: Center(
-                                        child: CircularProgressIndicator(),
-                                      ),
-                                    ),
-                                    error: (e, _) => CentliErrorState(
-                                      error: e,
-                                      compact: true,
-                                    ),
-                                    data: (txns) {
-                                      if (txns.isEmpty) {
-                                        return Padding(
-                                          padding: const EdgeInsets.all(24),
-                                          child: Column(
-                                            children: [
-                                              Icon(
-                                                Icons.receipt_long_outlined,
-                                                size: 40,
-                                                color: scheme.outline,
-                                              ),
-                                              const SizedBox(
-                                                height: CentliSpacing.item,
-                                              ),
-                                              Text(
-                                                '暂无账单',
-                                                style: TextStyle(
-                                                  color:
-                                                      scheme.onSurfaceVariant,
-                                                ),
-                                              ),
-                                              const SizedBox(
-                                                height: CentliSpacing.dense,
-                                              ),
-                                              Text(
-                                                '建议先到「资产」建好资产账户，再点底部「记一笔」',
-                                                style: Theme.of(context)
-                                                    .textTheme
-                                                    .bodySmall,
-                                              ),
-                                            ],
-                                          ),
-                                        );
-                                      }
-                                      return TxnGroupedSection(
-                                        txns: txns,
-                                        hide: hide,
-                                      );
-                                    },
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ] else ...[
-                            _CalendarCard(
-                              month: calMonth,
-                              hide: hide,
-                              base: base,
-                              selectedDay: _calendarDay,
-                              incomeSeries: calIncomeSeries,
-                              expenseSeries: calExpenseSeries,
-                              onMonthChanged: (m) {
-                                setState(() {
-                                  _calendarMonth = m;
-                                  _calendarDay = null;
-                                });
-                              },
-                              onSelectDay: (d) {
-                                setState(() => _calendarDay = d);
-                                _openCalendarDaySheet(
-                                  day: d,
-                                  hide: hide,
-                                  base: base,
-                                  monthTxns: calRecent,
-                                );
-                              },
-                            ),
-                            const SizedBox(height: CentliSpacing.section),
-                            _DailyTrendCard(
-                              month: calMonth,
-                              base: base,
-                              hide: hide,
-                              expenseSeries: calExpenseSeries,
-                              incomeSeries: calIncomeSeries,
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -1124,8 +1113,8 @@ class _HomeBudgetStrip extends StatelessWidget {
     final barColor = over
         ? scheme.error
         : ratio >= 0.8
-            ? scheme.tertiary
-            : scheme.primary;
+        ? scheme.tertiary
+        : scheme.primary;
     final remainLabel = over
         ? '超支 ${formatMinor(base, -remain, hide: hide)}'
         : '剩余 ${formatMinor(base, remain, hide: hide)}';
@@ -1835,8 +1824,7 @@ class _HomePendingSectionState extends ConsumerState<_HomePendingSection> {
               borderRadius: BorderRadius.circular(12),
               clipBehavior: Clip.antiAlias,
               child: InkWell(
-                onTap: () =>
-                    context.push('/home/pending?tab=parse_failed'),
+                onTap: () => context.push('/home/pending?tab=parse_failed'),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 12,
@@ -1865,21 +1853,17 @@ class _HomePendingSectionState extends ConsumerState<_HomePendingSection> {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              onlyFailed
-                                  ? '通知里没认出金额，点此补全或忽略'
-                                  : '未认出金额，点此补全或忽略',
+                              onlyFailed ? '通知里没认出金额，点此补全或忽略' : '未认出金额，点此补全或忽略',
                               style: theme.textTheme.bodySmall?.copyWith(
-                                color: scheme.onErrorContainer
-                                    .withValues(alpha: 0.85),
+                                color: scheme.onErrorContainer.withValues(
+                                  alpha: 0.85,
+                                ),
                               ),
                             ),
                           ],
                         ),
                       ),
-                      Icon(
-                        Icons.chevron_right,
-                        color: scheme.onErrorContainer,
-                      ),
+                      Icon(Icons.chevron_right, color: scheme.onErrorContainer),
                     ],
                   ),
                 ),

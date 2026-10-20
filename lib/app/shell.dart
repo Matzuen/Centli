@@ -15,7 +15,11 @@ class AppShell extends ConsumerWidget {
 
   static const _tabs = [
     (icon: Icons.home_outlined, selected: Icons.home_rounded, label: '首页'),
-    (icon: Icons.bar_chart_outlined, selected: Icons.bar_chart_rounded, label: '统计'),
+    (
+      icon: Icons.bar_chart_outlined,
+      selected: Icons.bar_chart_rounded,
+      label: '统计',
+    ),
     (icon: Icons.add_circle_outline, selected: Icons.add_circle, label: '记一笔'),
     (
       icon: Icons.account_balance_wallet_outlined,
@@ -39,12 +43,8 @@ class AppShell extends ConsumerWidget {
         ? 0
         : navigationShell.currentIndex;
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: DecoratedBox(
-        decoration: CentliTheme.scaffoldGradient(dark: dark),
-        child: navigationShell,
-      ),
+    return CentliGradientScaffold(
+      body: navigationShell,
       bottomNavigationBar: DecoratedBox(
         decoration: BoxDecoration(
           color: dark

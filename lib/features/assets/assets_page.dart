@@ -38,13 +38,14 @@ final _balancesProvider = StreamProvider.family<Map<String, int>, String>((
   return ref.watch(databaseProvider).watchAccountBalances(ledgerId);
 });
 
-final _assetTypesProvider =
-    StreamProvider.family<List<AssetType>, String>((ref, ledgerId) {
+final _assetTypesProvider = StreamProvider.family<List<AssetType>, String>((
+  ref,
+  ledgerId,
+) {
   return ref
       .watch(databaseProvider)
       .watchAssetTypes(ledgerId, includeArchived: true);
 });
-
 
 /// Test-only public alias for assets net-worth provider (G22 consistency).
 @visibleForTesting
@@ -72,308 +73,290 @@ class AssetsPage extends ConsumerStatefulWidget {
 
 /// 环形图配色（资产分析按类型着色）。
 const kAssetsDonutColors = <Color>[
-
-    Color(0xFFE53935),
-    Color(0xFF26A69A),
-    Color(0xFFFBC02D),
-    Color(0xFFFF8A65),
-    Color(0xFF7E57C2),
-    Color(0xFF42A5F5),
-    Color(0xFF66BB6A),
-    Color(0xFFAB47BC),
-  ];
+  Color(0xFFE53935),
+  Color(0xFF26A69A),
+  Color(0xFFFBC02D),
+  Color(0xFFFF8A65),
+  Color(0xFF7E57C2),
+  Color(0xFF42A5F5),
+  Color(0xFF66BB6A),
+  Color(0xFFAB47BC),
+];
 
 class _AssetsPageState extends ConsumerState<AssetsPage> {
   bool _showArchived = false;
-
-
 
   @override
   Widget build(BuildContext context) {
     final ledgerAsync = ref.watch(currentLedgerProvider);
     final hide = ref.watch(hideAmountProvider);
-    final dark = Theme.of(context).brightness == Brightness.dark;
     final scheme = Theme.of(context).colorScheme;
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: DecoratedBox(
-        decoration: CentliTheme.scaffoldGradient(dark: dark),
-        child: SafeArea(
-          bottom: false,
-          child: ledgerAsync.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => CentliErrorState(error: e, compact: true),
-            data: (ledger) {
-              if (ledger == null) {
-                return const Center(child: Text('尚未初始化记账本'));
-              }
-              final ledgerId = ledger.id;
-              final base = ledger.baseCurrency;
-              final activeAccountsAsync = ref.watch(_accountsProvider(ledgerId));
-              final accountsAsync = _showArchived
-                  ? ref.watch(_archivedAccountsProvider(ledgerId))
-                  : activeAccountsAsync;
-              final balancesAsync = ref.watch(_balancesProvider(ledgerId));
-              final typesAsync = ref.watch(_assetTypesProvider(ledgerId));
-              return accountsAsync.when(
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (e, _) => CentliErrorState(error: e, compact: true),
-                data: (accounts) {
-                  final balances = balancesAsync.valueOrNull ?? {};
-                  final nwArgs = (ledgerId: ledgerId, base: base);
-                  // Always show net-worth card (active accounts); avoid empty gap in archive tab.
-                  final netWorthAsync = ref.watch(_netWorthBaseProvider(nwArgs));
-                  final cardAccounts =
-                      activeAccountsAsync.valueOrNull ?? const <Account>[];
+    return CentliGradientScaffold(
+      body: SafeArea(
+        bottom: false,
+        child: ledgerAsync.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (e, _) => CentliErrorState(error: e, compact: true),
+          data: (ledger) {
+            if (ledger == null) {
+              return const Center(child: Text('尚未初始化记账本'));
+            }
+            final ledgerId = ledger.id;
+            final base = ledger.baseCurrency;
+            final activeAccountsAsync = ref.watch(_accountsProvider(ledgerId));
+            final accountsAsync = _showArchived
+                ? ref.watch(_archivedAccountsProvider(ledgerId))
+                : activeAccountsAsync;
+            final balancesAsync = ref.watch(_balancesProvider(ledgerId));
+            final typesAsync = ref.watch(_assetTypesProvider(ledgerId));
+            return accountsAsync.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (e, _) => CentliErrorState(error: e, compact: true),
+              data: (accounts) {
+                final balances = balancesAsync.valueOrNull ?? {};
+                final nwArgs = (ledgerId: ledgerId, base: base);
+                // Always show net-worth card (active accounts); avoid empty gap in archive tab.
+                final netWorthAsync = ref.watch(_netWorthBaseProvider(nwArgs));
+                final cardAccounts =
+                    activeAccountsAsync.valueOrNull ?? const <Account>[];
 
-                  return ListView(
-                    padding: CentliSpacing.pagePaddingNav,
-                    children: [
-                      Row(
-                        children: [
-                          Text(
-                            '资产',
-                            style: Theme.of(context).textTheme.headlineSmall
-                                ?.copyWith(fontWeight: FontWeight.w800),
+                return ListView(
+                  padding: CentliSpacing.pagePaddingNav,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          '资产',
+                          style: Theme.of(context).textTheme.headlineSmall
+                              ?.copyWith(fontWeight: FontWeight.w800),
+                        ),
+                        const Spacer(),
+                        if (!_showArchived) ...[
+                          IconButton(
+                            tooltip: '截图识别资产',
+                            onPressed: () async {
+                              await importAssetBalancesFromScreenshot(
+                                context,
+                                ref,
+                                ledgerId: ledger.id,
+                                baseCurrency: base,
+                              );
+                            },
+                            icon: const Icon(Icons.document_scanner_outlined),
                           ),
-                          const Spacer(),
-                          if (!_showArchived) ...[
-                            IconButton(
-                              tooltip: '截图识别资产',
-                              onPressed: () async {
-                                await importAssetBalancesFromScreenshot(
-                                  context,
-                                  ref,
-                                  ledgerId: ledger.id,
-                                  baseCurrency: base,
-                                );
-                              },
-                              icon: const Icon(Icons.document_scanner_outlined),
+                          IconButton(
+                            tooltip: '资产分类',
+                            onPressed: () => context.push('/assets/types'),
+                            icon: const Icon(Icons.category_outlined),
+                          ),
+                          IconButton(
+                            tooltip: '新建资产账户',
+                            onPressed: () async {
+                              await showAccountEditor(
+                                context,
+                                ref,
+                                ledgerId: ledger.id,
+                              );
+                            },
+                            icon: const Icon(Icons.add_rounded),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: CentliSpacing.item),
+                    Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: scheme.surfaceContainerHighest.withValues(
+                          alpha: 0.55,
+                        ),
+                        borderRadius: BorderRadius.circular(22),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: _Seg(
+                              label: '使用中',
+                              selected: !_showArchived,
+                              onTap: () =>
+                                  setState(() => _showArchived = false),
                             ),
-                            IconButton(
-                              tooltip: '资产分类',
-                              onPressed: () => context.push('/assets/types'),
-                              icon: const Icon(Icons.category_outlined),
+                          ),
+                          Expanded(
+                            child: _Seg(
+                              label: '已归档',
+                              selected: _showArchived,
+                              onTap: () => setState(() => _showArchived = true),
                             ),
-                            IconButton(
-                              tooltip: '新建资产账户',
-                              onPressed: () async {
-                                await showAccountEditor(
-                                  context,
-                                  ref,
-                                  ledgerId: ledger.id,
-                                );
-                              },
-                              icon: const Icon(Icons.add_rounded),
-                            ),
-                          ],
+                          ),
                         ],
                       ),
-                      const SizedBox(height: CentliSpacing.item),
-                      Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: scheme.surfaceContainerHighest.withValues(
-                            alpha: 0.55,
-                          ),
-                          borderRadius: BorderRadius.circular(22),
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: _Seg(
-                                label: '使用中',
-                                selected: !_showArchived,
-                                onTap: () =>
-                                    setState(() => _showArchived = false),
-                              ),
-                            ),
-                            Expanded(
-                              child: _Seg(
-                                label: '已归档',
-                                selected: _showArchived,
-                                onTap: () =>
-                                    setState(() => _showArchived = true),
-                              ),
-                            ),
-                          ],
-                        ),
+                    ),
+                    const SizedBox(height: CentliSpacing.section),
+                    netWorthAsync.when(
+                      loading: () => const CentliSoftCard(
+                        padding: EdgeInsets.all(24),
+                        child: Center(child: CircularProgressIndicator()),
                       ),
-                      const SizedBox(height: CentliSpacing.section),
-                      netWorthAsync.when(
-                          loading: () => const CentliSoftCard(
-                            padding: EdgeInsets.all(24),
-                            child: Center(child: CircularProgressIndicator()),
-                          ),
-                          error: (e, _) => CentliErrorState(error: e, compact: true),
-                          data: (nw) {
-                            final net = nw.totalMinor;
-                            final book =
-                                ref.watch(fxBookProvider).valueOrNull;
-                            final day = FxBook.todayLocal();
-                            final split = book == null
-                                ? null
-                                : assetLiabilityInBase(
-                                    accounts: [
-                                      for (final a in cardAccounts)
-                                        (
-                                          currency: a.currency,
-                                          balanceMinor: balances[a.id] ??
-                                              a.openingBalanceMinor,
-                                        ),
-                                    ],
-                                    book: book,
-                                    baseCurrency: base,
-                                    onDay: day,
-                                  );
-                            final assetSum = split?.assetMinor ?? 0;
-                            final liabilitySum = split?.liabilityMinor ?? 0;
-                            // 资产分析按**资产账户类型**汇总（银行 / 线上 / 信用卡 …），
-                            // 金额折算成本位币；负余额的资产账户类型也计入，占比带负号。
-                            final typeSlices = assetTypeSlices(
-                              accounts: cardAccounts,
-                              balances: balances,
-                              types: typesAsync.valueOrNull ??
-                                  const <AssetType>[],
-                              book: book,
-                              baseCurrency: base,
-                              onDay: day,
-                            );
-                            final unconverted = nw.unconvertedByCcy;
-                            final unconvertedHint = unconverted.isEmpty
-                                ? null
-                                : '未折算：${unconverted.entries.map((e) => '${e.key} ${formatMinor(e.key, e.value, hide: hide)}').join('、')}';
-                            return Column(
-                              children: [
-                                CentliSoftCard(
-                                  padding: const EdgeInsets.fromLTRB(
-                                    18,
-                                    16,
-                                    18,
-                                    16,
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        '净资产',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .labelMedium
-                                            ?.copyWith(
-                                              color:
-                                                  scheme.onSurfaceVariant,
-                                            ),
-                                      ),
-                                      const SizedBox(height: CentliSpacing.dense),
-                                      Text(
-                                        formatMinor(base, net, hide: hide),
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .headlineMedium
-                                            ?.copyWith(
-                                              fontWeight: FontWeight.w800,
-                                            ),
-                                      ),
-                                      const SizedBox(
-                                        height: CentliSpacing.section,
-                                      ),
-                                      _AssetLiabilityLine(
-                                        assets:
-                                            '总资产  ${formatMinor(base, assetSum, hide: hide)}',
-                                        liabilities:
-                                            '总负债  ${formatMinor(base, liabilitySum, hide: hide)}',
-                                      ),
-                                      if (unconvertedHint != null) ...[
-                                        const SizedBox(
-                                          height: CentliSpacing.item,
-                                        ),
-                                        Text(
-                                          unconvertedHint,
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: scheme.onSurfaceVariant,
-                                          ),
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(height: CentliSpacing.section),
-                                if (typeSlices.isNotEmpty)
-                                  _AssetAnalysisCard(
-                                    key: const Key('assets_analysis_card'),
-                                    slices: typeSlices,
-                                    base: base,
-                                    hide: hide,
-                                  ),
-                              ],
-                            );
-                          },
-                        ),
-                      if (accounts.isEmpty)
-                        CentliSoftCard(
-                          child: CentliEmptyState(
-                            icon: _showArchived
-                                ? Icons.inventory_2_outlined
-                                : Icons.account_balance_wallet_outlined,
-                            title: _showArchived ? '暂无已归档资产账户' : '暂无资产账户',
-                            message: _showArchived
-                                ? '归档资产账户不计入总资产，可在详情中恢复。'
-                                : '先新建现金 / 银行卡 / 电子钱包等资产账户，'
-                                    '再去记收支会更清楚。也可点右上角「截图识别资产」。',
-                            padding: const EdgeInsets.all(CentliSpacing.cardPad),
-                            action: _showArchived
-                                ? null
-                                : FilledButton.tonalIcon(
-                                    key: const Key('assets_add_first'),
-                                    onPressed: () async {
-                                      await showAccountEditor(
-                                        context,
-                                        ref,
-                                        ledgerId: ledger.id,
-                                      );
-                                    },
-                                    icon: const Icon(Icons.add, size: 18),
-                                    label: const Text('新建资产账户'),
-                                  ),
-                          ),
-                        )
-                      else ...[
-                        const SizedBox(height: CentliSpacing.section),
-                        ..._groupedCards(
-                          context,
-                          accounts: accounts,
-                          types: typesAsync.valueOrNull ?? const <AssetType>[],
+                      error: (e, _) =>
+                          CentliErrorState(error: e, compact: true),
+                      data: (nw) {
+                        final net = nw.totalMinor;
+                        final book = ref.watch(fxBookProvider).valueOrNull;
+                        final day = FxBook.todayLocal();
+                        final split = book == null
+                            ? null
+                            : assetLiabilityInBase(
+                                accounts: [
+                                  for (final a in cardAccounts)
+                                    (
+                                      currency: a.currency,
+                                      balanceMinor:
+                                          balances[a.id] ??
+                                          a.openingBalanceMinor,
+                                    ),
+                                ],
+                                book: book,
+                                baseCurrency: base,
+                                onDay: day,
+                              );
+                        final assetSum = split?.assetMinor ?? 0;
+                        final liabilitySum = split?.liabilityMinor ?? 0;
+                        // 资产分析按**资产账户类型**汇总（银行 / 线上 / 信用卡 …），
+                        // 金额折算成本位币；负余额的资产账户类型也计入，占比带负号。
+                        final typeSlices = assetTypeSlices(
+                          accounts: cardAccounts,
                           balances: balances,
-                          hide: hide,
-                          base: base,
-                          book: ref.watch(fxBookProvider).valueOrNull,
+                          types: typesAsync.valueOrNull ?? const <AssetType>[],
+                          book: book,
+                          baseCurrency: base,
+                          onDay: day,
+                        );
+                        final unconverted = nw.unconvertedByCcy;
+                        final unconvertedHint = unconverted.isEmpty
+                            ? null
+                            : '未折算：${unconverted.entries.map((e) => '${e.key} ${formatMinor(e.key, e.value, hide: hide)}').join('、')}';
+                        return Column(
+                          children: [
+                            CentliSoftCard(
+                              padding: const EdgeInsets.fromLTRB(
+                                18,
+                                16,
+                                18,
+                                16,
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '净资产',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelMedium
+                                        ?.copyWith(
+                                          color: scheme.onSurfaceVariant,
+                                        ),
+                                  ),
+                                  const SizedBox(height: CentliSpacing.dense),
+                                  Text(
+                                    formatMinor(base, net, hide: hide),
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .headlineMedium
+                                        ?.copyWith(fontWeight: FontWeight.w800),
+                                  ),
+                                  const SizedBox(height: CentliSpacing.section),
+                                  _AssetLiabilityLine(
+                                    assets:
+                                        '总资产  ${formatMinor(base, assetSum, hide: hide)}',
+                                    liabilities:
+                                        '总负债  ${formatMinor(base, liabilitySum, hide: hide)}',
+                                  ),
+                                  if (unconvertedHint != null) ...[
+                                    const SizedBox(height: CentliSpacing.item),
+                                    Text(
+                                      unconvertedHint,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: scheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: CentliSpacing.section),
+                            if (typeSlices.isNotEmpty)
+                              _AssetAnalysisCard(
+                                key: const Key('assets_analysis_card'),
+                                slices: typeSlices,
+                                base: base,
+                                hide: hide,
+                              ),
+                          ],
+                        );
+                      },
+                    ),
+                    if (accounts.isEmpty)
+                      CentliSoftCard(
+                        child: CentliEmptyState(
+                          icon: _showArchived
+                              ? Icons.inventory_2_outlined
+                              : Icons.account_balance_wallet_outlined,
+                          title: _showArchived ? '暂无已归档资产账户' : '暂无资产账户',
+                          message: _showArchived
+                              ? '归档资产账户不计入总资产，可在详情中恢复。'
+                              : '先新建现金 / 银行卡 / 电子钱包等资产账户，'
+                                    '再去记收支会更清楚。也可点右上角「截图识别资产」。',
+                          padding: const EdgeInsets.all(CentliSpacing.cardPad),
+                          action: _showArchived
+                              ? null
+                              : FilledButton.tonalIcon(
+                                  key: const Key('assets_add_first'),
+                                  onPressed: () async {
+                                    await showAccountEditor(
+                                      context,
+                                      ref,
+                                      ledgerId: ledger.id,
+                                    );
+                                  },
+                                  icon: const Icon(Icons.add, size: 18),
+                                  label: const Text('新建资产账户'),
+                                ),
                         ),
-                      ],
-                      Padding(
-                        padding: const EdgeInsets.only(top: 16, bottom: 8),
-                        child: Text(
-                          _showArchived
-                              ? '已归档资产账户不计入总资产，可点进详情取消归档。'
-                              : '找不到资产账户？可到「已归档」查看；归档资产账户不计入总资产。',
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: scheme.onSurfaceVariant),
-                        ),
+                      )
+                    else ...[
+                      const SizedBox(height: CentliSpacing.section),
+                      ..._groupedCards(
+                        context,
+                        accounts: accounts,
+                        types: typesAsync.valueOrNull ?? const <AssetType>[],
+                        balances: balances,
+                        hide: hide,
+                        base: base,
+                        book: ref.watch(fxBookProvider).valueOrNull,
                       ),
                     ],
-                  );
-                },
-              );
-            },
-          ),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 16, bottom: 8),
+                      child: Text(
+                        _showArchived
+                            ? '已归档资产账户不计入总资产，可点进详情取消归档。'
+                            : '找不到资产账户？可到「已归档」查看；归档资产账户不计入总资产。',
+                        style: Theme.of(context).textTheme.bodySmall
+                            ?.copyWith(color: scheme.onSurfaceVariant),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            );
+          },
         ),
       ),
     );
   }
-
 
   List<Widget> _groupedCards(
     BuildContext context, {
@@ -416,10 +399,7 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
     }
 
     final out = <Widget>[];
-    final keys = [
-      ...orderedIds,
-      if (needVirtual) virtualOther,
-    ];
+    final keys = [...orderedIds, if (needVirtual) virtualOther];
     for (final key in keys) {
       final list = groups[key];
       if (list == null || list.isEmpty) continue;
@@ -456,7 +436,12 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(CentliSpacing.cardPad, CentliSpacing.cardPad, CentliSpacing.cardPad, CentliSpacing.dense),
+                  padding: const EdgeInsets.fromLTRB(
+                    CentliSpacing.cardPad,
+                    CentliSpacing.cardPad,
+                    CentliSpacing.cardPad,
+                    CentliSpacing.dense,
+                  ),
                   child: Row(
                     children: [
                       Text(
@@ -497,9 +482,7 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                           overflow: TextOverflow.ellipsis,
                         ),
                         subtitle: Text(
-                          _showArchived
-                              ? '$typeName · 已归档'
-                              : typeName,
+                          _showArchived ? '$typeName · 已归档' : typeName,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -517,8 +500,8 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                               fontWeight: FontWeight.w600,
                               color: _showArchived
                                   ? Theme.of(context)
-                                      .colorScheme
-                                      .onSurfaceVariant
+                                        .colorScheme
+                                        .onSurfaceVariant
                                   : null,
                             ),
                           ),
@@ -552,7 +535,9 @@ String assetTypePctLabel(int part, int denominator) {
   final digits = abs >= 100 ? 0 : 1;
   final body = abs.toStringAsFixed(digits);
   // Drop the trailing ".0" only when it is exactly integral.
-  final trimmed = body.endsWith('.0') ? body.substring(0, body.length - 2) : body;
+  final trimmed = body.endsWith('.0')
+      ? body.substring(0, body.length - 2)
+      : body;
   if (abs == 0) return '0%';
   final sign = p < -0.05 ? '−' : '';
   return '$sign$trimmed%';
@@ -633,10 +618,7 @@ List<AssetTypeSlice> assetTypeSlices({
 
 /// 净资产卡片底部：总资产靠左、总负债靠右，中间至少留 28。
 class _AssetLiabilityLine extends StatelessWidget {
-  const _AssetLiabilityLine({
-    required this.assets,
-    required this.liabilities,
-  });
+  const _AssetLiabilityLine({required this.assets, required this.liabilities});
 
   final String assets;
   final String liabilities;
@@ -660,8 +642,10 @@ class _AssetLiabilityLine extends StatelessWidget {
         var leftW = leftNatural;
         var rightW = rightNatural;
         if (spare < _minGap) {
-          final budget =
-              (constraints.maxWidth - _minGap).clamp(0.0, double.infinity);
+          final budget = (constraints.maxWidth - _minGap).clamp(
+            0.0,
+            double.infinity,
+          );
           final sum = leftNatural + rightNatural;
           if (sum > budget && sum > 0) {
             leftW = leftNatural * budget / sum;
@@ -816,10 +800,7 @@ class _AssetAnalysisCardState extends State<_AssetAnalysisCard> {
                     ),
                     const SizedBox(width: 16),
                     Expanded(
-                      child: _AssetsLegend(
-                        slices: slices,
-                        colors: colors,
-                      ),
+                      child: _AssetsLegend(slices: slices, colors: colors),
                     ),
                   ],
                 ),
@@ -909,7 +890,8 @@ class _AssetsDonut extends StatelessWidget {
             centerSpaceRadius: 42,
             pieTouchData: PieTouchData(
               touchCallback: (event, response) {
-                final released = event is FlTapUpEvent ||
+                final released =
+                    event is FlTapUpEvent ||
                     event is FlTapCancelEvent ||
                     event is FlPanEndEvent ||
                     event is FlPanCancelEvent ||
@@ -965,10 +947,7 @@ class _AssetsDonut extends StatelessWidget {
 }
 
 class _AssetsLegend extends StatelessWidget {
-  const _AssetsLegend({
-    required this.slices,
-    required this.colors,
-  });
+  const _AssetsLegend({required this.slices, required this.colors});
 
   final List<AssetTypeSlice> slices;
   final List<Color> colors;
@@ -1110,16 +1089,21 @@ Future<void> showAccountEditor(
   final currentBalanceMinor = existing == null
       ? 0
       : (await db.accountBalances(existing.ledgerId))[existing.id] ??
-          existing.openingBalanceMinor;
+            existing.openingBalanceMinor;
   final balanceCtrl = TextEditingController(
     text: existing == null
         ? '0'
-        : fromMinor(currency0!, currentBalanceMinor)
-            .toStringAsFixed(currencyDecimals[currency0] ?? 2),
+        : fromMinor(
+            currency0!,
+            currentBalanceMinor,
+          ).toStringAsFixed(currencyDecimals[currency0] ?? 2),
   );
   var currency = existing?.currency ?? 'CNY';
   final allTypes = await db.loadAssetTypes(ledgerId, includeArchived: true);
-  final activeTypes = [for (final t in allTypes) if (t.archived == 0) t];
+  final activeTypes = [
+    for (final t in allTypes)
+      if (t.archived == 0) t,
+  ];
   String type;
   if (existing != null) {
     type = existing.type;
@@ -1133,8 +1117,7 @@ Future<void> showAccountEditor(
   // Dropdown: active types + current value if archived
   final dropdownTypes = <AssetType>[
     ...activeTypes,
-    if (existing != null &&
-        !activeTypes.any((t) => t.id == existing.type))
+    if (existing != null && !activeTypes.any((t) => t.id == existing.type))
       ...allTypes.where((t) => t.id == existing.type),
   ];
   String? iconKey = existing?.icon;
@@ -1189,7 +1172,9 @@ Future<void> showAccountEditor(
                     controller: nameCtrl,
                     decoration: const InputDecoration(
                       labelText: '名称',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.all(Radius.circular(14)),
+                      ),
                     ),
                     onChanged: (_) => setLocal(() {}),
                   ),
@@ -1210,7 +1195,9 @@ Future<void> showAccountEditor(
                         : null,
                     decoration: const InputDecoration(
                       labelText: '币种',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.all(Radius.circular(14)),
+                      ),
                       helperText: '已有资产账户币种不建议修改',
                     ),
                   ),
@@ -1219,8 +1206,8 @@ Future<void> showAccountEditor(
                     initialValue: dropdownTypes.any((t) => t.id == type)
                         ? type
                         : (dropdownTypes.isNotEmpty
-                            ? dropdownTypes.first.id
-                            : null),
+                              ? dropdownTypes.first.id
+                              : null),
                     items: [
                       for (final t in dropdownTypes)
                         DropdownMenuItem(
@@ -1236,7 +1223,9 @@ Future<void> showAccountEditor(
                     },
                     decoration: const InputDecoration(
                       labelText: '分类',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.all(Radius.circular(14)),
+                      ),
                     ),
                   ),
                   const SizedBox(height: CentliSpacing.section),
@@ -1248,13 +1237,13 @@ Future<void> showAccountEditor(
                     ),
                     decoration: InputDecoration(
                       labelText: existing == null ? '期初余额' : '当前金额',
-                      border: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
+                      border: const OutlineInputBorder(
+                        borderRadius: BorderRadius.all(Radius.circular(14)),
+                      ),
                       helperText: existing == null
-                          ? (decimals == 0
-                              ? '无小数（$currency）'
-                              : '$decimals 位小数')
+                          ? (decimals == 0 ? '无小数（$currency）' : '$decimals 位小数')
                           : '保存后会记一笔「余额校正」，把余额调整到这个数'
-                              '（不改期初，不计入统计）',
+                                '（不改期初，不计入统计）',
                       helperMaxLines: 2,
                     ),
                   ),
@@ -1325,9 +1314,8 @@ Future<void> showAccountEditor(
       currentBalanceMinor: currentBalanceMinor,
     );
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已记入余额校正')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('已记入余额校正')));
     }
   }
 }
