@@ -62,43 +62,43 @@ double niceTrendYInterval(double raw) {
 
 /// Format a Y-axis stop so neighbouring ticks never share the same text.
 ///
-/// Compact units (万 / 千) are only used when [interval] is coarse enough that
-/// rounding cannot collapse two stops onto one label — the home net-worth
-/// chart with a ~¥200 swing around ¥1万 previously rendered four identical
-/// `1.0万` labels.
+/// Rules (axis-wide via [axisMaxAbs]):
+/// - |ref| &lt; 1000 → plain number
+/// - 1000 ≤ |ref| &lt; 1_000_000 → `k` (e.g. `10.2k`)
+/// - |ref| ≥ 1_000_000 → `m` (e.g. `1.5m`)
+///
+/// Pass [axisMaxAbs] (= max |tick|) so every stop uses the same style.
 @visibleForTesting
 String formatTrendYAxisLabel(
   double value, {
   required double interval,
+  double? axisMaxAbs,
   bool hide = false,
 }) {
   if (hide) return '****';
-  final abs = value.abs();
-  if (abs < 1e-9) return '0';
+  if (value.abs() < 1e-9) return '0';
   final step = interval.isFinite && interval > 1e-12 ? interval.abs() : 1.0;
+  final ref = (axisMaxAbs != null && axisMaxAbs.isFinite)
+      ? axisMaxAbs.abs()
+      : value.abs();
 
-  // 万：显示量子 = 10000 / 10^decimals，必须严格小于步长。
-  if (abs >= 10000) {
-    final decimals = _compactDecimals(step, unit: 10000);
+  if (ref >= 1000000) {
+    final decimals = _compactUnitDecimals(step, unit: 1000000);
     if (decimals != null) {
-      return '${(value / 10000).toStringAsFixed(decimals)}\u4e07';
+      return '${(value / 1000000).toStringAsFixed(decimals)}m';
     }
-    return _plainTrendAxisNumber(value, step);
-  }
-  // 千：同上，单位 1000。
-  if (abs >= 1000) {
-    final decimals = _compactDecimals(step, unit: 1000);
+  } else if (ref >= 1000) {
+    final decimals = _compactUnitDecimals(step, unit: 1000);
     if (decimals != null) {
-      return '${(value / 1000).toStringAsFixed(decimals)}\u5343';
+      return '${(value / 1000).toStringAsFixed(decimals)}k';
     }
-    return _plainTrendAxisNumber(value, step);
   }
   return _plainTrendAxisNumber(value, step);
 }
 
-/// How many decimals a compact unit needs so two ticks [interval] apart stay
-/// distinct; null means "fall back to plain numbers".
-int? _compactDecimals(double step, {required double unit}) {
+/// How many decimals a compact unit needs so two ticks [step] apart stay
+/// distinct; null means fall back to plain numbers.
+int? _compactUnitDecimals(double step, {required double unit}) {
   // quantum = unit / 10^d  <  step  →  d > log10(unit / step)
   if (step >= unit) return 0;
   final need = math.log(unit / step) / math.ln10;
@@ -386,7 +386,7 @@ String trendTooltipText(List<DateTime> dayLabels, double x, String amount) {
 }
 
 /// Width reserved for the Y axis (kept in sync with [SideTitles.reservedSize]).
-/// Plain mid-range labels like `10050` need a bit more than compact `1.0万`.
+/// Plain mid-range labels like `10050` need a bit more width than compact `10k`.
 const double leftAxisWidth = 44;
 
 /// Index (into [touched]) of the day to label in a touch tooltip: the day
@@ -448,9 +448,11 @@ class _CentliTrendChartState extends State<CentliTrendChart> {
 
   String _fmtMajor(double major) => _fmtMajorOf(widget.base, widget.hide, major);
 
-  String _axisLabel(double value, double interval) => formatTrendYAxisLabel(
+  String _axisLabel(double value, double interval, double axisMaxAbs) =>
+      formatTrendYAxisLabel(
         value,
         interval: interval,
+        axisMaxAbs: axisMaxAbs,
         hide: widget.hide,
       );
 
@@ -496,6 +498,9 @@ class _CentliTrendChartState extends State<CentliTrendChart> {
         final yInterval = axis.interval;
         final minY = axis.minY;
         final maxY = axis.maxY;
+        final axisMaxAbs = axis.ticks
+            .map((t) => t.abs())
+            .fold<double>(0, (a, b) => a > b ? a : b);
         // 平滑曲线：只要有两个以上的点就画曲线（原来要点数够多才画，
         // 少量点会变成折线，看起来“有棱角”）。
         final useCurve = n >= 2;
@@ -580,7 +585,7 @@ class _CentliTrendChartState extends State<CentliTrendChart> {
                           child: Padding(
                             padding: const EdgeInsets.only(right: 4),
                             child: Text(
-                              _axisLabel(value, yInterval),
+                              _axisLabel(value, yInterval, axisMaxAbs),
                               style: Theme.of(context).textTheme.labelSmall,
                               maxLines: 1,
                             ),
