@@ -97,7 +97,7 @@ class _PendingPageBodyState extends ConsumerState<PendingPage> {
     final ledgerAsync = ref.watch(currentLedgerProvider);
     final filter = ref.watch(_pendingFilterProvider);
 
-    return Scaffold(
+    return CentliGradientScaffold(
       appBar: AppBar(
         title: const Text('待确认'),
         actions: [

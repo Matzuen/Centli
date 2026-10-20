@@ -217,11 +217,11 @@ class _RecurringWizardPageState extends ConsumerState<RecurringWizardPage> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Scaffold(
+      return const CentliGradientScaffold(
         body: Center(child: CircularProgressIndicator()),
       );
     }
-    return Scaffold(
+    return CentliGradientScaffold(
       appBar: AppBar(
         title: Text(_step == 0 ? '新建周期 · 类型与周期' : '新建周期 · 详情'),
       ),

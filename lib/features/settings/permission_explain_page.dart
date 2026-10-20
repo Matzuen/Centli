@@ -114,7 +114,7 @@ class _PermissionExplainPageState extends ConsumerState<PermissionExplainPage>
     final scheme = Theme.of(context).colorScheme;
     final supported = NotificationCaptureStub.supported;
 
-    return Scaffold(
+    return CentliGradientScaffold(
       appBar: AppBar(
         title: const Text('通知权限说明'),
         automaticallyImplyLeading: !widget.finishOnboarding,

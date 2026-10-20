@@ -24,7 +24,7 @@ class RecurringListPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(_recurringRulesProvider);
-    return Scaffold(
+    return CentliGradientScaffold(
       appBar: AppBar(
         title: const Text('周期记账'),
         actions: [

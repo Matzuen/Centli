@@ -344,7 +344,7 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
     final supported = NotificationCaptureStub.supported;
     final switchOn = supported && _enabled && _granted;
 
-    return Scaffold(
+    return CentliGradientScaffold(
       appBar: AppBar(title: const Text('自动记账')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())

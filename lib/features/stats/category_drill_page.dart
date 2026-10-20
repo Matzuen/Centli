@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/theme.dart';
 import '../../core/widgets/txn_grouped_list.dart';
 import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
@@ -38,7 +39,7 @@ class CategoryDrillPage extends ConsumerWidget {
           categoryId: categoryId,
         );
 
-    return Scaffold(
+    return CentliGradientScaffold(
       appBar: AppBar(
         title: Text(categoryName),
         bottom: PreferredSize(

@@ -56,17 +56,17 @@ class AccountDetailPage extends ConsumerWidget {
     final hide = ref.watch(hideAmountProvider);
 
     return async.when(
-      loading: () => Scaffold(
+      loading: () => CentliGradientScaffold(
         appBar: AppBar(title: const Text('\u8d44\u4ea7\u8d26\u6237')),
         body: const Center(child: CircularProgressIndicator()),
       ),
-      error: (e, _) => Scaffold(
+      error: (e, _) => CentliGradientScaffold(
         appBar: AppBar(title: const Text('\u8d44\u4ea7\u8d26\u6237')),
         body: Center(child: Text('\u52a0\u8f7d\u5931\u8d25: $e')),
       ),
       data: (account) {
         if (account == null) {
-          return Scaffold(
+          return CentliGradientScaffold(
             appBar: AppBar(title: const Text('\u8d44\u4ea7\u8d26\u6237')),
             body: const Center(
               child: Text('\u8d44\u4ea7\u8d26\u6237\u4e0d\u5b58\u5728'),
@@ -107,7 +107,7 @@ class _AccountDetailBody extends ConsumerWidget {
     );
     final txAsync = ref.watch(_accountTxProvider(txArgs));
 
-    return Scaffold(
+    return CentliGradientScaffold(
       appBar: AppBar(
         title: Row(
           children: [

@@ -22,7 +22,7 @@ class AssetTypesPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final ledgerAsync = ref.watch(currentLedgerIdProvider);
 
-    return Scaffold(
+    return CentliGradientScaffold(
       appBar: AppBar(title: const Text('资产分类')),
       floatingActionButton: ledgerAsync.valueOrNull == null
           ? null

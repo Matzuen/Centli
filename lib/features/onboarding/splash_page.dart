@@ -82,8 +82,7 @@ class _SplashPageState extends ConsumerState<SplashPage> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Scaffold(
-      backgroundColor: scheme.surface,
+    return CentliGradientScaffold(
       body: SafeArea(
         child: Center(
           child: Column(

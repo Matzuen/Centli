@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../app/theme.dart';
+
 /// In-app Chinese privacy policy (asset: assets/legal/privacy_zh.txt).
 class PrivacyPolicyPage extends StatefulWidget {
   const PrivacyPolicyPage({super.key});
@@ -22,7 +24,7 @@ class _PrivacyPolicyPageState extends State<PrivacyPolicyPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Scaffold(
+    return CentliGradientScaffold(
       appBar: AppBar(title: const Text('隐私政策')),
       body: FutureBuilder<String>(
         future: _textFuture,

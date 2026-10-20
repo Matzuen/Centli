@@ -39,17 +39,17 @@ class LedgerDetailPage extends ConsumerWidget {
     final scheme = Theme.of(context).colorScheme;
 
     return async.when(
-      loading: () => Scaffold(
+      loading: () => CentliGradientScaffold(
         appBar: AppBar(title: const Text('账单')),
         body: const Center(child: CircularProgressIndicator()),
       ),
-      error: (e, _) => Scaffold(
+      error: (e, _) => CentliGradientScaffold(
         appBar: AppBar(title: const Text('账单')),
         body: Center(child: Text('加载失败: $e')),
       ),
       data: (txn) {
         if (txn == null || txn.deletedAt != null) {
-          return Scaffold(
+          return CentliGradientScaffold(
             appBar: AppBar(title: const Text('账单')),
             body: const Center(child: Text('账单不存在或已删除')),
           );
@@ -187,7 +187,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
         ? scheme.onSurface
         : (isOut ? scheme.error : scheme.primary);
 
-    return Scaffold(
+    return CentliGradientScaffold(
       appBar: AppBar(
         title: const Text('账单'),
         actions: [

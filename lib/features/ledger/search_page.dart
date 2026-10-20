@@ -413,7 +413,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     final hide = ref.watch(hideAmountProvider);
     final scheme = Theme.of(context).colorScheme;
 
-    return Scaffold(
+    return CentliGradientScaffold(
       appBar: AppBar(
         titleSpacing: 0,
         title: TextField(
@@ -456,7 +456,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     final hasType = _type != null;
     final typeLabel = hasType ? _typeLabel(_type) : '类型';
     return Material(
-      color: scheme.surfaceContainerLowest,
+      color: Colors.transparent,
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),

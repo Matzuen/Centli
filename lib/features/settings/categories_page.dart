@@ -55,7 +55,7 @@ class _CategoriesPageState extends ConsumerState<CategoriesPage>
   Widget build(BuildContext context) {
     final ledgerAsync = ref.watch(currentLedgerIdProvider);
 
-    return Scaffold(
+    return CentliGradientScaffold(
       appBar: AppBar(
         title: const Text('分类管理'),
         bottom: PreferredSize(

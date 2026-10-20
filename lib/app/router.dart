@@ -273,7 +273,7 @@ class _UnknownRoutePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Scaffold(
+    return CentliGradientScaffold(
       body: SafeArea(
         child: Center(
           child: Padding(

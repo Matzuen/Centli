@@ -501,7 +501,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
 
-    return Scaffold(
+    return CentliGradientScaffold(
       appBar: AppBar(
         title: const Text('识别规则'),
         actions: [

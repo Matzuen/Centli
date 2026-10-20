@@ -186,7 +186,7 @@ class _RecognitionRuleEditPageState extends State<RecognitionRuleEditPage> {
   @override
   Widget build(BuildContext context) {
     final isEdit = _editingId != null;
-    return Scaffold(
+    return CentliGradientScaffold(
       appBar: AppBar(
         title: Text(isEdit ? '编辑规则' : '添加规则'),
         actions: [

@@ -17,7 +17,7 @@ class ManualCaptureHelpPage extends StatelessWidget {
           color: scheme.onSurfaceVariant,
         );
 
-    return Scaffold(
+    return CentliGradientScaffold(
       appBar: AppBar(title: const Text('发出去没通知？')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),

@@ -40,7 +40,7 @@ class RecycleBinPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final ledgerAsync = ref.watch(currentLedgerProvider);
-    return Scaffold(
+    return CentliGradientScaffold(
       appBar: AppBar(
         title: const Text('回收站'),
         actions: [

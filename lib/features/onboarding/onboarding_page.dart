@@ -139,7 +139,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     final scheme = Theme.of(context).colorScheme;
     final isLast = _index == _pageCount - 1;
 
-    return Scaffold(
+    return CentliGradientScaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
         actions: [
