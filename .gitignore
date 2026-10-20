@@ -96,3 +96,6 @@ tools/_*
 # 图标预览图（由脚本生成，供人工挑选，不是源文件）
 tools/bank_preview/
 tools/*_patch*.py
+
+# flutter_test 的 golden 失败产物（每次跑测试都会重新生成）
+test/failures/
