@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show debugPrint;
+
 import '../../core/utils/money.dart';
 import '../../data/db/centli_database.dart';
 import '../../features/ledger/llm_text_fill.dart';
@@ -72,8 +74,8 @@ abstract final class NotificationIngestBridge {
     if (resolved.exclude) {
       // AI said non-payment — distill 软件名-排除 for next time / kill-path.
       if (resolved.fromAi) {
-        unawaited(
-          distillExcludeRecognitionRuleFromAi(
+        _distillSafely(
+          () => distillExcludeRecognitionRuleFromAi(
             raw: notification,
             mustHint: resolved.mustHint,
           ),
@@ -146,8 +148,8 @@ abstract final class NotificationIngestBridge {
       );
       if (resolved.fromAi) {
         // Distill after ingest so kill-path can match next time without AI.
-        unawaited(
-          distillRecognitionRuleFromAi(
+        _distillSafely(
+          () => distillRecognitionRuleFromAi(
             raw: notification,
             parsed: parsed,
             mustHint: resolved.mustHint,
@@ -156,6 +158,17 @@ abstract final class NotificationIngestBridge {
       }
     }
     return id;
+  }
+
+  /// 蒸馏不阻塞入库（下一个进程里才用得上），但异常必须自己消化：
+  /// `unawaited` 抛出的错误会变成未捕获异步错误，在 debug 下直接打断运行。
+  static void _distillSafely(Future<String?> Function() task) {
+    unawaited(
+      task().catchError((Object e) {
+        debugPrint('noti distill failed: $e');
+        return null;
+      }),
+    );
   }
 
   /// AI first when ready; otherwise / on failure → local [parseNotification].

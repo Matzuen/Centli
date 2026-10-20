@@ -163,6 +163,52 @@ void main() {
     });
   });
 
+  group('AI 预筛与限频', () {
+    RawNotification raw(String title, [String text = '']) => RawNotification(
+          pkg: 'com.tencent.mm',
+          title: title,
+          text: text,
+          whenMs: 0,
+        );
+
+    test('支付类通知进 AI', () {
+      expect(looksLikePaymentCandidate(raw('支付成功', '￥12.00')), isTrue);
+      expect(looksLikePaymentCandidate(raw('微信支付', '向商户付款')), isTrue);
+      expect(looksLikePaymentCandidate(raw('收款到账', '0.01元')), isTrue);
+      expect(looksLikePaymentCandidate(raw('账单提醒', '本期应还')), isTrue);
+      // 没有关键词但有金额
+      expect(looksLikePaymentCandidate(raw('某银行', '12.50元')), isTrue);
+      expect(looksLikePaymentCandidate(raw('某银行', 'CNY 12')), isTrue);
+    });
+
+    test('聊天 / 验证码 / 系统消息不进 AI', () {
+      expect(looksLikePaymentCandidate(raw('张三', '明天见')), isFalse);
+      expect(looksLikePaymentCandidate(raw('朋友圈', '点赞了你的照片')), isFalse);
+      expect(looksLikePaymentCandidate(raw('登录验证', '123456')), isFalse);
+      expect(looksLikePaymentCandidate(raw('', '')), isFalse);
+    });
+
+    test('每分钟调用上限', () {
+      resetLlmParseRateLimit();
+      final t0 = DateTime(2026, 10, 20, 12, 0, 0);
+      for (var i = 0; i < kLlmParsePerMinuteCap; i++) {
+        expect(
+          noteLlmParseCall(now: t0.add(Duration(milliseconds: i * 10))),
+          isTrue,
+          reason: 'call $i should pass',
+        );
+      }
+      // 第 N+1 次超限
+      expect(noteLlmParseCall(now: t0.add(const Duration(seconds: 59))), isFalse);
+      // 一分钟后窗口滑出，恢复
+      expect(
+        noteLlmParseCall(now: t0.add(const Duration(seconds: 61))),
+        isTrue,
+      );
+      resetLlmParseRateLimit();
+    });
+  });
+
   group('helpers', () {
     test('sceneFragmentsForFusion uses distinct title', () {
       final raw = RawNotification(

@@ -7,6 +7,7 @@ library;
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:http/http.dart' as http;
 
 import '../../core/utils/money.dart';
@@ -109,6 +110,50 @@ String _scenarioKey(String hint) {
   return h.toRadixString(16);
 }
 
+/// 是否是**值得问一次 AI** 的通知。
+///
+/// native 会把监听应用（微信 / 支付宝）的每一条通知都转发上来，包括聊天、
+/// 朋友圈、登录提醒。若不加筛选，每条微信消息都会打一次模型接口——费用、
+/// 延迟和限流都不可接受，而且会把聊天正文发出去。这里先用本地关键字做一次
+/// 极宽松的预筛：只要像"钱"，才交给 AI 判断；不像的直接走本地解析（本地
+/// 也不会收）。
+@visibleForTesting
+bool looksLikePaymentCandidate(RawNotification raw) {
+  final head = '${raw.title}\n${raw.text}';
+  if (head.trim().isEmpty) return false;
+  const needles = [
+    '支付', '付款', '收款', '到账', '退款', '还款', '转账', '转帐',
+    '消费', '扣款', '交易', '支出', '收入', '账单', '缴费', '充值',
+    '提现', '余额', '红包', '激励', '结算', '代扣', '分期',
+  ];
+  for (final n in needles) {
+    if (head.contains(n)) return true;
+  }
+  // 没有关键词但有金额（¥12.00 / 12.00元 / CNY 12）也算候选。
+  if (RegExp(r'[¥￥$€]\s*\d').hasMatch(head)) return true;
+  if (RegExp(r'\d+(?:[.,]\d{1,2})?\s*元').hasMatch(head)) return true;
+  if (RegExp(r'\b(?:CNY|USD|HKD|EUR|JPY)\s*\d').hasMatch(head)) return true;
+  return false;
+}
+
+/// 每分钟最多问几次 AI：通知密集时（群聊刷屏）宁可回落本地解析。
+const int kLlmParsePerMinuteCap = 24;
+
+final List<int> _llmCallStamps = <int>[];
+
+/// 记录一次调用；超限返回 false（调用方应回落本地解析）。
+@visibleForTesting
+bool noteLlmParseCall({DateTime? now}) {
+  final t = (now ?? DateTime.now()).millisecondsSinceEpoch;
+  _llmCallStamps.removeWhere((s) => t - s > 60000);
+  if (_llmCallStamps.length >= kLlmParsePerMinuteCap) return false;
+  _llmCallStamps.add(t);
+  return true;
+}
+
+@visibleForTesting
+void resetLlmParseRateLimit() => _llmCallStamps.clear();
+
 /// Ask the configured LLM to classify + extract a payment notification.
 ///
 /// Returns null when [config] is not ready or the request fails — never throws
@@ -121,6 +166,9 @@ Future<NotificationLlmParseOutcome?> parseNotificationWithLlm(
 }) async {
   if (!config.isReady) return null;
   if (raw.title.trim().isEmpty && raw.text.trim().isEmpty) return null;
+  // 只问"像钱"的通知，并限制频率；任何一项不过都返回 null 走本地解析。
+  if (!looksLikePaymentCandidate(raw)) return null;
+  if (!noteLlmParseCall()) return null;
 
   final base = config.normalizedBaseUrl;
   final model =
