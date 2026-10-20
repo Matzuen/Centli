@@ -200,9 +200,6 @@ class _CentliAppState extends ConsumerState<CentliApp> {
     ref.listen<AsyncValue<bool>>(appLockEnabledProvider, (previous, next) {
       _refresh.ping();
     });
-    ref.listen<bool>(appLockUnlockedProvider, (previous, next) {
-      _refresh.ping();
-    });
     ref.listen(currentLedgerProvider, (previous, next) {
       _scheduleHomeWidgetSync();
     });
@@ -210,7 +207,6 @@ class _CentliAppState extends ConsumerState<CentliApp> {
       _scheduleHomeWidgetSync();
     });
     ref.watch(appLockEnabledProvider);
-    ref.watch(appLockUnlockedProvider);
 
     final router = _router;
     if (router == null) {

@@ -12,7 +12,6 @@ import '../features/onboarding/splash_page.dart';
 import '../features/pending/pending_page.dart';
 import '../features/ledger/ledger_detail_page.dart';
 import '../features/ledger/search_page.dart';
-import '../features/security/app_lock_page.dart';
 import '../features/settings/auto_capture_page.dart';
 import '../features/settings/manual_capture_help_page.dart';
 import '../features/settings/recognition_rules_page.dart';
@@ -60,10 +59,6 @@ GoRouter createRouter({
       GoRoute(
         path: '/onboarding',
         builder: (context, state) => const OnboardingPage(),
-      ),
-      GoRoute(
-        path: '/lock',
-        builder: (context, state) => const AppLockPage(),
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {

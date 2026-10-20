@@ -45,7 +45,6 @@ class _SecurityPageState extends ConsumerState<SecurityPage> {
       if (pin == null || !mounted) return;
       await svc.setPin(pin);
       await db.setAppLockEnabled(true);
-      ref.read(appLockUnlockedProvider.notifier).unlock();
       ref.read(amountsRevealedProvider.notifier).conceal();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -58,7 +57,6 @@ class _SecurityPageState extends ConsumerState<SecurityPage> {
       await svc.clearPin();
       await db.setAppLockEnabled(false);
       await db.setAppLockBiometric(false);
-      ref.read(appLockUnlockedProvider.notifier).unlock();
       ref.read(amountsRevealedProvider.notifier).conceal();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

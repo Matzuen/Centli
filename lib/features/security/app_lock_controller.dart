@@ -17,19 +17,6 @@ final appLockBiometricProvider = StreamProvider<bool>((ref) {
   return ref.watch(databaseProvider).watchAppLockBiometric();
 });
 
-/// Session unlock flag — resets on process kill. Not persisted.
-final appLockUnlockedProvider =
-    NotifierProvider<AppLockUnlockedNotifier, bool>(AppLockUnlockedNotifier.new);
-
-class AppLockUnlockedNotifier extends Notifier<bool> {
-  @override
-  bool build() => false;
-
-  void unlock() => state = true;
-
-  void lock() => state = false;
-}
-
 /// Session-only: whether amounts are temporarily revealed while 资产锁 is on.
 /// Defaults to concealed; resets when the app re-locks.
 final amountsRevealedProvider =

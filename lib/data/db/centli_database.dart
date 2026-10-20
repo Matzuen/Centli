@@ -548,12 +548,6 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
     );
     await into(appSettings).insert(
       AppSettingsCompanion.insert(
-        key: 'hide_amount',
-        value: 'false',
-      ),
-    );
-    await into(appSettings).insert(
-      AppSettingsCompanion.insert(
         key: 'app_lock',
         value: 'false',
       ),
@@ -613,16 +607,6 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
         .map((row) => row?.value);
   }
 
-  Stream<bool> watchHideAmount() {
-    return (select(appSettings)..where((t) => t.key.equals('hide_amount')))
-        .watchSingleOrNull()
-        .map((row) => row?.value == 'true');
-  }
-
-  Future<void> toggleHideAmount() async {
-    final cur = await getSetting('hide_amount');
-    await setSetting('hide_amount', cur == 'true' ? 'false' : 'true');
-  }
   Stream<bool> watchAppLockEnabled() {
     return (select(appSettings)..where((t) => t.key.equals('app_lock')))
         .watchSingleOrNull()

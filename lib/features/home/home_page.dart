@@ -17,7 +17,6 @@ import '../../data/db/database_provider.dart';
 import '../capture/capture_intake_actions.dart';
 import '../ledger/bookkeeping_sheet.dart';
 import '../security/app_lock_controller.dart';
-import '../security/pin_pad.dart';
 import '../../platform/notifications/notification_listener_stub.dart';
 import '../../platform/notifications/notification_parse.dart';
 import '../../platform/notifications/noti_template_store.dart';
@@ -447,13 +446,13 @@ class _HomePageState extends ConsumerState<HomePage> {
                               ledgerName: ledger.name,
                               base: base,
                               hide: hide,
-                              showAmountEye: true,
+                              // 不开资产锁就不显示眼睛：没东西可藏。
+                              showAmountEye: lockOn,
                               onToggleAmountVisibility: () =>
                                   _toggleHomeAmountVisibility(
                                 context,
                                 ref,
                                 currentlyHidden: hide,
-                                lockOn: lockOn,
                               ),
                               range: range,
                               netWorth: nw,
@@ -791,45 +790,9 @@ Future<void> _toggleHomeAmountVisibility(
   BuildContext context,
   WidgetRef ref, {
   required bool currentlyHidden,
-  required bool lockOn,
 }) async {
-  if (!lockOn) {
-    final go = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('设置密码保护？'),
-        content: const Text(
-          '开启资产锁后可隐藏全部金额；'
-          '之后点眼睛可临时查看（需验证），关掉眼睛不用验证。',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('暂不'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('去设置'),
-          ),
-        ],
-      ),
-    );
-    if (go != true || !context.mounted) return;
-    final pin = await showSetPinDialog(context);
-    if (pin == null || !context.mounted) return;
-    final svc = ref.read(appLockServiceProvider);
-    final db = ref.read(databaseProvider);
-    await svc.setPin(pin);
-    await db.setAppLockEnabled(true);
-    ref.read(appLockUnlockedProvider.notifier).unlock();
-    ref.read(amountsRevealedProvider.notifier).conceal();
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('资产锁已开启，金额已隐藏')),
-      );
-    }
-    return;
-  }
+  // 只在资产锁开启时才会显示眼睛（见 showAmountEye），所以这里只有两种状态：
+  // 隐藏中 → 验证后临时显示；显示中 → 直接收起，不需要验证。
   if (!currentlyHidden) {
     ref.read(amountsRevealedProvider.notifier).conceal();
     return;

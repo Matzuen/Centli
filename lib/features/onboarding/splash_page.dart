@@ -46,7 +46,6 @@ class _SplashPageState extends ConsumerState<SplashPage> {
     }
     if (!mounted) return;
     // 资产锁只藏金额，进 App 不再拦全屏解锁。
-    ref.read(appLockUnlockedProvider.notifier).unlock();
     ref.read(amountsRevealedProvider.notifier).conceal();
     if (done == 'true') {
       final deep = PendingDeepLink.take();
