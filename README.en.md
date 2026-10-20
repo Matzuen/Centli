@@ -5,7 +5,7 @@ Local-first personal bookkeeping (**Chinese UI only**): **clear every bill**.
 > Canonical docs are in Chinese: see [`README.md`](README.md) and [`docs/RELEASE_NOTES.md`](docs/RELEASE_NOTES.md).
 
 - Flutter · Drift (SQLite) · Riverpod · go_router
-- Version: `2.0.1+38`
+- Version: `2.0.2+39`
 - Currency display: `CNY · 人民币`
 - Bottom nav (5 tabs): 首页 / 统计 / 记账 / 资产 / 我的
 
@@ -58,6 +58,24 @@ Prefer JSON (`format: centli-export`). Excel import is best-effort (no fx/settin
 > (`1.4.1` → `1.4.2`); the build number increments by 1 on every release.
 > **2.0.0** starts a new major line: the UI and icon set were overhauled, auto-capture
 > now runs behind a foreground service, and aggregates moved into SQL.
+
+### 2.0.2 (2026-10-20)
+
+UI
+- **Glassmorphism**: cards are translucent with a 1px highlight border (no backdrop blur — it bought nothing over a smooth gradient and cost real GPU time); **dialogs and bottom sheets frost their own surface**, so the blur samples what is behind the panel and the page itself stays sharp
+- every dialog now goes through `CentliGlassDialog` (45 `AlertDialog` call sites); the gradient background covers all sub-pages
+- chart Y-axis labels use `k` / `m` compaction chosen per axis, so two neighbouring stops can no longer render the same text
+
+Notification capture
+- stronger keep-alive: the keeper starts with the process, rebinds when the listener drops, holds a wake lock plus a 2-minute watchdog, and restarts after boot/task removal
+- parsing is **AI first**: when AI is off, times out or fails it falls back to local rules; AI verdicts are written back as `app-direction-scene` capture rules and `app-排除` exclude rules, so the same scene is served locally next time without another call
+- AI is split into three independent gates (text fill / AI notification parse / AI asset scan), all off by default
+- distilled rules stay bounded: capture rules auto-merge the least-active siblings within an app and direction, and rules idle for 90 days can be purged from the rules page
+- the notification 入账 action no longer writes a bill directly; it opens the app and its confirm sheet, and home gained a 待确认 badge
+- fix: the native receiver queried the dropped `merchant` column, so 入账 failed silently
+
+Other
+- fix: bill-list amounts overflowed at large text scales (`Flexible(flex: 0)` received unbounded width)
 
 ### 2.0.1 (2026-10-19)
 
