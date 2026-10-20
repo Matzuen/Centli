@@ -94,7 +94,36 @@ class SmartFillLlmSettings {
   /// Set by [load] when baseUrl is deepseek and model is unknown / typo.
   String? lastModelWarning;
 
+  /// 配置缓存（含 API Key）。
+  ///
+  /// 通知解析在**每条通知**上都会问一次配置；`load()` 原本要做 4 次 DB 读 +
+  /// 1 次 Keystore 读，等于给每条通知加几毫秒开销。这里缓存结果，保存/清除
+  /// 设置时显式失效，另外加一个短 TTL 兜住外部写入（如导入备份）。
+  static const Duration _cacheTtl = Duration(seconds: 30);
+  static SmartFillLlmConfig? _cached;
+  static DateTime? _cachedAt;
+
+  /// 保存 / 清除 / 导入设置后调用，让下一次 [load] 重新读盘。
+  static void invalidateCache() {
+    _cached = null;
+    _cachedAt = null;
+  }
+
   Future<SmartFillLlmConfig> load(CentliDatabase db) async {
+    final cached = _cached;
+    final at = _cachedAt;
+    if (cached != null &&
+        at != null &&
+        DateTime.now().difference(at) < _cacheTtl) {
+      return cached;
+    }
+    final fresh = await _loadUncached(db);
+    _cached = fresh;
+    _cachedAt = DateTime.now();
+    return fresh;
+  }
+
+  Future<SmartFillLlmConfig> _loadUncached(CentliDatabase db) async {
     lastMigrationNotice = null;
     lastModelWarning = null;
     final enabled = (await db.getSetting(kLlmEnabledSettingKey)) == 'true';
@@ -104,7 +133,10 @@ class SmartFillLlmSettings {
         (await db.getSetting(kLlmAssetAiEnabledSettingKey)) == 'true';
     final base = (await db.getSetting(kLlmBaseUrlSettingKey))?.trim();
     var model = (await db.getSetting(kLlmModelSettingKey))?.trim();
-    final key = (await _storage.read(key: kLlmApiKeyStorageKey)) ?? '';
+    // 三个 AI 开关全关时没有任何调用路径，没必要读 Keystore；
+    // 这正好是通知解析最常走的分支（AI 默认关）。
+    final needKey = enabled || notifyAi || assetAi;
+    final key = needKey ? ((await _storage.read(key: kLlmApiKeyStorageKey)) ?? '') : '';
     final baseUrl = (base == null || base.isEmpty) ? kDefaultLlmBaseUrl : base;
     if (model == null || model.isEmpty) {
       model = kDefaultLlmModel;
@@ -170,6 +202,7 @@ class SmartFillLlmSettings {
         await _storage.write(key: kLlmApiKeyStorageKey, value: t);
       }
     }
+    invalidateCache();
   }
 
   Future<bool> hasApiKey() async {

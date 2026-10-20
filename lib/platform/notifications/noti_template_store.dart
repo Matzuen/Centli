@@ -546,20 +546,36 @@ abstract final class NotiTemplateStore {
     await syncWatchedPackagesToNative();
   }
 
+  /// 命中计数的落盘节流：内存实时更新，磁盘最多每 [kDistillHitPersistMs] 一次。
+  ///
+  /// `lastHitAt` 只用于「90 天未命中」判断，精度到分钟足够；而通知密集时
+  /// 每条都写一次规则 JSON 是纯粹的 IO 浪费。
+  static const int kDistillHitPersistMs = 60 * 1000;
+  static int _lastHitPersistMs = 0;
+
   /// Record a local match for a distill rule (capture or exclude).
-  static Future<void> touchDistillHit(String id) async {
+  static Future<void> touchDistillHit(String id, {DateTime? now}) async {
     if (id.isEmpty) return;
     await load();
-    final now = DateTime.now().millisecondsSinceEpoch;
+    final ts = (now ?? DateTime.now()).millisecondsSinceEpoch;
     final prev = _distillMeta[id];
     _distillMeta = {
       ..._distillMeta,
       id: DistillRuleMeta(
-        createdAtMs: prev?.createdAtMs ?? now,
-        lastHitAtMs: now,
+        createdAtMs: prev?.createdAtMs ?? ts,
+        lastHitAtMs: ts,
       ),
     };
+    if (ts - _lastHitPersistMs < kDistillHitPersistMs) return;
+    _lastHitPersistMs = ts;
     await _persistUserFile();
+  }
+
+  /// 测试 / 退出前把节流中的命中计数刷盘。
+  @visibleForTesting
+  static Future<void> flushDistillHits() async {
+    await _persistUserFile();
+    _lastHitPersistMs = 0;
   }
 
   /// Ensure [id] has a createdAt entry (idempotent).
