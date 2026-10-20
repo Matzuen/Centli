@@ -13,6 +13,7 @@ import '../../core/utils/fx.dart';
 import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
 import '../security/app_lock_controller.dart';
+import 'asset_balance_import.dart';
 
 final _accountsProvider = StreamProvider.family<List<Account>, String>((
   ref,
@@ -138,6 +139,18 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                           ),
                           const Spacer(),
                           if (!_showArchived) ...[
+                            IconButton(
+                              tooltip: '截图识别资产',
+                              onPressed: () async {
+                                await importAssetBalancesFromScreenshot(
+                                  context,
+                                  ref,
+                                  ledgerId: ledger.id,
+                                  baseCurrency: base,
+                                );
+                              },
+                              icon: const Icon(Icons.document_scanner_outlined),
+                            ),
                             IconButton(
                               tooltip: '资产分类',
                               onPressed: () => context.push('/assets/types'),

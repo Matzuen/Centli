@@ -2,7 +2,7 @@ import 'package:centli/data/db/centli_database.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// 编辑账户 → 「当前金额」→ 保存时记一笔「余额校正」把余额调到该值，
+/// 编辑资产账户 → 「当前金额」→ 保存时记一笔「余额校正」把余额调到该值，
 /// 期初余额保持不变（不计入统计 / 预算）。
 void main() {
   late CentliDatabase db;

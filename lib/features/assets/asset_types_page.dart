@@ -36,7 +36,7 @@ class AssetTypesPage extends ConsumerWidget {
         error: (e, _) => Center(child: Text('$e')),
         data: (ledgerId) {
           if (ledgerId == null) {
-            return const Center(child: Text('尚未初始化账本'));
+            return const Center(child: Text('尚未初始化记账本'));
           }
           final typesAsync = ref.watch(_assetTypesManageProvider(ledgerId));
           return typesAsync.when(
@@ -98,8 +98,8 @@ class _AssetTypeTile extends ConsumerWidget {
             title: Text(type.name),
             subtitle: Text(
               archived
-                  ? '已归档 · $count 个账户'
-                  : '$count 个账户在用',
+                  ? '已归档 · $count 个资产账户'
+                  : '$count 个资产账户在用',
               style: TextStyle(
                 color: archived ? scheme.outline : null,
               ),
@@ -262,7 +262,7 @@ Future<void> _promptDelete(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('无法删除'),
-        content: Text('有 $count 个账户在用「${type.name}」，请先改到其他分类或归档。'),
+        content: Text('有 $count 个资产账户在用「${type.name}」，请先改到其他分类或归档。'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),

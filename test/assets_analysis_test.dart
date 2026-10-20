@@ -4,7 +4,7 @@ import 'package:centli/features/assets/assets_page.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// 资产分析：按**账户类型**汇总 + 环形图图例的单行格式。
+/// 资产分析：按**资产账户类型**汇总 + 环形图图例的单行格式。
 void main() {
   CentliDatabase? db;
 
@@ -145,7 +145,7 @@ void main() {
 
   test('unknown account type falls back to 其他', () {
     final slices = assetTypeSlices(
-      accounts: [account('a1', '神秘账户', 't-missing'), account('a2', '银行', 't-bank')],
+      accounts: [account('a1', '神秘资产账户', 't-missing'), account('a2', '银行', 't-bank')],
       balances: {'a1': 1000, 'a2': 9000},
       types: [assetType('t-bank', '银行账户', 0)],
       book: null,

@@ -8,7 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// 资产页按截图数据渲染：图例金额不能被截断、分组头金额靠右、账户行不再有箭头。
+/// 资产页按截图数据渲染：图例金额不能被截断、分组头金额靠右、资产账户行不再有箭头。
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
