@@ -66,15 +66,13 @@ class RecurringListPage extends ConsumerWidget {
             padding: const EdgeInsets.all(CentliSpacing.cardPad),
             children: [
               if (truncated > 0)
-                Card(
+                CentliSoftCard(
                   color: Theme.of(context).colorScheme.errorContainer,
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Text(
-                      '有 $truncated 期未自动生成，请手动补记',
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onErrorContainer,
-                      ),
+                  padding: const EdgeInsets.all(12),
+                  child: Text(
+                    '有 $truncated 期未自动生成，请手动补记',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onErrorContainer,
                     ),
                   ),
                 ),
@@ -108,117 +106,120 @@ class _RuleTile extends ConsumerWidget {
     final nextLabel = rule.enabled == 1
         ? '下次执行：${DateFormat('yyyy-MM-dd').format(next)}'
         : '已暂停';
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: ListTile(
-        title: Text(
-          '${formatMinor(rule.currency, rule.amountMinor)} · ${rule.type == 'in' ? '收入' : '支出'}',
-          style: const TextStyle(fontWeight: FontWeight.w600),
-        ),
-        subtitle: Text(
-          [
-            if (rule.note != null && rule.note!.trim().isNotEmpty) rule.note!,
-            nextLabel,
-          ].join('\n'),
-        ),
-        isThreeLine: true,
-        trailing: Switch(
-          value: rule.enabled == 1,
-          onChanged: (v) async {
-            final ts = DateTime.now().millisecondsSinceEpoch;
-            await (db.update(db.recurringRules)
-                  ..where((t) => t.id.equals(rule.id)))
-                .write(
-              RecurringRulesCompanion(
-                enabled: Value(v ? 1 : 0),
-                updatedAt: Value(ts),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: CentliSoftCard(
+        padding: EdgeInsets.zero,
+        child: ListTile(
+          title: Text(
+            '${formatMinor(rule.currency, rule.amountMinor)} · ${rule.type == 'in' ? '收入' : '支出'}',
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          subtitle: Text(
+            [
+              if (rule.note != null && rule.note!.trim().isNotEmpty) rule.note!,
+              nextLabel,
+            ].join('\n'),
+          ),
+          isThreeLine: true,
+          trailing: Switch(
+            value: rule.enabled == 1,
+            onChanged: (v) async {
+              final ts = DateTime.now().millisecondsSinceEpoch;
+              await (db.update(db.recurringRules)
+                    ..where((t) => t.id.equals(rule.id)))
+                  .write(
+                RecurringRulesCompanion(
+                  enabled: Value(v ? 1 : 0),
+                  updatedAt: Value(ts),
+                ),
+              );
+            },
+          ),
+          onLongPress: () async {
+            final ok = await showGlassDialog<bool>(
+              context: context,
+              builder: (ctx) => CentliGlassDialog(
+                title: const Text('删除周期规则？'),
+                content: const Text('已生成的流水不受影响。'),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    child: const Text('取消'),
+                  ),
+                  FilledButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    child: const Text('删除'),
+                  ),
+                ],
+              ),
+            );
+            if (ok == true) {
+              await (db.delete(db.recurringRules)
+                    ..where((t) => t.id.equals(rule.id)))
+                  .go();
+            }
+          },
+          onTap: () async {
+            await showGlassSheet<void>(
+              context: context,
+              builder: (ctx) => SafeArea(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ListTile(
+                      leading: Icon(
+                        rule.enabled == 1 ? Icons.pause : Icons.play_arrow,
+                      ),
+                      title: Text(rule.enabled == 1 ? '暂停' : '启用'),
+                      onTap: () async {
+                        final ts = DateTime.now().millisecondsSinceEpoch;
+                        await (db.update(db.recurringRules)
+                              ..where((t) => t.id.equals(rule.id)))
+                            .write(
+                          RecurringRulesCompanion(
+                            enabled: Value(rule.enabled == 1 ? 0 : 1),
+                            updatedAt: Value(ts),
+                          ),
+                        );
+                        if (ctx.mounted) Navigator.pop(ctx);
+                      },
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.delete_outline),
+                      title: const Text('删除'),
+                      onTap: () async {
+                        Navigator.pop(ctx);
+                        final ok = await showGlassDialog<bool>(
+                          context: context,
+                          builder: (dCtx) => CentliGlassDialog(
+                            title: const Text('删除周期规则？'),
+                            content: const Text('已生成的流水不受影响。'),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(dCtx, false),
+                                child: const Text('取消'),
+                              ),
+                              FilledButton(
+                                onPressed: () => Navigator.pop(dCtx, true),
+                                child: const Text('删除'),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (ok == true) {
+                          await (db.delete(db.recurringRules)
+                                ..where((t) => t.id.equals(rule.id)))
+                              .go();
+                        }
+                      },
+                    ),
+                  ],
+                ),
               ),
             );
           },
         ),
-        onLongPress: () async {
-          final ok = await showGlassDialog<bool>(
-            context: context,
-            builder: (ctx) => CentliGlassDialog(
-              title: const Text('删除周期规则？'),
-              content: const Text('已生成的流水不受影响。'),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx, false),
-                  child: const Text('取消'),
-                ),
-                FilledButton(
-                  onPressed: () => Navigator.pop(ctx, true),
-                  child: const Text('删除'),
-                ),
-              ],
-            ),
-          );
-          if (ok == true) {
-            await (db.delete(db.recurringRules)
-                  ..where((t) => t.id.equals(rule.id)))
-                .go();
-          }
-        },
-        onTap: () async {
-          await showGlassSheet<void>(
-            context: context,
-            builder: (ctx) => SafeArea(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  ListTile(
-                    leading: Icon(
-                      rule.enabled == 1 ? Icons.pause : Icons.play_arrow,
-                    ),
-                    title: Text(rule.enabled == 1 ? '暂停' : '启用'),
-                    onTap: () async {
-                      final ts = DateTime.now().millisecondsSinceEpoch;
-                      await (db.update(db.recurringRules)
-                            ..where((t) => t.id.equals(rule.id)))
-                          .write(
-                        RecurringRulesCompanion(
-                          enabled: Value(rule.enabled == 1 ? 0 : 1),
-                          updatedAt: Value(ts),
-                        ),
-                      );
-                      if (ctx.mounted) Navigator.pop(ctx);
-                    },
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.delete_outline),
-                    title: const Text('删除'),
-                    onTap: () async {
-                      Navigator.pop(ctx);
-                      final ok = await showGlassDialog<bool>(
-                        context: context,
-                        builder: (dCtx) => CentliGlassDialog(
-                          title: const Text('删除周期规则？'),
-                          content: const Text('已生成的流水不受影响。'),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(dCtx, false),
-                              child: const Text('取消'),
-                            ),
-                            FilledButton(
-                              onPressed: () => Navigator.pop(dCtx, true),
-                              child: const Text('删除'),
-                            ),
-                          ],
-                        ),
-                      );
-                      if (ok == true) {
-                        await (db.delete(db.recurringRules)
-                              ..where((t) => t.id.equals(rule.id)))
-                            .go();
-                      }
-                    },
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
       ),
     );
   }

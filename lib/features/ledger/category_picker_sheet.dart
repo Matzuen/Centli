@@ -18,7 +18,7 @@ Future<String?> showCategoryPickerSheet(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    backgroundColor: Colors.white,
+    backgroundColor: Theme.of(context).colorScheme.surface,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
     ),
@@ -161,7 +161,8 @@ class _CategoryPickerBodyState extends State<_CategoryPickerBody> {
                       SizedBox(
                         width: 96,
                         child: ColoredBox(
-                          color: const Color(0xFFF5F6F8),
+                          color: scheme.surfaceContainerHighest
+                              .withValues(alpha: 0.55),
                           child: ListView.builder(
                             padding: const EdgeInsets.symmetric(
                               vertical: 8,
@@ -175,10 +176,10 @@ class _CategoryPickerBodyState extends State<_CategoryPickerBody> {
                                 padding: const EdgeInsets.only(bottom: 6),
                                 child: Material(
                                   color: selected
-                                      ? Colors.white
+                                      ? scheme.surface
                                       : Colors.transparent,
                                   elevation: selected ? 1.5 : 0,
-                                  shadowColor: const Color(0xFF6B7A99)
+                                  shadowColor: scheme.shadow
                                       .withValues(alpha: 0.18),
                                   borderRadius: BorderRadius.circular(12),
                                   child: InkWell(

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../app/theme.dart';
 import '../../data/db/centli_database.dart';
 import '../../data/db/txn_tags.dart';
 import '../../data/db/database_provider.dart';
@@ -12,7 +13,7 @@ import '../utils/money.dart';
 import 'category_visuals.dart';
 
 /// Highlight colour for search keywords on transaction rows.
-const Color kKeywordHighlight = Color(0xFF7C4DFF);
+const Color kKeywordHighlight = CentliTheme.brandPrimary;
 
 /// Expense / income accent colors (reference screenshot).
 const Color kTxnExpenseRed = Color(0xFFE53935);
@@ -72,12 +73,12 @@ class TxnListTile extends ConsumerWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         if (showSeparator)
-          const Divider(
+          Divider(
             height: 1,
             thickness: 0.5,
             indent: 72,
             endIndent: 16,
-            color: Color(0xFFEEEEEE),
+            color: Theme.of(context).colorScheme.outlineVariant,
           ),
         InkWell(
           onTap: () => context.push('/ledger/${txn.id}'),
