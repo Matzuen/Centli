@@ -261,16 +261,22 @@ object NativeCaptureIngest {
         "待支付|未支付|还未支付|支付失败|付款失败|扣款失败|交易关闭|自动取消|" +
             "验证码|登录提醒|配置更新",
     )
-    // G29.1: widened keyword gate; Dart noise filter drops marketing without amount.
-    private val MUST_ALIPAY: Pattern = Pattern.compile("交易|支付|付款|收款|退款|红包|转账|扣款|消费|入账|到账|支出|收入|余额")
-    private val MUST_WECHAT: Pattern = Pattern.compile("交易|支付|付款|收款|退款|红包|转账|扣款|消费|入账|到账|支出|收入|余额|零钱")
+    // Fallback 词表与 Dart v10 标题词对齐（rules_json / assets 不可用时）。
+    private val MUST_ALIPAY: Pattern = Pattern.compile(
+        "交易|支付|付款|收款|退款|退回|已退|红包|转账|扣款|消费|入账|到账|支出|收入|" +
+            "余额|还款|还清|代扣|缴费|充值|买单|付款码|汇款|转出|转入|收到",
+    )
+    private val MUST_WECHAT: Pattern = Pattern.compile(
+        "交易|支付|付款|收款|退款|退回|已退|红包|转账|扣款|消费|入账|到账|支出|收入|" +
+            "余额|零钱|还款|还清|代扣|缴费|充值|买单|付款码|汇款|转出|转入|收到",
+    )
     private val EXCLUDE_COMMON: Pattern = Pattern.compile(
         "验证码|登录|朋友圈|微信消息|发来一条|会话|拍了拍|互动消息|新的朋友|群聊|" +
             "语音通话|视频通话|收到一条|发来一个红包|领取了你的红包|服务通知|余额宝收益|生活号|" +
-            "待还|应还|请于|即将到期|还款提醒|账单提醒",
+            "待还|应还|请于|即将到期|还款提醒|账单提醒|账单日|还款日",
     )
-    private val EXPENSE_HINT: Pattern = Pattern.compile("支出|付款|支付|消费|扣款|转出|提现|买单|代扣")
-    private val INCOME_HINT: Pattern = Pattern.compile("退款|退回|返还|收入|收款|到账|入账|转入")
+    private val EXPENSE_HINT: Pattern = Pattern.compile("支出|付款|支付|消费|扣款|转出|提现|买单|代扣|还款|还清|汇款|缴费|充值")
+    private val INCOME_HINT: Pattern = Pattern.compile("退款|退回|已退|收入|收款|到账|入账|转入|收到")
 
     private data class RuleMatch(
         val direction: String?,

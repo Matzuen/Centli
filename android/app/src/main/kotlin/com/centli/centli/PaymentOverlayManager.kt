@@ -1154,8 +1154,9 @@ object PaymentOverlayManager {
 
     private fun isRefundSignal(direction: String?, title: String, text: String): Boolean {
         if (direction == "refund") return true
-        val hay = "$title $text"
-        return hay.contains("退款") || hay.contains("退回") || hay.contains("返还")
+        // 与 Dart kTitleRefundWords 对齐：退款|退回|已退
+        val hay = "$title\n$text"
+        return Regex("退款|退回|已退").containsMatchIn(hay)
     }
 
     private fun isRepaySignal(direction: String?, title: String, text: String): Boolean {
