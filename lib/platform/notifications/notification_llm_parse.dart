@@ -20,12 +20,58 @@ class NotificationLlmParseOutcome {
     required this.isPayment,
     this.parse,
     this.mustHint,
+    this.modelRaw,
+    this.error,
   });
 
   final bool isPayment;
   final ParseResult? parse;
   /// Stable title/body fragment for distilling a local must-contain rule.
   final String? mustHint;
+
+  /// Model reply text (JSON or raw) for AI 处理 debug.
+  final String? modelRaw;
+
+  /// Non-null → treat like call failure (fall back to local); do not distill exclude.
+  final String? error;
+
+  bool get failed => error != null;
+
+  /// One-line / multi-line summary for「最近 AI 处理」详情.
+  String recognitionSummary() {
+    if (error != null) {
+      final buf = StringBuffer('识别失败: $error');
+      final raw = modelRaw?.trim();
+      if (raw != null && raw.isNotEmpty) {
+        buf.write('\n模型原文: ${_clip(raw, 400)}');
+      }
+      return buf.toString();
+    }
+    final buf = StringBuffer();
+    buf.write(isPayment ? '判定: 收付款' : '判定: 非收付款');
+    final p = parse;
+    if (isPayment && p != null) {
+      buf.write('\n方向: ${p.direction}');
+      if (p.amountMinor != null) {
+        final major = fromMinor(p.currency ?? 'CNY', p.amountMinor!);
+        buf.write('\n金额: $major ${p.currency ?? 'CNY'}');
+      } else {
+        buf.write('\n金额: （未识别）');
+      }
+      final m = p.merchant?.trim();
+      if (m != null && m.isNotEmpty) buf.write('\n商户: $m');
+    }
+    final hint = mustHint?.trim();
+    if (hint != null && hint.isNotEmpty) buf.write('\n关键词: $hint');
+    final raw = modelRaw?.trim();
+    if (raw != null && raw.isNotEmpty) {
+      buf.write('\n模型原文: ${_clip(raw, 400)}');
+    }
+    return buf.toString();
+  }
+
+  static String _clip(String s, int max) =>
+      s.length <= max ? s : '${s.substring(0, max)}…';
 }
 
 /// Display name for rule titles: 支付宝 / 微信 / package tail.
@@ -47,10 +93,9 @@ String notificationAppLabel(String pkg) {
 String notificationDirectionRuleLabel(String? direction) {
   switch (NotiTemplate.normalizeDirection(direction)) {
     case 'in':
-    case 'refund':
       return '收入';
     default:
-      return '支出'; // out / repay
+      return '支出';
   }
 }
 
@@ -197,19 +242,26 @@ Future<NotificationLlmParseOutcome?> parseNotificationWithLlm(
   final uri = Uri.parse('$base/chat/completions');
   final app = notificationAppLabel(raw.pkg);
   final system = '''
-你是支付通知解析器。根据 Android 通知的包名、标题、正文判断是否为真实收付款，并提取字段。
-只输出一个 JSON 对象，不要 markdown。
+你是支付通知字段抽取器，不是推理助手。
+硬性规则：
+1. 只使用用户消息里给出的「包名 / 应用名 / 标题 / 正文」原文，禁止臆测、补全、联想未出现的商户或金额。
+2. 禁止输出思考过程、分析步骤、解释、markdown、代码块；不要写「让我看看」「根据常识」等。
+3. 标题与正文都未体现收付款事实时，isPayment 必须为 false；不要根据包名是微信/支付宝就当成支付。
+4. 金额、商户只能来自原文可见数字与文字；原文没有则对应字段用 null，禁止编造。
+5. 只输出一个 JSON 对象。
+
 字段：
 - isPayment: boolean（营销/验证码/聊天/登录/朋友圈等为 false）
-- direction: "out"|"in"|"refund"|"repay"（仅 isPayment=true 时需要；不确定用 out）
-- amount: number 元（可空）
+- direction: 仅 "out" 或 "in"（退款用 in；还款用 out；不要用 refund/repay）
+- amount: number 元或 null
 - currency: 默认 "CNY"
-- merchant: 商户或对方（可空）
-- mustHint: 适合做本地规则关键词的短片段（2～16 字，勿写金额）。
-  isPayment=true 时取支付类词（如「支付成功」）；
+- merchant: 商户或对方，原文没有则 null
+- mustHint: 从原文截取的短关键词（2～16 字，勿写金额）。
+  isPayment=true 时取支付类词（如「支付成功」「退款」）；
   isPayment=false 时取排除类词（如「验证码」「登录」「朋友圈」「微信消息」）。
 ''';
   final user = '''
+仅根据下列通知原文抽取，不要推理：
 包名: ${raw.pkg}
 应用名: $app
 标题: ${raw.title}
@@ -220,6 +272,8 @@ Future<NotificationLlmParseOutcome?> parseNotificationWithLlm(
     'model': model,
     'temperature': 0,
     'max_tokens': 220,
+    // DeepSeek / 部分兼容接口：关闭思维链，只出最终答案。
+    'think': false,
     'messages': [
       {'role': 'system', 'content': system},
       {'role': 'user', 'content': user},
@@ -239,19 +293,62 @@ Future<NotificationLlmParseOutcome?> parseNotificationWithLlm(
           body: jsonEncode(body),
         )
         .timeout(timeout);
-    if (resp.statusCode < 200 || resp.statusCode >= 300) return null;
+    if (resp.statusCode < 200 || resp.statusCode >= 300) {
+      return NotificationLlmParseOutcome(
+        isPayment: false,
+        error: 'HTTP ${resp.statusCode}',
+        modelRaw: _clipModel(resp.body),
+      );
+    }
     final decoded = jsonDecode(resp.body);
-    if (decoded is! Map) return null;
+    if (decoded is! Map) {
+      return const NotificationLlmParseOutcome(
+        isPayment: false,
+        error: '响应不是 JSON 对象',
+      );
+    }
     final choices = decoded['choices'];
-    if (choices is! List || choices.isEmpty) return null;
+    if (choices is! List || choices.isEmpty) {
+      return const NotificationLlmParseOutcome(
+        isPayment: false,
+        error: 'choices 为空',
+      );
+    }
     final msg = choices.first is Map ? choices.first['message'] : null;
     final content = msg is Map ? msg['content'] : null;
-    if (content is! String || content.trim().isEmpty) return null;
+    if (content is! String || content.trim().isEmpty) {
+      return const NotificationLlmParseOutcome(
+        isPayment: false,
+        error: '模型无 content',
+      );
+    }
 
     final jsonStr = _extractJsonObject(content);
-    if (jsonStr == null) return null;
-    final map = jsonDecode(jsonStr);
-    if (map is! Map) return null;
+    if (jsonStr == null) {
+      return NotificationLlmParseOutcome(
+        isPayment: false,
+        error: '模型输出无 JSON',
+        modelRaw: content,
+      );
+    }
+    late final Map map;
+    try {
+      final decodedMap = jsonDecode(jsonStr);
+      if (decodedMap is! Map) {
+        return NotificationLlmParseOutcome(
+          isPayment: false,
+          error: 'JSON 根不是对象',
+          modelRaw: content,
+        );
+      }
+      map = decodedMap;
+    } catch (_) {
+      return NotificationLlmParseOutcome(
+        isPayment: false,
+        error: 'JSON 解析失败',
+        modelRaw: content,
+      );
+    }
 
     final isPayment = map['isPayment'] == true;
     final mustHint = _sanitizeMustHint(map['mustHint']?.toString()) ??
@@ -264,6 +361,7 @@ Future<NotificationLlmParseOutcome?> parseNotificationWithLlm(
       return NotificationLlmParseOutcome(
         isPayment: false,
         mustHint: mustHint ?? scene,
+        modelRaw: jsonStr,
         parse: ParseResult(
           ok: false,
           happenAt: when,
@@ -304,6 +402,7 @@ Future<NotificationLlmParseOutcome?> parseNotificationWithLlm(
     return NotificationLlmParseOutcome(
       isPayment: true,
       mustHint: mustHint,
+      modelRaw: jsonStr,
       parse: ParseResult(
         amountMinor: amountMinor,
         currency: currency,
@@ -316,12 +415,24 @@ Future<NotificationLlmParseOutcome?> parseNotificationWithLlm(
       ),
     );
   } on TimeoutException {
-    return null;
-  } catch (_) {
-    return null;
+    return const NotificationLlmParseOutcome(
+      isPayment: false,
+      error: '超时',
+    );
+  } catch (e) {
+    return NotificationLlmParseOutcome(
+      isPayment: false,
+      error: '异常: $e',
+    );
   } finally {
     if (owned) httpClient.close();
   }
+}
+
+String _clipModel(String s, [int max = 240]) {
+  final t = s.trim();
+  if (t.length <= max) return t;
+  return '${t.substring(0, max)}…';
 }
 
 String? _sanitizeMustHint(String? raw) {

@@ -59,9 +59,10 @@ void main() {
     expect(byCcy2['CNY']!.income, 5000);
   });
 
-  test('pending confirm maps direction refund to type refund', () {
+  test('pending confirm no longer maps refund to type refund', () {
     final src = File('lib/features/pending/pending_page.dart').readAsStringSync();
-    expect(src.contains("if (_direction == 'refund')"), isTrue);
-    expect(src.contains("txnType = 'refund'"), isTrue);
+    expect(src.contains("txnType = 'refund'"), isFalse);
+    expect(src.contains("isRefundSignal"), isTrue);
+    expect(src.contains("'退款'"), isTrue);
   });
 }

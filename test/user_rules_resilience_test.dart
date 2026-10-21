@@ -59,8 +59,8 @@ void main() {
       expect(t!.direction, 'out');
     });
 
-    test('in / out / refund round-trip via toJson', () {
-      for (final d in ['in', 'out', 'refund', 'repay']) {
+    test('in / out round-trip; legacy refund/repay normalize', () {
+      for (final d in ['in', 'out']) {
         final m = _goodMap(id: 'd_$d')..['direction'] = d;
         final t = NotiTemplate.tryParse(m);
         expect(t, isNotNull);
@@ -69,6 +69,16 @@ void main() {
         expect(again, isNotNull);
         expect(again!.direction, d);
       }
+      expect(
+        NotiTemplate.tryParse(_goodMap(id: 'd_refund')..['direction'] = 'refund')!
+            .direction,
+        'in',
+      );
+      expect(
+        NotiTemplate.tryParse(_goodMap(id: 'd_repay')..['direction'] = 'repay')!
+            .direction,
+        'out',
+      );
     });
 
     test('normalizeDirection helper', () {
@@ -76,8 +86,8 @@ void main() {
       expect(NotiTemplate.normalizeDirection(''), 'out');
       expect(NotiTemplate.normalizeDirection('IN'), 'out');
       expect(NotiTemplate.normalizeDirection('in'), 'in');
-      expect(NotiTemplate.normalizeDirection('refund'), 'refund');
-      expect(NotiTemplate.normalizeDirection('repay'), 'repay');
+      expect(NotiTemplate.normalizeDirection('refund'), 'in');
+      expect(NotiTemplate.normalizeDirection('repay'), 'out');
     });
   });
 

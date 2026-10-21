@@ -340,7 +340,7 @@ group('manual capture parser (share/OCR/clipboard)', () {
       expect(r.amountMinor, 20000);
     });
 
-    test('alipay 退款成功 is direction refund', () {
+    test('alipay 退款成功 is direction in (tag/note, not type refund)', () {
       final raw = RawNotification(
         pkg: 'com.eg.android.AlipayGphone',
         title: '退款成功',
@@ -349,7 +349,8 @@ group('manual capture parser (share/OCR/clipboard)', () {
       );
       final r = parseNotification(raw);
       expect(r.templateId, 'alipay_refund_zh');
-      expect(r.direction, 'refund');
+      expect(r.direction, 'in');
+      expect(isRefundSignal(templateId: r.templateId, title: raw.title), isTrue);
       expect(r.ok, isTrue);
       expect(r.amountMinor, 2850);
     });
@@ -488,7 +489,7 @@ group('manual capture parser (share/OCR/clipboard)', () {
   });
 
   group('T0B repay + yuan amount', () {
-    test('huabei repay notice → repay 12.54', () {
+    test('huabei repay notice → out 12.54 (tag/note, not type repay)', () {
       final r = parseNotification(
         RawNotification(
           pkg: 'com.eg.android.AlipayGphone',
@@ -498,7 +499,11 @@ group('manual capture parser (share/OCR/clipboard)', () {
         ),
       );
       expect(r.ok, isTrue);
-      expect(r.direction, 'repay');
+      expect(r.direction, 'out');
+      expect(
+        isRepaySignal(templateId: r.templateId, title: '10月花呗账单还清啦'),
+        isTrue,
+      );
       expect(r.amountMinor, 1254);
       expect(r.templateId, 'alipay_repay_zh');
     });
@@ -590,8 +595,9 @@ group('manual capture parser (share/OCR/clipboard)', () {
       expect(r.direction, 'out');
     });
 
-    test('normalizeDirection accepts repay', () {
-      expect(NotiTemplate.normalizeDirection('repay'), 'repay');
+    test('normalizeDirection maps legacy repay/refund', () {
+      expect(NotiTemplate.normalizeDirection('repay'), 'out');
+      expect(NotiTemplate.normalizeDirection('refund'), 'in');
       expect(NotiTemplate.normalizeDirection('nope'), 'out');
     });
   });

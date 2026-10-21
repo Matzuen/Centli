@@ -42,14 +42,14 @@ void main() {
         pkg: alipay,
         title: '退款成功',
         text: '商家已退款 ¥9.90',
-        dir: 'refund',
+        dir: 'in',
         minor: 990,
       ),
       '支付宝 还款成功': (
         pkg: alipay,
         title: '还款成功',
         text: '花呗已还清 ¥500.00',
-        dir: 'repay',
+        dir: 'out',
         minor: 50000,
       ),
       '微信 微信支付': (
@@ -77,7 +77,7 @@ void main() {
         pkg: wechat,
         title: '退款成功',
         text: '退款 ¥12.00 已到账',
-        dir: 'refund',
+        dir: 'in',
         minor: 1200,
       ),
     };

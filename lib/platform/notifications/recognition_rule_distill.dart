@@ -533,13 +533,9 @@ String? _fallbackMust(RawNotification raw, String direction) {
         return title.contains('收款') ? '收款' : '到账';
       }
       break;
-    case 'refund':
-      if (title.contains('退款')) return '退款';
-      break;
-    case 'repay':
-      if (title.contains('还款')) return '还款';
-      break;
     default:
+      if (title.contains('退款')) return '退款';
+      if (title.contains('还款')) return '还款';
       if (title.contains('支付成功')) return '支付成功';
       if (title.contains('支付')) return '支付';
       if (title.contains('付款')) return '付款';

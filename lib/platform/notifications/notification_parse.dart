@@ -23,13 +23,16 @@ class NotiTemplate {
     this.matchOn = 'body',
   });
 
-  /// Allowed values: `in` | `out` | `refund` | `repay`. Use [normalizeDirection].
-  static const Set<String> kDirections = {'in', 'out', 'refund', 'repay'};
+  /// Accounting directions only: `in` | `out`.
+  /// Legacy `refund` / `repay` normalize to in / out (use tags/notes instead).
+  static const Set<String> kDirections = {'in', 'out'};
 
-  /// Illegal / missing → `'out'` (preserves pre-direction behavior).
+  /// Illegal / missing → `'out'`. Legacy `refund`→`in`, `repay`→`out`.
   static String normalizeDirection(String? raw) {
     final v = raw?.trim();
-    if (v != null && kDirections.contains(v)) return v;
+    if (v == 'in' || v == 'out') return v!;
+    if (v == 'refund') return 'in';
+    if (v == 'repay') return 'out';
     return 'out';
   }
 
@@ -45,7 +48,7 @@ class NotiTemplate {
   final String? merchantRegex;
   final bool merchantFromTitle;
   final String? defaultAccountHint;
-  /// Flow direction: `in` (income), `out` (expense), `refund`, `repay`.
+  /// Flow direction: `in` (income) or `out` (expense).
   final String direction;
 
   /// Which text the keyword rules run against: `body` (标题+正文, legacy) or
@@ -253,6 +256,42 @@ const kTitleRefundWords = r'退款|退回|已退';
 const kTitleRepayWords = r'还款|还清|代扣';
 const kTitleTransferWords = r'转账';
 
+/// 退款不再作为独立账单类型：记收入，并用标签/备注标记。
+bool isRefundSignal({
+  String? direction,
+  String? templateId,
+  String? title,
+  String? text,
+}) {
+  if (direction == 'refund') return true;
+  final tid = templateId?.toLowerCase() ?? '';
+  if (tid.contains('refund')) return true;
+  final body = '${title ?? ''}\n${text ?? ''}';
+  return RegExp(kTitleRefundWords).hasMatch(body);
+}
+
+/// 还款记支出，标签「还款」（不再使用独立 direction）。
+///
+/// 「代扣」 alone 会出现在普通支付通知里，只在标题含还款语义时认作还款。
+bool isRepaySignal({
+  String? direction,
+  String? templateId,
+  String? title,
+  String? text,
+}) {
+  if (direction == 'repay') return true;
+  final tid = templateId?.toLowerCase() ?? '';
+  if (tid.contains('repay')) return true;
+  final t = title ?? '';
+  final body = '$t\n${text ?? ''}';
+  if (RegExp(r'待还|应还|请于|即将到期|还款提醒|账单提醒').hasMatch(body)) {
+    return false;
+  }
+  if (RegExp(r'还款|还清').hasMatch(t)) return true;
+  return RegExp(r'代扣').hasMatch(t) &&
+      RegExp(r'还款|花呗|借呗|信用购').hasMatch(body);
+}
+
 /// 内置规则（同时镜像到 assets/noti_templates.json）。
 ///
 /// 顺序即优先级：到账 / 收款 → 退款 → 还款 → 转账 → 支付。
@@ -284,7 +323,8 @@ List<NotiTemplate> builtinNotiTemplates() => const [
         amountRegex: kAmountRegex,
         merchantRegex: r'(?:商户|来自)\s*(.+?)(?:\s|$)',
         defaultAccountHint: 'alipay',
-        direction: 'refund',
+        // 退款记收入；入账时打「退款」标签/备注，不再使用独立 type。
+        direction: 'in',
         matchOn: 'title',
       ),
       NotiTemplate(
@@ -309,10 +349,10 @@ List<NotiTemplate> builtinNotiTemplates() => const [
         amountRegex: kAmountRegex,
         merchantRegex: r'(?:商户|来自)\s*(.+?)(?:\s|$)',
         defaultAccountHint: 'wechat',
-        direction: 'refund',
+        direction: 'in',
         matchOn: 'title',
       ),
-      // 还款必须在支付之前：「还款…扣款」同时命中扣款。
+      // 还款必须在支付之前：「还款…扣款」同时命中扣款。记支出 +「还款」标签。
       NotiTemplate(
         id: 'alipay_repay_zh',
         name: '支付宝还款',
@@ -324,7 +364,7 @@ List<NotiTemplate> builtinNotiTemplates() => const [
             r'验证码|登录|待还|应还|请于|即将到期|还款提醒|账单提醒|账单日|还款日',
         amountRegex: kAmountRegex,
         defaultAccountHint: 'alipay',
-        direction: 'repay',
+        direction: 'out',
         matchOn: 'title',
       ),
       NotiTemplate(
@@ -617,22 +657,34 @@ _ExtractedAmount? _extractAmount(
 }
 
 String dedupeKey(RawNotification raw, ParseResult r) {
-  // Same StatusBarNotification key → same event (align NativeCaptureIngest).
-  final nk = raw.key?.trim();
-  if (nk != null && nk.isNotEmpty) {
-    return '${raw.pkg}|nk|$nk';
-  }
+  // Content fingerprint so consecutive payments that reuse the same
+  // StatusBarNotification key (WeChat/Alipay) still create separate rows.
+  // tipKey uses Java String.hashCode (align NativeCaptureIngest).
+  final tip = '${raw.title}\n${raw.text}'.trim().replaceAll(RegExp(r'\s+'), '');
+  final tipKey = tip.isEmpty ? 'empty' : _javaStringHashHex(tip);
   final amt = r.amountMinor?.toString() ?? 'na';
   final bucket = raw.whenMs ~/ 120000; // 2-minute window
+  final nk = raw.key?.trim();
+  if (nk != null && nk.isNotEmpty) {
+    return '${raw.pkg}|nk|$nk|$amt|$tipKey';
+  }
   // Failed parses must not collapse all same-pkg notices in the window
   // into one key (that caused "first capture works, later ones vanish").
   if (!r.ok || r.amountMinor == null) {
-    final tip = '${raw.title}\n${raw.text}'.trim();
-    final tipKey = tip.isEmpty ? 'empty' : tip.hashCode.toRadixString(16);
     return '${raw.pkg}|raw|$tipKey|$bucket';
   }
-  // T2-3: omit merchant so native/Dart keys stay aligned when extractors differ.
-  return '${raw.pkg}|$amt|$bucket';
+  // Include body hash so same amount within 2 minutes (two coffees) are distinct.
+  return '${raw.pkg}|$amt|$bucket|$tipKey';
+}
+
+/// Java `String.hashCode` → lowercase hex (matches `Integer.toHexString`).
+String _javaStringHashHex(String s) {
+  var h = 0;
+  for (final c in s.codeUnits) {
+    h = (31 * h + c) & 0xFFFFFFFF;
+  }
+  // Java int is signed; toHexString uses the bit pattern.
+  return h.toUnsigned(32).toRadixString(16);
 }
 
 String normalizeMerchantKey(String merchant) =>

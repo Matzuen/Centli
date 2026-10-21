@@ -499,9 +499,6 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
   bool _expanded = false;
   bool _categoryFallback = false;
   bool _accountFallback = false;
-  /// Repay default: exclude from stats/budget (T0B-5).
-  bool _includeRepayInStat = false;
-
   PendingCapture get c => widget.capture;
 
   @override
@@ -533,8 +530,7 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
   void _applySuggestions() {
     final cats = widget.categories;
     final accounts = widget.accounts;
-    // T1-5: prefer category kind matching parse direction (refund → out).
-    // Confirm still derives txn type from category kind (B1-2).
+    // Prefer category kind matching parse direction (in → income cats).
     final preferredKind = _direction == 'in' ? 'in' : 'out';
     final preferred =
         cats.where((x) => x.kind == preferredKind).toList(growable: false);
@@ -619,10 +615,6 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
     switch (_direction) {
       case 'in':
         return '收入';
-      case 'refund':
-        return '退款';
-      case 'repay':
-        return '还款';
       default:
         return '支出';
     }
@@ -698,24 +690,6 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
                         fontWeight: FontWeight.w600,
                       ),
                 ),
-                if (_direction == 'repay') ...[
-                  const SizedBox(height: CentliSpacing.item),
-                  Text(
-                    '还款不计入收支统计，避免与花呗消费重复计算',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: scheme.onSurfaceVariant,
-                        ),
-                  ),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
-                    title: const Text('计入统计'),
-                    value: _includeRepayInStat,
-                    onChanged: _busy
-                        ? null
-                        : (v) => setState(() => _includeRepayInStat = v),
-                  ),
-                ],
                 if (_categoryFallback || _accountFallback)
                   Padding(
                     padding: const EdgeInsets.only(top: 4),
@@ -954,18 +928,12 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
       final outCats = widget.categories.where((x) => x.kind == 'out');
       final known = outCats.any((x) => x.id == _categoryId) ||
           inCats.any((x) => x.id == _categoryId);
-      // T4-2: direction refund maps to type refund (never income).
       final String txnType;
-      if (_direction == 'refund') {
-        txnType = 'refund';
-      } else if (!known) {
-        txnType = 'out'; // deleted/archived category → fallback expense
+      if (!known) {
+        txnType = _direction == 'in' ? 'in' : 'out';
       } else {
         txnType = inCats.any((x) => x.id == _categoryId) ? 'in' : 'out';
       }
-      final isRepay = _direction == 'repay';
-      final include = isRepay ? (_includeRepayInStat ? 1 : 0) : 1;
-      // Merchant text for auto-categorize rules (not stored as a column).
       final templates = NotiTemplateStore.peek();
       final parsedForRule = parseNotification(
         RawNotification(
@@ -976,19 +944,40 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
         ),
         templates.isEmpty ? null : templates,
       );
+      final refund = isRefundSignal(
+        direction: c.direction,
+        templateId: parsedForRule.templateId,
+        title: c.rawTitle,
+        text: c.rawText,
+      );
+      final repay = isRepaySignal(
+        direction: c.direction,
+        templateId: parsedForRule.templateId,
+        title: c.rawTitle,
+        text: c.rawText,
+      );
+      final tags = <String>[
+        if (refund) '退款',
+        if (repay) '还款',
+      ];
+      var note = _noteCtrl.text.trim();
+      if (refund && note.isNotEmpty && !note.contains('退款')) {
+        note = '$note · 退款';
+      } else if (refund && note.isEmpty) {
+        note = '退款';
+      }
       await ref.read(databaseProvider).confirmPendingCapture(
             pendingId: c.id,
             amountMinor: toMinor(ccy, major),
             currency: ccy,
             accountId: _accountId!,
             categoryId: _categoryId!,
-            note: _noteCtrl.text.trim().isEmpty
-                ? null
-                : _noteCtrl.text.trim(),
+            note: note.isEmpty ? null : note,
             merchantForRule: parsedForRule.merchant,
-            type: isRepay ? 'out' : txnType,
-            includeInStat: include,
-            includeInBudget: include,
+            type: txnType,
+            tags: tags.isEmpty ? null : tags,
+            includeInStat: 1,
+            includeInBudget: 1,
           );
       await NotificationCaptureStub.cancelPendingConfirm(c.id);
       if (mounted) {

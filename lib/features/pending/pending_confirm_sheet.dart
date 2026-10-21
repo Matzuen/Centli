@@ -10,15 +10,11 @@ import '../../platform/notifications/notification_parse.dart';
 import '../../platform/notifications/noti_template_store.dart';
 import '../../core/widgets/glass.dart';
 
-/// 一条待确认通知里，「方向」的显示名。
+/// 一条待确认通知里，「方向」的显示名（仅支出 / 收入）。
 String pendingDirectionLabel(String? direction) {
   switch (NotiTemplate.normalizeDirection(direction)) {
     case 'in':
       return '收入';
-    case 'refund':
-      return '退款';
-    case 'repay':
-      return '还款';
     default:
       return '支出';
   }
@@ -82,7 +78,6 @@ class _ConfirmPendingSheetState extends ConsumerState<_ConfirmPendingSheet> {
   String? _accountId;
   String? _directionOverride;
   var _busy = false;
-  var _includeRepayInStat = false;
 
   PendingCapture get c => widget.capture;
 
@@ -128,7 +123,19 @@ class _ConfirmPendingSheetState extends ConsumerState<_ConfirmPendingSheet> {
           ? ''
           : fromMinor(ccy, c.amountMinor!).toStringAsFixed(ccy == 'JPY' ? 0 : 2),
     );
-    _noteCtrl = TextEditingController(text: c.note ?? '');
+    final seedNote = () {
+      final base = (c.note ?? '').trim();
+      if (isRefundSignal(
+            direction: c.direction,
+            title: c.rawTitle,
+            text: c.rawText,
+          ) &&
+          !base.contains('退款')) {
+        return base.isEmpty ? '退款' : '$base · 退款';
+      }
+      return base;
+    }();
+    _noteCtrl = TextEditingController(text: seedNote);
     final cats = _catsForDirection;
     final suggested = c.suggestedCategoryId;
     _categoryId = cats.any((x) => x.id == suggested)
@@ -169,16 +176,13 @@ class _ConfirmPendingSheetState extends ConsumerState<_ConfirmPendingSheet> {
       final outCats = widget.categories.where((x) => x.kind == 'out');
       final known = outCats.any((x) => x.id == _categoryId) ||
           inCats.any((x) => x.id == _categoryId);
+      // 仅支出 / 收入；退款走收入 + 标签「退款」。
       final String txnType;
-      if (_direction == 'refund') {
-        txnType = 'refund';
-      } else if (!known) {
-        txnType = 'out';
+      if (!known) {
+        txnType = _direction == 'in' ? 'in' : 'out';
       } else {
         txnType = inCats.any((x) => x.id == _categoryId) ? 'in' : 'out';
       }
-      final isRepay = _direction == 'repay';
-      final include = isRepay ? (_includeRepayInStat ? 1 : 0) : 1;
       final templates = NotiTemplateStore.peek();
       final parsedForRule = parseNotification(
         RawNotification(
@@ -189,19 +193,40 @@ class _ConfirmPendingSheetState extends ConsumerState<_ConfirmPendingSheet> {
         ),
         templates.isEmpty ? null : templates,
       );
+      final refund = isRefundSignal(
+        direction: c.direction,
+        templateId: parsedForRule.templateId,
+        title: c.rawTitle,
+        text: c.rawText,
+      );
+      final repay = isRepaySignal(
+        direction: c.direction,
+        templateId: parsedForRule.templateId,
+        title: c.rawTitle,
+        text: c.rawText,
+      );
+      final tags = <String>[
+        if (refund) '退款',
+        if (repay) '还款',
+      ];
+      var note = _noteCtrl.text.trim();
+      if (refund && note.isNotEmpty && !note.contains('退款')) {
+        note = '$note · 退款';
+      } else if (refund && note.isEmpty) {
+        note = '退款';
+      }
       await ref.read(databaseProvider).confirmPendingCapture(
             pendingId: c.id,
             amountMinor: toMinor(ccy, major),
             currency: ccy,
             accountId: _accountId!,
             categoryId: _categoryId!,
-            note: _noteCtrl.text.trim().isEmpty
-                ? null
-                : _noteCtrl.text.trim(),
+            note: note.isEmpty ? null : note,
             merchantForRule: parsedForRule.merchant,
-            type: isRepay ? 'out' : txnType,
-            includeInStat: include,
-            includeInBudget: include,
+            type: txnType,
+            tags: tags.isEmpty ? null : tags,
+            includeInStat: 1,
+            includeInBudget: 1,
           );
       await NotificationCaptureStub.cancelPendingConfirm(c.id);
       if (!mounted) return;
@@ -261,8 +286,6 @@ class _ConfirmPendingSheetState extends ConsumerState<_ConfirmPendingSheet> {
                   itemBuilder: (context) => const [
                     PopupMenuItem(value: 'out', child: Text('支出')),
                     PopupMenuItem(value: 'in', child: Text('收入')),
-                    PopupMenuItem(value: 'refund', child: Text('退款')),
-                    PopupMenuItem(value: 'repay', child: Text('还款')),
                   ],
                   child: Chip(
                     label: Text(pendingDirectionLabel(_direction)),
@@ -347,27 +370,10 @@ class _ConfirmPendingSheetState extends ConsumerState<_ConfirmPendingSheet> {
               controller: _noteCtrl,
               decoration: const InputDecoration(
                 labelText: '备注',
+                hintText: '退款可写在备注，或入账后打「退款」标签',
                 isDense: true,
               ),
             ),
-            if (_direction == 'repay') ...[
-              const SizedBox(height: CentliSpacing.item),
-              Text(
-                '还款默认不计入收支统计，避免与花呗消费重复计算',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                ),
-              ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                dense: true,
-                title: const Text('计入统计'),
-                value: _includeRepayInStat,
-                onChanged: _busy
-                    ? null
-                    : (v) => setState(() => _includeRepayInStat = v),
-              ),
-            ],
             const SizedBox(height: CentliSpacing.item),
             Row(
               children: [

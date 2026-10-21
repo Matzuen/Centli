@@ -18,21 +18,19 @@ void main() {
     final incomeCat = inCats.first;
     final expenseCat = outCats.first;
 
-    // Mirror pending_page.dart resolution against loaded lists (behavior).
+    // Mirror pending_page.dart: only in/out (refund is tag/note, not type).
     String resolveType(String? categoryId, {String direction = 'out'}) {
-      if (direction == 'refund') return 'refund';
       final known = outCats.any((x) => x.id == categoryId) ||
           inCats.any((x) => x.id == categoryId);
-      final txnType = !known
-          ? 'out'
-          : (inCats.any((x) => x.id == categoryId) ? 'in' : 'out');
-      return txnType;
+      if (!known) return direction == 'in' ? 'in' : 'out';
+      return inCats.any((x) => x.id == categoryId) ? 'in' : 'out';
     }
 
     expect(resolveType(incomeCat.id), 'in');
     expect(resolveType(expenseCat.id), 'out');
     expect(resolveType('deleted-cat-id'), 'out');
-    expect(resolveType(expenseCat.id, direction: 'refund'), 'refund');
+    expect(resolveType('deleted-cat-id', direction: 'in'), 'in');
+    expect(resolveType(incomeCat.id, direction: 'in'), 'in');
 
     final pendingInId = await db.ingestParsedNotification(
       ledgerId: ledger.id,

@@ -33,7 +33,7 @@
       "merchantRegex": "(?:商户|来自)\\s*(.+?)(?:\\s|$)",
       "merchantFromTitle": false,
       "defaultAccountHint": "alipay",
-      "direction": "refund",
+      "direction": "in",
       "matchOn": "title"
     },
     {
@@ -67,7 +67,7 @@
       "merchantRegex": "(?:商户|来自)\\s*(.+?)(?:\\s|$)",
       "merchantFromTitle": false,
       "defaultAccountHint": "wechat",
-      "direction": "refund",
+      "direction": "in",
       "matchOn": "title"
     },
     {
@@ -84,7 +84,7 @@
       "merchantRegex": null,
       "merchantFromTitle": false,
       "defaultAccountHint": "alipay",
-      "direction": "repay",
+      "direction": "out",
       "matchOn": "title"
     },
     {

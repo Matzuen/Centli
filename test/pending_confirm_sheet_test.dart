@@ -50,8 +50,9 @@ void main() {
     test('direction labels', () {
       expect(pendingDirectionLabel('out'), '支出');
       expect(pendingDirectionLabel('in'), '收入');
-      expect(pendingDirectionLabel('refund'), '退款');
-      expect(pendingDirectionLabel('repay'), '还款');
+      // Legacy refund/repay normalize to income/expense labels.
+      expect(pendingDirectionLabel('refund'), '收入');
+      expect(pendingDirectionLabel('repay'), '支出');
       expect(pendingDirectionLabel(null), '支出');
     });
 

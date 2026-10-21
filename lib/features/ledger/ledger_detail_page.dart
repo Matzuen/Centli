@@ -128,7 +128,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       _pendingIncludeInBudget != null;
 
   String get _type =>
-      _pendingType ?? (txn.type == 'refund' ? 'out' : txn.type);
+      _pendingType ?? (txn.type == 'refund' ? 'in' : txn.type);
 
   bool get _isTransfer => _type == 'transfer';
 
