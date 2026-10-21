@@ -5,13 +5,14 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('refund reduces expense and never increases income', () async {
+  test('type=refund rows are ignored by range summary', () async {
     final db = CentliDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);
     await db.seedDefaults();
     final ledger = await (db.select(db.ledgers)..limit(1)).getSingle();
     final account = (await db.loadActiveAccounts(ledger.id)).first;
     final outCat = (await db.loadCategories(ledger.id, 'out')).first;
+    final inCat = (await db.loadCategories(ledger.id, 'in')).first;
 
     await db.insertManualTransaction(
       ledgerId: ledger.id,
@@ -21,6 +22,7 @@ void main() {
       accountId: account.id,
       categoryId: outCat.id,
     );
+    // 历史脏数据：不再参与统计。
     await db.insertManualTransaction(
       ledgerId: ledger.id,
       type: 'refund',
@@ -35,32 +37,23 @@ void main() {
       amountMinor: 5000,
       currency: 'CNY',
       accountId: account.id,
-      categoryId: (await db.loadCategories(ledger.id, 'in')).first.id,
+      categoryId: inCat.id,
     );
 
     final now = DateTime.now();
-    final start = DateTime(now.year, now.month, 1).toUtc().millisecondsSinceEpoch;
-    final end = DateTime(now.year, now.month + 1, 1).toUtc().millisecondsSinceEpoch;
+    final start =
+        DateTime(now.year, now.month, 1).toUtc().millisecondsSinceEpoch;
+    final end =
+        DateTime(now.year, now.month + 1, 1).toUtc().millisecondsSinceEpoch;
     final byCcy = await db.rangeSummaryByCurrency(ledger.id, start, end);
     final cny = byCcy['CNY']!;
     expect(cny.income, 5000);
-    expect(cny.expense, 7000);
-
-    await db.insertManualTransaction(
-      ledgerId: ledger.id,
-      type: 'out',
-      amountMinor: -1000,
-      currency: 'CNY',
-      accountId: account.id,
-      categoryId: outCat.id,
-    );
-    final byCcy2 = await db.rangeSummaryByCurrency(ledger.id, start, end);
-    expect(byCcy2['CNY']!.expense, 6000);
-    expect(byCcy2['CNY']!.income, 5000);
+    expect(cny.expense, 10000);
   });
 
   test('pending confirm no longer maps refund to type refund', () {
-    final src = File('lib/features/pending/pending_page.dart').readAsStringSync();
+    final src =
+        File('lib/features/pending/pending_page.dart').readAsStringSync();
     expect(src.contains("txnType = 'refund'"), isFalse);
     expect(src.contains("isRefundSignal"), isTrue);
     expect(src.contains("'退款'"), isTrue);

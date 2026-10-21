@@ -1014,17 +1014,13 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
 
     final map = <String, ({int income, int expense})>{};
     for (final r in rows) {
-      if (r.type != 'in' && r.type != 'out' && r.type != 'refund') continue;
+      if (r.type != 'in' && r.type != 'out') continue;
       final cur = map[r.currency] ?? (income: 0, expense: 0);
       if (r.type == 'in') {
         map[r.currency] =
             (income: cur.income + r.amountMinor, expense: cur.expense);
-      } else if (r.type == 'refund') {
-        // Refund reduces net expense; never income.
-        map[r.currency] =
-            (income: cur.income, expense: cur.expense - r.amountMinor);
       } else {
-        // out (may be negative for partial refunds)
+        // out（金额可为负，表示冲减）
         map[r.currency] =
             (income: cur.income, expense: cur.expense + r.amountMinor);
       }
@@ -1102,7 +1098,7 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
       SELECT id, SUM(delta) AS delta FROM (
         SELECT account_id AS id,
                SUM(CASE
-                 WHEN type IN ('in', 'refund') THEN amount_minor
+                 WHEN type = 'in' THEN amount_minor
                  WHEN type IN ('out', 'transfer') THEN -amount_minor
                  ELSE 0
                END) AS delta
@@ -2488,7 +2484,7 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
       where.add('type = ?');
       vars.add(Variable<String>(type));
     } else if (expenseSide) {
-      where.add("type IN ('out', 'refund')");
+      where.add("type = 'out'");
     }
     final rows = await customSelect(
       'SELECT type, SUM(amount_minor) AS total FROM transactions '
@@ -2535,7 +2531,7 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
       where.add('type = ?');
       vars.add(Variable<String>(type));
     } else if (expenseSide) {
-      where.add("type IN ('out', 'refund')");
+      where.add("type = 'out'");
     }
     if (skipTransfer) where.add("type != 'transfer'");
     final rows = await customSelect(
@@ -2676,17 +2672,16 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
     );
     final book = foreign.isEmpty ? null : await loadFxBook();
     var income = sums['in'] ?? 0;
-    var expense = (sums['out'] ?? 0) - (sums['refund'] ?? 0);
+    var expense = sums['out'] ?? 0;
     var converted = 0;
     if ((sums['in'] ?? 0) != 0 ||
         (sums['out'] ?? 0) != 0 ||
-        (sums['refund'] ?? 0) != 0 ||
         sums.isNotEmpty) {
       final baseCount = await customSelect(
         '''
         SELECT COUNT(*) AS c FROM transactions
         WHERE ledger_id = ? AND deleted_at IS NULL AND include_in_stat = 1
-          AND currency = ? AND type IN ('in','out','refund')
+          AND currency = ? AND type IN ('in','out')
           AND happen_at >= ? AND happen_at < ?
         ''',
         variables: [
@@ -2702,7 +2697,7 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
     var unconverted = 0;
     final leftover = <String, ({int income, int expense})>{};
     for (final r in foreign) {
-      if (r.type != 'in' && r.type != 'out' && r.type != 'refund') continue;
+      if (r.type != 'in' && r.type != 'out') continue;
       final asBase = book!.convertMinor(
         fromCcy: r.currency,
         toCcy: baseCurrency,
@@ -2715,9 +2710,6 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
         if (r.type == 'in') {
           leftover[r.currency] =
               (income: cur.income + r.amount, expense: cur.expense);
-        } else if (r.type == 'refund') {
-          leftover[r.currency] =
-              (income: cur.income, expense: cur.expense - r.amount);
         } else {
           leftover[r.currency] =
               (income: cur.income, expense: cur.expense + r.amount);
@@ -2727,8 +2719,6 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
       converted += 1;
       if (r.type == 'in') {
         income += asBase;
-      } else if (r.type == 'refund') {
-        expense -= asBase;
       } else {
         expense += asBase;
       }
@@ -2772,9 +2762,9 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
     );
     final book = foreign.isEmpty ? null : await loadFxBook();
     var income = sums['in'] ?? 0;
-    var expense = (sums['out'] ?? 0) - (sums['refund'] ?? 0);
+    var expense = sums['out'] ?? 0;
     for (final r in foreign) {
-      if (r.type != 'in' && r.type != 'out' && r.type != 'refund') continue;
+      if (r.type != 'in' && r.type != 'out') continue;
       final asBase = book!.convertMinor(
         fromCcy: r.currency,
         toCcy: baseCurrency,
@@ -2784,8 +2774,6 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
       if (asBase == null) continue;
       if (r.type == 'in') {
         income += asBase;
-      } else if (r.type == 'refund') {
-        expense -= asBase;
       } else {
         expense += asBase;
       }
@@ -2909,14 +2897,12 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
       final total = _sqlInt(r, 'total');
       if (type == 'in') {
         income[id] = (income[id] ?? 0) + total;
-      } else if (type == 'refund') {
-        expense[id] = (expense[id] ?? 0) - total;
       } else if (type == 'out') {
         expense[id] = (expense[id] ?? 0) + total;
       }
     }
     for (final r in foreign) {
-      if (r.type != 'in' && r.type != 'out' && r.type != 'refund') continue;
+      if (r.type != 'in' && r.type != 'out') continue;
       final id = r.accountId;
       if (id == null) continue;
       final asBase = book!.convertMinor(
@@ -2928,8 +2914,6 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
       if (asBase == null) continue;
       if (r.type == 'in') {
         income[id] = (income[id] ?? 0) + asBase;
-      } else if (r.type == 'refund') {
-        expense[id] = (expense[id] ?? 0) - asBase;
       } else {
         expense[id] = (expense[id] ?? 0) + asBase;
       }
@@ -3264,7 +3248,7 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
       SELECT COALESCE(category_id, '') AS cid, type, SUM(amount_minor) AS total
       FROM transactions
       WHERE ledger_id = ? AND deleted_at IS NULL AND include_in_budget = 1
-        AND currency = ? AND type IN ('out', 'refund')
+        AND currency = ? AND type = 'out'
         AND happen_at >= ? AND happen_at < ?
       GROUP BY cid, type
       ''',
@@ -3289,16 +3273,15 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
     final spentByCat = <String, int>{};
     final leftover = <String, int>{};
     for (final r in baseCats) {
-      final type = r.read<String>('type');
       final total = _sqlInt(r, 'total');
-      final signed = type == 'refund' ? -total : total;
-      spentTotal += signed;
+      spentTotal += total;
       final cid = r.read<String>('cid');
       if (cid.isNotEmpty) {
-        spentByCat[cid] = (spentByCat[cid] ?? 0) + signed;
+        spentByCat[cid] = (spentByCat[cid] ?? 0) + total;
       }
     }
     for (final r in foreign) {
+      if (r.type != 'out') continue;
       final asBase = book!.convertMinor(
         fromCcy: r.currency,
         toCcy: baseCurrency,
@@ -3306,15 +3289,13 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
         onDay: FxBook.dayFromHappenAtMs(r.happenAt),
       );
       if (asBase == null) {
-        final signedRaw = r.type == 'refund' ? -r.amount : r.amount;
-        leftover[r.currency] = (leftover[r.currency] ?? 0) + signedRaw;
+        leftover[r.currency] = (leftover[r.currency] ?? 0) + r.amount;
         continue;
       }
-      final signed = r.type == 'refund' ? -asBase : asBase;
-      spentTotal += signed;
+      spentTotal += asBase;
       final cid = r.categoryId;
       if (cid != null && cid.isNotEmpty) {
-        spentByCat[cid] = (spentByCat[cid] ?? 0) + signed;
+        spentByCat[cid] = (spentByCat[cid] ?? 0) + asBase;
       }
     }
 

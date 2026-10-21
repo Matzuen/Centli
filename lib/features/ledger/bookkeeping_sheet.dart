@@ -176,8 +176,7 @@ List<Account> _accounts = [];
       _ledgerId = ledgerId;
       _accounts = accounts;
       if (existing != null) {
-        // Legacy type=refund → edit as income (tag/note carries「退款」).
-        _type = existing.type == 'refund' ? 'in' : existing.type;
+        _type = existing.type;
         _amountText = fromMinor(
           existing.currency,
           existing.amountMinor,
@@ -221,7 +220,7 @@ List<Account> _accounts = [];
         }
       } else if (template != null) {
         // 照着这笔再记一笔：复制分类 / 资产账户 / 标签 / 备注，金额留空。
-        _type = template.type == 'refund' ? 'in' : template.type;
+        _type = template.type;
         _accountId = template.accountId;
         _toAccountId = template.toAccountId;
         _categoryId = template.categoryId;
@@ -256,7 +255,7 @@ List<Account> _accounts = [];
       }
     } else if (template != null && template.type != 'out' &&
         template.type != 'transfer') {
-      // 模板是收入 / 退款时，分类列表要换成对应方向。
+      // 模板是收入时，分类列表要换成对应方向。
       cats = await db.loadCategories(
         ledgerId,
         template.type == 'in' ? 'in' : 'out',

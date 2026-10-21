@@ -112,7 +112,7 @@ void main() {
       expect(t.netMinor, 0);
     });
 
-    test('refunds reduce expense', () async {
+    test('legacy type=refund is ignored in totals', () async {
       await add(
         type: 'out',
         amountMinor: 5000,
@@ -131,8 +131,8 @@ void main() {
         oct.endMs,
         'CNY',
       );
-      expect(t.expenseMinor, 3000);
-      expect(t.netMinor, -3000);
+      expect(t.expenseMinor, 5000);
+      expect(t.netMinor, -5000);
     });
 
     test('bills outside the range are excluded', () async {

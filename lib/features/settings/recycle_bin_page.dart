@@ -31,8 +31,6 @@ class RecycleBinPage extends ConsumerWidget {
         return '收入';
       case 'transfer':
         return '转账';
-      case 'refund':
-        return '退款';
       default:
         return '支出';
     }
@@ -231,7 +229,7 @@ class _DeletedTile extends StatelessWidget {
         txn.type == 'transfer' && to != null ? '$from → $to' : from,
       if ((txn.note ?? '').trim().isNotEmpty) txn.note!.trim(),
     ];
-    final amountColor = txn.type == 'in' || txn.type == 'refund'
+    final amountColor = txn.type == 'in'
         ? const Color(0xFF43A047)
         : (txn.type == 'transfer'
             ? scheme.onSurface

@@ -127,8 +127,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       _pendingIncludeInStat != null ||
       _pendingIncludeInBudget != null;
 
-  String get _type =>
-      _pendingType ?? (txn.type == 'refund' ? 'in' : txn.type);
+  String get _type => _pendingType ?? txn.type;
 
   bool get _isTransfer => _type == 'transfer';
 
@@ -183,7 +182,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     final hide = widget.hide;
     final isOut = txn.type == 'out';
     final isTransfer = txn.type == 'transfer';
-    final prefix = isTransfer ? '' : (isOut ? '-' : '+'); // refund → +
+    final prefix = isTransfer ? '' : (isOut ? '-' : '+');
     final amountColor = isTransfer
         ? scheme.onSurface
         : (isOut ? scheme.error : scheme.primary);
@@ -1401,8 +1400,6 @@ class _Subtitle extends ConsumerWidget {
         return '收入';
       case 'transfer':
         return '转账';
-      case 'refund':
-        return '退款';
       default:
         return '支出';
     }

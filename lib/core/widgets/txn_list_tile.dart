@@ -54,7 +54,7 @@ class TxnListTile extends ConsumerWidget {
         ? Theme.of(context).colorScheme.onSurfaceVariant
         : isTransfer
         ? Theme.of(context).colorScheme.onSurface
-        : (isOut ? kTxnExpenseRed : kTxnIncomeGreen); // refund → income green
+        : (isOut ? kTxnExpenseRed : kTxnIncomeGreen);
     final time = DateTime.fromMillisecondsSinceEpoch(
       txn.happenAt,
       isUtc: true,
@@ -211,7 +211,6 @@ class TxnListTile extends ConsumerWidget {
     var base = '\u672a\u5206\u7c7b';
     final name = (cat?.name ?? '').trim();
     if (name.isNotEmpty) base = name;
-    if (txn.type == 'refund') return '\u9000\u6b3e · $base';
     return base;
   }
 
