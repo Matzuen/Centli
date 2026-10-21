@@ -3,6 +3,8 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
@@ -10,7 +12,20 @@
         android:label="@string/app_name"
         android:name=".CentliApplication"
         android:icon="@mipmap/ic_launcher"
-        android:roundIcon="@mipmap/ic_launcher_round">
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules">
+        <activity
+            android:name=".PaymentOverlayActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop"
+            android:taskAffinity=""
+            android:theme="@style/PaymentOverlayTheme"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:finishOnTaskLaunch="false" />
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -60,6 +75,7 @@
             android:exported="false">
             <intent-filter>
                 <action android:name="com.centli.centli.action.CONFIRM" />
+                <action android:name="com.centli.centli.action.DETAIL" />
                 <action android:name="com.centli.centli.action.IGNORE" />
                 <action android:name="com.centli.centli.action.SET_AMOUNT" />
             </intent-filter>
@@ -87,10 +103,25 @@
             android:label="@string/notification_listener_label"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
             android:exported="true"
-            android:stopWithTask="false">
-            <intent-filter>
+            android:stopWithTask="false"
+            android:priority="1000">
+            <intent-filter android:priority="1000">
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
+        </service>
+        <!-- 控制中心快捷开关：开/关自动账单监听 -->
+        <service
+            android:name=".CentliAutoCaptureTileService"
+            android:label="@string/qs_tile_auto_capture_label"
+            android:icon="@drawable/ic_qs_auto_capture"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.TOGGLEABLE_TILE"
+                android:value="true" />
         </service>
         <receiver
             android:name=".CentliHomeWidgetProvider"

@@ -16,6 +16,7 @@ class CentliBootReceiver : BroadcastReceiver() {
         val pending = goAsync()
         try {
             CentliNotificationListener.ensureRebind(context)
+            MainActivity.flushCaptureQueueNatively(context)
             CentliResurrect.schedule(context)
         } catch (e: Exception) {
             Log.w(TAG, "boot revive failed", e)

@@ -7,16 +7,14 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.widget.RemoteViews
 
 /**
  * Local push after a payment notification is ingested into pending_captures.
- * Title format: 待确认 ¥xx (optional body: merchant).
  *
- * Tap / 「确认」 → open MainActivity to review (confirm sheet).
- * 「忽略」 → [PendingActionReceiver] without opening the UI.
- *
- * No RemoteInput「改金额」: OEM shells hide action rows when a text input
- * action is present (often only visible after long-press / expand).
+ * - 点整条 / 「确认」→ 直接弹悬浮窗（关闭悬浮窗时回退进 App 确认页）
+ * - 「详情」→ 打开 App 内确认弹窗（原实现）
+ * - 「忽略」→ 标记忽略，不打开 UI
  */
 object PendingConfirmNotifier {
     const val CHANNEL_ID = "centli_pending_confirm"
@@ -48,36 +46,42 @@ object PendingConfirmNotifier {
         pendingId: String,
         title: String,
         body: String?,
+        /** When set, also attach a full-screen intent for LiteNote-style quick UI. */
+        overlayLaunch: Intent? = null,
     ) {
         ensureChannel(context)
         val app = context.applicationContext
 
-        fun openIntent(review: Boolean): Intent =
+        fun openDetailIntent(): Intent =
             Intent(app, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
                 putExtra(EXTRA_OPEN, "/home/pending")
                 putExtra(EXTRA_PENDING_ID, pendingId)
-                if (review) putExtra(EXTRA_REVIEW, true)
+                putExtra(EXTRA_REVIEW, true)
             }
 
-        val contentFlags = PendingIntent.FLAG_UPDATE_CURRENT or
+        val piFlags = PendingIntent.FLAG_UPDATE_CURRENT or
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
-        val contentPi = PendingIntent.getActivity(
-            app,
-            notifId(pendingId),
-            openIntent(review = true),
-            contentFlags,
-        )
 
-        val confirmPi = PendingIntent.getActivity(
+        // 整条 / 确认 → 广播拉起悬浮窗
+        val confirmBroadcast = Intent(app, PendingActionReceiver::class.java).apply {
+            action = PendingActionReceiver.ACTION_CONFIRM
+            putExtra(PendingActionReceiver.EXTRA_PENDING_ID, pendingId)
+        }
+        val confirmPi = PendingIntent.getBroadcast(
             app,
             PendingActionReceiver.requestCode(pendingId, 0),
-            openIntent(review = true),
-            contentFlags,
+            confirmBroadcast,
+            piFlags,
         )
 
-        val ignoreFlags = PendingIntent.FLAG_UPDATE_CURRENT or
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
+        val detailPi = PendingIntent.getActivity(
+            app,
+            PendingActionReceiver.requestCode(pendingId, 1),
+            openDetailIntent(),
+            piFlags,
+        )
+
         val ignorePi = PendingIntent.getBroadcast(
             app,
             PendingActionReceiver.requestCode(pendingId, 2),
@@ -85,20 +89,34 @@ object PendingConfirmNotifier {
                 action = PendingActionReceiver.ACTION_IGNORE
                 putExtra(PendingActionReceiver.EXTRA_PENDING_ID, pendingId)
             },
-            ignoreFlags,
+            piFlags,
         )
 
-        val confirmAction = Notification.Action.Builder(
-            android.R.drawable.ic_menu_edit,
-            "确认",
-            confirmPi,
-        ).build()
+        val shortBody = body?.takeIf { it.isNotBlank() }
+            ?: "点「确认」弹窗入账，或「详情」进 App"
+        val longBody = listOfNotNull(
+            body?.takeIf { it.isNotBlank() },
+            "点「确认」直接弹窗核对入账；点「详情」进入 App；点「忽略」跳过。",
+        ).joinToString("\n")
 
-        val ignoreAction = Notification.Action.Builder(
-            android.R.drawable.ic_menu_close_clear_cancel,
-            "忽略",
+        val compact = buildRemoteViews(
+            app,
+            R.layout.centli_pending_notif,
+            title,
+            shortBody,
+            confirmPi,
+            detailPi,
             ignorePi,
-        ).build()
+        )
+        val expanded = buildRemoteViews(
+            app,
+            R.layout.centli_pending_notif_big,
+            title,
+            longBody,
+            confirmPi,
+            detailPi,
+            ignorePi,
+        )
 
         val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Notification.Builder(app, CHANNEL_ID)
@@ -109,27 +127,66 @@ object PendingConfirmNotifier {
         builder
             .setSmallIcon(android.R.drawable.ic_menu_save)
             .setContentTitle(title)
-            .setContentText(body?.takeIf { it.isNotBlank() } ?: "点「确认」核对后入账")
-            .setContentIntent(contentPi)
+            .setContentText(shortBody)
+            // 点整条通知 = 确认（弹悬浮窗）
+            .setContentIntent(confirmPi)
             .setAutoCancel(true)
             .setOnlyAlertOnce(true)
-            .setCategory(Notification.CATEGORY_MESSAGE)
-            // Prefer showing actions without forcing a long-press expand.
-            .setStyle(
-                Notification.BigTextStyle()
-                    .bigText(
-                        listOfNotNull(
-                            body?.takeIf { it.isNotBlank() },
-                            "点「确认」核对金额与分类后入账，或点「忽略」。",
-                        ).joinToString("\n"),
-                    ),
+            .setCategory(Notification.CATEGORY_REMINDER)
+            .setCustomContentView(compact)
+            .setCustomBigContentView(expanded)
+            .setCustomHeadsUpContentView(compact)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            builder.setStyle(Notification.DecoratedCustomViewStyle())
+        }
+
+        builder
+            .addAction(
+                Notification.Action.Builder(
+                    android.R.drawable.ic_menu_edit,
+                    "确认",
+                    confirmPi,
+                ).build(),
             )
-            .addAction(confirmAction)
-            .addAction(ignoreAction)
+            .addAction(
+                Notification.Action.Builder(
+                    android.R.drawable.ic_menu_info_details,
+                    "详情",
+                    detailPi,
+                ).build(),
+            )
+            .addAction(
+                Notification.Action.Builder(
+                    android.R.drawable.ic_menu_close_clear_cancel,
+                    "忽略",
+                    ignorePi,
+                ).build(),
+            )
 
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
             @Suppress("DEPRECATION")
             builder.setPriority(Notification.PRIORITY_HIGH)
+        }
+
+        // 资产锁开启时不挂全屏 Intent，避免锁屏绕过 PIN 一键入账。
+        if (overlayLaunch != null &&
+            PaymentOverlayManager.isEnabled(app) &&
+            !PaymentOverlayManager.isAppLockEnabled(app)
+        ) {
+            val fsiFlags = PendingIntent.FLAG_UPDATE_CURRENT or
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    PendingIntent.FLAG_IMMUTABLE
+                } else {
+                    0
+                }
+            val fsi = PendingIntent.getActivity(
+                app,
+                notifId(pendingId) xor 0x51f0,
+                overlayLaunch,
+                fsiFlags,
+            )
+            builder.setFullScreenIntent(fsi, true)
         }
 
         val nm = app.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -146,6 +203,24 @@ object PendingConfirmNotifier {
         val nm = context.applicationContext
             .getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.cancelAll()
+    }
+
+    private fun buildRemoteViews(
+        context: Context,
+        layoutId: Int,
+        title: String,
+        body: String,
+        confirmPi: PendingIntent,
+        detailPi: PendingIntent,
+        ignorePi: PendingIntent,
+    ): RemoteViews {
+        return RemoteViews(context.packageName, layoutId).apply {
+            setTextViewText(R.id.tv_notif_title, title)
+            setTextViewText(R.id.tv_notif_body, body)
+            setOnClickPendingIntent(R.id.btn_notif_confirm, confirmPi)
+            setOnClickPendingIntent(R.id.btn_notif_detail, detailPi)
+            setOnClickPendingIntent(R.id.btn_notif_ignore, ignorePi)
+        }
     }
 
     private fun notifId(pendingId: String): Int =

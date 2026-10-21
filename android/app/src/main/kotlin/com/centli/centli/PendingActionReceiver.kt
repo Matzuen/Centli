@@ -12,9 +12,9 @@ import java.util.regex.Pattern
 /**
  * Notification action receiver.
  *
+ * - 「确认」/ 点整条: 直接弹悬浮窗入账（悬浮窗关闭时再回退进 App）。
+ * - 「详情」: 打开 App 内确认弹窗（原实现）。
  * - 「忽略」: mark pending ignored without opening the UI.
- * - Legacy 「入账」/「改金额」: open MainActivity for in-app confirmation
- *   (direct bookkeeping from the shade was removed — user must confirm).
  *
  * Schema note: pending_captures stores merchant text in [note] (v8 removed the
  * merchant column).
@@ -40,14 +40,25 @@ class PendingActionReceiver : BroadcastReceiver() {
                     pending.finish()
                 }
             }
-            // Legacy actions from older notification payloads: open confirm UI.
-            ACTION_CONFIRM, ACTION_SET_AMOUNT -> openReview(context, pendingId)
+            ACTION_CONFIRM -> {
+                val pending = goAsync()
+                try {
+                    showOverlayOrReview(context, pendingId)
+                } catch (e: Exception) {
+                    Log.e(TAG, "confirm/overlay failed", e)
+                    openReview(context, pendingId)
+                } finally {
+                    pending.finish()
+                }
+            }
+            ACTION_DETAIL, ACTION_SET_AMOUNT -> openReview(context, pendingId)
             else -> Log.w(TAG, "unknown action=${intent.action}")
         }
     }
 
     companion object {
         const val ACTION_CONFIRM = "com.centli.centli.action.CONFIRM"
+        const val ACTION_DETAIL = "com.centli.centli.action.DETAIL"
         const val ACTION_IGNORE = "com.centli.centli.action.IGNORE"
         const val ACTION_SET_AMOUNT = "com.centli.centli.action.SET_AMOUNT"
         const val EXTRA_PENDING_ID = "pendingId"
@@ -55,7 +66,7 @@ class PendingActionReceiver : BroadcastReceiver() {
         private const val TAG = "CentliPendingAction"
         private const val DB_NAME = "centli.sqlite"
 
-        /** Unique requestCode = notifId + actionIndex (0/1/2). */
+        /** Unique requestCode = notifId + actionIndex (0=confirm, 1=detail, 2=ignore). */
         fun requestCode(pendingId: String, actionIndex: Int): Int =
             ((pendingId.hashCode() and 0x7fffffff) + actionIndex * 100_000_003) and 0x7fffffff
 
@@ -64,6 +75,18 @@ class PendingActionReceiver : BroadcastReceiver() {
             if (!m.find()) return null
             val major = m.group(1)?.replace(",", "")?.toDoubleOrNull() ?: return null
             return Math.round(major * 100.0).toInt()
+        }
+
+        /** 确认 / 点整条：优先悬浮窗；资产锁开启或关掉悬浮窗时进 App。 */
+        private fun showOverlayOrReview(context: Context, pendingId: String) {
+            val app = context.applicationContext
+            if (!PaymentOverlayManager.isEnabled(app) ||
+                PaymentOverlayManager.isAppLockEnabled(app)
+            ) {
+                openReview(app, pendingId)
+                return
+            }
+            PaymentOverlayManager.showFromPendingId(app, pendingId)
         }
 
         private fun openReview(context: Context, pendingId: String) {
@@ -103,6 +126,13 @@ class PendingActionReceiver : BroadcastReceiver() {
             }
             try {
                 val now = System.currentTimeMillis()
+                var oldDedupe: String? = null
+                db.rawQuery(
+                    "SELECT dedupe_key FROM pending_captures WHERE id=? AND status=? LIMIT 1",
+                    arrayOf(pendingId, "pending"),
+                ).use { c ->
+                    if (c.moveToFirst()) oldDedupe = c.getString(0)
+                }
                 val updated = db.compileStatement(
                     "UPDATE pending_captures SET status=?, updated_at=? WHERE id=? AND status=?",
                 ).use { stmt ->
@@ -111,6 +141,22 @@ class PendingActionReceiver : BroadcastReceiver() {
                     stmt.bindString(3, pendingId)
                     stmt.bindString(4, "pending")
                     stmt.executeUpdateDelete()
+                }
+                // 与 Dart ignorePendingCapture 对齐：释放 dedupe 唯一键，避免后续支付撞库。
+                if (updated > 0 && !oldDedupe.isNullOrBlank() && !oldDedupe.startsWith("done|")) {
+                    val retired = if (oldDedupe.length <= 120) {
+                        "done|$pendingId|$oldDedupe"
+                    } else {
+                        "done|$pendingId"
+                    }
+                    db.compileStatement(
+                        "UPDATE pending_captures SET dedupe_key=?, updated_at=? WHERE id=?",
+                    ).use { stmt ->
+                        stmt.bindString(1, retired)
+                        stmt.bindLong(2, now)
+                        stmt.bindString(3, pendingId)
+                        stmt.executeUpdateDelete()
+                    }
                 }
                 PendingConfirmNotifier.cancel(context, pendingId)
                 Toast.makeText(

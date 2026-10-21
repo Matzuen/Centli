@@ -7,4 +7,11 @@
     <string name="widget_expense_label">今日支出</string>
     <string name="widget_pending_label">待确认</string>
     <string name="widget_subtitle_default">点按打开厘记</string>
+    <string name="qs_tile_auto_capture_label">自动记账</string>
+    <string name="qs_tile_subtitle_on">监听中</string>
+    <string name="qs_tile_subtitle_off">已关闭</string>
+    <string name="qs_tile_subtitle_need_access">需授权</string>
+    <string name="qs_tile_need_notification_access">请开启 Centli 的通知使用权后再打开</string>
+    <string name="qs_tile_turned_on">已开启自动记账监听</string>
+    <string name="qs_tile_turned_off">已关闭自动记账监听</string>
 </resources>

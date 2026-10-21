@@ -14,6 +14,8 @@ class CentliApplication : Application() {
             if (CentliNotificationListener.isAutoCaptureEnabled(this)) {
                 CentliResurrect.ensureAlive(this)
                 CentliNotificationListener.ensureRebind(this)
+                // 进程刚起来（可能由 NLS / Job 拉起）：先把积压通知用 native 落库。
+                MainActivity.flushCaptureQueueNatively(this)
             }
         } catch (e: Exception) {
             Log.w(TAG, "early capture start failed", e)

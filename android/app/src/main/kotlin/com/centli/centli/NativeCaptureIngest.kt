@@ -110,7 +110,32 @@ object NativeCaptureIngest {
             } else {
                 "待确认"
             }
-            PendingConfirmNotifier.show(context, id, pushTitle, merchant)
+            val overlayLaunch = PaymentOverlayActivity.launchIntent(
+                context,
+                pendingId = id,
+                amountMinor = amountMinor,
+                currency = currency,
+                sourcePkg = pkg,
+                merchant = merchant,
+                direction = direction,
+            )
+            PendingConfirmNotifier.show(
+                context,
+                id,
+                pushTitle,
+                merchant,
+                overlayLaunch = overlayLaunch,
+            )
+            // LiteNote 式悬浮窗：WM 优先；失败则 Activity / 通知全屏 Intent 兜底。
+            PaymentOverlayManager.showPending(
+                context,
+                pendingId = id,
+                amountMinor = amountMinor,
+                currency = currency,
+                sourcePkg = pkg,
+                merchant = merchant,
+                direction = direction,
+            )
             MainActivity.notifyPendingDbChanged()
             Log.i(TAG, "inserted pending $id dedupe=$dedupe")
             return id
@@ -134,36 +159,61 @@ object NativeCaptureIngest {
     }
 
     private fun existsDedupe(db: SQLiteDatabase, key: String): Boolean {
+        // Only live pending rows block. Confirmed/ignored retire their key in
+        // Dart; for native path also ignore non-pending so WeChat reusing the
+        // same StatusBarNotification key can create a new capture.
         db.rawQuery(
-            "SELECT 1 FROM pending_captures WHERE dedupe_key=? LIMIT 1",
+            "SELECT 1 FROM pending_captures WHERE dedupe_key=? AND status='pending' LIMIT 1",
             arrayOf(key),
         ).use { c ->
-            return c.moveToFirst()
+            if (c.moveToFirst()) return true
         }
+        // Retire leftover unique keys on confirmed/ignored (legacy rows).
+        db.rawQuery(
+            "SELECT id, dedupe_key FROM pending_captures WHERE dedupe_key=? AND status!='pending'",
+            arrayOf(key),
+        ).use { c ->
+            while (c.moveToNext()) {
+                val id = c.getString(0)
+                val old = c.getString(1) ?: continue
+                val retired =
+                    if (old.startsWith("done|")) old
+                    else if (old.length <= 120) "done|$id|$old" else "done|$id"
+                if (retired != old) {
+                    db.execSQL(
+                        "UPDATE pending_captures SET dedupe_key=?, updated_at=? WHERE id=?",
+                        arrayOf(retired, System.currentTimeMillis(), id),
+                    )
+                }
+            }
+        }
+        return false
     }
 
     private fun buildDedupeKey(
         pkg: String,
         title: String,
         text: String,
-        merchant: String?,
+        @Suppress("UNUSED_PARAMETER") merchant: String?,
         amountMinor: Int?,
         whenMs: Long,
         parseOk: Boolean,
         notifKey: String?,
     ): String {
-        // Same StatusBarNotification key → same event (updates / dual path).
-        if (!notifKey.isNullOrBlank()) {
-            return "$pkg|nk|$notifKey"
-        }
+        // Content fingerprint: WeChat/Alipay often reuse StatusBarNotification.key
+        // for successive payments — key alone would collapse them into one pending.
+        val tip = "$title\n$text".trim().replace(Regex("\\s+"), "")
+        val tipKey = if (tip.isEmpty()) "empty" else Integer.toHexString(tip.hashCode())
+        val amt = amountMinor?.toString() ?: "na"
         val bucket = whenMs / 120000L
+        if (!notifKey.isNullOrBlank()) {
+            return "$pkg|nk|$notifKey|$amt|$tipKey"
+        }
         if (!parseOk || amountMinor == null) {
-            val tip = "$title\n$text".trim()
-            val tipKey = if (tip.isEmpty()) "empty" else Integer.toHexString(tip.hashCode())
             return "$pkg|raw|$tipKey|$bucket"
         }
-        // T2-3: omit merchant (align with Dart dedupeKey).
-        return "$pkg|$amountMinor|$bucket"
+        // Same amount within 2 minutes still distinct when body differs.
+        return "$pkg|$amountMinor|$bucket|$tipKey"
     }
 
     private data class Parsed(
@@ -172,6 +222,11 @@ object NativeCaptureIngest {
         val merchant: String?,
     )
 
+    // G29.1 + AutoBookKeeping：未成交/失败类一律丢弃。
+    private val IGNORE_NON_BILL: Pattern = Pattern.compile(
+        "待支付|未支付|还未支付|支付失败|付款失败|扣款失败|交易关闭|自动取消|" +
+            "验证码|登录提醒|配置更新",
+    )
     // G29.1: widened keyword gate; Dart noise filter drops marketing without amount.
     private val MUST_ALIPAY: Pattern = Pattern.compile("交易|支付|付款|收款|退款|红包|转账|扣款|消费|入账|到账|支出|收入|余额")
     private val MUST_WECHAT: Pattern = Pattern.compile("交易|支付|付款|收款|退款|红包|转账|扣款|消费|入账|到账|支出|收入|余额|零钱")
@@ -180,6 +235,8 @@ object NativeCaptureIngest {
             "语音通话|视频通话|收到一条|发来一个红包|领取了你的红包|服务通知|余额宝收益|生活号|" +
             "待还|应还|请于|即将到期|还款提醒|账单提醒",
     )
+    private val EXPENSE_HINT: Pattern = Pattern.compile("支出|付款|支付|消费|扣款|转出|提现|买单|代扣")
+    private val INCOME_HINT: Pattern = Pattern.compile("退款|退回|返还|收入|收款|到账|入账|转入")
 
     private data class RuleMatch(
         val direction: String?,
@@ -200,6 +257,11 @@ object NativeCaptureIngest {
         text: String,
     ): RuleMatch? {
         val body = "$title\n$text"
+        val compact = body.replace(Regex("\\s+"), "")
+        if (IGNORE_NON_BILL.matcher(compact).find()) {
+            Log.i(TAG, "drop ignore-non-bill pkg=$pkg")
+            return null
+        }
         val rules = loadRules(context)
         if (rules == null) {
             // Fallback hardcode
@@ -209,7 +271,15 @@ object NativeCaptureIngest {
                 "com.tencent.mm" -> MUST_WECHAT
                 else -> return null
             }
-            return if (must.matcher(body).find()) RuleMatch("out") else null
+            if (!must.matcher(body).find()) {
+                // 对齐 AutoBookKeeping：标题「微信支付 / 交易提醒」也算候选。
+                val titleHit = (pkg.contains("tencent.mm") && title.contains("微信支付")) ||
+                    (pkg.contains("Alipay") && (title.contains("交易提醒") || title.contains("交易通知")))
+                if (!titleHit) return null
+            }
+            val income = INCOME_HINT.matcher(compact).find() &&
+                !EXPENSE_HINT.matcher(compact).find()
+            return RuleMatch(if (income) "in" else "out")
         }
         val forPkg = rules.filter { it.pkg == pkg }
         if (forPkg.isEmpty()) {
@@ -237,8 +307,10 @@ object NativeCaptureIngest {
                 if (!must.isNullOrBlank() && !Pattern.compile(must).matcher(keyword).find()) {
                     continue
                 }
+                // refund/repay are legacy template values → in/out + note/tag in UI.
                 val dir = when (rule.direction) {
-                    "in", "out", "refund" -> rule.direction
+                    "in", "refund" -> "in"
+                    "out", "repay" -> "out"
                     else -> "out"
                 }
                 return RuleMatch(dir)
@@ -355,12 +427,18 @@ object NativeCaptureIngest {
 
     /** Currency symbol / code prefix (align Dart [kAmountRegex]). */
     private val AMOUNT: Pattern = Pattern.compile(
-        "(?:(?:USD|EUR|CNY|HKD|TWD|JPY)\\s*|(?:[¥￥]|\\$|€))\\s*([0-9]+(?:,[0-9]{3})*(?:\\.[0-9]{1,2})?)",
+        "(?:(?:USD|EUR|CNY|HKD|TWD|JPY)\\s*|(?:[¥￥]|\\$|€|人民币|RMB))\\s*([0-9]+(?:,[0-9]{3})*(?:\\.[0-9]{1,2})?)",
     )
 
-    /** Number + 元 suffix (align Dart [kAmountRegexYuan], e.g. 抖音支付 24.70元). */
+    /** Number + 元/块/圆 suffix (align Dart + AutoBookKeeping). */
     private val AMOUNT_YUAN: Pattern = Pattern.compile(
-        "([0-9]+(?:,[0-9]{3})*(?:\\.[0-9]{1,2})?)\\s*元",
+        "([0-9]+(?:,[0-9]{3})*(?:\\.[0-9]{1,2})?)\\s*(?:元|块|圆)",
+    )
+
+    /** 语义金额：支付/支出/收款… 后紧跟数字（对齐 AutoBookKeeping SEMANTIC_AMOUNT）。 */
+    private val AMOUNT_SEMANTIC: Pattern = Pattern.compile(
+        "(?:金额|消费|支付|支出|收入|转入|转出|扣款|付款|收款|入账|提现|退款|已支付)" +
+            "[^0-9¥￥]{0,8}(?:¥|￥)?\\s*([0-9]+(?:,[0-9]{3})*(?:\\.[0-9]{1,2})?)",
     )
 
     private fun currencyDecimals(ccy: String): Int = when (ccy) {
@@ -377,6 +455,7 @@ object NativeCaptureIngest {
         val body = "$title\n$text"
         parseAmountWith(body, AMOUNT, title, text, symbolPrefix = true)?.let { return it }
         parseAmountWith(body, AMOUNT_YUAN, title, text, symbolPrefix = false)?.let { return it }
+        parseAmountWith(body, AMOUNT_SEMANTIC, title, text, symbolPrefix = false)?.let { return it }
         return Parsed(null, "CNY", guessMerchant(title, text))
     }
 

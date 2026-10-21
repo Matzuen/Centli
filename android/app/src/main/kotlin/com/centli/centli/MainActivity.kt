@@ -18,6 +18,7 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterFragmentActivity() {
 
     private val mainHandler = Handler(Looper.getMainLooper())
+    private var pendingPostNotifResult: MethodChannel.Result? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -31,8 +32,15 @@ class MainActivity : FlutterFragmentActivity() {
                 "isPermissionGranted" -> {
                     result.success(isNotificationAccessGranted())
                 }
+                "isPostNotificationsGranted" -> {
+                    result.success(isPostNotificationsGranted())
+                }
+                "requestPostNotificationsPermission" -> {
+                    requestPostNotificationsPermission(result)
+                }
                 "isListenerConnected" -> {
-                    result.success(CentliNotificationListener.connected)
+                    // Probe the live bind — static flag alone is false on cold start.
+                    result.success(CentliNotificationListener.isConnectedNow())
                 }
                 "ensureListenerRebind" -> {
                     try {
@@ -68,13 +76,7 @@ class MainActivity : FlutterFragmentActivity() {
                 }
                 "setAutoCaptureEnabled" -> {
                     val enabled = call.arguments as? Boolean ?: true
-                    CentliNotificationListener.setAutoCaptureEnabled(this, enabled)
-                    if (enabled && isNotificationAccessGranted()) {
-                        CentliNotificationListener.ensureRebind(this)
-                        CentliResurrect.ensureAlive(this)
-                    } else if (!enabled) {
-                        CentliResurrect.cancel(this)
-                    }
+                    CentliNotificationListener.applyAutoCaptureEnabled(this, enabled)
                     result.success(null)
                 }
                 "setWatchedPackages" -> {
@@ -104,7 +106,27 @@ class MainActivity : FlutterFragmentActivity() {
                     val body = args["body"] as? String
                     ensurePostNotificationsPermission()
                     PendingConfirmNotifier.show(this, pendingId, title, body)
+                    PaymentOverlayManager.showFromPendingId(this, pendingId)
                     result.success(null)
+                }
+                "isOverlayPermissionGranted" -> {
+                    result.success(PaymentOverlayManager.hasPermission(this))
+                }
+                "isOverlayEnabled" -> {
+                    result.success(PaymentOverlayManager.isEnabled(this))
+                }
+                "setOverlayEnabled" -> {
+                    val enabled = call.arguments as? Boolean ?: true
+                    PaymentOverlayManager.setEnabled(this, enabled)
+                    result.success(null)
+                }
+                "openOverlayPermissionSettings" -> {
+                    try {
+                        PaymentOverlayManager.openPermissionSettings(this)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("open_failed", e.message, null)
+                    }
                 }
                 "cancelPendingConfirm" -> {
                     @Suppress("UNCHECKED_CAST")
@@ -184,11 +206,9 @@ class MainActivity : FlutterFragmentActivity() {
             ) {
                 // Soft rebind NLS + schedule resurrect heartbeat (no FGS).
                 CentliResurrect.ensureAlive(this)
-                if (!CentliNotificationListener.connected) {
-                    CentliNotificationListener.ensureRebind(this)
-                }
+                CentliNotificationListener.ensureRebind(this)
             } else if (isNotificationAccessGranted() &&
-                !CentliNotificationListener.connected
+                !CentliNotificationListener.isConnectedNow()
             ) {
                 CentliNotificationListener.ensureRebind(this)
             } else if (!CentliNotificationListener.isAutoCaptureEnabled(this)) {
@@ -199,9 +219,20 @@ class MainActivity : FlutterFragmentActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (isNotificationAccessGranted() && !CentliNotificationListener.connected) {
+        appInForeground = true
+        // 每次回前台都尽量把监听补上（软重绑；已连接则 no-op）。
+        if (isNotificationAccessGranted()) {
             CentliNotificationListener.ensureRebind(this)
+            if (CentliNotificationListener.isAutoCaptureEnabled(this)) {
+                CentliResurrect.ensureAlive(this)
+            }
         }
+    }
+
+    override fun onPause() {
+        // 退到后台后 Flutter isolate 可能被挂起，通知改走 native 写库。
+        appInForeground = false
+        super.onPause()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -212,6 +243,7 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
     override fun onDestroy() {
+        appInForeground = false
         dartBridgeReadyGlobal = false
         if (methodChannel != null) {
             methodChannel = null
@@ -219,17 +251,51 @@ class MainActivity : FlutterFragmentActivity() {
         super.onDestroy()
     }
 
+    private fun isPostNotificationsGranted(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return true
+        return checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) ==
+            PackageManager.PERMISSION_GRANTED
+    }
+
     private fun ensurePostNotificationsPermission() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
-        val granted = checkSelfPermission(
-            android.Manifest.permission.POST_NOTIFICATIONS,
-        ) == PackageManager.PERMISSION_GRANTED
-        if (!granted) {
-            requestPermissions(
-                arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
-                REQ_POST_NOTIFICATIONS,
-            )
+        if (isPostNotificationsGranted()) return
+        requestPermissions(
+            arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
+            REQ_POST_NOTIFICATIONS,
+        )
+    }
+
+    /** System dialog for POST_NOTIFICATIONS (Android 13+). Completes [result]. */
+    private fun requestPostNotificationsPermission(result: MethodChannel.Result) {
+        if (isPostNotificationsGranted()) {
+            result.success(true)
+            return
         }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            result.success(true)
+            return
+        }
+        // Drop previous waiter if any (should be rare).
+        pendingPostNotifResult?.success(false)
+        pendingPostNotifResult = result
+        requestPermissions(
+            arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
+            REQ_POST_NOTIFICATIONS,
+        )
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != REQ_POST_NOTIFICATIONS) return
+        val granted = grantResults.isNotEmpty() &&
+            grantResults[0] == PackageManager.PERMISSION_GRANTED
+        val pending = pendingPostNotifResult
+        pendingPostNotifResult = null
+        pending?.success(granted)
     }
 
     private fun isNotificationAccessGranted(): Boolean {
@@ -386,6 +452,10 @@ class MainActivity : FlutterFragmentActivity() {
         @Volatile
         private var dartBridgeReadyGlobal = false
 
+        /** True only while [MainActivity] is resumed (UI visible). */
+        @Volatile
+        private var appInForeground = false
+
         @Volatile
         private var queuedOpenRoute: Map<String, Any?>? = null
 
@@ -396,6 +466,7 @@ class MainActivity : FlutterFragmentActivity() {
         @JvmStatic
         fun notifyPendingDbChanged() {
             val ch = methodChannel ?: return
+            if (!dartBridgeReadyGlobal) return
             Handler(Looper.getMainLooper()).post {
                 try {
                     ch.invokeMethod("pending_db_changed", null)
@@ -406,34 +477,56 @@ class MainActivity : FlutterFragmentActivity() {
         }
 
         /**
-         * Called from [CentliNotificationListener]. Delivers to Flutter when
-         * the engine is attached; otherwise enqueues for later flush.
+         * Called from [CentliNotificationListener].
+         *
+         * 对齐 LiteNote / AutoBookKeeping：**始终由 native 解析并写待确认**，
+         * 不依赖 Flutter 是否在前台。前台时额外通知 Dart 做 AI 反写
+         * （二次入库会被 dedupe 挡掉）。
          */
         @JvmStatic
         fun emitNotificationCapture(context: android.content.Context, payload: Map<String, Any?>) {
+            ingestViaNative(context, payload)
+
             val ch = methodChannel
-            if (ch != null && dartBridgeReadyGlobal) {
+            if (ch != null && dartBridgeReadyGlobal && appInForeground) {
                 Handler(Looper.getMainLooper()).post {
                     try {
-                        ch.invokeMethod("notification_capture", payload)
+                        // Dart 侧主要用于 AI 蒸馏；入库已由 native 完成。
+                        val enriched = HashMap(payload)
+                        enriched["nativeIngested"] = true
+                        ch.invokeMethod("notification_capture", enriched)
                     } catch (e: Exception) {
-                        Log.w("CentliMain", "invoke notification_capture failed", e)
-                        CentliNotificationListener.enqueue(context, payload)
-                        try {
-                            NativeCaptureIngest.ingestAndNotify(context, payload)
-                        } catch (_: Exception) {
-                        }
+                        Log.w("CentliMain", "notify dart after native ingest failed", e)
                     }
                 }
             } else {
-                Log.d("CentliMain", "Flutter not ready; native path owns ingest")
-                try {
-                    NativeCaptureIngest.ingestAndNotify(context, payload)
-                } catch (e: Exception) {
-                    Log.e("CentliMain", "native ingest fallback failed", e)
-                    CentliNotificationListener.enqueue(context, payload)
-                }
+                Log.d(
+                    "CentliMain",
+                    "native-only (fg=$appInForeground bridge=$dartBridgeReadyGlobal)",
+                )
             }
+        }
+
+        @JvmStatic
+        fun ingestViaNative(context: android.content.Context, payload: Map<String, Any?>) {
+            try {
+                NativeCaptureIngest.ingestAndNotify(context, payload)
+            } catch (e: Exception) {
+                Log.e("CentliMain", "native ingest failed", e)
+                CentliNotificationListener.enqueue(context, payload)
+            }
+        }
+
+        /** Drain SharedPreferences queue through native ingest (no Flutter needed). */
+        @JvmStatic
+        fun flushCaptureQueueNatively(context: android.content.Context) {
+            val queued = CentliNotificationListener.peekQueue(context)
+            if (queued.isEmpty()) return
+            CentliNotificationListener.clearQueue(context)
+            for (payload in queued) {
+                ingestViaNative(context, payload)
+            }
+            Log.i("CentliMain", "flushed ${queued.size} queued captures via native")
         }
     }
 }

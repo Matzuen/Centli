@@ -3,14 +3,20 @@ package com.centli.centli
 import android.app.Notification
 import android.content.Context
 import android.content.SharedPreferences
+import android.database.sqlite.SQLiteDatabase
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.content.ComponentName
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.provider.Settings
+import android.text.TextUtils
 import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 
 /**
  * Captures payment-style notifications and forwards them to Flutter via
@@ -29,15 +35,24 @@ class CentliNotificationListener : NotificationListenerService() {
 
     override fun onListenerConnected() {
         super.onListenerConnected()
+        instance = this
         connected = true
+        cancelRebindRetries()
         Log.i(TAG, "onListenerConnected")
         if (isAutoCaptureEnabled(this)) {
             CentliResurrect.ensureAlive(this)
+        }
+        // 进程被杀后重绑：队列里可能还有 Flutter 未处理的通知，用 native 立刻落库。
+        try {
+            MainActivity.flushCaptureQueueNatively(this)
+        } catch (e: Exception) {
+            Log.w(TAG, "flush queue on connect failed", e)
         }
     }
 
     override fun onListenerDisconnected() {
         connected = false
+        instance = null
         Log.w(TAG, "onListenerDisconnected — requesting rebind")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             try {
@@ -46,19 +61,34 @@ class CentliNotificationListener : NotificationListenerService() {
                 Log.e(TAG, "requestRebind failed", e)
             }
         }
-        // Ask AlarmManager / FGS to revive the process soon.
+        // 尽快补绑，不要干等到 15 分钟 Job。
         if (isAutoCaptureEnabled(this)) {
-            CentliResurrect.scheduleRetry(this, delayMs = 30_000L)
+            CentliResurrect.scheduleRetry(this, delayMs = 15_000L)
             CentliResurrect.ensureAlive(this)
+            scheduleRebindRetries(applicationContext)
         }
         super.onListenerDisconnected()
+    }
+
+    override fun onDestroy() {
+        if (instance === this) {
+            instance = null
+            connected = false
+        }
+        super.onDestroy()
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         if (sbn == null) return
         val pkg = sbn.packageName ?: return
-        val extras = sbn.notification?.extras
-        val title = extras?.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: ""
+        // 对齐 LiteNote / AutoBookKeeping：尽量抽全通知字段，避免金额只在
+        // bigText / textLines / ticker 里时漏抓。
+        val notification = sbn.notification
+        val extras = notification?.extras
+        val title = listOfNotNull(
+            extras?.getCharSequence(Notification.EXTRA_TITLE)?.toString(),
+            extras?.getCharSequence(Notification.EXTRA_TITLE_BIG)?.toString(),
+        ).firstOrNull { it.isNotBlank() } ?: ""
 
         if (!isAutoCaptureEnabled(this)) {
             recordDrop(this, pkg, title, "disabled")
@@ -70,21 +100,39 @@ class CentliNotificationListener : NotificationListenerService() {
         }
 
         if (extras == null) return
+        val lineParts = ArrayList<String>()
+        val textLines = extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)
+        if (textLines != null) {
+            for (line in textLines) {
+                val s = line?.toString()?.trim().orEmpty()
+                if (s.isNotEmpty()) lineParts.add(s)
+            }
+        }
         val textParts = listOfNotNull(
             extras.getCharSequence(Notification.EXTRA_TEXT)?.toString(),
             extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString(),
             extras.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString(),
-        ).filter { it.isNotBlank() }.distinct()
-        val text = textParts.joinToString("\n")
+            extras.getCharSequence(Notification.EXTRA_SUMMARY_TEXT)?.toString(),
+            extras.getCharSequence(Notification.EXTRA_INFO_TEXT)?.toString(),
+            notification?.tickerText?.toString(),
+        ).filter { it.isNotBlank() } + lineParts
+        val text = textParts.distinct().joinToString("\n")
 
         if (title.isBlank() && text.isBlank()) {
             recordDrop(this, pkg, title, "blank")
             return
         }
 
-        val whenMs = sbn.notification?.`when`?.takeIf { it > 0 }
+        // 对齐 AutoBookKeeping：短时内容去重，避免同一支付刷多次 posted。
+        if (isRecentContentDuplicate(pkg, title, text)) {
+            recordDrop(this, pkg, title, "dup_content")
+            return
+        }
+
+        val whenMs = notification?.`when`?.takeIf { it > 0 }
+            ?: sbn.postTime.takeIf { it > 0 }
             ?: System.currentTimeMillis()
-        val channelId = sbn.notification?.channelId
+        val channelId = notification?.channelId
 
         val payload = hashMapOf<String, Any?>(
             "pkg" to pkg,
@@ -95,11 +143,8 @@ class CentliNotificationListener : NotificationListenerService() {
             "channelId" to channelId,
         )
 
-        // Single writer inside emitNotificationCapture: Flutter when bridge is
-        // ready, otherwise native SQLite + push (no dual insert).
-        // Do NOT call ensureAlive/ensureRebind here — soft rebind is a no-op
-        // when connected, but thrashing requestRebind on every post can make
-        // OEMs drop the binding. Heartbeat is CentliResurrect's job.
+        // Do NOT call ensureAlive/ensureRebind here — thrashing requestRebind
+        // on every post can make OEMs drop the binding.
         MainActivity.emitNotificationCapture(this, payload)
     }
 
@@ -116,6 +161,16 @@ class CentliNotificationListener : NotificationListenerService() {
         @Volatile
         var connected: Boolean = false
             private set
+
+        @Volatile
+        private var instance: CentliNotificationListener? = null
+
+        private val rebindHandler = Handler(Looper.getMainLooper())
+        private val rebindRetryRunnables = mutableListOf<Runnable>()
+
+        /** 内容去重窗口（对齐 AutoBookKeeping 5 分钟）。 */
+        private const val CONTENT_DEDUP_WINDOW_MS = 5 * 60 * 1000L
+        private val recentContentDedup = LinkedHashMap<String, Long>()
 
         /** Builtin packages mirrored from assets/noti_templates.json */
         val WATCHED_PACKAGES = setOf(
@@ -134,6 +189,55 @@ class CentliNotificationListener : NotificationListenerService() {
 
         fun setAutoCaptureEnabled(context: Context, enabled: Boolean) {
             prefs(context).edit().putBoolean(KEY_AUTO, enabled).apply()
+            // Native ingest 读 Drift app_settings；与 prefs 保持一致。
+            syncAutoCaptureSettingToDb(context, enabled)
+            CentliAutoCaptureTileService.requestRefresh(context)
+        }
+
+        /**
+         * 开关自动监听：写 prefs+DB、重绑 NLS / 启停复活任务。
+         * Tile 与 Flutter MethodChannel 共用。
+         */
+        fun applyAutoCaptureEnabled(context: Context, enabled: Boolean) {
+            val app = context.applicationContext
+            setAutoCaptureEnabled(app, enabled)
+            if (enabled && isNotificationAccessGranted(app)) {
+                ensureRebind(app)
+                CentliResurrect.ensureAlive(app)
+            } else if (!enabled) {
+                CentliResurrect.cancel(app)
+            }
+        }
+
+        private fun syncAutoCaptureSettingToDb(context: Context, enabled: Boolean) {
+            val dbFile = File(
+                context.applicationContext.getDir("flutter", Context.MODE_PRIVATE),
+                "centli.sqlite",
+            )
+            if (!dbFile.exists()) return
+            var db: SQLiteDatabase? = null
+            try {
+                db = SQLiteDatabase.openDatabase(
+                    dbFile.absolutePath,
+                    null,
+                    SQLiteDatabase.OPEN_READWRITE,
+                )
+                val value = if (enabled) "true" else "false"
+                db.execSQL(
+                    """
+                    INSERT INTO app_settings(key, value) VALUES(?, ?)
+                    ON CONFLICT(key) DO UPDATE SET value=excluded.value
+                    """.trimIndent(),
+                    arrayOf(KEY_AUTO, value),
+                )
+            } catch (e: Exception) {
+                Log.w(TAG, "sync auto_capture_enabled to DB failed", e)
+            } finally {
+                try {
+                    db?.close()
+                } catch (_: Exception) {
+                }
+            }
         }
 
         /** Union of builtin + Flutter-synced extra packages (JSON string array). */
@@ -283,13 +387,82 @@ class CentliNotificationListener : NotificationListenerService() {
             prefs(context).edit().remove(KEY_DROPS).apply()
         }
 
+        @Synchronized
+        private fun isRecentContentDuplicate(pkg: String, title: String, text: String): Boolean {
+            val amountHint = Regex(
+                """(?:¥|￥|\$|€)?\s*([0-9]+(?:,[0-9]{3})*(?:\.[0-9]{1,2})?)\s*元?""",
+            ).find("$title\n$text")?.groupValues?.getOrNull(1) ?: ""
+            val key = ("$pkg|$title|$text|$amountHint").replace(Regex("\\s+"), "")
+            val now = System.currentTimeMillis()
+            val it = recentContentDedup.entries.iterator()
+            while (it.hasNext()) {
+                if (now - it.next().value >= CONTENT_DEDUP_WINDOW_MS) it.remove()
+            }
+            val last = recentContentDedup[key]
+            if (last != null && now - last < CONTENT_DEDUP_WINDOW_MS) return true
+            recentContentDedup[key] = now
+            // Bound memory.
+            while (recentContentDedup.size > 80) {
+                val first = recentContentDedup.keys.firstOrNull() ?: break
+                recentContentDedup.remove(first)
+            }
+            return false
+        }
+
+        /**
+         * True only when the service is bound and can read the notification shade.
+         * Static [connected] alone is a false negative right after process start.
+         */
+        fun isConnectedNow(): Boolean {
+            val svc = instance
+            if (svc == null) {
+                connected = false
+                return false
+            }
+            return try {
+                // Throws if the listener is not currently bound to the system.
+                @Suppress("UNUSED_VARIABLE")
+                val probe = svc.activeNotifications
+                connected = true
+                true
+            } catch (_: Exception) {
+                connected = false
+                false
+            }
+        }
+
+        fun isNotificationAccessGranted(context: Context): Boolean {
+            val flat = Settings.Secure.getString(
+                context.contentResolver,
+                "enabled_notification_listeners",
+            ) ?: return false
+            if (TextUtils.isEmpty(flat)) return false
+            val cn = ComponentName(context, CentliNotificationListener::class.java)
+            val full = cn.flattenToString()
+            val shortName = ComponentName(cn.packageName, cn.shortClassName).flattenToString()
+            return flat.split(':').any {
+                it.equals(full, ignoreCase = true) ||
+                    it.equals(shortName, ignoreCase = true) ||
+                    it.contains(cn.className, ignoreCase = true)
+            }
+        }
+
         /**
          * Soft rebind: if already connected, do nothing (toggling the component
-         * would drop live notifications). Otherwise ask the system to bind again.
+         * would drop live notifications). Otherwise ask the system to bind again,
+         * and retry a few times — cold start often needs 0.5–3s before connected.
          */
         fun ensureRebind(context: Context) {
-            if (connected) return
+            if (isConnectedNow()) return
+            val app = context.applicationContext
+            if (!isNotificationAccessGranted(app)) return
+            requestSoftRebind(app)
+            scheduleRebindRetries(app)
+        }
+
+        private fun requestSoftRebind(context: Context) {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return
+            if (isConnectedNow()) return
             val cn = ComponentName(context, CentliNotificationListener::class.java)
             try {
                 // Ensure component is enabled (may have been left disabled by an
@@ -310,15 +483,42 @@ class CentliNotificationListener : NotificationListenerService() {
             }
         }
 
+        private fun scheduleRebindRetries(context: Context) {
+            cancelRebindRetries()
+            val app = context.applicationContext
+            // 冷启动 / OEM 慢绑：多试几次，避免打开 App 就报「未连接」。
+            val delays = longArrayOf(500L, 1500L, 3000L, 6000L)
+            for (delay in delays) {
+                val r = Runnable {
+                    if (isConnectedNow()) return@Runnable
+                    if (!isNotificationAccessGranted(app)) return@Runnable
+                    if (!isAutoCaptureEnabled(app)) return@Runnable
+                    requestSoftRebind(app)
+                }
+                rebindRetryRunnables.add(r)
+                rebindHandler.postDelayed(r, delay)
+            }
+        }
+
+        private fun cancelRebindRetries() {
+            for (r in rebindRetryRunnables) {
+                rebindHandler.removeCallbacks(r)
+            }
+            rebindRetryRunnables.clear()
+        }
+
         /**
          * Hard rebind for the settings UI "重新连接" button — disable/enable the
          * component. Do **not** call this on a timer.
          */
         fun forceRebind(context: Context) {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return
-            val cn = ComponentName(context, CentliNotificationListener::class.java)
+            val app = context.applicationContext
+            val cn = ComponentName(app, CentliNotificationListener::class.java)
             try {
-                val pm = context.packageManager
+                connected = false
+                instance = null
+                val pm = app.packageManager
                 pm.setComponentEnabledSetting(
                     cn,
                     PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
@@ -330,6 +530,7 @@ class CentliNotificationListener : NotificationListenerService() {
                     PackageManager.DONT_KILL_APP,
                 )
                 requestRebind(cn)
+                scheduleRebindRetries(app)
                 Log.i(TAG, "forceRebind for $cn")
             } catch (e: Exception) {
                 Log.e(TAG, "forceRebind failed", e)
