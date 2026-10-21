@@ -174,6 +174,9 @@ Future<T?> showGlassSheet<T>({
   AnimationStyle? sheetAnimationStyle,
   bool? requestFocus,
 }) {
+  // 弹层材质透明时，系统 showDragHandle 会画在 CentliGlass 外侧（悬空灰线）。
+  // 把手改画在玻璃内部。
+  final paintHandleInside = showDragHandle == true;
   return showModalBottomSheet<T>(
     context: context,
     barrierLabel: barrierLabel,
@@ -184,7 +187,7 @@ Future<T?> showGlassSheet<T>({
     useRootNavigator: useRootNavigator,
     isDismissible: isDismissible,
     enableDrag: enableDrag,
-    showDragHandle: showDragHandle,
+    showDragHandle: false,
     useSafeArea: useSafeArea,
     routeSettings: routeSettings,
     transitionAnimationController: transitionAnimationController,
@@ -200,12 +203,63 @@ Future<T?> showGlassSheet<T>({
         const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
-    builder: (ctx) => CentliGlass(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-      tint: backgroundColor,
-      child: Builder(builder: builder),
-    ),
+    builder: (ctx) {
+      final body = Builder(builder: builder);
+      return CentliGlass(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        tint: backgroundColor,
+        child: paintHandleInside
+            ? _GlassSheetBodyWithHandle(child: body)
+            : body,
+      );
+    },
   );
+}
+
+/// 拖拽条画在玻璃板内顶部，避免透明 Modal 材质把系统 handle 晾在外面。
+class _GlassSheetBodyWithHandle extends StatelessWidget {
+  const _GlassSheetBodyWithHandle({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final handle = Padding(
+      padding: const EdgeInsets.only(top: 10, bottom: 6),
+      child: Center(
+        child: Container(
+          width: 36,
+          height: 4,
+          decoration: BoxDecoration(
+            color: scheme.onSurfaceVariant.withValues(alpha: 0.35),
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+      ),
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.hasBoundedHeight) {
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              handle,
+              Flexible(child: child),
+            ],
+          );
+        }
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            handle,
+            child,
+          ],
+        );
+      },
+    );
+  }
 }
 
 /// 毛玻璃弹窗面板：`AlertDialog` 的等价替代。
