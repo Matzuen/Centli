@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -25,7 +27,9 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
   bool _loading = true;
   bool _enabled = false;
   bool _granted = false;
+  bool _postNotificationsGranted = true;
   bool _listenerConnected = false;
+  bool _listenerConnecting = false;
   int _templateVersion = kNotiTemplateFallbackVersion;
   String? _templateUpdatedAt;
   String _templateSource = 'builtin';
@@ -33,6 +37,8 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
   bool _busy = false;
   bool _batteryIgnored = false;
   bool _resurrectScheduled = false;
+  bool _overlayEnabled = true;
+  bool _overlayGranted = false;
   Map<String, String> _accountMap = {};
   List<Account> _accounts = const [];
   List<DroppedNotification> _dropped = const [];
@@ -61,38 +67,55 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
   Future<void> _reload({bool soft = false}) async {
     if (!soft && mounted) setState(() => _loading = true);
     final db = ref.read(databaseProvider);
-    final enabled = (await db.getSetting('auto_capture_enabled')) == 'true';
-    final granted = await NotificationCaptureStub.isPermissionGranted();
-    // Soft only — hard forceRebind on every reload/resume was disconnecting
-    // the listener and made「打开软件也无法实时监听」.
-    if (granted && enabled) {
-      await NotificationCaptureStub.ensureListenerRebind();
-    }
-    final connected = await NotificationCaptureStub.isListenerConnected();
-    final batteryIgnored =
-        await NotificationCaptureStub.isBatteryOptimizationIgnored();
-    final resurrectScheduled =
-        await NotificationCaptureStub.isResurrectScheduled();
-    final ledgerId = await db.currentLedgerId();
+
+    // Fast path: paint without waiting up to 5s for listener rebind.
+    final enabledF = db.getSetting('auto_capture_enabled');
+    final grantedF = NotificationCaptureStub.isPermissionGranted();
+    final postF = NotificationCaptureStub.isPostNotificationsGranted();
+    final connectedF = NotificationCaptureStub.isListenerConnected();
+    final batteryF = NotificationCaptureStub.isBatteryOptimizationIgnored();
+    final resurrectF = NotificationCaptureStub.isResurrectScheduled();
+    final overlayOnF = NotificationCaptureStub.isOverlayEnabled();
+    final overlayPermF = NotificationCaptureStub.isOverlayPermissionGranted();
+    final ledgerIdF = db.currentLedgerId();
+    final accountMapF = db.getCaptureAccountMap();
+    final droppedF = NotificationCaptureStub.getDroppedNotifications();
+
+    final enabled = (await enabledF) == 'true';
+    final granted = await grantedF;
+    final postGranted = await postF;
+    final connected = await connectedF;
+    final batteryIgnored = await batteryF;
+    final resurrectScheduled = await resurrectF;
+    final overlayEnabled = await overlayOnF;
+    final overlayGranted = await overlayPermF;
+    final ledgerId = await ledgerIdF;
+    final accountMap = await accountMapF;
+    final dropped = await droppedF;
+
     var pending = 0;
     List<Account> accounts = const [];
     if (ledgerId != null) {
-      pending = await db.countPendingCaptures(ledgerId);
-      accounts = await db.loadActiveAccounts(ledgerId);
+      final pendingF = db.countPendingCaptures(ledgerId);
+      final accountsF = db.loadActiveAccounts(ledgerId);
+      pending = await pendingF;
+      accounts = await accountsF;
     }
-    final accountMap = await db.getCaptureAccountMap();
 
     NotiTemplateStore.bindDatabase(db);
-    final templates = await NotiTemplateStore.load();
+    // Prefer cache; avoid blocking open on network/disk template refresh.
+    final templates = NotiTemplateStore.peek().isNotEmpty
+        ? NotiTemplateStore.peek()
+        : await NotiTemplateStore.load();
     final version = NotiTemplateStore.version;
     final updatedAt = NotiTemplateStore.updatedAt;
     final source = NotiTemplateStore.source;
-    final dropped = await NotificationCaptureStub.getDroppedNotifications();
     final aiRules = [
       for (final t in templates)
         if (isDistillRuleId(t.id)) t,
     ];
-    final trace = await AiNotiTrace.load(force: true);
+    // Cache only — force disk flush was making open feel stuck.
+    final trace = await AiNotiTrace.load(force: false);
     final latest = trace.isEmpty ? null : trace.first;
     final hint = latest == null
         ? (aiRules.isEmpty
@@ -100,15 +123,17 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
             : '官方 v$version · AI 规则 ${aiRules.length} 条')
         : 'AI 规则 ${aiRules.length} 条 · 最近：${latest.kindLabel}';
 
-    await db.setSetting('notification_template_version', '$version');
-
     if (!mounted) return;
     setState(() {
       _enabled = enabled;
       _granted = granted;
+      _postNotificationsGranted = postGranted;
       _listenerConnected = connected;
+      _listenerConnecting = granted && enabled && !connected;
       _batteryIgnored = batteryIgnored;
       _resurrectScheduled = resurrectScheduled;
+      _overlayEnabled = overlayEnabled;
+      _overlayGranted = overlayGranted;
       _templateVersion = version;
       _templateUpdatedAt = updatedAt;
       _templateSource = source;
@@ -119,6 +144,59 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
       _aiTraceHint = hint;
       _loading = false;
     });
+
+    // Soft rebind in background — never block first paint.
+    if (granted && enabled && !connected) {
+      unawaited(_refreshListenerInBackground());
+    }
+
+    // Persist template version off the critical path.
+    unawaited(db.setSetting('notification_template_version', '$version'));
+  }
+
+  Future<void> _refreshListenerInBackground() async {
+    try {
+      await NotificationCaptureStub.ensureListenerRebind();
+      final connected = await NotificationCaptureStub.awaitListenerConnected(
+        timeout: const Duration(seconds: 3),
+      );
+      if (!mounted) return;
+      setState(() {
+        _listenerConnected = connected;
+        _listenerConnecting = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _listenerConnecting = false);
+    }
+  }
+
+  Future<void> _requestPostNotifications() async {
+    setState(() => _busy = true);
+    try {
+      final ok =
+          await NotificationCaptureStub.requestPostNotificationsPermission();
+      if (!mounted) return;
+      setState(() => _postNotificationsGranted = ok);
+      if (!ok) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('请在系统设置中允许 Centli 发送通知')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _openOverlayPermission() async {
+    setState(() => _busy = true);
+    try {
+      await NotificationCaptureStub.openOverlayPermissionSettings();
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+      if (mounted) await _reload(soft: true);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _setEnabled(bool wantOn) async {
@@ -152,17 +230,21 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
           await Future<void>.delayed(const Duration(milliseconds: 400));
         }
         // Soft rebind is enough after enabling; hard toggle drops the bind.
+        if (mounted) setState(() => _listenerConnecting = true);
         await NotificationCaptureStub.ensureListenerRebind();
       }
       if (!mounted) return;
       final batteryIgnored =
           await NotificationCaptureStub.isBatteryOptimizationIgnored();
-      final connected = await NotificationCaptureStub.isListenerConnected();
+      final connected = wantOn
+          ? await NotificationCaptureStub.awaitListenerConnected()
+          : await NotificationCaptureStub.isListenerConnected();
       if (!mounted) return;
       setState(() {
         _enabled = wantOn;
         _batteryIgnored = batteryIgnored;
         _listenerConnected = connected;
+        _listenerConnecting = false;
       });
       if (wantOn && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -183,12 +265,14 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
   Future<void> _openPermission() async {
     if (_granted && !_listenerConnected) {
       // Explicit user action — hard rebind OK here.
+      if (mounted) setState(() => _listenerConnecting = true);
       await NotificationCaptureStub.forceListenerRebind();
-      // Give the system a moment to fire onListenerConnected.
-      await Future<void>.delayed(const Duration(milliseconds: 600));
-      final connected = await NotificationCaptureStub.isListenerConnected();
+      final connected = await NotificationCaptureStub.awaitListenerConnected();
       if (!mounted) return;
-      setState(() => _listenerConnected = connected);
+      setState(() {
+        _listenerConnected = connected;
+        _listenerConnecting = false;
+      });
       if (connected) {
         ScaffoldMessenger.of(context)
             .showSnackBar(const SnackBar(content: Text('已重新连接通知监听')));
@@ -417,6 +501,119 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
     setState(() => _dropped = const []);
   }
 
+  Widget _buildReadyChecklist(BuildContext context, ColorScheme scheme) {
+    final listenOk = _granted && _listenerConnected;
+    final items = <({
+      String title,
+      String okHint,
+      String badHint,
+      bool ok,
+      VoidCallback? onFix,
+    })>[
+      (
+        title: '1. 通知使用权',
+        okHint: '已开启',
+        badHint: '未开启 · 去系统授权',
+        ok: _granted,
+        onFix: _busy ? null : _openPermission,
+      ),
+      (
+        title: '2. 发送通知',
+        okHint: '已允许（待确认提醒）',
+        badHint: '未允许 · 点此申请',
+        ok: _postNotificationsGranted,
+        onFix: _busy ? null : _requestPostNotifications,
+      ),
+      (
+        title: '3. 支付悬浮窗（LiteNote 式）',
+        okHint: _overlayEnabled
+            ? '已授权 · 支付后弹出快速记账'
+            : '已授权 · 下方开关已关',
+        badHint: '需「显示在其他应用上层」；小米/OPPO/vivo 还要开「后台弹出界面」',
+        ok: _overlayGranted && _overlayEnabled,
+        onFix: _busy
+            ? null
+            : (_overlayGranted
+                ? () async {
+                    await NotificationCaptureStub.setOverlayEnabled(true);
+                    if (mounted) setState(() => _overlayEnabled = true);
+                  }
+                : _openOverlayPermission),
+      ),
+      (
+        title: '4. 电池优化',
+        okHint: '已忽略，利于后台捕获',
+        badHint: '建议设为「不优化」',
+        ok: _batteryIgnored,
+        onFix: _busy ? null : _openBattery,
+      ),
+    ];
+    final readyCount = items.where((e) => e.ok).length + (listenOk ? 1 : 0);
+    final total = items.length + 1;
+
+    return CentliSoftCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ListTile(
+            contentPadding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            title: const Text('就绪检查'),
+            subtitle: Text(
+              listenOk && readyCount == total
+                  ? '权限已齐 · 支付后可走悬浮窗或待确认'
+                  : '建议按序完成 $readyCount/$total · 监听${listenOk ? '已连接' : (_listenerConnecting ? '连接中…' : '未连接')}',
+            ),
+          ),
+          const Divider(height: 1),
+          ListTile(
+            dense: true,
+            leading: Icon(
+              listenOk ? Icons.check_circle : Icons.radio_button_unchecked,
+              color: listenOk ? scheme.primary : scheme.outline,
+              size: 22,
+            ),
+            title: const Text('监听连接'),
+            subtitle: Text(
+              !_granted
+                  ? '需先开通知使用权'
+                  : (_listenerConnected
+                      ? '已连接'
+                      : (_listenerConnecting ? '正在连接…' : '未连接 · 点此重连')),
+            ),
+            trailing: (!_granted || _listenerConnected || _busy)
+                ? null
+                : TextButton(
+                    onPressed: _openPermission,
+                    child: const Text('重连'),
+                  ),
+            onTap: (!_granted || _listenerConnected || _busy)
+                ? null
+                : _openPermission,
+          ),
+          for (final item in items)
+            ListTile(
+              dense: true,
+              leading: Icon(
+                item.ok ? Icons.check_circle : Icons.radio_button_unchecked,
+                color: item.ok ? scheme.primary : scheme.outline,
+                size: 22,
+              ),
+              title: Text(item.title),
+              subtitle: Text(item.ok ? item.okHint : item.badHint),
+              trailing: item.ok
+                  ? null
+                  : TextButton(
+                      onPressed: item.onFix,
+                      child: const Text('去设置'),
+                    ),
+              onTap: item.ok ? null : item.onFix,
+            ),
+          const SizedBox(height: CentliSpacing.dense),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -431,13 +628,17 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
               padding: CentliSpacing.pagePadding,
               children: [
                 Text(
-                  '开启后将读取支付宝/微信等支付成功类通知，生成待确认账单；'
-                  '不会自动入账。清后台后由系统绑定 + 周期任务补回监听（不显示常驻通知）——'
-                  '请关闭电池优化，并在厂商系统里允许自启动/后台运行，否则可能被系统杀掉。',
+                  '支付通知优先走自动线：捕获后进悬浮窗或待确认，点一下才入账。\n'
+                  '按下方清单一次配齐权限，之后少打断。\n'
+                  '也可在系统控制中心添加「自动记账」快捷开关，下拉即可开/关监听。',
                   style: Theme.of(context).textTheme.bodyMedium
                       ?.copyWith(color: scheme.onSurfaceVariant),
                 ),
-                const SizedBox(height: CentliSpacing.sectionLoose),
+                const SizedBox(height: CentliSpacing.section),
+                if (supported) ...[
+                  _buildReadyChecklist(context, scheme),
+                  const SizedBox(height: CentliSpacing.sectionLoose),
+                ],
                 if (!supported) ...[
                   CentliSoftCard(
                     child: ListTile(
@@ -490,57 +691,39 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
                 CentliSoftCard(
                   child: ListTile(
                     leading: Icon(
-                      _granted
-                          ? Icons.verified_user_outlined
-                          : Icons.privacy_tip_outlined,
-                      color: _granted ? scheme.primary : scheme.error,
+                      Icons.picture_in_picture_alt_outlined,
+                      color: scheme.primary,
                     ),
-                    title: const Text('通知权限'),
+                    title: const Text('支付悬浮窗'),
                     subtitle: Text(
                       !supported
-                          ? '仅 Android 可申请'
-                          : (!_granted
-                                ? '未开启 · 去开启'
-                                : (_listenerConnected
-                                      ? '已开启 · 监听已连接'
-                                      : '已开启 · 监听未连接（请点此重连或开关一次通知使用权）')),
+                          ? '仅 Android 支持'
+                          : (!_overlayGranted
+                                ? '未授权「显示在其他应用上层」'
+                                : (_overlayEnabled
+                                      ? '捕获后弹出快速记账（选分类即可入账）'
+                                      : '已关闭 · 仍会发待确认通知')),
                     ),
-                    trailing: supported && !_granted
-                        ? FilledButton.tonal(
-                            onPressed: _busy ? null : _openPermission,
-                            child: const Text('去开启'),
-                          )
-                        : (supported
+                    trailing: !supported
+                        ? null
+                        : (!_overlayGranted
                               ? TextButton(
-                                  onPressed: _busy ? null : _openPermission,
-                                  child: const Text('系统设置'),
+                                  onPressed:
+                                      _busy ? null : _openOverlayPermission,
+                                  child: const Text('去开启'),
                                 )
-                              : null),
-                  ),
-                ),
-                const SizedBox(height: CentliSpacing.section),
-                CentliSoftCard(
-                  child: ListTile(
-                    leading: Icon(
-                      _batteryIgnored
-                          ? Icons.battery_charging_full
-                          : Icons.battery_alert_outlined,
-                      color: _batteryIgnored ? scheme.primary : scheme.tertiary,
-                    ),
-                    title: const Text('电池优化（捕获可靠性）'),
-                    subtitle: Text(
-                      !supported
-                          ? '仅 Android 相关：系统杀后台会导致漏记'
-                          : (_batteryIgnored
-                                ? '已忽略电池优化，有利于后台捕获'
-                                : '建议将 Centli 设为「不优化」，减少通知监听被系统杀掉'),
-                    ),
-                    trailing: supported
-                        ? FilledButton.tonal(
-                            onPressed: _busy ? null : _openBattery,
-                            child: Text(_batteryIgnored ? '查看设置' : '去设置'),
-                          )
-                        : null,
+                              : Switch(
+                                  value: _overlayEnabled,
+                                  onChanged: _busy
+                                      ? null
+                                      : (v) async {
+                                          await NotificationCaptureStub
+                                              .setOverlayEnabled(v);
+                                          if (mounted) {
+                                            setState(() => _overlayEnabled = v);
+                                          }
+                                        },
+                                )),
                   ),
                 ),
                 const SizedBox(height: CentliSpacing.section),

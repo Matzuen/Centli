@@ -48,6 +48,34 @@ abstract final class NotificationCaptureStub {
     }
   }
 
+  /// Android 13+：是否已允许 App 弹出通知（POST_NOTIFICATIONS）。
+  static Future<bool> isPostNotificationsGranted() async {
+    if (!supported) return true;
+    try {
+      final v =
+          await _channel.invokeMethod<bool>('isPostNotificationsGranted');
+      return v ?? true;
+    } on MissingPluginException {
+      return true;
+    } on PlatformException {
+      return true;
+    }
+  }
+
+  /// 弹出系统「允许发送通知」对话框。已授权或低版本直接返回 true。
+  static Future<bool> requestPostNotificationsPermission() async {
+    if (!supported) return true;
+    try {
+      final v = await _channel
+          .invokeMethod<bool>('requestPostNotificationsPermission');
+      return v ?? false;
+    } on MissingPluginException {
+      return true;
+    } on PlatformException {
+      return false;
+    }
+  }
+
   /// Whether NotificationListenerService.onListenerConnected has fired.
   /// Permission can be ON while this is false (OEM dropped the binding).
   static Future<bool> isListenerConnected() async {
@@ -72,6 +100,21 @@ abstract final class NotificationCaptureStub {
     } on PlatformException {
       // no-op
     }
+  }
+
+  /// After [ensureListenerRebind], wait until the system fires
+  /// `onListenerConnected` (cold start often needs 0.5–3s).
+  static Future<bool> awaitListenerConnected({
+    Duration timeout = const Duration(seconds: 5),
+    Duration step = const Duration(milliseconds: 250),
+  }) async {
+    if (!supported) return false;
+    final deadline = DateTime.now().add(timeout);
+    while (DateTime.now().isBefore(deadline)) {
+      if (await isListenerConnected()) return true;
+      await Future<void>.delayed(step);
+    }
+    return isListenerConnected();
   }
 
   /// Hard disable/enable of the NLS component. Only for explicit「重新连接」—
@@ -286,6 +329,53 @@ abstract final class NotificationCaptureStub {
     if (!supported) return;
     try {
       await _channel.invokeMethod<void>('openBatteryOptimizationSettings');
+    } on MissingPluginException {
+      // no-op
+    } on PlatformException {
+      // no-op
+    }
+  }
+
+  /// LiteNote 式悬浮窗：是否已授予「显示在其他应用上层」。
+  static Future<bool> isOverlayPermissionGranted() async {
+    if (!supported) return false;
+    try {
+      final v = await _channel.invokeMethod<bool>('isOverlayPermissionGranted');
+      return v ?? false;
+    } on MissingPluginException {
+      return false;
+    } on PlatformException {
+      return false;
+    }
+  }
+
+  static Future<bool> isOverlayEnabled() async {
+    if (!supported) return false;
+    try {
+      final v = await _channel.invokeMethod<bool>('isOverlayEnabled');
+      return v ?? false;
+    } on MissingPluginException {
+      return false;
+    } on PlatformException {
+      return false;
+    }
+  }
+
+  static Future<void> setOverlayEnabled(bool enabled) async {
+    if (!supported) return;
+    try {
+      await _channel.invokeMethod<void>('setOverlayEnabled', enabled);
+    } on MissingPluginException {
+      // no-op
+    } on PlatformException {
+      // no-op
+    }
+  }
+
+  static Future<void> openOverlayPermissionSettings() async {
+    if (!supported) return;
+    try {
+      await _channel.invokeMethod<void>('openOverlayPermissionSettings');
     } on MissingPluginException {
       // no-op
     } on PlatformException {

@@ -30,6 +30,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
 
   Future<void> _finish({String route = '/assets'}) async {
     await ref.read(databaseProvider).setSetting('onboarding_done', 'true');
+    ref.invalidate(onboardingDoneProvider);
     if (!mounted) return;
     context.go(PendingDeepLink.take() ?? route);
   }
@@ -176,9 +177,9 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                   const _OnboardSlide(
                     icon: Icons.calculate_outlined,
                     title: '然后记一笔',
-                    body: '底部中间「记一笔」记下支出 / 收入 / 转账。'
-                        '支付通知会进待确认，确认后才入账；'
-                        '需要藏金额时，可在「我的 · 安全」开启资产锁。',
+                    body: '日常支付优先开「自动记账」：通知进待确认或悬浮窗，点一下才入账。'
+                        '现金 / 无通知用底部「记一笔」或长按一句话补记。'
+                        '建议先建好资产账户，再配齐通知与悬浮窗权限。',
                     sketch: _CalcSketch(),
                   ),
                 ],
@@ -213,9 +214,14 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                       children: [
                         FilledButton(
                           onPressed: () => _finish(route: '/assets'),
-                          child: const Text('去资产页开始'),
+                          child: const Text('去资产页建账户'),
                         ),
                         const SizedBox(height: CentliSpacing.item),
+                        FilledButton.tonal(
+                          onPressed: () => _finish(route: '/me/auto'),
+                          child: const Text('去开启自动记账'),
+                        ),
+                        const SizedBox(height: CentliSpacing.dense),
                         TextButton(
                           onPressed: () => _finish(route: '/home'),
                           child: const Text('先逛逛首页'),

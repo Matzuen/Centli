@@ -80,6 +80,11 @@ abstract final class NotiTemplateStore {
       return _merged!;
     }
 
+    // force reload 会整文件覆盖内存；先把未落盘的命中时间写出去。
+    if (_distillHitsDirty) {
+      await flushDistillHits();
+    }
+
     await _loadOfficial();
     await _loadUserFile();
     _rebuildMerged();
@@ -552,6 +557,7 @@ abstract final class NotiTemplateStore {
   /// 每条都写一次规则 JSON 是纯粹的 IO 浪费。
   static const int kDistillHitPersistMs = 60 * 1000;
   static int _lastHitPersistMs = 0;
+  static bool _distillHitsDirty = false;
 
   /// Record a local match for a distill rule (capture or exclude).
   static Future<void> touchDistillHit(String id, {DateTime? now}) async {
@@ -566,15 +572,22 @@ abstract final class NotiTemplateStore {
         lastHitAtMs: ts,
       ),
     };
+    _distillHitsDirty = true;
     if (ts - _lastHitPersistMs < kDistillHitPersistMs) return;
     _lastHitPersistMs = ts;
+    _distillHitsDirty = false;
     await _persistUserFile();
   }
 
-  /// 测试 / 退出前把节流中的命中计数刷盘。
-  @visibleForTesting
+  /// 把节流中的命中时间刷盘（规则页刷新 / 强制 reload 前必须调用，
+  /// 否则 force load 会从磁盘盖掉内存里刚写的 lastHitAt）。
   static Future<void> flushDistillHits() async {
+    if (!_distillHitsDirty) {
+      _lastHitPersistMs = 0;
+      return;
+    }
     await _persistUserFile();
+    _distillHitsDirty = false;
     _lastHitPersistMs = 0;
   }
 

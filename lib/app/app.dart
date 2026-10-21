@@ -142,6 +142,20 @@ class _CentliAppState extends ConsumerState<CentliApp> {
     // Widget sync after first frame path — lower priority than first route.
     unawaited(_syncHomeWidget());
     unawaited(_handleInitialWidgetLaunch());
+    // 冷启动后请求「允许发送通知」（待确认推送 / 支付提醒需要）。
+    unawaited(_requestPostNotificationsOnLaunch());
+  }
+
+  /// 软件打开时弹出系统通知权限（Android 13+）；已授权则跳过。
+  Future<void> _requestPostNotificationsOnLaunch() async {
+    if (!NotificationCaptureStub.supported) return;
+    // 等 splash 切走，避免系统对话框盖在启动页上被误关。
+    await Future<void>.delayed(const Duration(milliseconds: 700));
+    if (!mounted) return;
+    final already =
+        await NotificationCaptureStub.isPostNotificationsGranted();
+    if (already) return;
+    await NotificationCaptureStub.requestPostNotificationsPermission();
   }
 
   void _scheduleHomeWidgetSync() {

@@ -1894,12 +1894,48 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
     });
   }
 
+  /// True if a **pending** row already holds [key].
+  ///
+  /// Confirmed / ignored rows must not block forever — WeChat often reuses the
+  /// same [StatusBarNotification] key for later payments. Those rows retire
+  /// their key on confirm/ignore; this check only looks at live pending.
   Future<bool> existsDedupeKey(String key) async {
     final row = await (select(pendingCaptures)
-          ..where((t) => t.dedupeKey.equals(key))
+          ..where(
+            (t) => t.dedupeKey.equals(key) & t.status.equals('pending'),
+          )
           ..limit(1))
         .getSingleOrNull();
     return row != null;
+  }
+
+  /// Free [dedupeKey] unique slot after confirm/ignore so the next payment
+  /// with the same notification key can create a new pending row.
+  Future<void> _retireDedupeKey(String id, String oldKey) async {
+    final retired = oldKey.startsWith('done|')
+        ? oldKey
+        : (oldKey.length <= 120 ? 'done|$id|$oldKey' : 'done|$id');
+    if (retired == oldKey) return;
+    await (update(pendingCaptures)..where((t) => t.id.equals(id))).write(
+      PendingCapturesCompanion(
+        dedupeKey: Value(retired),
+        updatedAt: Value(nowMs()),
+      ),
+    );
+  }
+
+  /// Legacy confirmed/ignored rows may still hold the live key (unique).
+  /// Retire them so a new insert can proceed.
+  Future<void> _retireInactiveDedupeKey(String key) async {
+    final rows = await (select(pendingCaptures)
+          ..where(
+            (t) =>
+                t.dedupeKey.equals(key) & t.status.isNotValue('pending'),
+          ))
+        .get();
+    for (final r in rows) {
+      await _retireDedupeKey(r.id, r.dedupeKey);
+    }
   }
 
   Future<PendingCapture?> getPendingCapture(String id) {
@@ -2040,6 +2076,8 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
       return null;
     }
     if (await existsDedupeKey(dedupeKey)) return null;
+    // Old confirmed/ignored rows may still occupy the unique key.
+    await _retireInactiveDedupeKey(dedupeKey);
 
     String? suggestedCategory;
     String? suggestedAccount =
@@ -2056,27 +2094,32 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
 
     final ts = nowMs();
     final id = newId();
-    await into(pendingCaptures).insert(
-      PendingCapturesCompanion.insert(
-        id: id,
-        ledgerId: ledgerId,
-        sourcePkg: sourcePkg,
-        rawTitle: Value(rawTitle),
-        rawText: rawText,
-        amountMinor: Value(amountMinor),
-        currency: Value(currency ?? 'CNY'),
-        note: Value(composeNote(merchant: merchant, note: null)),
-        happenAt: Value(happenAt ?? ts),
-        suggestedCategoryId: Value(suggestedCategory),
-        suggestedAccountId: Value(suggestedAccount),
-        status: 'pending',
-        dedupeKey: dedupeKey,
-        parseOk: Value(parseOk ? 1 : 0),
-        direction: Value(direction),
-        createdAt: ts,
-        updatedAt: ts,
-      ),
-    );
+    try {
+      await into(pendingCaptures).insert(
+        PendingCapturesCompanion.insert(
+          id: id,
+          ledgerId: ledgerId,
+          sourcePkg: sourcePkg,
+          rawTitle: Value(rawTitle),
+          rawText: rawText,
+          amountMinor: Value(amountMinor),
+          currency: Value(currency ?? 'CNY'),
+          note: Value(composeNote(merchant: merchant, note: null)),
+          happenAt: Value(happenAt ?? ts),
+          suggestedCategoryId: Value(suggestedCategory),
+          suggestedAccountId: Value(suggestedAccount),
+          status: 'pending',
+          dedupeKey: dedupeKey,
+          parseOk: Value(parseOk ? 1 : 0),
+          direction: Value(direction),
+          createdAt: ts,
+          updatedAt: ts,
+        ),
+      );
+    } catch (_) {
+      // Unique race / leftover key — treat as dedupe skip.
+      return null;
+    }
     return id;
   }
 
@@ -2149,6 +2192,7 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
           updatedAt: Value(ts),
         ),
       );
+      await _retireDedupeKey(pending.id, pending.dedupeKey);
       final m = merchantForRule?.trim();
       if (m != null && m.isNotEmpty) {
         final key = m.toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
@@ -2194,6 +2238,9 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
   }
 
   Future<void> ignorePendingCapture(String pendingId) async {
+    final pending = await (select(pendingCaptures)
+          ..where((t) => t.id.equals(pendingId)))
+        .getSingleOrNull();
     final ts = nowMs();
     await (update(pendingCaptures)..where((t) => t.id.equals(pendingId)))
         .write(
@@ -2202,6 +2249,9 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
         updatedAt: Value(ts),
       ),
     );
+    if (pending != null) {
+      await _retireDedupeKey(pending.id, pending.dedupeKey);
+    }
   }
 
   /// Mark all status=pending captures as ignored. Returns affected count.
@@ -2225,6 +2275,9 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
         updatedAt: Value(ts),
       ),
     );
+    for (final r in rows) {
+      await _retireDedupeKey(r.id, r.dedupeKey);
+    }
     return rows.length;
   }
 

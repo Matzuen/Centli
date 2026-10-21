@@ -538,19 +538,47 @@ class _HomePageState extends ConsumerState<HomePage> {
                                               height: CentliSpacing.item,
                                             ),
                                             Text(
-                                              '暂无账单',
+                                              '还没有流水',
                                               style: TextStyle(
                                                 color: scheme.onSurfaceVariant,
+                                                fontWeight: FontWeight.w600,
                                               ),
                                             ),
                                             const SizedBox(
                                               height: CentliSpacing.dense,
                                             ),
                                             Text(
-                                              '建议先到「资产」建好资产账户，再点底部「记一笔」',
+                                              '支付优先开自动记账；现金或漏记用「记一笔」。',
+                                              textAlign: TextAlign.center,
                                               style: Theme.of(context)
                                                   .textTheme
-                                                  .bodySmall,
+                                                  .bodySmall
+                                                  ?.copyWith(
+                                                    color: scheme
+                                                        .onSurfaceVariant,
+                                                  ),
+                                            ),
+                                            const SizedBox(
+                                              height: CentliSpacing.section,
+                                            ),
+                                            Wrap(
+                                              alignment: WrapAlignment.center,
+                                              spacing: 8,
+                                              runSpacing: 8,
+                                              children: [
+                                                FilledButton.tonal(
+                                                  onPressed: () => context
+                                                      .push('/me/auto'),
+                                                  child: const Text('开自动记账'),
+                                                ),
+                                                FilledButton(
+                                                  onPressed: () =>
+                                                      showBookkeepingSheet(
+                                                    context,
+                                                  ),
+                                                  child: const Text('记第一笔'),
+                                                ),
+                                              ],
                                             ),
                                           ],
                                         ),

@@ -35,6 +35,10 @@ abstract final class NotificationIngestBridge {
 
     final enabled = await db.getSetting('auto_capture_enabled');
     await NotificationCaptureStub.setAutoCaptureEnabled(enabled == 'true');
+    // App 冷启动后主动软重绑，尽量保持监听一直连着。
+    if (enabled == 'true') {
+      unawaited(NotificationCaptureStub.ensureListenerRebind());
+    }
   }
 
   static Future<void> stop() async {
@@ -43,6 +47,10 @@ abstract final class NotificationIngestBridge {
   }
 
   /// Parse + ingest one raw notification map from MethodChannel / samples.
+  ///
+  /// When [raw] carries `nativeIngested: true`, native already wrote pending +
+  /// push (LiteNote / AutoBookKeeping style). Dart only runs AI distill / hit
+  /// stats and must not insert again.
   static Future<String?> ingestRaw(
     CentliDatabase db,
     Map<String, dynamic> raw,
@@ -53,6 +61,7 @@ abstract final class NotificationIngestBridge {
     final ledgerId = await db.currentLedgerId();
     if (ledgerId == null || ledgerId.isEmpty) return null;
 
+    final nativeIngested = raw['nativeIngested'] == true;
     final notification = RawNotification.fromMap(raw);
     if (notification.title.isEmpty && notification.text.isEmpty) return null;
 
@@ -66,12 +75,12 @@ abstract final class NotificationIngestBridge {
       if (!realPayment) {
         _touchHitSafely(excl.id);
         unawaited(
-          AiNotiTrace.record(
-            pkg: notification.pkg,
-            title: notification.title,
+          AiNotiTrace.recordForRaw(
+            raw: notification,
             kind: AiNotiTraceKinds.reuseExclude,
             ruleName: excl.displayName,
             detail: excl.mustContainRegex,
+            recognition: '命中排除规则 · ${excl.mustContainRegex ?? ''}',
           ),
         );
         await NotificationCaptureStub.recordDroppedNotification(
@@ -85,16 +94,7 @@ abstract final class NotificationIngestBridge {
 
     final reused = matchDistilledCaptureRule(notification, templates);
     if (reused != null) {
-      unawaited(
-        AiNotiTrace.record(
-          pkg: notification.pkg,
-          title: notification.title,
-          kind: AiNotiTraceKinds.reuseCapture,
-          ruleName: reused.templateId,
-          detail: '金额 ${reused.amountMinor}',
-        ),
-      );
-      return _ingestResolved(
+      final id = await _ingestResolved(
         db,
         notification,
         (
@@ -103,7 +103,33 @@ abstract final class NotificationIngestBridge {
           exclude: false,
           mustHint: null,
         ),
+        skipInsert: nativeIngested,
       );
+      // 匹配 ≠ 新建待确认：同通知已在待确认 / 刚确认过会走去重。
+      unawaited(
+        AiNotiTrace.recordForRaw(
+          raw: notification,
+          kind: (id != null || nativeIngested)
+              ? AiNotiTraceKinds.reuseCapture
+              : AiNotiTraceKinds.ingestDeduped,
+          ruleName: reused.templateId,
+          detail: nativeIngested
+              ? '金额 ${reused.amountMinor} · native 已入待确认'
+              : (id != null
+                  ? '金额 ${reused.amountMinor} · 已入待确认'
+                  : '金额 ${reused.amountMinor} · 去重未新建'),
+          recognition: formatLocalRecognition(
+            reused,
+            note: nativeIngested
+                ? '命中 AI 捕获规则（native 已落库）'
+                : (id != null
+                    ? '命中 AI 捕获规则，已写入待确认'
+                    : '命中 AI 捕获规则，但未新建待确认：'
+                        '待确认列表里已有同通知，或该通知键刚被确认/忽略过（去重）'),
+          ),
+        ),
+      );
+      return id;
     }
 
     final resolved = await _resolveParse(db, notification, templates);
@@ -114,11 +140,14 @@ abstract final class NotificationIngestBridge {
           localCapture.amountMinor != null;
       if (realPayment) {
         unawaited(
-          AiNotiTrace.record(
-            pkg: notification.pkg,
-            title: notification.title,
+          AiNotiTrace.recordForRaw(
+            raw: notification,
             kind: AiNotiTraceKinds.localOverrideAi,
             detail: '本地模板 ${localCapture.templateId}',
+            recognition: formatLocalRecognition(
+              localCapture,
+              note: 'AI 判排除，本地支付模板兜底',
+            ),
           ),
         );
         return _ingestResolved(
@@ -130,6 +159,7 @@ abstract final class NotificationIngestBridge {
             exclude: false,
             mustHint: null,
           ),
+          skipInsert: nativeIngested,
         );
       }
       if (resolved.fromAi) {
@@ -140,15 +170,22 @@ abstract final class NotificationIngestBridge {
           ),
         );
       }
-      await NotificationCaptureStub.recordDroppedNotification(
-        pkg: notification.pkg,
-        title: notification.title,
-        reason: 'ai_exclude',
-      );
+      if (!nativeIngested) {
+        await NotificationCaptureStub.recordDroppedNotification(
+          pkg: notification.pkg,
+          title: notification.title,
+          reason: 'ai_exclude',
+        );
+      }
       return null;
     }
 
-    return _ingestResolved(db, notification, resolved);
+    return _ingestResolved(
+      db,
+      notification,
+      resolved,
+      skipInsert: nativeIngested,
+    );
   }
 
   static Future<String?> _ingestResolved(
@@ -159,8 +196,9 @@ abstract final class NotificationIngestBridge {
       bool fromAi,
       bool exclude,
       String? mustHint,
-    }) resolved,
-  ) async {
+    }) resolved, {
+    bool skipInsert = false,
+  }) async {
     final ledgerId = await db.currentLedgerId();
     if (ledgerId == null || ledgerId.isEmpty) return null;
 
@@ -174,42 +212,55 @@ abstract final class NotificationIngestBridge {
           text: notification.text,
         ) ||
         (!matched && parsed.amountMinor == null)) {
-      await NotificationCaptureStub.recordDroppedNotification(
-        pkg: notification.pkg,
-        title: notification.title,
-        reason: 'weak',
-      );
+      if (!skipInsert) {
+        await NotificationCaptureStub.recordDroppedNotification(
+          pkg: notification.pkg,
+          title: notification.title,
+          reason: 'weak',
+        );
+      }
       return null;
     }
     if (!matched) {
-      await NotificationCaptureStub.recordDroppedNotification(
-        pkg: notification.pkg,
-        title: notification.title,
-        reason: 'weak',
-      );
+      if (!skipInsert) {
+        await NotificationCaptureStub.recordDroppedNotification(
+          pkg: notification.pkg,
+          title: notification.title,
+          reason: 'weak',
+        );
+      }
       return null;
     }
     final key = dedupeKey(notification, parsed);
 
     final currency = parsed.currency ?? 'CNY';
     String? id;
-    try {
-      id = await db.ingestParsedNotification(
-        ledgerId: ledgerId,
-        sourcePkg: notification.pkg,
-        rawTitle: notification.title,
-        rawText: notification.text,
-        dedupeKey: key,
-        amountMinor: parsed.amountMinor,
-        currency: currency,
-        merchant: parsed.merchant,
-        happenAt: parsed.happenAt?.millisecondsSinceEpoch ?? notification.whenMs,
-        parseOk: parsed.ok,
-        accountHint: parsed.accountHint,
-        direction: parsed.direction,
-      );
-    } catch (e) {
-      return null;
+    if (!skipInsert) {
+      try {
+        id = await db.ingestParsedNotification(
+          ledgerId: ledgerId,
+          sourcePkg: notification.pkg,
+          rawTitle: notification.title,
+          rawText: notification.text,
+          dedupeKey: key,
+          amountMinor: parsed.amountMinor,
+          currency: currency,
+          merchant: parsed.merchant,
+          happenAt:
+              parsed.happenAt?.millisecondsSinceEpoch ?? notification.whenMs,
+          parseOk: parsed.ok,
+          accountHint: parsed.accountHint,
+          direction: parsed.direction,
+        );
+      } catch (e) {
+        return null;
+      }
+    }
+
+    // 命中计数跟「规则是否匹配」走，不跟「是否新建待确认」走。
+    // 去重跳过入库时轨迹已写「命中」，若这里不 touch 就会出现「命中了 / 尚未命中」。
+    if (!resolved.fromAi && isDistillCaptureRuleId(parsed.templateId)) {
+      _touchHitSafely(parsed.templateId!);
     }
 
     if (id != null) {
@@ -219,17 +270,16 @@ abstract final class NotificationIngestBridge {
         currency: currency,
         merchant: parsed.merchant,
       );
-      if (resolved.fromAi) {
-        _distillSafely(
-          () => _distillCaptureTraced(
-            raw: notification,
-            parsed: parsed,
-            mustHint: resolved.mustHint,
-          ),
-        );
-      } else if (isDistillCaptureRuleId(parsed.templateId)) {
-        _touchHitSafely(parsed.templateId!);
-      }
+    }
+    // AI 反写：前台 Dart 路径；native 已入库时仍要学规则。
+    if (resolved.fromAi && (id != null || skipInsert)) {
+      _distillSafely(
+        () => _distillCaptureTraced(
+          raw: notification,
+          parsed: parsed,
+          mustHint: resolved.mustHint,
+        ),
+      );
     }
     return id;
   }
@@ -262,11 +312,14 @@ abstract final class NotificationIngestBridge {
       mustHint: mustHint,
     );
     if (id == null) {
-      await AiNotiTrace.record(
-        pkg: raw.pkg,
-        title: raw.title,
+      await AiNotiTrace.recordForRaw(
+        raw: raw,
         kind: AiNotiTraceKinds.distillSkipped,
         detail: '捕获规则未写入（校验失败或无 mustHint）',
+        recognition: formatLocalRecognition(
+          parsed,
+          note: '反写捕获规则失败',
+        ),
       );
       return null;
     }
@@ -275,12 +328,12 @@ abstract final class NotificationIngestBridge {
       parsed.direction,
       mustHint ?? '支付',
     );
-    await AiNotiTrace.record(
-      pkg: raw.pkg,
-      title: raw.title,
+    await AiNotiTrace.recordForRaw(
+      raw: raw,
       kind: AiNotiTraceKinds.distillCapture,
       ruleName: name,
       detail: id,
+      recognition: formatLocalRecognition(parsed, note: '已写入捕获规则 $name'),
     );
     return id;
   }
@@ -294,20 +347,20 @@ abstract final class NotificationIngestBridge {
       mustHint: mustHint,
     );
     if (id == null) {
-      await AiNotiTrace.record(
-        pkg: raw.pkg,
-        title: raw.title,
+      await AiNotiTrace.recordForRaw(
+        raw: raw,
         kind: AiNotiTraceKinds.distillSkipped,
         detail: '排除规则未写入（片段不安全或为空）',
+        recognition: '关键词: ${mustHint ?? '（空）'}\n反写排除规则失败',
       );
       return null;
     }
-    await AiNotiTrace.record(
-      pkg: raw.pkg,
-      title: raw.title,
+    await AiNotiTrace.recordForRaw(
+      raw: raw,
       kind: AiNotiTraceKinds.distillExclude,
       ruleName: distilledExcludeRuleDisplayName(raw.pkg),
       detail: id,
+      recognition: '关键词: ${mustHint ?? ''}\n已写入排除规则',
     );
     return id;
   }
@@ -326,40 +379,42 @@ abstract final class NotificationIngestBridge {
         return null;
       }
       if (isLlmParseRateLimited()) {
-        await AiNotiTrace.record(
-          pkg: raw.pkg,
-          title: raw.title,
+        await AiNotiTrace.recordForRaw(
+          raw: raw,
           kind: AiNotiTraceKinds.aiRateLimited,
           detail: '本地已入账；后台蒸馏跳过',
+          recognition: formatLocalRecognition(local, note: 'AI 限频，未再问模型'),
         );
         return null;
       }
       final llm = await parseNotificationWithLlm(raw, config: cfg);
-      if (llm == null) {
-        await AiNotiTrace.record(
-          pkg: raw.pkg,
-          title: raw.title,
+      if (llm == null || llm.failed) {
+        await AiNotiTrace.recordForRaw(
+          raw: raw,
           kind: AiNotiTraceKinds.aiFailed,
           detail: '本地已入账；后台 AI 无结果',
+          recognition: llm?.recognitionSummary() ??
+              formatLocalRecognition(local, note: '后台 AI 无返回'),
         );
         return null;
       }
       if (!llm.isPayment) {
-        await AiNotiTrace.record(
-          pkg: raw.pkg,
-          title: raw.title,
+        await AiNotiTrace.recordForRaw(
+          raw: raw,
           kind: AiNotiTraceKinds.aiCalledExclude,
           detail: '本地已按支付入账，不学排除（避免误伤）',
           ruleName: llm.mustHint,
+          recognition: '${llm.recognitionSummary()}\n'
+              '（本地已入账，不学排除）',
         );
         return null;
       }
-      await AiNotiTrace.record(
-        pkg: raw.pkg,
-        title: raw.title,
+      await AiNotiTrace.recordForRaw(
+        raw: raw,
         kind: AiNotiTraceKinds.aiCalledPayment,
         detail: '后台确认收付款 · 准备反写',
         ruleName: llm.mustHint,
+        recognition: llm.recognitionSummary(),
       );
       return _distillCaptureTraced(
         raw: raw,
@@ -383,11 +438,11 @@ abstract final class NotificationIngestBridge {
     final local = parseNotification(notification, templates);
     if (local.templateId != null && local.amountMinor != null) {
       unawaited(
-        AiNotiTrace.record(
-          pkg: notification.pkg,
-          title: notification.title,
+        AiNotiTrace.recordForRaw(
+          raw: notification,
           kind: AiNotiTraceKinds.localFastPath,
           detail: '模板 ${local.templateId}',
+          recognition: formatLocalRecognition(local),
         ),
       );
       // Ingest uses local; AI distill runs after caller finishes ingest.
@@ -411,38 +466,42 @@ abstract final class NotificationIngestBridge {
       final cfg = await SmartFillLlmSettings().load(db);
       if (!cfg.isNotifyAiReady) {
         unawaited(
-          AiNotiTrace.record(
-            pkg: notification.pkg,
-            title: notification.title,
+          AiNotiTrace.recordForRaw(
+            raw: notification,
             kind: AiNotiTraceKinds.aiOff,
             detail: '无本地金额匹配 · 仅本地规则',
+            recognition: formatLocalRecognition(
+              local,
+              note: '未开 AI 识别通知',
+            ),
           ),
         );
       } else if (isLlmParseRateLimited()) {
         unawaited(
-          AiNotiTrace.record(
-            pkg: notification.pkg,
-            title: notification.title,
+          AiNotiTrace.recordForRaw(
+            raw: notification,
             kind: AiNotiTraceKinds.aiRateLimited,
+            recognition: formatLocalRecognition(local, note: 'AI 限频'),
           ),
         );
       } else {
         final llm = await parseNotificationWithLlm(notification, config: cfg);
-        if (llm == null) {
+        if (llm == null || llm.failed) {
           unawaited(
-            AiNotiTrace.record(
-              pkg: notification.pkg,
-              title: notification.title,
+            AiNotiTrace.recordForRaw(
+              raw: notification,
               kind: AiNotiTraceKinds.aiFailed,
+              detail: llm?.error,
+              recognition: llm?.recognitionSummary() ?? 'AI 无返回',
             ),
           );
         } else if (!llm.isPayment) {
           unawaited(
-            AiNotiTrace.record(
-              pkg: notification.pkg,
-              title: notification.title,
+            AiNotiTrace.recordForRaw(
+              raw: notification,
               kind: AiNotiTraceKinds.aiCalledExclude,
               ruleName: llm.mustHint,
+              recognition: llm.recognitionSummary(),
             ),
           );
           return (
@@ -461,14 +520,14 @@ abstract final class NotificationIngestBridge {
           );
         } else if (llm.parse != null) {
           unawaited(
-            AiNotiTrace.record(
-              pkg: notification.pkg,
-              title: notification.title,
+            AiNotiTrace.recordForRaw(
+              raw: notification,
               kind: AiNotiTraceKinds.aiCalledPayment,
               ruleName: llm.mustHint,
               detail: llm.parse!.amountMinor != null
                   ? '金额 ${llm.parse!.amountMinor}'
                   : '无金额',
+              recognition: llm.recognitionSummary(),
             ),
           );
           return (
@@ -479,13 +538,13 @@ abstract final class NotificationIngestBridge {
           );
         }
       }
-    } catch (_) {
+    } catch (e) {
       unawaited(
-        AiNotiTrace.record(
-          pkg: notification.pkg,
-          title: notification.title,
+        AiNotiTrace.recordForRaw(
+          raw: notification,
           kind: AiNotiTraceKinds.aiFailed,
           detail: '异常',
+          recognition: '异常: $e',
         ),
       );
     }

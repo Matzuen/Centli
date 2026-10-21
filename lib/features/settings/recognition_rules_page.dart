@@ -163,6 +163,45 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
     setState(() => _aiTrace = const []);
   }
 
+  Future<void> _showAiTraceDetail(AiNotiTraceEvent e) async {
+    final scheme = Theme.of(context).colorScheme;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(e.kindLabel),
+        content: SingleChildScrollView(
+          child: SelectableText(
+            [
+              '应用: ${_pkgLabel(e.pkg)}',
+              if (e.ruleName != null && e.ruleName!.isNotEmpty)
+                '规则: ${e.ruleName}',
+              if (e.detail != null && e.detail!.isNotEmpty) '备注: ${e.detail}',
+              if (_relTrace(e.atMs).isNotEmpty) _relTrace(e.atMs),
+              '',
+              '—— 原通知 ——',
+              e.originalNotification,
+              '',
+              '—— AI / 本地识别 ——',
+              (e.recognition != null && e.recognition!.trim().isNotEmpty)
+                  ? e.recognition!.trim()
+                  : '（无识别详情，请用新版再测一条通知）',
+            ].join('\n'),
+            style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(
+                  height: 1.4,
+                  color: scheme.onSurface,
+                ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('关闭'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _userRuleTile(NotiTemplate t, ColorScheme scheme) {
     return CentliSoftCard(
       child: ListTile(
@@ -841,7 +880,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
                 const SizedBox(height: CentliSpacing.dense),
                 Text(
                   '打开「我的 → AI 增强 → AI 识别通知」后，每条监听通知会记一条决策。'
-                  '微信/支付宝支付会先本地入账，再后台问 AI 反写规则。',
+                  '点某条可看原通知正文，以及 AI/本地识别出的金额、方向与模型原文。',
                   style: Theme.of(context).textTheme.bodySmall
                       ?.copyWith(color: scheme.onSurfaceVariant),
                 ),
@@ -896,16 +935,27 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
                               [
                                 _pkgLabel(e.pkg),
                                 e.titleShort,
+                                if (e.recognition != null &&
+                                    e.recognition!.contains('金额:'))
+                                  e.recognition!
+                                      .split('\n')
+                                      .firstWhere(
+                                        (l) => l.startsWith('金额:'),
+                                        orElse: () => '',
+                                      ),
                                 if (e.ruleName != null &&
                                     e.ruleName!.isNotEmpty)
                                   e.ruleName!,
-                                if (e.detail != null && e.detail!.isNotEmpty)
-                                  e.detail!,
                                 _relTrace(e.atMs),
                               ].where((s) => s.isNotEmpty).join(' · '),
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                             ),
+                            trailing: Icon(
+                              Icons.chevron_right,
+                              color: scheme.onSurfaceVariant,
+                            ),
+                            onTap: () => _showAiTraceDetail(e),
                           ),
                     ],
                   ),

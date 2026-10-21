@@ -22,9 +22,19 @@ abstract final class NotificationCaptureStub {
 
   static Future<bool> isPermissionGranted() async => false;
 
+  static Future<bool> isPostNotificationsGranted() async => true;
+
+  static Future<bool> requestPostNotificationsPermission() async => true;
+
   static Future<bool> isListenerConnected() async => false;
 
   static Future<void> ensureListenerRebind() async {}
+
+  static Future<bool> awaitListenerConnected({
+    Duration timeout = const Duration(seconds: 5),
+    Duration step = const Duration(milliseconds: 250),
+  }) async =>
+      false;
 
   static Future<void> forceListenerRebind() async {}
 
@@ -76,6 +86,14 @@ abstract final class NotificationCaptureStub {
   static Future<bool> isBatteryOptimizationIgnored() async => true;
 
   static Future<void> openBatteryOptimizationSettings() async {}
+
+  static Future<bool> isOverlayPermissionGranted() async => false;
+
+  static Future<bool> isOverlayEnabled() async => false;
+
+  static Future<void> setOverlayEnabled(bool enabled) async {}
+
+  static Future<void> openOverlayPermissionSettings() async {}
 
   static Future<List<DroppedNotification>> getDroppedNotifications() async =>
       const [];

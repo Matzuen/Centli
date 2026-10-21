@@ -21,10 +21,17 @@ final currentLedgerProvider = StreamProvider<Ledger?>((ref) {
   return ref.watch(databaseProvider).watchCurrentLedger();
 });
 
+/// True only for explicit done markers (`true` / `1`).
+/// Missing / `false` / empty → first-run guide should show.
+bool isOnboardingDoneSetting(String? raw) {
+  final v = raw?.trim().toLowerCase();
+  return v == 'true' || v == '1' || v == 'yes';
+}
+
 final onboardingDoneProvider = FutureProvider<bool>((ref) async {
   final db = ref.watch(databaseProvider);
   final v = await db.getSetting('onboarding_done');
-  return v == 'true';
+  return isOnboardingDoneSetting(v);
 });
 
 final fxBookProvider = StreamProvider<FxBook>((ref) {

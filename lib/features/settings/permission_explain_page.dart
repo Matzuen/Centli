@@ -97,6 +97,7 @@ class _PermissionExplainPageState extends ConsumerState<PermissionExplainPage>
   Future<void> _continue() async {
     if (widget.finishOnboarding) {
       await ref.read(databaseProvider).setSetting('onboarding_done', 'true');
+      ref.invalidate(onboardingDoneProvider);
       if (!mounted) return;
       // New users land on assets to set up 资产账户 before 记一笔.
       context.go(PendingDeepLink.take() ?? '/assets');

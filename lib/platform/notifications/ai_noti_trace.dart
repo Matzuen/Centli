@@ -11,6 +11,9 @@ import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../../core/utils/money.dart';
+import 'notification_parse.dart';
+
 const int kAiNotiTraceMax = 30;
 
 /// One decision/event while processing a captured notification.
@@ -22,6 +25,8 @@ class AiNotiTraceEvent {
     required this.kind,
     this.detail,
     this.ruleName,
+    this.body,
+    this.recognition,
   });
 
   final int atMs;
@@ -33,10 +38,26 @@ class AiNotiTraceEvent {
   final String? detail;
   final String? ruleName;
 
+  /// Original notification body (正文).
+  final String? body;
+
+  /// How local / AI recognized this notice (金额、方向、模型原文等).
+  final String? recognition;
+
   String get titleShort {
     final t = title.trim();
     if (t.isEmpty) return '（无标题）';
     return t.length > 40 ? '${t.substring(0, 40)}…' : t;
+  }
+
+  /// Title + body for detail dialog.
+  String get originalNotification {
+    final t = title.trim();
+    final b = (body ?? '').trim();
+    if (t.isEmpty && b.isEmpty) return '（空通知）';
+    if (b.isEmpty) return t;
+    if (t.isEmpty) return b;
+    return '$t\n$b';
   }
 
   Map<String, dynamic> toJson() => {
@@ -46,6 +67,8 @@ class AiNotiTraceEvent {
         'kind': kind,
         if (detail != null) 'detail': detail,
         if (ruleName != null) 'ruleName': ruleName,
+        if (body != null) 'body': body,
+        if (recognition != null) 'recognition': recognition,
       };
 
   factory AiNotiTraceEvent.fromJson(Map<String, dynamic> j) {
@@ -56,6 +79,8 @@ class AiNotiTraceEvent {
       kind: j['kind']?.toString() ?? '',
       detail: j['detail']?.toString(),
       ruleName: j['ruleName']?.toString(),
+      body: j['body']?.toString(),
+      recognition: j['recognition']?.toString(),
     );
   }
 
@@ -81,7 +106,9 @@ class AiNotiTraceEvent {
       case AiNotiTraceKinds.distillSkipped:
         return '未反写规则';
       case AiNotiTraceKinds.reuseCapture:
-        return '命中已有 AI 捕获规则';
+        return '命中已有 AI 捕获规则 · 已入待确认';
+      case AiNotiTraceKinds.ingestDeduped:
+        return '命中规则但去重 · 未新建待确认';
       case AiNotiTraceKinds.reuseExclude:
         return '命中已有 AI 排除规则';
       case AiNotiTraceKinds.localOverrideAi:
@@ -103,8 +130,27 @@ abstract final class AiNotiTraceKinds {
   static const distillExclude = 'distill_exclude';
   static const distillSkipped = 'distill_skipped';
   static const reuseCapture = 'reuse_capture';
+  static const ingestDeduped = 'ingest_deduped';
   static const reuseExclude = 'reuse_exclude';
   static const localOverrideAi = 'local_override_ai';
+}
+
+/// Human-readable local template recognition for AI 处理.
+String formatLocalRecognition(ParseResult parsed, {String? note}) {
+  final buf = StringBuffer('来源: 本地模板');
+  final tid = parsed.templateId;
+  if (tid != null && tid.isNotEmpty) buf.write('\n模板: $tid');
+  buf.write('\n方向: ${parsed.direction}');
+  if (parsed.amountMinor != null) {
+    final ccy = parsed.currency ?? 'CNY';
+    buf.write('\n金额: ${fromMinor(ccy, parsed.amountMinor!)} $ccy');
+  } else {
+    buf.write('\n金额: （未识别）');
+  }
+  final m = parsed.merchant?.trim();
+  if (m != null && m.isNotEmpty) buf.write('\n商户: $m');
+  if (note != null && note.trim().isNotEmpty) buf.write('\n$note');
+  return buf.toString();
 }
 
 abstract final class AiNotiTrace {
@@ -132,21 +178,30 @@ abstract final class AiNotiTrace {
   static bool _dirty = false;
   static int _lastPersistMs = 0;
 
+  static const int _kTitleMax = 80;
+  static const int _kBodyMax = 500;
+  static const int _kRecognitionMax = 800;
+
   static Future<void> record({
     required String pkg,
     required String title,
     required String kind,
     String? detail,
     String? ruleName,
+    String? body,
+    String? recognition,
   }) async {
     await load();
     final ev = AiNotiTraceEvent(
       atMs: DateTime.now().millisecondsSinceEpoch,
       pkg: pkg,
-      title: title.length > 80 ? title.substring(0, 80) : title,
+      title: _clip(title, _kTitleMax),
       kind: kind,
       detail: detail,
       ruleName: ruleName,
+      body: body == null ? null : _clip(body, _kBodyMax),
+      recognition:
+          recognition == null ? null : _clip(recognition, _kRecognitionMax),
     );
     _events = [ev, ..._events];
     if (_events.length > kAiNotiTraceMax) {
@@ -156,6 +211,31 @@ abstract final class AiNotiTrace {
     final now = DateTime.now().millisecondsSinceEpoch;
     if (now - _lastPersistMs < kTracePersistMs) return;
     await flush();
+  }
+
+  /// Convenience: attach [RawNotification] title/body.
+  static Future<void> recordForRaw({
+    required RawNotification raw,
+    required String kind,
+    String? detail,
+    String? ruleName,
+    String? recognition,
+  }) {
+    return record(
+      pkg: raw.pkg,
+      title: raw.title,
+      body: raw.text,
+      kind: kind,
+      detail: detail,
+      ruleName: ruleName,
+      recognition: recognition,
+    );
+  }
+
+  static String _clip(String s, int max) {
+    final t = s.trim();
+    if (t.length <= max) return t;
+    return '${t.substring(0, max)}…';
   }
 
   /// 把节流中的事件立即写盘（测试 / 页面打开前调用）。

@@ -6,7 +6,8 @@ import 'package:go_router/go_router.dart';
 
 
 import '../../data/db/centli_database.dart';
-import '../../data/db/database_provider.dart';
+import '../../data/db/database_provider.dart'
+    show databaseProvider, isOnboardingDoneSetting;
 import '../../data/fx/fx_remote_service.dart';
 import '../recurring/recurring_runner.dart';
 import '../../app/deep_link.dart';
@@ -32,7 +33,8 @@ class _SplashPageState extends ConsumerState<SplashPage> {
     final started = DateTime.now();
     final db = ref.read(databaseProvider);
     // Parallel settings reads; first touch also opens Drift (LazyDatabase).
-    final done = await db.getSetting('onboarding_done');
+    final doneRaw = await db.getSetting('onboarding_done');
+    final onboardingDone = isOnboardingDoneSetting(doneRaw);
 
     // FX + ledger lookup are not needed to choose the first route — defer.
     unawaited(_scheduleFxDeferred(db));
@@ -47,7 +49,7 @@ class _SplashPageState extends ConsumerState<SplashPage> {
     if (!mounted) return;
     // 资产锁只藏金额，进 App 不再拦全屏解锁。
     ref.read(amountsRevealedProvider.notifier).conceal();
-    if (done == 'true') {
+    if (onboardingDone) {
       final deep = PendingDeepLink.take();
       context.go(deep ?? '/home');
     } else {
