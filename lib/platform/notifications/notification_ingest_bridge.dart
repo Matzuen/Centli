@@ -33,10 +33,11 @@ abstract final class NotificationIngestBridge {
       onCapture: (raw) => ingestRaw(db, raw),
     );
 
-    final enabled = await db.getSetting('auto_capture_enabled');
-    await NotificationCaptureStub.setAutoCaptureEnabled(enabled == 'true');
+    // 监听开关以 native prefs 为准（磁贴也写这里），再回写 DB，避免双源漂移。
+    final nativeOn = await NotificationCaptureStub.isAutoCaptureEnabled();
+    await db.setSetting('auto_capture_enabled', nativeOn ? 'true' : 'false');
     // App 冷启动后主动软重绑，尽量保持监听一直连着。
-    if (enabled == 'true') {
+    if (nativeOn) {
       unawaited(NotificationCaptureStub.ensureListenerRebind());
     }
   }
@@ -55,8 +56,13 @@ abstract final class NotificationIngestBridge {
     CentliDatabase db,
     Map<String, dynamic> raw,
   ) async {
-    final enabled = await db.getSetting('auto_capture_enabled');
-    if (enabled != 'true') return null;
+    // 与 native 监听同源：prefs 优先（磁贴即时生效），再对齐 DB。
+    final nativeOn = await NotificationCaptureStub.isAutoCaptureEnabled();
+    final dbOn = (await db.getSetting('auto_capture_enabled')) == 'true';
+    if (nativeOn != dbOn) {
+      await db.setSetting('auto_capture_enabled', nativeOn ? 'true' : 'false');
+    }
+    if (!nativeOn) return null;
 
     final ledgerId = await db.currentLedgerId();
     if (ledgerId == null || ledgerId.isEmpty) return null;
@@ -265,6 +271,7 @@ abstract final class NotificationIngestBridge {
 
     if (id != null) {
       await _showLocalPendingPush(
+        db: db,
         pendingId: id,
         amountMinor: parsed.amountMinor,
         currency: currency,
@@ -557,20 +564,29 @@ abstract final class NotificationIngestBridge {
   }
 
   static Future<void> _showLocalPendingPush({
+    required CentliDatabase db,
     required String pendingId,
     int? amountMinor,
     required String currency,
     String? merchant,
   }) async {
+    final lockOn = (await db.getSetting('app_lock')) == 'true';
     final String title;
-    if (amountMinor != null) {
+    final String? body;
+    if (lockOn) {
+      title = '待确认记账';
+      body = null;
+    } else if (amountMinor != null) {
       title = '待确认 ${formatMinor(currency, amountMinor)}';
+      body = (merchant != null && merchant.trim().isNotEmpty)
+          ? merchant.trim()
+          : null;
     } else {
       title = '待确认';
+      body = (merchant != null && merchant.trim().isNotEmpty)
+          ? merchant.trim()
+          : null;
     }
-    final body = (merchant != null && merchant.trim().isNotEmpty)
-        ? merchant.trim()
-        : null;
     await NotificationCaptureStub.showPendingConfirm(
       pendingId: pendingId,
       title: title,

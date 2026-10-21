@@ -132,25 +132,32 @@ object NativeCaptureIngest {
                 ),
             )
 
-            val pushTitle = if (amountMinor != null) {
-                "待确认 ${formatYuan(currency, amountMinor)}"
-            } else {
-                "待确认"
+            // 资产锁开启：通知栏不暴露金额/商户（悬浮窗/FSI 已在别处拦截）。
+            val lockOn = PaymentOverlayManager.isAppLockEnabled(context)
+            val pushTitle = when {
+                lockOn -> "待确认记账"
+                amountMinor != null -> "待确认 ${formatYuan(currency, amountMinor)}"
+                else -> "待确认"
             }
-            val overlayLaunch = PaymentOverlayActivity.launchIntent(
-                context,
-                pendingId = id,
-                amountMinor = amountMinor,
-                currency = currency,
-                sourcePkg = pkg,
-                merchant = merchant,
-                direction = direction,
-            )
+            val pushBody = if (lockOn) null else merchant
+            val overlayLaunch = if (lockOn) {
+                null
+            } else {
+                PaymentOverlayActivity.launchIntent(
+                    context,
+                    pendingId = id,
+                    amountMinor = amountMinor,
+                    currency = currency,
+                    sourcePkg = pkg,
+                    merchant = merchant,
+                    direction = direction,
+                )
+            }
             PendingConfirmNotifier.show(
                 context,
                 id,
                 pushTitle,
-                merchant,
+                pushBody,
                 overlayLaunch = overlayLaunch,
             )
             // LiteNote 式悬浮窗：WM 优先；失败则 Activity / 通知全屏 Intent 兜底。

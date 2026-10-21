@@ -523,13 +523,23 @@ class MainActivity : FlutterFragmentActivity() {
         /** Drain SharedPreferences queue through native ingest (no Flutter needed). */
         @JvmStatic
         fun flushCaptureQueueNatively(context: android.content.Context) {
-            val queued = CentliNotificationListener.peekQueue(context)
-            if (queued.isEmpty()) return
-            CentliNotificationListener.clearQueue(context)
-            for (payload in queued) {
-                ingestViaNative(context, payload)
+            var remaining = CentliNotificationListener.peekQueue(context)
+            if (remaining.isEmpty()) return
+            val total = remaining.size
+            var done = 0
+            while (remaining.isNotEmpty()) {
+                val head = remaining.first()
+                try {
+                    ingestViaNative(context, head)
+                    done++
+                } catch (e: Exception) {
+                    Log.e("CentliMain", "flush item failed; keep rest in queue", e)
+                    break
+                }
+                remaining = remaining.drop(1)
+                CentliNotificationListener.replaceQueue(context, remaining)
             }
-            Log.i("CentliMain", "flushed ${queued.size} queued captures via native")
+            Log.i("CentliMain", "flushed $done/$total queued captures via native")
         }
     }
 }

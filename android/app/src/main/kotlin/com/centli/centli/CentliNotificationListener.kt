@@ -328,6 +328,19 @@ class CentliNotificationListener : NotificationListenerService() {
             prefs(context).edit().remove(KEY_QUEUE).apply()
         }
 
+        /** 覆盖整队列（flush 时逐条成功后再缩短，避免中途崩溃丢未处理项）。 */
+        fun replaceQueue(context: Context, items: List<Map<String, Any?>>) {
+            if (items.isEmpty()) {
+                clearQueue(context)
+                return
+            }
+            val arr = JSONArray()
+            for (payload in items) {
+                arr.put(JSONObject(payload.filterValues { it != null }))
+            }
+            prefs(context).edit().putString(KEY_QUEUE, arr.toString()).apply()
+        }
+
         /** Peek then clear. Prefer [peekQueue]+[clearQueue] after successful deliver. */
         fun drainQueue(context: Context): List<Map<String, Any?>> {
             val items = peekQueue(context)
