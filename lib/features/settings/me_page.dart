@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/app_version.dart';
@@ -101,6 +100,24 @@ class MePage extends ConsumerWidget {
                   const Divider(height: 1),
                   _tile(
                     context,
+                    icon: Icons.lock_outline,
+                    title: '安全',
+                    subtitle: '资产锁 · PIN / 生物识别',
+                    onTap: () => context.push('/me/security'),
+                  ),
+                  const Divider(height: 1),
+                  _tile(
+                    context,
+                    icon: Icons.notifications_active_outlined,
+                    title: '自动记账',
+                    subtitle: NotificationCaptureStub.supported
+                        ? '支付通知 → 悬浮窗 / 待确认，点一下入账'
+                        : '仅 Android 支持；Windows 上可用示例数据调试',
+                    onTap: () => context.push('/me/auto'),
+                  ),
+                  const Divider(height: 1),
+                  _tile(
+                    context,
                     icon: Icons.menu_book_outlined,
                     title: '记账本管理',
                     onTap: () => context.push('/me/ledgers'),
@@ -116,43 +133,32 @@ class MePage extends ConsumerWidget {
                   const Divider(height: 1),
                   _tile(
                     context,
+                    icon: Icons.repeat,
+                    title: '周期记账',
+                    subtitle: '工资 / 房租等到点补记',
+                    onTap: () => context.push('/me/recurring'),
+                  ),
+                  const Divider(height: 1),
+                  _tile(
+                    context,
                     icon: Icons.pie_chart_outline,
                     title: '预算',
                     subtitle: '月度总额 / 分类预算与进度',
                     onTap: () => context.push('/me/budget'),
                   ),
-                  const Divider(height: 1),
-                  _tile(
-                    context,
-                    icon: Icons.repeat,
-                    title: '周期记账',
-                    subtitle: '工资 / 房租等自动入账',
-                    onTap: () => context.push('/me/recurring'),
-                  ),
-                  const Divider(height: 1),
                 ],
               ),
             ),
             const SizedBox(height: CentliSpacing.section),
-            _sectionHeader(context, '功能'),
+            _sectionHeader(context, '增强'),
             CentliSoftCard(
               child: Column(
                 children: [
                   _tile(
                     context,
-                    icon: Icons.notifications_active_outlined,
-                    title: '自动记账',
-                    subtitle: NotificationCaptureStub.supported
-                        ? '通知监听 · 待确认入账'
-                        : '仅 Android 支持；Windows 上可用示例数据调试',
-                    onTap: () => context.push('/me/auto'),
-                  ),
-                  const Divider(height: 1),
-                  _tile(
-                    context,
                     icon: Icons.auto_awesome,
                     title: 'AI 增强',
-                    subtitle: '本地解析 · 可选大模型增强',
+                    subtitle: '识别通知 · 智能填单 · 资产识余额（需 API）',
                     onTap: () => context.push('/me/smart-fill'),
                   ),
                   const Divider(height: 1),
@@ -191,14 +197,6 @@ class MePage extends ConsumerWidget {
                   const Divider(height: 1),
                   _tile(
                     context,
-                    icon: Icons.lock_outline,
-                    title: '安全',
-                    subtitle: '资产锁 · PIN / 生物识别',
-                    onTap: () => context.push('/me/security'),
-                  ),
-                  const Divider(height: 1),
-                  _tile(
-                    context,
                     icon: Icons.currency_exchange,
                     title: '汇率',
                     subtitle: '手动 + 远程日频；折算为本位币',
@@ -208,10 +206,26 @@ class MePage extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: CentliSpacing.section),
-            _sectionHeader(context, '数据'),
+            _sectionHeader(context, '备份'),
             CentliSoftCard(
               child: Column(
                 children: [
+                  _tile(
+                    context,
+                    icon: Icons.import_export,
+                    title: '导出',
+                    subtitle: '定期 JSON / Excel 备份',
+                    onTap: () => context.push('/me/export'),
+                  ),
+                  const Divider(height: 1),
+                  _tile(
+                    context,
+                    icon: Icons.settings_backup_restore,
+                    title: '导入',
+                    subtitle: '从 JSON 还原',
+                    onTap: () => context.push('/me/import'),
+                  ),
+                  const Divider(height: 1),
                   _tile(
                     context,
                     icon: Icons.delete_outline,
@@ -226,22 +240,6 @@ class MePage extends ConsumerWidget {
                     title: '已忽略通知',
                     subtitle: '查看 / 恢复待确认',
                     onTap: () => context.push('/home/pending?tab=ignored'),
-                  ),
-                  const Divider(height: 1),
-                  _tile(
-                    context,
-                    icon: Icons.import_export,
-                    title: '导出',
-                    subtitle: 'JSON / Excel（分享）',
-                    onTap: () => context.push('/me/export'),
-                  ),
-                  const Divider(height: 1),
-                  _tile(
-                    context,
-                    icon: Icons.settings_backup_restore,
-                    title: '导入',
-                    subtitle: 'JSON 还原',
-                    onTap: () => context.push('/me/import'),
                   ),
                 ],
               ),
@@ -272,21 +270,20 @@ class MePage extends ConsumerWidget {
                       );
                     },
                   ),
-                  if (kDebugMode) ...[
-                    const Divider(height: 1),
-                    _tile(
-                      context,
-                      icon: Icons.tour_outlined,
-                      title: '重新查看引导',
-                      subtitle: '测试：重置引导完成标记并打开引导',
-                      onTap: () async {
-                        await ref
-                            .read(databaseProvider)
-                            .setSetting('onboarding_done', 'false');
-                        if (context.mounted) context.go('/onboarding');
-                      },
-                    ),
-                  ],
+                  const Divider(height: 1),
+                  _tile(
+                    context,
+                    icon: Icons.tour_outlined,
+                    title: '重新查看引导',
+                    subtitle: '记账本 → 资产账户 → 记一笔与自动记账',
+                    onTap: () async {
+                      await ref
+                          .read(databaseProvider)
+                          .setSetting('onboarding_done', 'false');
+                      ref.invalidate(onboardingDoneProvider);
+                      if (context.mounted) context.go('/onboarding');
+                    },
+                  ),
                 ],
               ),
             ),
