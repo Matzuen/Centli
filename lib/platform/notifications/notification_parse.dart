@@ -236,8 +236,10 @@ class ParseResult {
 }
 
 /// Shared amount pattern: ¥/￥/$/€ + optional currency code, capture group 1 = number.
+/// Must stay identical to `assets/noti_templates.json` `amountRegex` (no optional symbol —
+/// otherwise dates like `10-17` become ¥10 before the real `25.00 元`).
 const kAmountRegex =
-    r'(?:(?:USD|EUR|CNY|HKD|TWD|JPY)\s*|(?:\u00a5|\uffe5|\$|\u20ac))\s*([0-9]+(?:,[0-9]{3})*(?:\.[0-9]{1,2})?)';
+    r'(?:(?:USD|EUR|CNY|HKD|TWD|JPY)\s*|(?:¥|￥|\$|€))\s*([0-9]+(?:,[0-9]{3})*(?:\.[0-9]{1,2})?)';
 
 /// Fallback when no currency symbol: number + 元 (e.g. 还款12.54元).
 const kAmountRegexYuan =
@@ -301,7 +303,8 @@ List<NotiTemplate> builtinNotiTemplates() => const [
         packages: ['com.eg.android.AlipayGphone'],
         // 收款 + 退款。裸「转账」可能是发起转账（支出），收入侧不认。
         mustContainRegex: '$kTitleReceiveWords|$kTitleRefundWords',
-        excludeTextRegex: r'验证码|登录|服务通知|账单',
+        // 勿裸排除「账单」：会漏掉「账单退款成功」；提醒类用细粒度词。
+        excludeTextRegex: r'验证码|登录|服务通知|账单提醒|账单日',
         amountRegex: kAmountRegex,
         merchantRegex: r'(?:商户|来自|从)\s*(.+?)(?:\s|$)',
         defaultAccountHint: 'alipay',

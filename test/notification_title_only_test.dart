@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:centli/platform/notifications/notification_parse.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// v9 规则：微信 / 支付宝通知**只看标题**。
+/// v10 规则：微信 / 支付宝通知**只看标题**。
 ///
 /// 标题含 支付 / 交易 / 收款 / 退款 / 转账 / 到账 / 还款 等词就解析；
 /// 正文完全不再参与过滤（只在命中后用来取金额 / 商户）。

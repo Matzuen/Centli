@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:centli/platform/notifications/notification_parse.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// v9 规则：微信 / 支付宝通知**只看标题**——标题含支付 / 交易 / 收款 / 退款 /
+/// v10 规则：微信 / 支付宝通知**只看标题**——标题含支付 / 交易 / 收款 / 退款 /
 /// 转账 / 到账 / 还款等词就解析，正文不参与过滤（正文只用来取金额）。
 /// 因此这里所有用例都把关键词放在 `title`，并额外验证「关键词只在正文」
 /// 时不会再被抓。
@@ -15,7 +15,7 @@ void main() {
   RawNotification raw(String pkg, String text, {String title = ''}) =>
       RawNotification(pkg: pkg, title: title, text: text, whenMs: 1);
 
-  group('标题含关键词就抓 (v9)', () {
+  group('标题含关键词就抓 (v10)', () {
     final cases = <String, (String, String, String, int)>{
       // text -> (pkg, expected template, expected direction, minor)
       '花呗付款（无“成功”）': ('你已于 10-17 12:03 通过花呗付款 25.00 元', alipay, 'out', 2500),
@@ -44,7 +44,7 @@ void main() {
     });
   });
 
-  group('标题即噪音时仍排除 (v9)', () {
+  group('标题即噪音时仍排除 (v10)', () {
     final excluded = <String, String>{
       '验证码': '验证码 123456，5 分钟内有效',
       '设备登录': '您在 Android 设备登录了支付宝',
@@ -58,7 +58,7 @@ void main() {
     excluded.forEach((label, text) {
       test(label, () {
         // Noise words must be in the TITLE to be excluded (title-only rules).
-        final alipayR = parseNotification(raw(text, text, title: text));
+        final alipayR = parseNotification(raw(alipay, text, title: text));
         final wechatR = parseNotification(raw(wechat, text, title: text));
         expect(alipayR.templateId, isNull, reason: 'alipay: $text');
         expect(wechatR.templateId, isNull, reason: 'wechat: $text');
@@ -82,20 +82,54 @@ void main() {
       final b = entry.value;
       expect(a.mustContainRegex, b.mustContainRegex, reason: entry.key);
       expect(a.excludeTextRegex, b.excludeTextRegex, reason: entry.key);
+      expect(a.amountRegex, b.amountRegex, reason: entry.key);
       expect(a.direction, b.direction, reason: entry.key);
       expect(a.matchOn, b.matchOn, reason: entry.key);
       expect(b.matchOn, 'title', reason: '${entry.key} must be title-only');
       expect(a.defaultAccountHint, b.defaultAccountHint, reason: entry.key);
       expect(a.packages, b.packages, reason: entry.key);
-      // The amount pattern must accept a bare number (no ¥ / $ prefix).
+      // 主金额正则须带币种/符号；裸数字靠 yuan 回退，避免把 10-17 吃成 ¥10。
       final re = RegExp(a.amountRegex);
-      expect(re.firstMatch('金额 15.80 元')?.group(1), '15.80', reason: entry.key);
-      expect(re.firstMatch('付款成功 12.50')?.group(1), '12.50', reason: entry.key);
+      expect(re.firstMatch('付款成功 ¥15.80')?.group(1), '15.80', reason: entry.key);
+      expect(re.firstMatch('金额 15.80 元')?.group(1), isNull, reason: entry.key);
     }
     // Order matters: same App 先收入后支出（「转账成功」vs「转账」）。
     final ids = [for (final item in list) item['id'] as String];
     expect(ids.indexOf('alipay_income_zh'), lessThan(ids.indexOf('alipay_expense_zh')));
     expect(ids.indexOf('wechat_income_zh'), lessThan(ids.indexOf('wechat_expense_zh')));
     expect(ids.length, 4);
+  });
+
+  test('assets 模板：日期不抢金额；账单退款仍进收入', () async {
+    final rawJson = await File('assets/noti_templates.json').readAsString();
+    final map = jsonDecode(rawJson) as Map<String, dynamic>;
+    final templates = (map['templates'] as List)
+        .cast<Map<String, dynamic>>()
+        .map(NotiTemplate.fromJson)
+        .toList();
+
+    final pay = parseNotification(
+      raw(
+        alipay,
+        '你已于 10-17 12:03 通过花呗付款 25.00 元',
+        title: '你已于 10-17 12:03 通过花呗付款 25.00 元',
+      ),
+      templates,
+    );
+    expect(pay.ok, isTrue);
+    expect(pay.amountMinor, 2500);
+    expect(pay.direction, 'out');
+
+    final refund = parseNotification(
+      raw(alipay, '商家已退 ¥28.50', title: '账单退款成功'),
+      templates,
+    );
+    expect(refund.templateId, 'alipay_income_zh');
+    expect(refund.direction, 'in');
+    expect(
+      isRefundSignal(templateId: refund.templateId, title: '账单退款成功'),
+      isTrue,
+    );
+    expect(refund.amountMinor, 2850);
   });
 }
