@@ -165,9 +165,9 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
 
   Future<void> _showAiTraceDetail(AiNotiTraceEvent e) async {
     final scheme = Theme.of(context).colorScheme;
-    await showDialog<void>(
+    await showGlassDialog<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => CentliGlassDialog(
         title: Text(e.kindLabel),
         content: SingleChildScrollView(
           child: SelectableText(
@@ -686,6 +686,16 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
                 const SizedBox(height: CentliSpacing.section),
                 _kv('ID', t.id),
                 _kv('包名', t.packages.map(_pkgLabel).join('、')),
+                _kv(
+                  '匹配位置',
+                  t.matchOn == 'title' ? '仅标题（门控）' : '标题+正文',
+                ),
+                _kv(
+                  '收支',
+                  t.matchOn == 'title'
+                      ? '正文判定（默认${t.direction == 'in' ? '收入' : '支出'}）'
+                      : (t.direction == 'in' ? '收入' : '支出'),
+                ),
                 _kv('必须包含', t.mustContainRegex ?? '—'),
                 _kv('排除', t.excludeTextRegex ?? '—'),
                 _kv('标题正则', t.titleRegex ?? '—'),
@@ -786,43 +796,40 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
               children: [
                 if (!_loadWarnDismissed &&
                     (_skippedCount > 0 || _loadError != null)) ...[
-                  Card(
+                  CentliSoftCard(
                     color: scheme.errorContainer,
-                    margin: EdgeInsets.zero,
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Icon(
-                            Icons.warning_amber_rounded,
-                            color: scheme.onErrorContainer,
+                    padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.warning_amber_rounded,
+                          color: scheme.onErrorContainer,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _loadError != null
+                                ? (_skippedCount > 0
+                                    ? '$_loadError。另有 $_skippedCount 条规则格式有误已跳过，其余规则正常。建议导出备份后检查。'
+                                    : '$_loadError。建议导出备份后检查。')
+                                : '有 $_skippedCount 条规则格式有误已跳过，其余规则正常。建议导出备份后检查。',
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  color: scheme.onErrorContainer,
+                                  height: 1.35,
+                                ),
                           ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              _loadError != null
-                                  ? (_skippedCount > 0
-                                      ? '$_loadError。另有 $_skippedCount 条规则格式有误已跳过，其余规则正常。建议导出备份后检查。'
-                                      : '$_loadError。建议导出备份后检查。')
-                                  : '有 $_skippedCount 条规则格式有误已跳过，其余规则正常。建议导出备份后检查。',
-                              style: Theme.of(context).textTheme.bodyMedium
-                                  ?.copyWith(
-                                    color: scheme.onErrorContainer,
-                                    height: 1.35,
-                                  ),
-                            ),
+                        ),
+                        TextButton(
+                          onPressed: () =>
+                              setState(() => _loadWarnDismissed = true),
+                          child: Text(
+                            '关闭',
+                            style: TextStyle(color: scheme.onErrorContainer),
                           ),
-                          TextButton(
-                            onPressed: () =>
-                                setState(() => _loadWarnDismissed = true),
-                            child: Text(
-                              '关闭',
-                              style: TextStyle(color: scheme.onErrorContainer),
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(height: CentliSpacing.section),
@@ -971,63 +978,60 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
                   const SizedBox(height: CentliSpacing.item),
                 ],
                 if (!_staleWarnDismissed && _staleDistill.isNotEmpty) ...[
-                  Card(
+                  CentliSoftCard(
                     color: scheme.secondaryContainer,
-                    margin: EdgeInsets.zero,
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Icon(
-                                Icons.hourglass_empty,
-                                color: scheme.onSecondaryContainer,
+                    padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              Icons.hourglass_empty,
+                              color: scheme.onSecondaryContainer,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                '有 ${_staleDistill.length} 条 AI 规则超过 $kDistillStaleDays 天未命中，可一键清理。',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(
+                                      color: scheme.onSecondaryContainer,
+                                      height: 1.35,
+                                    ),
                               ),
-                              const SizedBox(width: 8),
-                              Expanded(
+                            ),
+                          ],
+                        ),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: Wrap(
+                            spacing: 4,
+                            children: [
+                              TextButton(
+                                onPressed: _busy
+                                    ? null
+                                    : () => setState(
+                                          () => _staleWarnDismissed = true,
+                                        ),
                                 child: Text(
-                                  '有 ${_staleDistill.length} 条 AI 规则超过 $kDistillStaleDays 天未命中，可一键清理。',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodyMedium
-                                      ?.copyWith(
-                                        color: scheme.onSecondaryContainer,
-                                        height: 1.35,
-                                      ),
+                                  '稍后',
+                                  style: TextStyle(
+                                    color: scheme.onSecondaryContainer,
+                                  ),
                                 ),
+                              ),
+                              FilledButton.tonal(
+                                onPressed: _busy ? null : _purgeStaleDistill,
+                                child: const Text('一键清理'),
                               ),
                             ],
                           ),
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: Wrap(
-                              spacing: 4,
-                              children: [
-                                TextButton(
-                                  onPressed: _busy
-                                      ? null
-                                      : () => setState(
-                                            () => _staleWarnDismissed = true,
-                                          ),
-                                  child: Text(
-                                    '稍后',
-                                    style: TextStyle(
-                                      color: scheme.onSecondaryContainer,
-                                    ),
-                                  ),
-                                ),
-                                FilledButton.tonal(
-                                  onPressed: _busy ? null : _purgeStaleDistill,
-                                  child: const Text('一键清理'),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(height: CentliSpacing.section),

@@ -30,6 +30,11 @@ class _RecognitionRuleEditPageState extends State<RecognitionRuleEditPage> {
 
   String _appChoice = 'alipay';
   String? _accountHint = 'alipay';
+  String _direction = 'out';
+  String _matchOn = 'body';
+  String _defaultCurrency = 'CNY';
+  /// Extra packages beyond the primary app choice (preserved on edit).
+  List<String> _extraPackages = const [];
   bool _merchantFromTitle = false;
   bool _loading = true;
   bool _saving = false;
@@ -67,7 +72,8 @@ class _RecognitionRuleEditPageState extends State<RecognitionRuleEditPage> {
       if (found != null) {
         _editingId = found.id;
         _nameCtrl.text = found.displayName;
-        final pkg = found.packages.isNotEmpty ? found.packages.first : '';
+        final pkgs = found.packages;
+        final pkg = pkgs.isNotEmpty ? pkgs.first : '';
         if (pkg == 'com.eg.android.AlipayGphone') {
           _appChoice = 'alipay';
         } else if (pkg == 'com.tencent.mm') {
@@ -76,6 +82,7 @@ class _RecognitionRuleEditPageState extends State<RecognitionRuleEditPage> {
           _appChoice = 'other';
           _pkgOtherCtrl.text = pkg;
         }
+        _extraPackages = pkgs.length > 1 ? pkgs.sublist(1) : const [];
         _titleCtrl.text = found.titleRegex ?? '';
         _mustCtrl.text = found.mustContainRegex ?? '';
         _excludeCtrl.text = found.excludeTextRegex ?? '';
@@ -83,6 +90,11 @@ class _RecognitionRuleEditPageState extends State<RecognitionRuleEditPage> {
         _merchantCtrl.text = found.merchantRegex ?? '';
         _merchantFromTitle = found.merchantFromTitle;
         _accountHint = found.defaultAccountHint;
+        _direction = NotiTemplate.normalizeDirection(found.direction);
+        _matchOn = found.matchOn == 'title' ? 'title' : 'body';
+        _defaultCurrency = found.defaultCurrency.trim().isEmpty
+            ? 'CNY'
+            : found.defaultCurrency.trim().toUpperCase();
       }
     }
     if (!mounted) return;
@@ -90,16 +102,26 @@ class _RecognitionRuleEditPageState extends State<RecognitionRuleEditPage> {
   }
 
   List<String> _packagesForChoice() {
+    late final List<String> primary;
     switch (_appChoice) {
       case 'wechat':
-        return const ['com.tencent.mm'];
+        primary = const ['com.tencent.mm'];
       case 'other':
         final p = _pkgOtherCtrl.text.trim();
-        return p.isEmpty ? const <String>[] : [p];
+        primary = p.isEmpty ? const <String>[] : [p];
       case 'alipay':
       default:
-        return const ['com.eg.android.AlipayGphone'];
+        primary = const ['com.eg.android.AlipayGphone'];
     }
+    if (primary.isEmpty) return primary;
+    final seen = <String>{primary.first};
+    final extras = <String>[];
+    for (final p in _extraPackages) {
+      final t = p.trim();
+      if (t.isEmpty || !seen.add(t)) continue;
+      extras.add(t);
+    }
+    return [...primary, ...extras];
   }
 
   String? _hintForChoice() {
@@ -154,6 +176,7 @@ class _RecognitionRuleEditPageState extends State<RecognitionRuleEditPage> {
         id: id,
         name: _nameCtrl.text.trim(),
         packages: packages,
+        defaultCurrency: _defaultCurrency,
         titleRegex: _nullIfEmpty(_titleCtrl.text),
         mustContainRegex: _nullIfEmpty(_mustCtrl.text),
         excludeTextRegex: _nullIfEmpty(_excludeCtrl.text),
@@ -161,6 +184,8 @@ class _RecognitionRuleEditPageState extends State<RecognitionRuleEditPage> {
         merchantRegex: _nullIfEmpty(_merchantCtrl.text),
         merchantFromTitle: _merchantFromTitle,
         defaultAccountHint: _hintForChoice(),
+        direction: _direction,
+        matchOn: _matchOn,
       );
       await NotiTemplateStore.upsertUserTemplate(template);
       if (!mounted) return;
@@ -235,6 +260,7 @@ class _RecognitionRuleEditPageState extends State<RecognitionRuleEditPage> {
                       if (v == null) return;
                       setState(() {
                         _appChoice = v;
+                        _extraPackages = const [];
                         if (v == 'alipay') {
                           _accountHint ??= 'alipay';
                           if (_accountHint == 'wechat') _accountHint = 'alipay';
@@ -260,6 +286,13 @@ class _RecognitionRuleEditPageState extends State<RecognitionRuleEditPage> {
                       },
                     ),
                   ],
+                  if (_extraPackages.isNotEmpty) ...[
+                    const SizedBox(height: CentliSpacing.dense),
+                    Text(
+                      '另含包名：${_extraPackages.join('、')}（保存时保留）',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
                   const SizedBox(height: CentliSpacing.section),
                   DropdownButtonFormField<String?>(
                     initialValue: _accountHint,
@@ -275,6 +308,69 @@ class _RecognitionRuleEditPageState extends State<RecognitionRuleEditPage> {
                     ],
                     onChanged: (v) => setState(() => _accountHint = v),
                   ),
+                  const SizedBox(height: CentliSpacing.section),
+                  DropdownButtonFormField<String>(
+                    initialValue: _defaultCurrency,
+                    decoration: const InputDecoration(
+                      labelText: '默认币种',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'CNY', child: Text('CNY 人民币')),
+                      DropdownMenuItem(value: 'USD', child: Text('USD 美元')),
+                      DropdownMenuItem(value: 'EUR', child: Text('EUR 欧元')),
+                      DropdownMenuItem(value: 'HKD', child: Text('HKD 港币')),
+                      DropdownMenuItem(value: 'JPY', child: Text('JPY 日元')),
+                      DropdownMenuItem(value: 'TWD', child: Text('TWD 新台币')),
+                    ],
+                    onChanged: (v) {
+                      if (v == null) return;
+                      setState(() => _defaultCurrency = v);
+                    },
+                  ),
+                  const SizedBox(height: CentliSpacing.sectionLoose),
+                  Text(
+                    '匹配范围与收支',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  const SizedBox(height: CentliSpacing.item),
+                  DropdownButtonFormField<String>(
+                    initialValue: _matchOn,
+                    decoration: const InputDecoration(
+                      labelText: '关键词匹配位置',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
+                      helperText: '「仅标题」= 标题门控是否抓取；收支再由正文判定',
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'body', child: Text('标题+正文（传统）')),
+                      DropdownMenuItem(value: 'title', child: Text('仅标题（门控）')),
+                    ],
+                    onChanged: (v) {
+                      if (v == null) return;
+                      setState(() => _matchOn = v);
+                    },
+                  ),
+                  const SizedBox(height: CentliSpacing.section),
+                  DropdownButtonFormField<String>(
+                    initialValue: _direction,
+                    decoration: InputDecoration(
+                      labelText: '默认收支方向',
+                      border: const OutlineInputBorder(
+                        borderRadius: BorderRadius.all(Radius.circular(14)),
+                      ),
+                      helperText: _matchOn == 'title'
+                          ? '仅标题门控时：正文有收/支词则覆盖此默认'
+                          : '匹配成功后的记账方向',
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'out', child: Text('支出')),
+                      DropdownMenuItem(value: 'in', child: Text('收入')),
+                    ],
+                    onChanged: (v) {
+                      if (v == null) return;
+                      setState(() => _direction = v);
+                    },
+                  ),
                   const SizedBox(height: CentliSpacing.sectionLoose),
                   Text(
                     '匹配条件（正则，普通关键词用 | 分隔）',
@@ -283,29 +379,33 @@ class _RecognitionRuleEditPageState extends State<RecognitionRuleEditPage> {
                   const SizedBox(height: CentliSpacing.item),
                   TextFormField(
                     controller: _mustCtrl,
-                    decoration: const InputDecoration(
-                      labelText: '正文必须包含',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
+                    decoration: InputDecoration(
+                      labelText: _matchOn == 'title' ? '标题必须包含' : '正文必须包含',
+                      border: const OutlineInputBorder(
+                        borderRadius: BorderRadius.all(Radius.circular(14)),
+                      ),
                       hintText: '支付成功|付款成功',
                     ),
                   ),
                   const SizedBox(height: CentliSpacing.section),
                   TextFormField(
                     controller: _excludeCtrl,
-                    decoration: const InputDecoration(
-                      labelText: '排除词',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
-                      hintText: '验证码|登录',
+                    decoration: InputDecoration(
+                      labelText: _matchOn == 'title' ? '标题排除词' : '排除词',
+                      border: const OutlineInputBorder(
+                        borderRadius: BorderRadius.all(Radius.circular(14)),
+                      ),
+                      hintText: '验证码|登录|还款提醒',
                     ),
                   ),
                   const SizedBox(height: CentliSpacing.section),
                   TextFormField(
                     controller: _titleCtrl,
                     decoration: const InputDecoration(
-                      labelText: '标题正则（可选）',
+                      labelText: '标题正则（可选，额外约束）',
                       border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
                     ),
-                  ),
+                  )
                   const SizedBox(height: CentliSpacing.sectionLoose),
                   Text(
                     '提取',
