@@ -177,13 +177,10 @@ class NotiTemplate {
 
 /// Friendly names for builtin / official template ids.
 const Map<String, String> kBuiltinTemplateNames = {
-  'alipay_pay_success_zh': '支付宝交易/支付成功',
-  'alipay_repay_zh': '支付宝还款',
-  'wechat_pay_success_zh': '微信支付成功',
-  'alipay_receive_zh': '支付宝收款到账',
-  'wechat_receive_zh': '微信收款到账',
-  'alipay_refund_zh': '支付宝退款',
-  'wechat_refund_zh': '微信退款',
+  'alipay_income_zh': '支付宝收入',
+  'alipay_expense_zh': '支付宝支出',
+  'wechat_income_zh': '微信收入',
+  'wechat_expense_zh': '微信支出',
 };
 
 class RawNotification {
@@ -294,85 +291,45 @@ bool isRepaySignal({
 
 /// 内置规则（同时镜像到 assets/noti_templates.json）。
 ///
-/// 顺序即优先级：到账 / 收款 → 退款 → 还款 → 转账 → 支付。
-/// 一条通知可能同时含多个词（「转账到账」「还款…扣款」），先命中的决定方向。
-/// `matchOn: 'title'` 表示**只匹配标题**；`excludeTextRegex` 也已收窄到
-/// 只保留标题里出现的噪音（验证码 / 登录 / 朋友圈等），正文不再过滤。
+/// v10：每 App 两条——收入 / 支出。同 App 必须先收入后支出
+/// （「转账成功」进收入，「转账」进支出；退款/还款靠标题词打标签）。
+/// `matchOn: 'title'` 只匹配标题；正文不参与过滤。
 List<NotiTemplate> builtinNotiTemplates() => const [
       NotiTemplate(
-        id: 'alipay_receive_zh',
-        name: '支付宝收款到账',
+        id: 'alipay_income_zh',
+        name: '支付宝收入',
         packages: ['com.eg.android.AlipayGphone'],
-        // 「转账」单独出现可能是「你发起了…转账」（支出），所以收入侧只认
-        // 到账 / 收款类词；真正的转入会同时带「到账」。
-        mustContainRegex: kTitleReceiveWords,
-        // 标题里的「验证码到账」这类仍要挡掉；正文不再参与。
+        // 收款 + 退款。裸「转账」可能是发起转账（支出），收入侧不认。
+        mustContainRegex: '$kTitleReceiveWords|$kTitleRefundWords',
         excludeTextRegex: r'验证码|登录|服务通知|账单',
         amountRegex: kAmountRegex,
-        merchantRegex: r'(?:来自|从)\s*(.+?)(?:\s|$)',
+        merchantRegex: r'(?:商户|来自|从)\s*(.+?)(?:\s|$)',
         defaultAccountHint: 'alipay',
         direction: 'in',
         matchOn: 'title',
       ),
       NotiTemplate(
-        id: 'alipay_refund_zh',
-        name: '支付宝退款',
-        packages: ['com.eg.android.AlipayGphone'],
-        mustContainRegex: kTitleRefundWords,
-        excludeTextRegex: r'验证码|登录',
-        amountRegex: kAmountRegex,
-        merchantRegex: r'(?:商户|来自)\s*(.+?)(?:\s|$)',
-        defaultAccountHint: 'alipay',
-        // 退款记收入；入账时打「退款」标签/备注，不再使用独立 type。
-        direction: 'in',
-        matchOn: 'title',
-      ),
-      NotiTemplate(
-        id: 'wechat_receive_zh',
-        name: '微信收款到账',
+        id: 'wechat_income_zh',
+        name: '微信收入',
         packages: ['com.tencent.mm'],
-        // 「转账成功」「你领取了…红包」都是钱进来了，算收入。
-        mustContainRegex: '$kTitleReceiveWords|你领取了.+红包|转账成功|已转账',
+        // 收款 / 退款 / 领红包 / 转账成功（须排在支出「转账」之前）。
+        mustContainRegex:
+            '$kTitleReceiveWords|$kTitleRefundWords|你领取了.+红包|转账成功|已转账',
         excludeTextRegex: r'验证码|登录|朋友圈|拍了拍|互动消息|新的朋友',
         amountRegex: kAmountRegex,
-        merchantRegex: r'(?:来自|从)\s*(.+?)(?:\s|$)',
+        merchantRegex: r'(?:商户|来自|从)\s*(.+?)(?:\s|$)',
         defaultAccountHint: 'wechat',
         direction: 'in',
         matchOn: 'title',
       ),
       NotiTemplate(
-        id: 'wechat_refund_zh',
-        name: '微信退款',
-        packages: ['com.tencent.mm'],
-        mustContainRegex: kTitleRefundWords,
-        excludeTextRegex: r'验证码|登录',
-        amountRegex: kAmountRegex,
-        merchantRegex: r'(?:商户|来自)\s*(.+?)(?:\s|$)',
-        defaultAccountHint: 'wechat',
-        direction: 'in',
-        matchOn: 'title',
-      ),
-      // 还款必须在支付之前：「还款…扣款」同时命中扣款。记支出 +「还款」标签。
-      NotiTemplate(
-        id: 'alipay_repay_zh',
-        name: '支付宝还款',
+        id: 'alipay_expense_zh',
+        name: '支付宝支出',
         packages: ['com.eg.android.AlipayGphone'],
-        mustContainRegex: kTitleRepayWords,
-        // 提醒类标题（花呗还款提醒）里也会出现「还款」「待还」，必须挡掉，
-        // 否则把「请于…前还款」当成已经还了。
+        // 支付 + 还款；提醒类「待还 / 还款提醒」必须 exclude。
+        mustContainRegex: '$kTitlePayWords|$kTitleRepayWords',
         excludeTextRegex:
-            r'验证码|登录|待还|应还|请于|即将到期|还款提醒|账单提醒|账单日|还款日',
-        amountRegex: kAmountRegex,
-        defaultAccountHint: 'alipay',
-        direction: 'out',
-        matchOn: 'title',
-      ),
-      NotiTemplate(
-        id: 'alipay_pay_success_zh',
-        name: '支付宝交易/支付成功',
-        packages: ['com.eg.android.AlipayGphone'],
-        mustContainRegex: kTitlePayWords,
-        excludeTextRegex: r'验证码|登录|服务通知|生活号',
+            r'验证码|登录|服务通知|生活号|待还|应还|请于|即将到期|还款提醒|账单提醒|账单日|还款日',
         amountRegex: kAmountRegex,
         merchantRegex: r'(?:向|给|商户)\s*(.+?)(?:\s|$)',
         defaultAccountHint: 'alipay',
@@ -380,8 +337,8 @@ List<NotiTemplate> builtinNotiTemplates() => const [
         matchOn: 'title',
       ),
       NotiTemplate(
-        id: 'wechat_pay_success_zh',
-        name: '微信支付成功',
+        id: 'wechat_expense_zh',
+        name: '微信支出',
         packages: ['com.tencent.mm'],
         mustContainRegex: '$kTitlePayWords|$kTitleTransferWords',
         excludeTextRegex: r'验证码|登录|朋友圈|会话|拍了拍|互动消息|新的朋友',

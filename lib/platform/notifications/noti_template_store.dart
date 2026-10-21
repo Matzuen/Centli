@@ -997,7 +997,7 @@ class TemplateUpdateResult {
 }
 
 /// Keep in sync with assets/noti_templates.json `version`.
-const int kNotiTemplateFallbackVersion = 9;
+const int kNotiTemplateFallbackVersion = 10;
 
 /// Per-rule lifecycle for AI-distilled templates (side table in user JSON).
 class DistillRuleMeta {

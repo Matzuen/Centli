@@ -116,7 +116,6 @@ void main() {
   group('标题里的提醒 / 验证码仍然挡掉', () {
     final excluded = <String>[
       '验证码',
-      '支付宝',
       '登录提醒',
       '花呗还款提醒',
       '待还提醒',
@@ -124,17 +123,16 @@ void main() {
     ];
     for (final title in excluded) {
       test(title, () {
-        // 「账单日」 is legitimately in the repay exclude list; the pay rule
-        // has no such word, so assert only that no AMOUNT-bearing parse
-        // pretends it is a transaction of the wrong direction.
         final r = parseNotification(n(alipay, title, '验证码 123456，请勿泄露'));
-        expect(
-          r.templateId,
-          isNot('alipay_repay_zh'),
-          reason: '$title 不应被当作还款',
-        );
+        expect(r.templateId, isNull, reason: '$title 应被排除');
       });
     }
+    test('支付宝（标题含「支付」子串但不造金额）', () {
+      // 「支付宝」会命中支出词「支付」，但正文无金额时不得 ok。
+      final r = parseNotification(n(alipay, '支付宝', '验证码 123456，请勿泄露'));
+      expect(r.ok, isFalse);
+      expect(r.amountMinor, isNull);
+    });
   });
 
   test('模板声明 matchOn=title', () {
@@ -144,10 +142,10 @@ void main() {
     }
   });
 
-  test('assets JSON is v9 and every rule is title-only', () {
+  test('assets JSON is v10 and every rule is title-only', () {
     final map = jsonDecode(File('assets/noti_templates.json').readAsStringSync())
         as Map<String, dynamic>;
-    expect(map['version'], 9);
+    expect(map['version'], 10);
     for (final item in (map['templates'] as List).cast<Map<String, dynamic>>()) {
       expect(item['matchOn'], 'title', reason: item['id'] as String);
     }

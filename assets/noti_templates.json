@@ -1,102 +1,51 @@
 {
-  "version": 9,
-  "updated_at": "2026-10-18",
+  "version": 10,
+  "updated_at": "2026-10-21",
   "templates": [
     {
-      "id": "alipay_receive_zh",
-      "name": "支付宝收款到账",
+      "id": "alipay_income_zh",
+      "name": "支付宝收入",
       "packages": [
         "com.eg.android.AlipayGphone"
       ],
       "defaultCurrency": "CNY",
       "titleRegex": null,
-      "mustContainRegex": "收款|到账|入账|收到|转入|转入零钱|零钱转入",
+      "mustContainRegex": "收款|到账|入账|收到|转入|转入零钱|零钱转入|退款|退回|已退",
       "excludeTextRegex": "验证码|登录|服务通知|账单",
       "amountRegex": "(?:(?:USD|EUR|CNY|HKD|TWD|JPY)\\s*|(?:¥|￥|\\$|€))?\\s*([0-9]+(?:,[0-9]{3})*(?:\\.[0-9]{1,2})?)",
-      "merchantRegex": "(?:来自|从)\\s*(.+?)(?:\\s|$)",
+      "merchantRegex": "(?:商户|来自|从)\\s*(.+?)(?:\\s|$)",
       "merchantFromTitle": false,
       "defaultAccountHint": "alipay",
       "direction": "in",
       "matchOn": "title"
     },
     {
-      "id": "alipay_refund_zh",
-      "name": "支付宝退款",
-      "packages": [
-        "com.eg.android.AlipayGphone"
-      ],
-      "defaultCurrency": "CNY",
-      "titleRegex": null,
-      "mustContainRegex": "退款|退回|已退",
-      "excludeTextRegex": "验证码|登录",
-      "amountRegex": "(?:(?:USD|EUR|CNY|HKD|TWD|JPY)\\s*|(?:¥|￥|\\$|€))?\\s*([0-9]+(?:,[0-9]{3})*(?:\\.[0-9]{1,2})?)",
-      "merchantRegex": "(?:商户|来自)\\s*(.+?)(?:\\s|$)",
-      "merchantFromTitle": false,
-      "defaultAccountHint": "alipay",
-      "direction": "in",
-      "matchOn": "title"
-    },
-    {
-      "id": "wechat_receive_zh",
-      "name": "微信收款到账",
+      "id": "wechat_income_zh",
+      "name": "微信收入",
       "packages": [
         "com.tencent.mm"
       ],
       "defaultCurrency": "CNY",
       "titleRegex": null,
-      "mustContainRegex": "收款|到账|入账|收到|转入|转入零钱|零钱转入|你领取了.+红包|转账成功|已转账",
+      "mustContainRegex": "收款|到账|入账|收到|转入|转入零钱|零钱转入|退款|退回|已退|你领取了.+红包|转账成功|已转账",
       "excludeTextRegex": "验证码|登录|朋友圈|拍了拍|互动消息|新的朋友",
       "amountRegex": "(?:(?:USD|EUR|CNY|HKD|TWD|JPY)\\s*|(?:¥|￥|\\$|€))?\\s*([0-9]+(?:,[0-9]{3})*(?:\\.[0-9]{1,2})?)",
-      "merchantRegex": "(?:来自|从)\\s*(.+?)(?:\\s|$)",
+      "merchantRegex": "(?:商户|来自|从)\\s*(.+?)(?:\\s|$)",
       "merchantFromTitle": false,
       "defaultAccountHint": "wechat",
       "direction": "in",
       "matchOn": "title"
     },
     {
-      "id": "wechat_refund_zh",
-      "name": "微信退款",
-      "packages": [
-        "com.tencent.mm"
-      ],
-      "defaultCurrency": "CNY",
-      "titleRegex": null,
-      "mustContainRegex": "退款|退回|已退",
-      "excludeTextRegex": "验证码|登录",
-      "amountRegex": "(?:(?:USD|EUR|CNY|HKD|TWD|JPY)\\s*|(?:¥|￥|\\$|€))?\\s*([0-9]+(?:,[0-9]{3})*(?:\\.[0-9]{1,2})?)",
-      "merchantRegex": "(?:商户|来自)\\s*(.+?)(?:\\s|$)",
-      "merchantFromTitle": false,
-      "defaultAccountHint": "wechat",
-      "direction": "in",
-      "matchOn": "title"
-    },
-    {
-      "id": "alipay_repay_zh",
-      "name": "支付宝还款",
+      "id": "alipay_expense_zh",
+      "name": "支付宝支出",
       "packages": [
         "com.eg.android.AlipayGphone"
       ],
       "defaultCurrency": "CNY",
       "titleRegex": null,
-      "mustContainRegex": "还款|还清|代扣",
-      "excludeTextRegex": "验证码|登录|待还|应还|请于|即将到期|还款提醒|账单提醒|账单日|还款日",
-      "amountRegex": "(?:(?:USD|EUR|CNY|HKD|TWD|JPY)\\s*|(?:¥|￥|\\$|€))?\\s*([0-9]+(?:,[0-9]{3})*(?:\\.[0-9]{1,2})?)",
-      "merchantRegex": null,
-      "merchantFromTitle": false,
-      "defaultAccountHint": "alipay",
-      "direction": "out",
-      "matchOn": "title"
-    },
-    {
-      "id": "alipay_pay_success_zh",
-      "name": "支付宝交易/支付成功",
-      "packages": [
-        "com.eg.android.AlipayGphone"
-      ],
-      "defaultCurrency": "CNY",
-      "titleRegex": null,
-      "mustContainRegex": "支付|付款|消费|扣款|支出|转出|汇款|缴费|充值|买单|付款码|交易",
-      "excludeTextRegex": "验证码|登录|服务通知|生活号",
+      "mustContainRegex": "支付|付款|消费|扣款|支出|转出|汇款|缴费|充值|买单|付款码|交易|还款|还清|代扣",
+      "excludeTextRegex": "验证码|登录|服务通知|生活号|待还|应还|请于|即将到期|还款提醒|账单提醒|账单日|还款日",
       "amountRegex": "(?:(?:USD|EUR|CNY|HKD|TWD|JPY)\\s*|(?:¥|￥|\\$|€))?\\s*([0-9]+(?:,[0-9]{3})*(?:\\.[0-9]{1,2})?)",
       "merchantRegex": "(?:向|给|商户)\\s*(.+?)(?:\\s|$)",
       "merchantFromTitle": false,
@@ -105,8 +54,8 @@
       "matchOn": "title"
     },
     {
-      "id": "wechat_pay_success_zh",
-      "name": "微信支付成功",
+      "id": "wechat_expense_zh",
+      "name": "微信支出",
       "packages": [
         "com.tencent.mm"
       ],

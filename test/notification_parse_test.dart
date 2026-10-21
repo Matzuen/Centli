@@ -85,7 +85,7 @@ group('payment filter drops chat / non-pay', () {
         whenMs: 1,
       );
       final r = parseNotification(raw);
-      expect(r.templateId, 'wechat_pay_success_zh');
+      expect(r.templateId, 'wechat_expense_zh');
       expect(r.ok, isTrue);
       expect(r.amountMinor, 1200);
     });
@@ -109,7 +109,7 @@ group('payment filter drops chat / non-pay', () {
         whenMs: 1,
       );
       final r = parseNotification(raw);
-      expect(r.templateId, 'alipay_pay_success_zh');
+      expect(r.templateId, 'alipay_expense_zh');
       expect(r.ok, isFalse);
     });
 
@@ -121,7 +121,7 @@ group('payment filter drops chat / non-pay', () {
         whenMs: 1,
       );
       final r = parseNotification(raw);
-      expect(r.templateId, 'alipay_pay_success_zh');
+      expect(r.templateId, 'alipay_expense_zh');
       expect(r.ok, isTrue);
       expect(r.amountMinor, 1580);
       expect(r.merchant, contains('全家'));
@@ -135,7 +135,7 @@ group('payment filter drops chat / non-pay', () {
         whenMs: 1,
       );
       final r = parseNotification(raw);
-      expect(r.templateId, 'alipay_pay_success_zh');
+      expect(r.templateId, 'alipay_expense_zh');
       expect(r.ok, isTrue);
       expect(r.amountMinor, 4200);
     });
@@ -149,7 +149,7 @@ group('payment filter drops chat / non-pay', () {
       );
       final r = parseNotification(raw);
       // 「支付宝」本身含「支付」；宁可多抓进待确认，也不再靠正文过滤。
-      expect(r.templateId, 'alipay_pay_success_zh');
+      expect(r.templateId, 'alipay_expense_zh');
       expect(r.ok, isFalse, reason: '无金额 → 解析失败但保留待确认');
     });
 
@@ -161,7 +161,7 @@ group('payment filter drops chat / non-pay', () {
         whenMs: 1,
       );
       final r = parseNotification(raw);
-      expect(r.templateId, 'alipay_pay_success_zh');
+      expect(r.templateId, 'alipay_expense_zh');
       expect(r.ok, isTrue);
       expect(r.amountMinor, 3600);
     });
@@ -174,7 +174,7 @@ group('payment filter drops chat / non-pay', () {
         whenMs: 1,
       );
       final r = parseNotification(raw);
-      expect(r.templateId, 'alipay_pay_success_zh');
+      expect(r.templateId, 'alipay_expense_zh');
       expect(r.ok, isTrue);
       expect(r.amountMinor, 990);
     });
@@ -187,7 +187,7 @@ group('payment filter drops chat / non-pay', () {
         whenMs: 1,
       );
       final r = parseNotification(raw);
-      expect(r.templateId, 'alipay_pay_success_zh');
+      expect(r.templateId, 'alipay_expense_zh');
       expect(r.ok, isTrue);
       expect(r.amountMinor, 1800);
     });
@@ -223,7 +223,7 @@ group('payment filter drops chat / non-pay', () {
         whenMs: 1,
       );
       final r = parseNotification(raw);
-      expect(r.templateId, 'wechat_pay_success_zh');
+      expect(r.templateId, 'wechat_expense_zh');
       expect(r.ok, isTrue);
       expect(r.amountMinor, 3200);
     });
@@ -334,7 +334,7 @@ group('manual capture parser (share/OCR/clipboard)', () {
         whenMs: 1,
       );
       final r = parseNotification(raw);
-      expect(r.templateId, 'alipay_receive_zh');
+      expect(r.templateId, 'alipay_income_zh');
       expect(r.direction, 'in');
       expect(r.ok, isTrue);
       expect(r.amountMinor, 20000);
@@ -348,7 +348,7 @@ group('manual capture parser (share/OCR/clipboard)', () {
         whenMs: 1,
       );
       final r = parseNotification(raw);
-      expect(r.templateId, 'alipay_refund_zh');
+      expect(r.templateId, 'alipay_income_zh');
       expect(r.direction, 'in');
       expect(isRefundSignal(templateId: r.templateId, title: raw.title), isTrue);
       expect(r.ok, isTrue);
@@ -363,7 +363,7 @@ group('manual capture parser (share/OCR/clipboard)', () {
         whenMs: 1,
       );
       final r = parseNotification(raw);
-      expect(r.templateId, 'alipay_pay_success_zh');
+      expect(r.templateId, 'alipay_expense_zh');
       expect(r.direction, 'out');
       expect(r.ok, isTrue);
       expect(r.amountMinor, 2850);
@@ -377,7 +377,7 @@ group('manual capture parser (share/OCR/clipboard)', () {
         whenMs: 1,
       );
       final r = parseNotification(raw);
-      expect(r.templateId, 'wechat_receive_zh');
+      expect(r.templateId, 'wechat_income_zh');
       expect(r.direction, 'in');
       expect(r.ok, isTrue);
     });
@@ -409,7 +409,7 @@ group('manual capture parser (share/OCR/clipboard)', () {
       final r = parseNotification(wx('你领取了张三的红包 ¥8.88'));
       expect(r.ok, isTrue);
       expect(r.direction, 'in');
-      expect(r.templateId, 'wechat_receive_zh');
+      expect(r.templateId, 'wechat_income_zh');
       expect(r.amountMinor, 888);
     });
 
@@ -426,7 +426,7 @@ group('manual capture parser (share/OCR/clipboard)', () {
       final r = parseNotification(wx('你领取了你的红包 ¥8.88'));
       expect(r.ok, isTrue);
       expect(r.direction, 'in');
-      expect(r.templateId, 'wechat_receive_zh');
+      expect(r.templateId, 'wechat_income_zh');
       expect(r.amountMinor, 888);
     });
 
@@ -434,7 +434,7 @@ group('manual capture parser (share/OCR/clipboard)', () {
       final r = parseNotification(wx('微信支付转账成功，对方已收款 ¥50.00'));
       expect(r.ok, isTrue);
       expect(r.direction, 'in');
-      expect(r.templateId, 'wechat_receive_zh');
+      expect(r.templateId, 'wechat_income_zh');
       expect(r.amountMinor, 5000);
     });
 
@@ -449,7 +449,7 @@ group('manual capture parser (share/OCR/clipboard)', () {
       final r = parseNotification(wx('你收到一个红包 ¥6.66'));
       expect(r.ok, isTrue);
       expect(r.direction, 'in');
-      expect(r.templateId, 'wechat_receive_zh');
+      expect(r.templateId, 'wechat_income_zh');
       expect(r.amountMinor, 666);
     });
 
@@ -505,7 +505,7 @@ group('manual capture parser (share/OCR/clipboard)', () {
         isTrue,
       );
       expect(r.amountMinor, 1254);
-      expect(r.templateId, 'alipay_repay_zh');
+      expect(r.templateId, 'alipay_expense_zh');
     });
 
     test('待还 reminder is excluded', () {

@@ -66,10 +66,10 @@ void main() {
     });
   });
 
-  test('assets/noti_templates.json mirrors the builtin rules (v9)', () async {
+  test('assets/noti_templates.json mirrors the builtin rules (v10)', () async {
     final rawJson = await File('assets/noti_templates.json').readAsString();
     final map = jsonDecode(rawJson) as Map<String, dynamic>;
-    expect(map['version'], 9);
+    expect(map['version'], 10);
     final list = (map['templates'] as List).cast<Map<String, dynamic>>();
     final assets = {
       for (final item in list) item['id'] as String: NotiTemplate.fromJson(item),
@@ -92,11 +92,10 @@ void main() {
       expect(re.firstMatch('金额 15.80 元')?.group(1), '15.80', reason: entry.key);
       expect(re.firstMatch('付款成功 12.50')?.group(1), '12.50', reason: entry.key);
     }
-    // Order matters: repay must be tried before pay (「还款…扣款」).
+    // Order matters: same App 先收入后支出（「转账成功」vs「转账」）。
     final ids = [for (final item in list) item['id'] as String];
-    expect(
-      ids.indexOf('alipay_repay_zh'),
-      lessThan(ids.indexOf('alipay_pay_success_zh')),
-    );
+    expect(ids.indexOf('alipay_income_zh'), lessThan(ids.indexOf('alipay_expense_zh')));
+    expect(ids.indexOf('wechat_income_zh'), lessThan(ids.indexOf('wechat_expense_zh')));
+    expect(ids.length, 4);
   });
 }

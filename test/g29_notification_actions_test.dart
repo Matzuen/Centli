@@ -60,7 +60,7 @@ void main() {
       // Prefer exact template id if present
       expect(
         parsed.templateId,
-        anyOf('alipay_pay_success_zh', contains('alipay')),
+        anyOf('alipay_expense_zh', contains('alipay')),
       );
     });
   });
