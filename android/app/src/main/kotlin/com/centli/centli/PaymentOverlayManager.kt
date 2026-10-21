@@ -58,6 +58,7 @@ object PaymentOverlayManager {
     private var selectedCategoryId: String? = null
     private var selectedCategoryName: String? = null
     private var selectedDirection: String = "out"
+    private var overlayCurrency: String = "CNY"
     private var allCategories: List<Category> = emptyList()
     /** null = showing root (L1); non-null = showing children of this parent (L2). */
     private var browsingParentId: String? = null
@@ -284,7 +285,11 @@ object PaymentOverlayManager {
         }
 
         val app = context.applicationContext
-        val amountMajor = if (amountMinor != null) amountMinor / 100.0 else null
+        val amountMajor = if (amountMinor != null) {
+            NativeCaptureIngest.fromMinor(currency, amountMinor)
+        } else {
+            null
+        }
         val sourceLabel = when {
             sourcePkg.contains("tencent.mm") -> "微信支付"
             sourcePkg.contains("Alipay") || sourcePkg.contains("alipay") -> "支付宝"
@@ -410,7 +415,11 @@ object PaymentOverlayManager {
     ) {
         hostActivity = WeakReference(activity)
         overlayView = null
-        val amountMajor = if (amountMinor != null) amountMinor / 100.0 else null
+        val amountMajor = if (amountMinor != null) {
+            NativeCaptureIngest.fromMinor(currency, amountMinor)
+        } else {
+            null
+        }
         val sourceLabel = when {
             sourcePkg.contains("tencent.mm") -> "微信支付"
             sourcePkg.contains("Alipay") || sourcePkg.contains("alipay") -> "支付宝"
@@ -497,6 +506,7 @@ object PaymentOverlayManager {
         selectedCategoryId = null
         selectedCategoryName = null
         selectedDirection = dirOrOut(categoryKind)
+        overlayCurrency = currency.ifBlank { "CNY" }
         browsingParentId = null
         allCategories = emptyList()
         categoryViews.clear()
@@ -513,7 +523,7 @@ object PaymentOverlayManager {
 
         val amountEt = view.findViewById<EditText>(R.id.et_amount)
         if (amountMajor != null) {
-            amountEt.setText(String.format(Locale.US, "%.2f", amountMajor))
+            amountEt.setText(formatMajor(overlayCurrency, amountMajor))
             amountEt.setSelection(amountEt.text.length)
         } else {
             amountEt.setText("")
@@ -567,7 +577,7 @@ object PaymentOverlayManager {
             if (raw.isEmpty()) return null
             val major = raw.toDoubleOrNull() ?: return null
             if (major < 0) return null
-            return Math.round(major * 100.0).toInt()
+            return NativeCaptureIngest.toMinor(overlayCurrency, major)
         }
 
         fun refreshConfirmEnabled() {
@@ -625,7 +635,11 @@ object PaymentOverlayManager {
                         prefs(context).edit().putString(KEY_LAST_CATEGORY, catId).apply()
                         PendingConfirmNotifier.cancel(context, pendingId)
                         MainActivity.notifyPendingDbChanged()
-                        showSuccess(view, amountMinor / 100.0, catName)
+                        showSuccess(
+                            view,
+                            NativeCaptureIngest.fromMinor(overlayCurrency, amountMinor),
+                            catName,
+                        )
                     } else {
                         confirmBtn.isEnabled = true
                         confirmBtn.text = "入账"
@@ -863,15 +877,29 @@ object PaymentOverlayManager {
         if (raw.isEmpty()) return null
         val major = raw.toDoubleOrNull() ?: return null
         if (major < 0) return null
-        return Math.round(major * 100.0).toInt()
+        return NativeCaptureIngest.toMinor(overlayCurrency, major)
+    }
+
+    private fun formatMajor(currency: String, major: Double): String {
+        val decimals = NativeCaptureIngest.currencyDecimals(currency)
+        return if (decimals == 0) {
+            String.format(Locale.US, "%.0f", major)
+        } else {
+            String.format(Locale.US, "%.${decimals}f", major)
+        }
     }
 
     private fun showSuccess(view: View, amountMajor: Double, categoryName: String) {
         view.findViewById<View>(R.id.content_main).visibility = View.GONE
         val success = view.findViewById<View>(R.id.content_success)
         success.visibility = View.VISIBLE
+        val symbol = when (overlayCurrency.uppercase(Locale.US)) {
+            "USD" -> "$"
+            "EUR" -> "€"
+            else -> "¥"
+        }
         view.findViewById<TextView>(R.id.tv_success_detail).text =
-            String.format("¥%.2f · %s", amountMajor, categoryName)
+            "$symbol${formatMajor(overlayCurrency, amountMajor)} · $categoryName"
         mainHandler.postDelayed({ dismissInternal() }, SUCCESS_DISMISS_MS)
     }
 
@@ -1038,7 +1066,14 @@ object PaymentOverlayManager {
             if (amountMinor == null || amountMinor < 0) return false
 
             if (accountId.isNullOrBlank()) {
-                accountId = resolveDefaultAccount(db, ledgerId, sourcePkg)
+                val hint = when {
+                    sourcePkg.contains("Alipay", ignoreCase = true) -> "alipay"
+                    sourcePkg.contains("tencent.mm") -> "wechat"
+                    else -> null
+                }
+                accountId = NativeCaptureIngest.resolveSuggestedAccount(
+                    db, ledgerId, sourcePkg, hint,
+                )
             }
             if (accountId.isNullOrBlank()) return false
 
@@ -1114,33 +1149,6 @@ object PaymentOverlayManager {
             }
             db.close()
         }
-    }
-
-    private fun resolveDefaultAccount(
-        db: SQLiteDatabase,
-        ledgerId: String,
-        sourcePkg: String,
-    ): String? {
-        val preferName = when {
-            sourcePkg.contains("Alipay") || sourcePkg.contains("alipay") -> "支付宝"
-            sourcePkg.contains("tencent.mm") -> "微信"
-            else -> null
-        }
-        if (preferName != null) {
-            db.rawQuery(
-                "SELECT id FROM accounts WHERE ledger_id=? AND name=? AND archived=0 LIMIT 1",
-                arrayOf(ledgerId, preferName),
-            ).use { c ->
-                if (c.moveToFirst()) return c.getString(0)
-            }
-        }
-        db.rawQuery(
-            "SELECT id FROM accounts WHERE ledger_id=? AND archived=0 ORDER BY sort_order ASC LIMIT 1",
-            arrayOf(ledgerId),
-        ).use { c ->
-            if (c.moveToFirst()) return c.getString(0)
-        }
-        return null
     }
 
     private fun querySetting(db: SQLiteDatabase, key: String): String? {

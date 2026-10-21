@@ -69,6 +69,13 @@ object NativeCaptureIngest {
             else -> System.currentTimeMillis()
         }
 
+        // 仅加入监听、尚无规则：只入队等 Flutter 精炼，不直接落待确认（避免滥入）。
+        if (match.softAllow) {
+            Log.i(TAG, "softAllow enqueue-only pkg=$pkg")
+            CentliNotificationListener.enqueue(context, enriched)
+            return null
+        }
+
         val dbFile = File(context.applicationContext.getDir("flutter", Context.MODE_PRIVATE), DB_NAME)
         if (!dbFile.exists()) {
             Log.w(TAG, "DB missing at ${dbFile.absolutePath}; queueing")
@@ -112,6 +119,9 @@ object NativeCaptureIngest {
                 return null
             }
 
+            val suggestedAccount = resolveSuggestedAccount(
+                db, ledgerId, pkg, match.accountHint,
+            )
             val id = UUID.randomUUID().toString()
             val now = System.currentTimeMillis()
             db.execSQL(
@@ -127,7 +137,7 @@ object NativeCaptureIngest {
                 arrayOf<Any?>(
                     id, ledgerId, pkg, title.ifBlank { null }, text,
                     amountMinor, currency, merchant, whenMs,
-                    null, null, "pending", dedupe,
+                    null, suggestedAccount, "pending", dedupe,
                     if (parseOk) 1 else 0, direction, now, now,
                 ),
             )
@@ -189,6 +199,61 @@ object NativeCaptureIngest {
             arrayOf(key),
         ).use { c ->
             return if (c.moveToFirst()) c.getString(0) else null
+        }
+    }
+
+    /** Align Dart [defaultAccountIdForPkg]: map[hint]/map[pkg] → 名匹配 → 首个账户. */
+    fun resolveSuggestedAccount(
+        db: SQLiteDatabase,
+        ledgerId: String,
+        pkg: String,
+        hint: String?,
+    ): String? {
+        val mapRaw = querySetting(db, "capture_account_map")
+        if (!mapRaw.isNullOrBlank()) {
+            try {
+                val o = org.json.JSONObject(mapRaw)
+                val keys = buildList {
+                    val h = hint?.trim().orEmpty()
+                    if (h.isNotEmpty()) add(h)
+                    if (pkg.isNotBlank()) add(pkg)
+                }
+                for (k in keys) {
+                    val id = o.optString(k).trim()
+                    if (id.isNotEmpty() && accountActive(db, ledgerId, id)) return id
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "capture_account_map parse failed", e)
+            }
+        }
+        val preferName = when {
+            hint == "alipay" || pkg.contains("Alipay", ignoreCase = true) -> "支付宝"
+            hint == "wechat" || pkg.contains("tencent.mm") -> "微信"
+            else -> null
+        }
+        if (preferName != null) {
+            db.rawQuery(
+                "SELECT id FROM accounts WHERE ledger_id=? AND name=? AND archived=0 LIMIT 1",
+                arrayOf(ledgerId, preferName),
+            ).use { c ->
+                if (c.moveToFirst()) return c.getString(0)
+            }
+        }
+        db.rawQuery(
+            "SELECT id FROM accounts WHERE ledger_id=? AND archived=0 ORDER BY sort_order ASC LIMIT 1",
+            arrayOf(ledgerId),
+        ).use { c ->
+            if (c.moveToFirst()) return c.getString(0)
+        }
+        return null
+    }
+
+    private fun accountActive(db: SQLiteDatabase, ledgerId: String, id: String): Boolean {
+        db.rawQuery(
+            "SELECT 1 FROM accounts WHERE id=? AND ledger_id=? AND archived=0 LIMIT 1",
+            arrayOf(id, ledgerId),
+        ).use { c ->
+            return c.moveToFirst()
         }
     }
 
@@ -261,26 +326,25 @@ object NativeCaptureIngest {
         "待支付|未支付|还未支付|支付失败|付款失败|扣款失败|交易关闭|自动取消|" +
             "验证码|登录提醒|配置更新",
     )
-    // Fallback 词表与 Dart v10 标题词对齐（rules_json / assets 不可用时）。
-    private val MUST_ALIPAY: Pattern = Pattern.compile(
-        "交易|支付|付款|收款|退款|退回|已退|红包|转账|扣款|消费|入账|到账|支出|收入|" +
-            "余额|还款|还清|代扣|缴费|充值|买单|付款码|汇款|转出|转入|收到",
-    )
-    private val MUST_WECHAT: Pattern = Pattern.compile(
-        "交易|支付|付款|收款|退款|退回|已退|红包|转账|扣款|消费|入账|到账|支出|收入|" +
-            "余额|零钱|还款|还清|代扣|缴费|充值|买单|付款码|汇款|转出|转入|收到",
+    // Fallback 与 Dart v11 标题门控对齐（不含「余额」，避免余额变动误抓）。
+    private val MUST_TITLE: Pattern = Pattern.compile(
+        "交易|支付|付款|收款|退款|退回|已退|红包|转账|扣款|消费|入账|到账|支出|" +
+            "还款|还清|代扣|缴费|充值|买单|付款码|汇款|转出|转入|收到|转账成功|已转账",
     )
     private val EXCLUDE_COMMON: Pattern = Pattern.compile(
         "验证码|登录|朋友圈|微信消息|发来一条|会话|拍了拍|互动消息|新的朋友|群聊|" +
             "语音通话|视频通话|收到一条|发来一个红包|领取了你的红包|服务通知|余额宝收益|生活号|" +
             "待还|应还|请于|即将到期|还款提醒|账单提醒|账单日|还款日",
     )
-    private val EXPENSE_HINT: Pattern = Pattern.compile("支出|付款|支付|消费|扣款|转出|提现|买单|代扣|还款|还清|汇款|缴费|充值")
+    private val EXPENSE_HINT: Pattern = Pattern.compile(
+        "支出|付款|支付|消费|扣款|转出|提现|买单|代扣|还款|还清|汇款|缴费|充值",
+    )
     private val INCOME_HINT: Pattern = Pattern.compile(
-        "退款|退回|已退|收入|收款|到账|入账|转入|收到|转账成功|已转账|向你转账|转账给你",
+        "退款|退回|已退|收入|收款|到账|入账|转入|收到|转账成功|已转账|" +
+            "向你转账|转账给你|你领取了.+红包|收到.+转账",
     )
 
-    /** Align Dart [inferCaptureDirection]: body first, then title. */
+    /** Align Dart [inferCaptureDirection]: body first, then title; income beats expense. */
     private fun inferCaptureDirection(title: String, text: String): String? {
         fun hint(s: String): String? {
             if (s.isBlank()) return null
@@ -301,6 +365,7 @@ object NativeCaptureIngest {
     private data class RuleMatch(
         val direction: String?,
         val softAllow: Boolean = false,
+        val accountHint: String? = null,
     )
 
     /**
@@ -324,22 +389,22 @@ object NativeCaptureIngest {
         }
         val rules = loadRules(context)
         if (rules == null) {
-            // Fallback hardcode
-            if (EXCLUDE_COMMON.matcher(body).find()) return null
-            val must = when (pkg) {
-                "com.eg.android.AlipayGphone" -> MUST_ALIPAY
-                "com.tencent.mm" -> MUST_WECHAT
-                else -> return null
-            }
-            if (!must.matcher(body).find()) {
-                // 对齐 AutoBookKeeping：标题「微信支付 / 交易提醒」也算候选。
+            // Fallback：只看标题门控（对齐 v11），收支看正文。
+            if (EXCLUDE_COMMON.matcher(title).find()) return null
+            if (!MUST_TITLE.matcher(title).find()) {
                 val titleHit = (pkg.contains("tencent.mm") && title.contains("微信支付")) ||
                     (pkg.contains("Alipay") && (title.contains("交易提醒") || title.contains("交易通知")))
                 if (!titleHit) return null
             }
-            val income = INCOME_HINT.matcher(compact).find() &&
-                !EXPENSE_HINT.matcher(compact).find()
-            return RuleMatch(if (income) "in" else "out")
+            val hint = when {
+                pkg.contains("Alipay", ignoreCase = true) -> "alipay"
+                pkg.contains("tencent.mm") -> "wechat"
+                else -> null
+            }
+            return RuleMatch(
+                direction = inferCaptureDirection(title, text) ?: "out",
+                accountHint = hint,
+            )
         }
         val forPkg = rules.filter { it.pkg == pkg }
         if (forPkg.isEmpty()) {
@@ -374,7 +439,7 @@ object NativeCaptureIngest {
                     "out", "repay" -> "out"
                     else -> "out"
                 }
-                return RuleMatch(dir)
+                return RuleMatch(dir, accountHint = rule.accountHint)
             } catch (e: Exception) {
                 Log.w(TAG, "bad rule regex id=${rule.id}", e)
                 continue
@@ -394,6 +459,7 @@ object NativeCaptureIngest {
         val merchantFromTitle: Boolean,
         val matchOn: String,
         val drop: Boolean = false,
+        val accountHint: String? = null,
     )
 
     /** null = empty/corrupt → use hardcode fallback */
@@ -440,6 +506,9 @@ object NativeCaptureIngest {
                             matchOn = o.optString("matchOn").ifBlank { "title" },
                             drop = o.optBoolean("drop", false) ||
                                 (id?.startsWith("distill_excl_") == true),
+                            accountHint = o.optString("accountHint").ifBlank {
+                                o.optString("defaultAccountHint")
+                            }.ifBlank { null },
                         ),
                     )
                 }
@@ -475,6 +544,7 @@ object NativeCaptureIngest {
                                 merchant = o.optString("merchantRegex").ifBlank { null },
                                 merchantFromTitle = o.optBoolean("merchantFromTitle", false),
                                 matchOn = matchOn,
+                                accountHint = o.optString("defaultAccountHint").ifBlank { null },
                             ),
                         )
                     }
@@ -502,14 +572,19 @@ object NativeCaptureIngest {
             "[^0-9¥￥]{0,8}(?:¥|￥)?\\s*([0-9]+(?:,[0-9]{3})*(?:\\.[0-9]{1,2})?)",
     )
 
-    private fun currencyDecimals(ccy: String): Int = when (ccy) {
+    fun currencyDecimals(ccy: String): Int = when (ccy.uppercase()) {
         "JPY" -> 0
         else -> 2
     }
 
-    private fun toMinor(ccy: String, major: Double): Int {
+    fun toMinor(ccy: String, major: Double): Int {
         val factor = Math.pow(10.0, currencyDecimals(ccy).toDouble())
         return Math.round(major * factor).toInt()
+    }
+
+    fun fromMinor(ccy: String, minor: Int): Double {
+        val factor = Math.pow(10.0, currencyDecimals(ccy).toDouble())
+        return minor / factor
     }
 
     private fun parseAmount(title: String, text: String): Parsed {
