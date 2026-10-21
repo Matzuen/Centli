@@ -140,29 +140,7 @@ object PendingConfirmNotifier {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             builder.setStyle(Notification.DecoratedCustomViewStyle())
         }
-
-        builder
-            .addAction(
-                Notification.Action.Builder(
-                    android.R.drawable.ic_menu_edit,
-                    "确认",
-                    confirmPi,
-                ).build(),
-            )
-            .addAction(
-                Notification.Action.Builder(
-                    android.R.drawable.ic_menu_info_details,
-                    "详情",
-                    detailPi,
-                ).build(),
-            )
-            .addAction(
-                Notification.Action.Builder(
-                    android.R.drawable.ic_menu_close_clear_cancel,
-                    "忽略",
-                    ignorePi,
-                ).build(),
-            )
+        // 按钮只放在自定义 RemoteViews 里；再 addAction 会在展开态再出一排重复按钮。
 
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
             @Suppress("DEPRECATION")
