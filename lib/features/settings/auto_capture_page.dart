@@ -656,12 +656,14 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
                 ],
                 CentliSoftCard(
                   child: SwitchListTile(
-                    title: const Text('启用通知捕获'),
+                    title: const Text('启用自动记账'),
                     subtitle: Text(
                       !supported
                           ? '当前平台不可用'
                           : (_granted
-                                ? (_enabled ? '已开启' : '已关闭')
+                                ? (_enabled
+                                    ? '已开启 · 支付通知进待确认或悬浮窗'
+                                    : '已关闭 · 不再监听支付通知')
                                 : '需先授予通知使用权'),
                     ),
                     value: switchOn,
@@ -874,7 +876,7 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
                   child: ListTile(
                     leading: const Icon(Icons.system_update_alt),
                     title: const Text('检查模板更新'),
-                    subtitle: const Text('对比内置 assets；有更新或尚无本地覆盖时写入 documents'),
+                    subtitle: const Text('与安装包内置模板对比；有更新或本地尚无覆盖时写入本机'),
                     trailing: _busy
                         ? const SizedBox(
                             width: 24,

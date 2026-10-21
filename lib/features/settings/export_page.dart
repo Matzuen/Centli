@@ -87,7 +87,8 @@ class _ExportPageState extends ConsumerState<ExportPage> {
         padding: CentliSpacing.pagePadding,
         children: [
           Text(
-            '导出当前记账本为文件并打开系统分享。还原请到「我的 → 导入」。本页仅导出并分享，不会清空本机数据。',
+            '导出当前记账本为文件并打开系统分享。还原请到「我的 → 导入」。本页仅导出并分享，不会清空本机数据。\n'
+            '不含通知识别规则（我的规则请在「自动记账 → 识别规则」单独导出）。',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                   height: 1.4,

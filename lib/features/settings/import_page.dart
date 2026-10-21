@@ -86,10 +86,14 @@ class _ImportPageState extends ConsumerState<ImportPage> {
       builder: (ctx) => CentliGlassDialog(
         title: const Text('\u786e\u8ba4\u8fd8\u539f\uff1f'),
         content: Text(
-          '\u5c06\u6e05\u7a7a\u672c\u673a\u5168\u90e8\u8d26\u672c\u6570\u636e\uff08\u8d44\u4ea7\u8d26\u6237/\u5206\u7c7b/\u6d41\u6c34/\u5f85\u786e\u8ba4/\u89c4\u5219/\u9884\u7b97/\u6c47\u7387\u7f13\u5b58\uff09\uff0c'
-          '\u5e76\u5199\u5165\u5907\u4efd\u4e2d\u7684\u8d26\u672c\u300c${b.ledgerName}\u300d\u3002\n\n'
-          '\u4e0d\u4f1a\u6539\u52a8\u672c\u673a PIN\uff08\u5e94\u7528\u9501\u5f00\u5173\u4e5f\u4e0d\u4f1a\u4ece\u5907\u4efd\u8986\u76d6\uff09\u3002\n\n'
-          '\u6b64\u64cd\u4f5c\u4e0d\u53ef\u64a4\u9500\u3002',
+          '将清空本机记账本「${b.ledgerName}」下的资产账户、分类、流水、待确认、商户规则与预算，'
+          '再写入备份内容。其它记账本不受影响。\n\n'
+          '${preview.sourceKind == 'excel'
+              ? 'Excel 不含汇率：本机汇率缓存会保留。\n\n'
+              : '汇率缓存会按备份整体替换（全局）。\n\n'}'
+          '通知识别规则（我的规则）不在此备份范围内，不会被清空或覆盖。\n'
+          '本机 PIN 与应用锁开关也不会从备份覆盖。\n\n'
+          '此操作不可撤销。',
         ),
         actions: [
           TextButton(

@@ -99,8 +99,8 @@ class _PermissionExplainPageState extends ConsumerState<PermissionExplainPage>
       await ref.read(databaseProvider).setSetting('onboarding_done', 'true');
       ref.invalidate(onboardingDoneProvider);
       if (!mounted) return;
-      // New users land on assets to set up 资产账户 before 记一笔.
-      context.go(PendingDeepLink.take() ?? '/assets');
+      // 权限说明后进入自动记账清单（总开关 / 悬浮窗 / 保活）。
+      context.go(PendingDeepLink.take() ?? '/me/auto');
       return;
     }
     if (context.canPop()) {
@@ -155,23 +155,33 @@ class _PermissionExplainPageState extends ConsumerState<PermissionExplainPage>
                 ),
                 const SizedBox(height: CentliSpacing.sectionLoose + CentliSpacing.item),
                 CentliSoftCard(
-                  child: Padding(
-                    padding: const EdgeInsets.all(CentliSpacing.cardPad),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '权限用途',
-                          style: Theme.of(context).textTheme.titleSmall,
-                        ),
-                        const SizedBox(height: CentliSpacing.item),
-                        const Text('· 读取支付宝 / 微信等支付成功类通知'),
-                        const SizedBox(height: CentliSpacing.dense),
-                        const Text('· 解析金额与商户，生成待确认账单'),
-                        const SizedBox(height: CentliSpacing.dense),
-                        const Text('· 默认不自动入账；可随时在「自动记账」关闭'),
-                      ],
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '权限用途',
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                      const SizedBox(height: CentliSpacing.item),
+                      const Text('· 读取支付宝 / 微信等支付成功类通知'),
+                      const SizedBox(height: CentliSpacing.dense),
+                      const Text('· 解析金额与商户，生成待确认账单'),
+                      const SizedBox(height: CentliSpacing.dense),
+                      const Text('· 默认不自动入账；可随时在「自动记账」关闭'),
+                      const SizedBox(height: CentliSpacing.section),
+                      Text(
+                        '完整清单（建议按序）',
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                      const SizedBox(height: CentliSpacing.item),
+                      const Text('1. 本页：通知使用权'),
+                      const SizedBox(height: CentliSpacing.dense),
+                      const Text('2. 「自动记账」总开关打开'),
+                      const SizedBox(height: CentliSpacing.dense),
+                      const Text('3. 支付悬浮窗权限（可选，便于边付边记）'),
+                      const SizedBox(height: CentliSpacing.dense),
+                      const Text('4. 自启动 / 后台运行（被系统杀进程后能续听）'),
+                    ],
                   ),
                 ),
                 if (_awaitingReturn) ...[
@@ -208,12 +218,19 @@ class _PermissionExplainPageState extends ConsumerState<PermissionExplainPage>
                     onPressed: _busy ? null : _continue,
                     child: Text(
                       widget.finishOnboarding
-                          ? '进入首页'
+                          ? '继续去自动记账'
                           : (_granted ? '完成' : '返回'),
                     ),
                   ),
                   if (supported && _granted) ...[
                     const SizedBox(height: CentliSpacing.item),
+                    if (!widget.finishOnboarding)
+                      TextButton(
+                        onPressed: _busy
+                            ? null
+                            : () => context.go('/me/auto'),
+                        child: const Text('打开自动记账清单'),
+                      ),
                     TextButton(
                       onPressed: _busy ? null : _openSettings,
                       child: const Text('重新打开系统设置'),

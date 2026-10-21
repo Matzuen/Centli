@@ -177,9 +177,9 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                   const _OnboardSlide(
                     icon: Icons.calculate_outlined,
                     title: '然后记一笔',
-                    body: '日常支付优先开「自动记账」：通知进待确认或悬浮窗，点一下才入账。'
-                        '现金 / 无通知用底部「记一笔」或长按一句话补记。'
-                        '建议先建好资产账户，再配齐通知与悬浮窗权限。',
+                    body: '日常支付优先开「自动记账」：按清单配齐通知使用权、总开关、'
+                        '悬浮窗（可选）与后台保活后，支付通知进待确认或悬浮窗，点一下才入账。'
+                        '现金 / 无通知用底部「记一笔」或长按一句话补记。',
                     sketch: _CalcSketch(),
                   ),
                 ],
@@ -219,9 +219,15 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                         const SizedBox(height: CentliSpacing.item),
                         FilledButton.tonal(
                           onPressed: () => _finish(route: '/me/auto'),
-                          child: const Text('去开启自动记账'),
+                          child: const Text('去自动记账权限清单'),
                         ),
                         const SizedBox(height: CentliSpacing.dense),
+                        TextButton(
+                          onPressed: () => _finish(
+                            route: '/me/permission?open=1',
+                          ),
+                          child: const Text('先开通知使用权'),
+                        ),
                         TextButton(
                           onPressed: () => _finish(route: '/home'),
                           child: const Text('先逛逛首页'),
