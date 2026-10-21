@@ -8,7 +8,7 @@ import '../../core/constants/currencies.dart';
 import '../../data/db/database_provider.dart';
 import '../../core/widgets/glass.dart';
 
-/// First-launch guide. Leads with 记账本 → 资产账户 → 记一笔.
+/// First-launch guide. Leads with 记账本 → 资产账户 → 自动记账.
 class OnboardingPage extends ConsumerStatefulWidget {
   const OnboardingPage({super.key});
 
@@ -28,7 +28,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     super.dispose();
   }
 
-  Future<void> _finish({String route = '/assets'}) async {
+  Future<void> _finish({String route = '/me/auto'}) async {
     await ref.read(databaseProvider).setSetting('onboarding_done', 'true');
     ref.invalidate(onboardingDoneProvider);
     if (!mounted) return;
@@ -162,25 +162,24 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                   _OnboardSlide(
                     icon: Icons.menu_book_outlined,
                     title: '先建记账本',
-                    body: '记账本把个人 / 家庭 / 出差的账分开。'
-                        '起个名字、选好本位币，之后的资产账户和流水都归在这里。',
+                    body: '个人 / 家庭 / 出差各一本，账不混。'
+                        '起个名字、选好本位币，之后的资产账户和流水都归这里。',
                     sketch: _LedgerSketch(onSetup: _setupLedger),
                   ),
                   const _OnboardSlide(
                     icon: Icons.account_balance_wallet_outlined,
                     title: '再建资产账户',
-                    body: '到「资产」页点右上角 +「新建资产账户」，'
-                        '添加现金、银行卡、电子钱包等，也可截图识别余额。'
-                        '资产账户清楚了，收支才知道钱从哪来、到哪去。',
+                    body: '到「资产」页右上角 +，添加现金、银行卡、电子钱包；'
+                        '也可截图识别余额。账户清楚了，钱从哪来、到哪去才看得见。',
                     sketch: _AssetsSketch(),
                   ),
                   const _OnboardSlide(
-                    icon: Icons.calculate_outlined,
-                    title: '然后记一笔',
-                    body: '日常支付优先开「自动记账」：按清单配齐通知使用权、总开关、'
-                        '悬浮窗（可选）与后台保活后，支付通知进待确认或悬浮窗，点一下才入账。'
-                        '现金 / 无通知用底部「记一笔」或长按一句话补记。',
-                    sketch: _CalcSketch(),
+                    icon: Icons.notifications_active_outlined,
+                    title: '开自动记账',
+                    body: '微信 / 支付宝支付通知进悬浮窗或待确认，点一下才入账。'
+                        '配齐：通知使用权 · 总开关 · 悬浮窗 · 后台保活。'
+                        '现金或漏记用底部「记一笔」。',
+                    sketch: _AutoSketch(),
                   ),
                 ],
               ),
@@ -213,13 +212,13 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         FilledButton(
-                          onPressed: () => _finish(route: '/assets'),
-                          child: const Text('去资产页建账户'),
+                          onPressed: () => _finish(route: '/me/auto'),
+                          child: const Text('去自动记账权限清单'),
                         ),
                         const SizedBox(height: CentliSpacing.item),
                         FilledButton.tonal(
-                          onPressed: () => _finish(route: '/me/auto'),
-                          child: const Text('去自动记账权限清单'),
+                          onPressed: () => _finish(route: '/assets'),
+                          child: const Text('去资产页建账户'),
                         ),
                         const SizedBox(height: CentliSpacing.dense),
                         TextButton(
@@ -354,17 +353,37 @@ class _AssetsSketch extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    Widget chip(String label, IconData icon) => Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    Widget row(String label, String balance, IconData icon) => Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           decoration: BoxDecoration(
-            color: scheme.surfaceContainerHighest.withValues(alpha: 0.7),
-            borderRadius: BorderRadius.circular(12),
+            color: scheme.surfaceContainerHighest.withValues(alpha: 0.55),
+            borderRadius: BorderRadius.circular(14),
           ),
           child: Row(
             children: [
-              Icon(icon, size: 18, color: scheme.primary),
-              const SizedBox(width: 8),
-              Text(label),
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: scheme.primaryContainer.withValues(alpha: 0.55),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, size: 18, color: scheme.primary),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  label,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+              Text(
+                balance,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: scheme.onSurfaceVariant,
+                    ),
+              ),
             ],
           ),
         );
@@ -381,7 +400,7 @@ class _AssetsSketch extends StatelessWidget {
                     ),
               ),
               const Spacer(),
-              Icon(Icons.add_rounded, color: scheme.primary),
+              Icon(Icons.add_rounded, color: scheme.primary, size: 20),
               const SizedBox(width: 4),
               Text(
                 '新建资产账户',
@@ -394,19 +413,19 @@ class _AssetsSketch extends StatelessWidget {
             ],
           ),
           const SizedBox(height: CentliSpacing.section),
-          chip('现金', Icons.payments_outlined),
+          row('现金', '¥ 0.00', Icons.payments_outlined),
           const SizedBox(height: 8),
-          chip('银行卡', Icons.credit_card_outlined),
+          row('银行卡', '¥ 0.00', Icons.credit_card_outlined),
           const SizedBox(height: 8),
-          chip('电子钱包', Icons.account_balance_wallet_outlined),
+          row('电子钱包', '¥ 0.00', Icons.account_balance_wallet_outlined),
         ],
       ),
     );
   }
 }
 
-class _CalcSketch extends StatelessWidget {
-  const _CalcSketch();
+class _AutoSketch extends StatelessWidget {
+  const _AutoSketch();
 
   @override
   Widget build(BuildContext context) {
@@ -416,46 +435,91 @@ class _CalcSketch extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            '记一笔',
+            '支付通知',
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.w700,
                 ),
           ),
           const SizedBox(height: CentliSpacing.item),
-          Text(
-            '¥ 0.00',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: scheme.surfaceContainerHighest.withValues(alpha: 0.55),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.chat_bubble_outline, size: 18, color: scheme.primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '微信支付 · 付款成功',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
                 ),
+                Text(
+                  '¥28.50',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: CentliSpacing.section),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final t in ['支出', '收入', '转账'])
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: scheme.primaryContainer.withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  '确认入账',
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: scheme.primary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '¥ 28.50',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '餐饮 · 支付宝/微信',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                ),
+                const SizedBox(height: CentliSpacing.item),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
                   decoration: BoxDecoration(
-                    color: t == '支出'
-                        ? scheme.primaryContainer
-                        : scheme.surfaceContainerHighest.withValues(alpha: 0.7),
-                    borderRadius: BorderRadius.circular(20),
+                    color: scheme.primary,
+                    borderRadius: BorderRadius.circular(12),
                   ),
+                  alignment: Alignment.center,
                   child: Text(
-                    t,
+                    '确认入账',
                     style: TextStyle(
-                      fontWeight:
-                          t == '支出' ? FontWeight.w700 : FontWeight.w500,
+                      color: scheme.onPrimary,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
-            ],
+              ],
+            ),
           ),
           const Spacer(),
           Text(
-            '选好资产账户后再落库，流水才清楚。',
+            '也可进待确认列表再处理。',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: scheme.onSurfaceVariant,
                 ),
