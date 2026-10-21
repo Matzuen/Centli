@@ -405,7 +405,7 @@ class _RecognitionRuleEditPageState extends State<RecognitionRuleEditPage> {
                       labelText: '标题正则（可选，额外约束）',
                       border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
                     ),
-                  )
+                  ),
                   const SizedBox(height: CentliSpacing.sectionLoose),
                   Text(
                     '提取',
