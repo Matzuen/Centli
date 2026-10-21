@@ -257,6 +257,34 @@ abstract final class NotificationCaptureStub {
       }
       return null;
     }
+    // Native bridgeReady flush：逐条 await，返回仍失败、需保留在队列的项。
+    if (call.method == 'notification_capture_flush') {
+      final args = call.arguments;
+      if (args is! List) return <Map<String, dynamic>>[];
+      final handler = _onCapture;
+      final keep = <Map<String, dynamic>>[];
+      for (final item in args) {
+        if (item is! Map) continue;
+        final raw = Map<String, dynamic>.from(item);
+        if (handler == null) {
+          keep.add(raw);
+          continue;
+        }
+        try {
+          await handler(raw).timeout(const Duration(seconds: 20));
+        } catch (e, st) {
+          debugPrint('notification_capture_flush item failed: $e\n$st');
+          try {
+            await _fallbackToNativeIngest(raw)
+                .timeout(const Duration(seconds: 8));
+          } catch (e2, st2) {
+            debugPrint('flush fallback failed: $e2\n$st2');
+            keep.add(raw);
+          }
+        }
+      }
+      return keep;
+    }
     if (call.method == 'open_route') {
       final args = call.arguments;
       if (args is Map) {

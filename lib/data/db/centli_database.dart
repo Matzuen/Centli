@@ -52,7 +52,7 @@ class CentliDatabase extends _$CentliDatabase {
   void _dropFxBookCache() => _fxBookCache = null;
 
   @override
-  int get schemaVersion => 11;
+  int get schemaVersion => 12;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -178,6 +178,18 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
               await m.alterTable(TableMigration(transactions));
             }
           }
+          if (from < 12) {
+            // Keep one row per pending_id before unique index (prefer oldest).
+            await customStatement('''
+DELETE FROM transactions
+WHERE pending_id IS NOT NULL
+  AND rowid NOT IN (
+    SELECT MIN(rowid) FROM transactions
+    WHERE pending_id IS NOT NULL
+    GROUP BY pending_id
+  )
+''');
+          }
           await _ensureQueryIndexes();
         },
         beforeOpen: (details) async {
@@ -226,6 +238,11 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
     await customStatement(
       'CREATE INDEX IF NOT EXISTS idx_pending_ledger_status '
       'ON pending_captures(ledger_id, status)',
+    );
+    // One confirmed txn per pending capture (blocks Native/Dart double-confirm).
+    await customStatement(
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_pending_id '
+      'ON transactions(pending_id) WHERE pending_id IS NOT NULL',
     );
   }
 
@@ -2147,6 +2164,14 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
     final pending = await (select(pendingCaptures)
           ..where((t) => t.id.equals(pendingId)))
         .getSingle();
+
+    // Already confirmed (e.g. Native overlay won the race) → idempotent OK.
+    if (pending.status == 'confirmed') {
+      final existing = await (select(transactions)
+            ..where((t) => t.pendingId.equals(pendingId)))
+          .get();
+      if (existing.isNotEmpty) return;
+    }
     if (pending.status != 'pending') {
       throw StateError('该记录不是待确认状态');
     }
@@ -2156,27 +2181,43 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
     // so screenshot imports are not mislabeled as notification.
     final source = _txnSourceFromPendingPkg(pending.sourcePkg);
     await transaction(() async {
-      await into(transactions).insert(
-        TransactionsCompanion.insert(
-          id: newId(),
-          ledgerId: pending.ledgerId,
-          type: type,
-          amountMinor: amountMinor,
-          currency: currency,
-          accountId: accountId,
-          categoryId: Value(categoryId),
-          note: Value(note ?? pending.note),
-          happenAt: pending.happenAt ?? ts,
-          source: Value(source),
-          tags: Value(encodeTxnTags(tags)),
-          pendingId: Value(pending.id),
-          includeInStat: Value(includeInStat),
-          includeInBudget: Value(includeInBudget),
-          createdAt: ts,
-          updatedAt: ts,
-        ),
-      );
-      await (update(pendingCaptures)..where((t) => t.id.equals(pendingId)))
+      final already = await (select(transactions)
+            ..where((t) => t.pendingId.equals(pendingId)))
+          .get();
+      if (already.isEmpty) {
+        try {
+          await into(transactions).insert(
+            TransactionsCompanion.insert(
+              id: newId(),
+              ledgerId: pending.ledgerId,
+              type: type,
+              amountMinor: amountMinor,
+              currency: currency,
+              accountId: accountId,
+              categoryId: Value(categoryId),
+              note: Value(note ?? pending.note),
+              happenAt: pending.happenAt ?? ts,
+              source: Value(source),
+              tags: Value(encodeTxnTags(tags)),
+              pendingId: Value(pending.id),
+              includeInStat: Value(includeInStat),
+              includeInBudget: Value(includeInBudget),
+              createdAt: ts,
+              updatedAt: ts,
+            ),
+          );
+        } catch (e) {
+          // Unique idx_transactions_pending_id: Native already inserted.
+          final raced = await (select(transactions)
+                ..where((t) => t.pendingId.equals(pendingId)))
+              .get();
+          if (raced.isEmpty) rethrow;
+        }
+      }
+      final claimed = await (update(pendingCaptures)
+            ..where(
+              (t) => t.id.equals(pendingId) & t.status.equals('pending'),
+            ))
           .write(
         PendingCapturesCompanion(
           status: const Value('confirmed'),
@@ -2188,9 +2229,11 @@ WHERE member IS NOT NULL AND length(trim(member)) > 0
           updatedAt: Value(ts),
         ),
       );
-      await _retireDedupeKey(pending.id, pending.dedupeKey);
+      if (claimed > 0) {
+        await _retireDedupeKey(pending.id, pending.dedupeKey);
+      }
       final m = merchantForRule?.trim();
-      if (m != null && m.isNotEmpty) {
+      if (m != null && m.isNotEmpty && claimed > 0) {
         final key = m.toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
         await upsertMerchantRule(
           ledgerId: pending.ledgerId,

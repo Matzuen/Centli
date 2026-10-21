@@ -1036,19 +1036,33 @@ object PaymentOverlayManager {
     ): Boolean {
         val db = openDb(context) ?: return false
         try {
+            // 与 Drift 争用同一库：先拿事务写锁；再靠 pending_id 唯一索引兜底。
             db.beginTransaction()
+            fun hasTxnForPending(): Boolean {
+                db.rawQuery(
+                    "SELECT 1 FROM transactions WHERE pending_id=? LIMIT 1",
+                    arrayOf(pendingId),
+                ).use { return it.moveToFirst() }
+            }
             val row = db.rawQuery(
                 """
                 SELECT ledger_id, amount_minor, currency, note, happen_at,
                        suggested_account_id, source_pkg, direction, dedupe_key,
-                       raw_title, raw_text
-                FROM pending_captures WHERE id=? AND status='pending' LIMIT 1
+                       raw_title, raw_text, status
+                FROM pending_captures WHERE id=? LIMIT 1
                 """.trimIndent(),
                 arrayOf(pendingId),
             )
             if (!row.moveToFirst()) {
                 row.close()
                 return false
+            }
+            val status = row.getString(11)
+            if (status != "pending") {
+                val ok = status == "confirmed" && hasTxnForPending()
+                row.close()
+                if (ok) db.setTransactionSuccessful()
+                return ok
             }
             val ledgerId = row.getString(0)
             val dbAmount = if (row.isNull(1)) null else row.getInt(1)
@@ -1062,6 +1076,24 @@ object PaymentOverlayManager {
             val rawTitle = row.getString(9).orEmpty()
             val rawText = row.getString(10).orEmpty()
             row.close()
+            if (hasTxnForPending()) {
+                // Dart 已写入流水：只把 pending 标成 confirmed（幂等）。
+                val now = System.currentTimeMillis()
+                val retired = when {
+                    oldDedupe.isNullOrBlank() -> "done|$pendingId"
+                    oldDedupe.startsWith("done|") -> oldDedupe
+                    else -> "done|$pendingId|$oldDedupe"
+                }
+                db.execSQL(
+                    """
+                    UPDATE pending_captures SET status=?, dedupe_key=?, updated_at=?
+                    WHERE id=? AND status=?
+                    """.trimIndent(),
+                    arrayOf<Any?>("confirmed", retired, now, pendingId, "pending"),
+                )
+                db.setTransactionSuccessful()
+                return true
+            }
             val amountMinor = amountMinorOverride ?: dbAmount
             if (amountMinor == null || amountMinor < 0) return false
 
@@ -1106,20 +1138,25 @@ object PaymentOverlayManager {
             }
             val now = System.currentTimeMillis()
             val txnId = UUID.randomUUID().toString()
-            db.execSQL(
-                """
-                INSERT INTO transactions(
-                  id, ledger_id, type, amount_minor, currency, account_id,
-                  category_id, note, happen_at, source, tags, pending_id,
-                  include_in_stat, include_in_budget, created_at, updated_at
-                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-                """.trimIndent(),
-                arrayOf<Any?>(
-                    txnId, ledgerId, type, amountMinor, currency, accountId,
-                    categoryId, note, happenAt, "notification", tagsJson, pendingId,
-                    1, 1, now, now,
-                ),
-            )
+            try {
+                db.execSQL(
+                    """
+                    INSERT INTO transactions(
+                      id, ledger_id, type, amount_minor, currency, account_id,
+                      category_id, note, happen_at, source, tags, pending_id,
+                      include_in_stat, include_in_budget, created_at, updated_at
+                    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    """.trimIndent(),
+                    arrayOf<Any?>(
+                        txnId, ledgerId, type, amountMinor, currency, accountId,
+                        categoryId, note, happenAt, "notification", tagsJson, pendingId,
+                        1, 1, now, now,
+                    ),
+                )
+            } catch (e: android.database.sqlite.SQLiteConstraintException) {
+                // idx_transactions_pending_id：另一端已插入同一 pending_id。
+                Log.i(TAG, "confirmPending race: txn already exists for $pendingId")
+            }
             val retired = when {
                 oldDedupe.isNullOrBlank() -> "done|$pendingId"
                 oldDedupe.startsWith("done|") -> oldDedupe
@@ -1130,11 +1167,11 @@ object PaymentOverlayManager {
                 UPDATE pending_captures SET status=?, amount_minor=?, currency=?,
                   suggested_category_id=?, suggested_account_id=?,
                   note=?, direction=?, dedupe_key=?, updated_at=?
-                WHERE id=?
+                WHERE id=? AND status=?
                 """.trimIndent(),
                 arrayOf<Any?>(
                     "confirmed", amountMinor, currency, categoryId, accountId,
-                    note, direction, retired, now, pendingId,
+                    note, direction, retired, now, pendingId, "pending",
                 ),
             )
             db.setTransactionSuccessful()

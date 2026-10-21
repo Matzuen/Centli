@@ -15,6 +15,20 @@ object NativeCaptureIngest {
     private const val TAG = "CentliNativeIngest"
     private const val DB_NAME = "centli.sqlite"
 
+    const val OUTCOME_INSERTED = "inserted"
+    const val OUTCOME_SOFT_ALLOW = "softAllow"
+    const val OUTCOME_DROPPED = "dropped"
+    const val OUTCOME_QUEUED = "queued"
+
+    private val lastOutcome = ThreadLocal.withInitial { OUTCOME_DROPPED }
+
+    /** 最近一次 [ingestAndNotify] 结果（供 native flush 区分 softAllow / 丢弃）。 */
+    fun takeLastOutcome(): String {
+        val v = lastOutcome.get() ?: OUTCOME_DROPPED
+        lastOutcome.set(OUTCOME_DROPPED)
+        return v
+    }
+
     /** 是否已有可写入的当前记账本（至少打开过一次 App 完成初始化）。 */
     fun isLedgerReady(context: Context): Boolean {
         val dbFile = File(
@@ -42,6 +56,7 @@ object NativeCaptureIngest {
     }
 
     fun ingestAndNotify(context: Context, payload: Map<String, Any?>): String? {
+        lastOutcome.set(OUTCOME_DROPPED)
         val pkg = payload["pkg"] as? String ?: return null
         val title = (payload["title"] as? String).orEmpty()
         val text = (payload["text"] as? String).orEmpty()
@@ -71,6 +86,12 @@ object NativeCaptureIngest {
 
         // 仅加入监听、尚无规则：只入队等 Flutter 精炼，不直接落待确认（避免滥入）。
         if (match.softAllow) {
+            lastOutcome.set(OUTCOME_SOFT_ALLOW)
+            // Native flush 传 __centliFlush：不再二次入队（由 flush 把条目留给 Dart）。
+            if (payload["__centliFlush"] == true) {
+                Log.i(TAG, "softAllow during flush — keep for Dart pkg=$pkg")
+                return null
+            }
             Log.i(TAG, "softAllow enqueue-only pkg=$pkg")
             CentliNotificationListener.enqueue(context, enriched)
             return null
@@ -79,7 +100,10 @@ object NativeCaptureIngest {
         val dbFile = File(context.applicationContext.getDir("flutter", Context.MODE_PRIVATE), DB_NAME)
         if (!dbFile.exists()) {
             Log.w(TAG, "DB missing at ${dbFile.absolutePath}; queueing")
-            CentliNotificationListener.enqueue(context, enriched)
+            lastOutcome.set(OUTCOME_QUEUED)
+            if (payload["__centliFlush"] != true) {
+                CentliNotificationListener.enqueue(context, enriched)
+            }
             return null
         }
 
@@ -100,7 +124,10 @@ object NativeCaptureIngest {
             val ledgerId = querySetting(db, "current_ledger_id")
             if (ledgerId.isNullOrBlank()) {
                 Log.w(TAG, "no current_ledger_id; queueing")
-                CentliNotificationListener.enqueue(context, enriched)
+                lastOutcome.set(OUTCOME_QUEUED)
+                if (payload["__centliFlush"] != true) {
+                    CentliNotificationListener.enqueue(context, enriched)
+                }
                 return null
             }
 
@@ -116,6 +143,7 @@ object NativeCaptureIngest {
 
             if (existsDedupe(db, dedupe)) {
                 Log.i(TAG, "dedupe hit $dedupe")
+                lastOutcome.set(OUTCOME_DROPPED)
                 return null
             }
 
@@ -182,10 +210,14 @@ object NativeCaptureIngest {
             )
             MainActivity.notifyPendingDbChanged()
             Log.i(TAG, "inserted pending $id dedupe=$dedupe")
+            lastOutcome.set(OUTCOME_INSERTED)
             return id
         } catch (e: Exception) {
             Log.e(TAG, "native ingest failed", e)
-            CentliNotificationListener.enqueue(context, enriched)
+            lastOutcome.set(OUTCOME_QUEUED)
+            if (payload["__centliFlush"] != true) {
+                CentliNotificationListener.enqueue(context, enriched)
+            }
             return null
         } finally {
             try { db?.close() } catch (_: Exception) {}

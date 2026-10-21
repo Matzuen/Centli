@@ -321,11 +321,65 @@ class MainActivity : FlutterFragmentActivity() {
         val queued = CentliNotificationListener.peekQueue(this)
         if (queued.isEmpty()) return
         val ch = methodChannel ?: return
+        // 等 Dart 处理完再清队列；失败则保留未完成项（见 notification_capture_flush）。
         try {
-            for (payload in queued) {
-                ch.invokeMethod("notification_capture", payload)
-            }
-            CentliNotificationListener.clearQueue(this)
+            ch.invokeMethod(
+                "notification_capture_flush",
+                queued,
+                object : MethodChannel.Result {
+                    override fun success(result: Any?) {
+                        when (result) {
+                            is List<*> -> {
+                                val keep = result.mapNotNull { item ->
+                                    @Suppress("UNCHECKED_CAST")
+                                    (item as? Map<*, *>)?.entries
+                                        ?.associate { it.key.toString() to it.value }
+                                        as? Map<String, Any?>
+                                }
+                                CentliNotificationListener.replaceQueue(
+                                    this@MainActivity,
+                                    keep,
+                                )
+                                Log.i(
+                                    "CentliMain",
+                                    "flush ack: kept ${keep.size}/${queued.size}",
+                                )
+                            }
+                            else -> {
+                                CentliNotificationListener.clearQueue(this@MainActivity)
+                                Log.i(
+                                    "CentliMain",
+                                    "flush ack: cleared ${queued.size}",
+                                )
+                            }
+                        }
+                    }
+
+                    override fun error(
+                        errorCode: String,
+                        errorMessage: String?,
+                        errorDetails: Any?,
+                    ) {
+                        Log.w(
+                            "CentliMain",
+                            "flushQueuedCaptures error $errorCode: $errorMessage; keeping queue",
+                        )
+                    }
+
+                    override fun notImplemented() {
+                        // 旧 Dart：退回逐条 fire-and-forget，但不再提前清空。
+                        Log.w("CentliMain", "notification_capture_flush missing; legacy path")
+                        for (payload in queued) {
+                            try {
+                                ch.invokeMethod("notification_capture", payload)
+                            } catch (e: Exception) {
+                                Log.w("CentliMain", "legacy flush item failed", e)
+                            }
+                        }
+                        // 给 Dart 一点时间；不清空，靠下次 bridgeReady / 去重消化。
+                    }
+                },
+            )
         } catch (e: Exception) {
             Log.w("CentliMain", "flushQueuedCaptures failed; keeping queue", e)
         }
@@ -522,26 +576,41 @@ class MainActivity : FlutterFragmentActivity() {
             }
         }
 
-        /** Drain SharedPreferences queue through native ingest (no Flutter needed). */
+        /**
+         * Drain SharedPreferences queue through native ingest (no Flutter needed).
+         * softAllow / 需重试项留在队列给 Dart；已入库或确定丢弃的从队列移除。
+         */
         @JvmStatic
         fun flushCaptureQueueNatively(context: android.content.Context) {
-            var remaining = CentliNotificationListener.peekQueue(context)
+            val remaining = CentliNotificationListener.peekQueue(context)
             if (remaining.isEmpty()) return
             val total = remaining.size
             var done = 0
-            while (remaining.isNotEmpty()) {
-                val head = remaining.first()
+            val keep = ArrayList<Map<String, Any?>>()
+            for (head in remaining) {
                 try {
-                    ingestViaNative(context, head)
-                    done++
+                    val tagged = HashMap(head)
+                    tagged["__centliFlush"] = true
+                    val id = NativeCaptureIngest.ingestAndNotify(context, tagged)
+                    val outcome = NativeCaptureIngest.takeLastOutcome()
+                    when {
+                        id != null || outcome == NativeCaptureIngest.OUTCOME_INSERTED -> done++
+                        outcome == NativeCaptureIngest.OUTCOME_SOFT_ALLOW ||
+                            outcome == NativeCaptureIngest.OUTCOME_QUEUED -> keep.add(head)
+                        else -> {
+                            // dropped（非支付 / 去重 / 关开关）— 不再占队列
+                        }
+                    }
                 } catch (e: Exception) {
-                    Log.e("CentliMain", "flush item failed; keep rest in queue", e)
-                    break
+                    Log.e("CentliMain", "flush item failed; keep in queue", e)
+                    keep.add(head)
                 }
-                remaining = remaining.drop(1)
-                CentliNotificationListener.replaceQueue(context, remaining)
             }
-            Log.i("CentliMain", "flushed $done/$total queued captures via native")
+            CentliNotificationListener.replaceQueue(context, keep)
+            Log.i(
+                "CentliMain",
+                "native flush: inserted=$done keep=${keep.size} total=$total",
+            )
         }
     }
 }
