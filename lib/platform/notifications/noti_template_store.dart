@@ -359,7 +359,7 @@ abstract final class NotiTemplateStore {
         updated: false,
         activeVersion: activeVersion,
         assetsVersion: activeVersion,
-        message: '官方规则无效或为空，已保留原规则',
+        message: '内置规则无效或为空，已保留原规则',
         source: _source,
       );
     }
@@ -388,7 +388,7 @@ abstract final class NotiTemplateStore {
         updated: true,
         activeVersion: _version,
         assetsVersion: parsed.version,
-        message: '已导入官方规则 v$_version（${parsed.templates.length} 条）',
+        message: '已导入内置规则 v$_version（${parsed.templates.length} 条）',
         source: _source,
       );
     } catch (e) {

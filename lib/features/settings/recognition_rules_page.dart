@@ -415,7 +415,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('导入官方规则失败: $e')));
+          .showSnackBar(SnackBar(content: Text('导入内置规则失败: $e')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -428,13 +428,13 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
     final url = await showGlassDialog<String>(
       context: context,
       builder: (ctx) => CentliGlassDialog(
-        title: const Text('从网络导入官方规则'),
+        title: const Text('从网络导入内置规则'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Text(
-              '粘贴 HTTPS 地址下载官方规则 JSON。'
+              '粘贴 HTTPS 地址下载内置规则 JSON。'
               '仅当 version 更高时覆盖；失败则保留原规则。'
               '默认地址留空，请使用自建 Raw/Gist。',
             ),
@@ -483,8 +483,8 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
     final ok = await showGlassDialog<bool>(
       context: context,
       builder: (ctx) => CentliGlassDialog(
-        title: const Text('恢复内置官方规则'),
-        content: const Text('将用 App 内置模板覆盖本地官方规则（不影响「我的规则」）。确定？'),
+        title: const Text('恢复内置规则'),
+        content: const Text('将用 App 打包的内置模板覆盖本地规则包（不影响「我的规则」）。确定？'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -584,7 +584,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
           children: [
             const Text(
               '粘贴 HTTPS 地址，下载 JSON 后按与本地导入相同的格式校验。'
-              '仅更新「我的规则」，不会改动官方模板。不会在启动时自动拉取。',
+              '仅更新「我的规则」，不会改动内置规则。不会在启动时自动拉取。',
             ),
             const SizedBox(height: CentliSpacing.section),
             TextField(
@@ -680,7 +680,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
                 Text(t.displayName, style: Theme.of(ctx).textTheme.titleLarge),
                 const SizedBox(height: CentliSpacing.dense),
                 Text(
-                  disabled ? '已禁用 · 官方规则 · 只读' : '官方规则 · 只读',
+                  disabled ? '已禁用 · 内置规则 · 只读' : '内置规则 · 只读',
                   style: Theme.of(ctx).textTheme.bodySmall,
                 ),
                 const SizedBox(height: CentliSpacing.section),
@@ -697,7 +697,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
                 const SizedBox(height: CentliSpacing.sectionLoose),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('启用此官方规则'),
+                  title: const Text('启用此内置规则'),
                   subtitle: const Text('关闭后解析时跳过（不修改规则内容）'),
                   value: !disabled,
                   onChanged: _busy
@@ -757,9 +757,9 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
               PopupMenuItem(value: 'export', child: Text('导出我的规则')),
               PopupMenuItem(value: 'import', child: Text('从文件导入我的规则')),
               PopupMenuItem(value: 'import_url', child: Text('从网络导入我的规则')),
-              PopupMenuItem(value: 'import_official', child: Text('从文件导入官方规则')),
-              PopupMenuItem(value: 'import_official_url', child: Text('从网络导入官方规则')),
-              PopupMenuItem(value: 'rollback_official', child: Text('恢复内置官方规则')),
+              PopupMenuItem(value: 'import_official', child: Text('从文件导入内置规则')),
+              PopupMenuItem(value: 'import_official_url', child: Text('从网络导入内置规则')),
+              PopupMenuItem(value: 'rollback_official', child: Text('恢复内置规则')),
             ],
           ),
         ],
@@ -828,14 +828,14 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
                   const SizedBox(height: CentliSpacing.section),
                 ],
                 Text(
-                  '官方 / AI / 我的规则可点标题展开或收起。'
+                  '内置 / AI / 我的规则可点标题展开或收起。'
                   '右上角导入导出；右下角添加手写规则；底部「试一试」验证样例。',
                   style: Theme.of(context).textTheme.bodyMedium
                       ?.copyWith(color: scheme.onSurfaceVariant, height: 1.4),
                 ),
                 const SizedBox(height: CentliSpacing.sectionLoose),
                 _collapsibleRuleSection(
-                  title: '官方规则',
+                  title: '内置规则',
                   subtitle: 'v$_version · $_source · ${_official.length} 条 · 只读可启停',
                   expanded: _officialExpanded,
                   onExpanded: (v) => setState(() => _officialExpanded = v),
@@ -843,7 +843,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
                     if (_official.isEmpty)
                       CentliEmptyState(
                         icon: Icons.rule_folder_outlined,
-                        title: '暂无官方规则',
+                        title: '暂无内置规则',
                         message: '内置模板未加载时会出现这里；可从右上角导入规则包。',
                         padding: EdgeInsets.zero,
                       )

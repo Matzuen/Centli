@@ -119,8 +119,8 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
     final latest = trace.isEmpty ? null : trace.first;
     final hint = latest == null
         ? (aiRules.isEmpty
-            ? '官方 v$version · 尚无 AI 反写，点进查看处理记录'
-            : '官方 v$version · AI 规则 ${aiRules.length} 条')
+            ? '内置 v$version · 尚无 AI 反写，点进查看处理记录'
+            : '内置 v$version · AI 规则 ${aiRules.length} 条')
         : 'AI 规则 ${aiRules.length} 条 · 最近：${latest.kindLabel}';
 
     if (!mounted) return;
@@ -677,7 +677,7 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
                     title: const Text('识别规则'),
                     subtitle: Text(
                       _aiTraceHint.isEmpty
-                          ? '官方 v$_templateVersion · 含 AI 反写规则与最近处理记录'
+                          ? '内置 v$_templateVersion · 含 AI 反写规则与最近处理记录'
                           : _aiTraceHint,
                     ),
                     trailing: const Icon(Icons.chevron_right),

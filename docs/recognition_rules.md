@@ -8,12 +8,12 @@
 
 | 文件 | 位置 | 内容 |
 |---|---|---|
-| `noti_templates.json` | assets + documents 覆盖 | **官方**模板（只读 UI；版本热更新） |
+| `noti_templates.json` | assets + documents 覆盖 | **内置**模板（只读 UI；版本热更新；无官网拉取） |
 | `user_noti_templates.json` | documents | **我的规则** + `disabled_official_ids` |
 
-解析时合并：`我的规则 ∪ (官方 − 已禁用)`，我的规则优先匹配。
+解析时合并：`我的规则 ∪ (内置 − 已禁用)`，我的规则优先匹配。
 
-官方 assets 本体不因用户编辑而改写。
+内置 assets 本体不因用户编辑而改写。
 
 ## Native 杀路径说明
 
@@ -29,5 +29,5 @@
 
 - 包名：`com.eg.android.AlipayGphone`（原生 `WATCHED_PACKAGES` 与 `setWatchedPackages` 并集均含此包）。
 - 匹配关键词：支付成功 / 付款成功 / **交易成功** / **交易提醒** / **交易通知**（标题或正文任一命中即可）。
-- Native 杀路径 `NativeCaptureIngest` 的 `MUST_ALIPAY` 与 Dart 官方模板保持同步。
+- Native 杀路径 `NativeCaptureIngest` 的 `MUST_ALIPAY` 与 Dart 内置模板保持同步。
 - 微信规则未改，不影响微信监听。

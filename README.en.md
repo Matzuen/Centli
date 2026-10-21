@@ -64,7 +64,7 @@ Prefer JSON (`format: centli-export`). Excel import is best-effort (no fx/settin
 - Payment overlay for quick confirm (amount / direction / note / categories)
 - Pending notification actions: Confirm (overlay), Detail (in-app), Ignore (no duplicate system actions)
 - Quick Settings tile to toggle auto-capture; hard-rebind NLS after process swipe-away
-- Official rules v10: 4 templates (WeChat/Alipay × income/expense); refund/repay as tags
+- Built-in rules v10: 4 templates (WeChat/Alipay × income/expense); refund/repay as tags
 - Amount regex aligned so dates like `10-17` are not parsed as ¥10
 - App lock skips overlay / full-screen intent; new app icon
 - Content-fingerprint dedupe for consecutive WeChat/Alipay payments
