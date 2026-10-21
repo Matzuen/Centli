@@ -5,7 +5,7 @@ Local-first personal bookkeeping (**Chinese UI only**): **clear every bill**.
 > Canonical docs are in Chinese: see [`README.md`](README.md) and [`docs/RELEASE_NOTES.md`](docs/RELEASE_NOTES.md).
 
 - Flutter · Drift (SQLite) · Riverpod · go_router
-- Version: `2.0.3+40`
+- Version: `2.0.3+41`
 - Currency display: `CNY · 人民币`
 - Bottom nav (5 tabs): 首页 / 统计 / 记账 / 资产 / 我的
 
@@ -62,10 +62,11 @@ Prefer JSON (`format: centli-export`). Excel import is best-effort (no fx/settin
 ### 2.0.3 (2026-10-21)
 
 - Payment overlay for quick confirm (amount / direction / note / categories)
-- Pending notification actions: Confirm (overlay), Detail (in-app), Ignore
-- Quick Settings tile to toggle auto-capture
-- Refund/repay are tags/notes, not separate transaction types
-- App lock skips overlay / full-screen intent
+- Pending notification actions: Confirm (overlay), Detail (in-app), Ignore (no duplicate system actions)
+- Quick Settings tile to toggle auto-capture; hard-rebind NLS after process swipe-away
+- Official rules v10: 4 templates (WeChat/Alipay × income/expense); refund/repay as tags
+- Amount regex aligned so dates like `10-17` are not parsed as ¥10
+- App lock skips overlay / full-screen intent; new app icon
 - Content-fingerprint dedupe for consecutive WeChat/Alipay payments
 
 ### 2.0.2 (2026-10-20)
