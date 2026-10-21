@@ -85,7 +85,7 @@ void main() {
     );
 
     final ver = await db.customSelect('PRAGMA user_version').getSingle();
-    expect(ver.read<int>('user_version'), 11);
+    expect(ver.read<int>('user_version'), 12);
 
     final cols = {
       for (final r in await db.customSelect('PRAGMA table_info(transactions)').get())

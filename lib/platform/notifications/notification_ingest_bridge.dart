@@ -56,13 +56,18 @@ abstract final class NotificationIngestBridge {
     CentliDatabase db,
     Map<String, dynamic> raw,
   ) async {
-    // 与 native 监听同源：prefs 优先（磁贴即时生效），再对齐 DB。
-    final nativeOn = await NotificationCaptureStub.isAutoCaptureEnabled();
+    // Android：prefs 优先（磁贴即时生效），再对齐 DB。
+    // 非 Android / 测试：无 native prefs，只信 DB，避免 stub 恒 false 把开关冲掉。
     final dbOn = (await db.getSetting('auto_capture_enabled')) == 'true';
-    if (nativeOn != dbOn) {
-      await db.setSetting('auto_capture_enabled', nativeOn ? 'true' : 'false');
+    if (NotificationCaptureStub.supported) {
+      final nativeOn = await NotificationCaptureStub.isAutoCaptureEnabled();
+      if (nativeOn != dbOn) {
+        await db.setSetting('auto_capture_enabled', nativeOn ? 'true' : 'false');
+      }
+      if (!nativeOn) return null;
+    } else if (!dbOn) {
+      return null;
     }
-    if (!nativeOn) return null;
 
     final ledgerId = await db.currentLedgerId();
     if (ledgerId == null || ledgerId.isEmpty) return null;
