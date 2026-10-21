@@ -13,7 +13,8 @@ class CentliApplication : Application() {
         try {
             if (CentliNotificationListener.isAutoCaptureEnabled(this)) {
                 CentliResurrect.ensureAlive(this)
-                CentliNotificationListener.ensureRebind(this)
+                // 划掉后台后进程再起：软绑不够时 escalate 到硬重绑（等同磁贴关开）。
+                CentliNotificationListener.recoverBinding(this)
                 // 进程刚起来（可能由 NLS / Job 拉起）：先把积压通知用 native 落库。
                 MainActivity.flushCaptureQueueNatively(this)
             }

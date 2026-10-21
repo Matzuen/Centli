@@ -15,7 +15,8 @@ class CentliBootReceiver : BroadcastReceiver() {
         if (!CentliNotificationListener.isAutoCaptureEnabled(context)) return
         val pending = goAsync()
         try {
-            CentliNotificationListener.ensureRebind(context)
+            // 看门狗 / 开机：优先 recover（软绑失败则硬重绑），避免 prefs 开着却听不到。
+            CentliNotificationListener.recoverBinding(context)
             MainActivity.flushCaptureQueueNatively(context)
             CentliResurrect.schedule(context)
         } catch (e: Exception) {

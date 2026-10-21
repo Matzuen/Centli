@@ -61,11 +61,11 @@ class CentliNotificationListener : NotificationListenerService() {
                 Log.e(TAG, "requestRebind failed", e)
             }
         }
-        // 尽快补绑，不要干等到 15 分钟 Job。
+        // 尽快补绑，不要干等到 15 分钟 Job；断开后软绑常不够，升级硬重绑。
         if (isAutoCaptureEnabled(this)) {
-            CentliResurrect.scheduleRetry(this, delayMs = 15_000L)
+            CentliResurrect.scheduleRetry(this, delayMs = 8_000L)
             CentliResurrect.ensureAlive(this)
-            scheduleRebindRetries(applicationContext)
+            recoverBinding(applicationContext)
         }
         super.onListenerDisconnected()
     }
@@ -471,6 +471,12 @@ class CentliNotificationListener : NotificationListenerService() {
             }
         }
 
+        /** 硬重绑节流：划掉后台后 OEM 常卡在僵尸绑定，但频繁 disable/enable 会丢通知。 */
+        private const val FORCE_REBIND_MIN_INTERVAL_MS = 45_000L
+
+        @Volatile
+        private var lastForceRebindAtMs: Long = 0L
+
         /**
          * Soft rebind: if already connected, do nothing (toggling the component
          * would drop live notifications). Otherwise ask the system to bind again,
@@ -482,6 +488,21 @@ class CentliNotificationListener : NotificationListenerService() {
             if (!isNotificationAccessGranted(app)) return
             requestSoftRebind(app)
             scheduleRebindRetries(app)
+        }
+
+        /**
+         * 进程被划掉后：prefs/磁贴仍显示「开着」，但系统 NLS 绑定已死。
+         * 软 [requestRebind] 常常无效，需在短暂重试后升级为 [forceRebind]
+         *（与磁贴关开一次等价）。
+         */
+        fun recoverBinding(context: Context) {
+            val app = context.applicationContext
+            if (!isAutoCaptureEnabled(app)) return
+            if (!isNotificationAccessGranted(app)) return
+            if (isConnectedNow()) return
+            requestSoftRebind(app)
+            scheduleRebindRetries(app, escalateToForce = true)
+            CentliResurrect.scheduleRetry(app, delayMs = 8_000L)
         }
 
         private fun requestSoftRebind(context: Context) {
@@ -507,21 +528,41 @@ class CentliNotificationListener : NotificationListenerService() {
             }
         }
 
-        private fun scheduleRebindRetries(context: Context) {
+        private fun scheduleRebindRetries(
+            context: Context,
+            escalateToForce: Boolean = false,
+        ) {
             cancelRebindRetries()
             val app = context.applicationContext
-            // 冷启动 / OEM 慢绑：多试几次，避免打开 App 就报「未连接」。
+            // 冷启动 / OEM 慢绑：多试几次；后半段升级硬重绑（划掉后台后软绑常无效）。
             val delays = longArrayOf(500L, 1500L, 3000L, 6000L)
             for (delay in delays) {
+                val useForce = escalateToForce && delay >= 3000L
                 val r = Runnable {
                     if (isConnectedNow()) return@Runnable
                     if (!isNotificationAccessGranted(app)) return@Runnable
                     if (!isAutoCaptureEnabled(app)) return@Runnable
-                    requestSoftRebind(app)
+                    if (useForce) {
+                        forceRebindThrottled(app)
+                    } else {
+                        requestSoftRebind(app)
+                    }
                 }
                 rebindRetryRunnables.add(r)
                 rebindHandler.postDelayed(r, delay)
             }
+        }
+
+        private fun forceRebindThrottled(context: Context) {
+            if (isConnectedNow()) return
+            val now = System.currentTimeMillis()
+            if (now - lastForceRebindAtMs < FORCE_REBIND_MIN_INTERVAL_MS) {
+                Log.i(TAG, "forceRebind throttled")
+                requestSoftRebind(context)
+                return
+            }
+            lastForceRebindAtMs = now
+            forceRebind(context)
         }
 
         private fun cancelRebindRetries() {
@@ -542,6 +583,7 @@ class CentliNotificationListener : NotificationListenerService() {
             try {
                 connected = false
                 instance = null
+                lastForceRebindAtMs = System.currentTimeMillis()
                 val pm = app.packageManager
                 pm.setComponentEnabledSetting(
                     cn,
@@ -554,7 +596,8 @@ class CentliNotificationListener : NotificationListenerService() {
                     PackageManager.DONT_KILL_APP,
                 )
                 requestRebind(cn)
-                scheduleRebindRetries(app)
+                // 硬重绑后只做软重试，避免 disable/enable 连环触发。
+                scheduleRebindRetries(app, escalateToForce = false)
                 Log.i(TAG, "forceRebind for $cn")
             } catch (e: Exception) {
                 Log.e(TAG, "forceRebind failed", e)

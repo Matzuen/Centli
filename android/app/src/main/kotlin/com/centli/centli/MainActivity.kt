@@ -204,9 +204,9 @@ class MainActivity : FlutterFragmentActivity() {
             if (isNotificationAccessGranted() &&
                 CentliNotificationListener.isAutoCaptureEnabled(this)
             ) {
-                // Soft rebind NLS + schedule resurrect heartbeat (no FGS).
+                // 回前台补绑：划掉后台后可能需硬重绑才能恢复监听。
                 CentliResurrect.ensureAlive(this)
-                CentliNotificationListener.ensureRebind(this)
+                CentliNotificationListener.recoverBinding(this)
             } else if (isNotificationAccessGranted() &&
                 !CentliNotificationListener.isConnectedNow()
             ) {
@@ -220,11 +220,13 @@ class MainActivity : FlutterFragmentActivity() {
     override fun onResume() {
         super.onResume()
         appInForeground = true
-        // 每次回前台都尽量把监听补上（软重绑；已连接则 no-op）。
+        // 每次回前台都尽量把监听补上（已连接则 no-op；断开则 soft→force）。
         if (isNotificationAccessGranted()) {
-            CentliNotificationListener.ensureRebind(this)
             if (CentliNotificationListener.isAutoCaptureEnabled(this)) {
+                CentliNotificationListener.recoverBinding(this)
                 CentliResurrect.ensureAlive(this)
+            } else {
+                CentliNotificationListener.ensureRebind(this)
             }
         }
     }

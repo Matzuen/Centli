@@ -50,13 +50,13 @@ object CentliResurrect {
             return
         }
         try {
-            CentliNotificationListener.ensureRebind(context)
+            CentliNotificationListener.recoverBinding(context)
         } catch (e: Exception) {
-            Log.w(TAG, "ensureRebind failed", e)
+            Log.w(TAG, "recoverBinding failed", e)
         }
         // 尚未连上时加一次短补救，避免只靠 15 分钟周期。
         if (!CentliNotificationListener.isConnectedNow()) {
-            scheduleRetry(context, delayMs = 20_000L)
+            scheduleRetry(context, delayMs = 8_000L)
         }
         schedule(context)
     }
@@ -180,7 +180,7 @@ class CentliResurrectJobService : JobService() {
         val app = applicationContext
         try {
             if (CentliNotificationListener.isAutoCaptureEnabled(app)) {
-                CentliNotificationListener.ensureRebind(app)
+                CentliNotificationListener.recoverBinding(app)
                 MainActivity.flushCaptureQueueNatively(app)
                 CentliResurrect.schedule(app)
             }

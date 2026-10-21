@@ -20,6 +20,14 @@ class CentliAutoCaptureTileService : TileService() {
 
     override fun onStartListening() {
         super.onStartListening()
+        val app = applicationContext
+        // 划掉后台后磁贴仍显示「开」但 NLS 已断：展开控制中心时自动补绑。
+        if (CentliNotificationListener.isAutoCaptureEnabled(app) &&
+            CentliNotificationListener.isNotificationAccessGranted(app) &&
+            !CentliNotificationListener.isConnectedNow()
+        ) {
+            CentliNotificationListener.recoverBinding(app)
+        }
         refreshTile()
     }
 
