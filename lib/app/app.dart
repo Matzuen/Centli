@@ -79,7 +79,10 @@ class _CentliAppState extends ConsumerState<CentliApp> {
       _wasBackgrounded = true;
       return;
     }
-    if (state != AppLifecycleState.resumed || !_wasBackgrounded) return;
+    if (state != AppLifecycleState.resumed) return;
+    // 悬浮窗/通知栏可能在后台改过库；回前台一律刷新 Drift 观察者。
+    ref.read(pendingExternalWriteTickProvider.notifier).state++;
+    if (!_wasBackgrounded) return;
     _wasBackgrounded = false;
     _relockIfNeeded();
     unawaited(_syncHomeWidget());

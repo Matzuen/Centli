@@ -15,6 +15,32 @@ object NativeCaptureIngest {
     private const val TAG = "CentliNativeIngest"
     private const val DB_NAME = "centli.sqlite"
 
+    /** 是否已有可写入的当前记账本（至少打开过一次 App 完成初始化）。 */
+    fun isLedgerReady(context: Context): Boolean {
+        val dbFile = File(
+            context.applicationContext.getDir("flutter", Context.MODE_PRIVATE),
+            DB_NAME,
+        )
+        if (!dbFile.exists()) return false
+        var db: SQLiteDatabase? = null
+        return try {
+            db = SQLiteDatabase.openDatabase(
+                dbFile.absolutePath,
+                null,
+                SQLiteDatabase.OPEN_READONLY,
+            )
+            val id = querySetting(db, "current_ledger_id")
+            !id.isNullOrBlank()
+        } catch (_: Exception) {
+            false
+        } finally {
+            try {
+                db?.close()
+            } catch (_: Exception) {
+            }
+        }
+    }
+
     fun ingestAndNotify(context: Context, payload: Map<String, Any?>): String? {
         val pkg = payload["pkg"] as? String ?: return null
         val title = (payload["title"] as? String).orEmpty()
@@ -57,9 +83,10 @@ object NativeCaptureIngest {
             )
             db.rawQuery("PRAGMA busy_timeout=3000", null).close()
 
-            val enabled = querySetting(db, "auto_capture_enabled")
-            if (enabled != null && enabled != "true") {
-                Log.i(TAG, "auto_capture_enabled=$enabled; skip")
+            // 与监听开关同源：以 SharedPreferences 为准（磁贴/Flutter 都写这里）。
+            // 勿只读 app_settings：磁贴开了但 Drift 缓存未刷时会误判为关闭。
+            if (!CentliNotificationListener.isAutoCaptureEnabled(context)) {
+                Log.i(TAG, "auto_capture_enabled=false (prefs); skip")
                 return null
             }
 

@@ -196,13 +196,24 @@ class CentliNotificationListener : NotificationListenerService() {
 
         /**
          * 开关自动监听：写 prefs+DB、重绑 NLS / 启停复活任务。
-         * Tile 与 Flutter MethodChannel 共用。
+         *
+         * [hardRebind] 仅磁贴等「用户刚打开开关、进程可能冷着」时用；
+         * App 内日常同步请保持 false，避免每次进前台硬掐监听。
          */
-        fun applyAutoCaptureEnabled(context: Context, enabled: Boolean) {
+        fun applyAutoCaptureEnabled(
+            context: Context,
+            enabled: Boolean,
+            hardRebind: Boolean = false,
+        ) {
             val app = context.applicationContext
             setAutoCaptureEnabled(app, enabled)
             if (enabled && isNotificationAccessGranted(app)) {
-                ensureRebind(app)
+                if (hardRebind) {
+                    forceRebind(app)
+                    MainActivity.flushCaptureQueueNatively(app)
+                } else {
+                    ensureRebind(app)
+                }
                 CentliResurrect.ensureAlive(app)
             } else if (!enabled) {
                 CentliResurrect.cancel(app)

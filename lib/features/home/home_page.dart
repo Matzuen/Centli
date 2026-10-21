@@ -136,6 +136,7 @@ final _homeBalancesProvider = StreamProvider.family<Map<String, int>, String>((
   ref,
   ledgerId,
 ) {
+  ref.watch(pendingExternalWriteTickProvider);
   return ref.watch(databaseProvider).watchAccountBalances(ledgerId);
 });
 

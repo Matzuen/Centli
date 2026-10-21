@@ -38,8 +38,41 @@ class CentliAutoCaptureTileService : TileService() {
                 refreshTile()
                 return
             }
-            CentliNotificationListener.applyAutoCaptureEnabled(app, true)
-            Toast.makeText(app, R.string.qs_tile_turned_on, Toast.LENGTH_SHORT).show()
+            if (!NativeCaptureIngest.isLedgerReady(app)) {
+                Toast.makeText(
+                    app,
+                    R.string.qs_tile_need_open_app_once,
+                    Toast.LENGTH_LONG,
+                ).show()
+                try {
+                    startActivityAndCollapse(
+                        Intent(app, MainActivity::class.java)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                    )
+                } catch (_: Exception) {
+                    startActivity(
+                        Intent(app, MainActivity::class.java)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                    )
+                }
+                refreshTile()
+                return
+            }
+            CentliNotificationListener.applyAutoCaptureEnabled(
+                app,
+                enabled = true,
+                hardRebind = true,
+            )
+            val connected = CentliNotificationListener.isConnectedNow()
+            Toast.makeText(
+                app,
+                if (connected) {
+                    R.string.qs_tile_turned_on
+                } else {
+                    R.string.qs_tile_turned_on_connecting
+                },
+                Toast.LENGTH_SHORT,
+            ).show()
         } else {
             CentliNotificationListener.applyAutoCaptureEnabled(app, false)
             Toast.makeText(app, R.string.qs_tile_turned_off, Toast.LENGTH_SHORT).show()

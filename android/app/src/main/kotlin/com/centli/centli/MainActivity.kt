@@ -462,11 +462,14 @@ class MainActivity : FlutterFragmentActivity() {
         @JvmStatic
         fun isDartBridgeReady(): Boolean = dartBridgeReadyGlobal
 
-        /** Native SQLite wrote/ignored a pending row — refresh Drift watchers. */
+        /** Native SQLite wrote pending/txn — refresh Drift watchers when Flutter is up. */
         @JvmStatic
         fun notifyPendingDbChanged() {
-            val ch = methodChannel ?: return
-            if (!dartBridgeReadyGlobal) return
+            val ch = methodChannel
+            if (ch == null || !dartBridgeReadyGlobal) {
+                Log.d("CentliMain", "pending_db_changed deferred (bridge not ready)")
+                return
+            }
             Handler(Looper.getMainLooper()).post {
                 try {
                     ch.invokeMethod("pending_db_changed", null)

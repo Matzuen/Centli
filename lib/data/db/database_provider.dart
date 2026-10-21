@@ -62,8 +62,8 @@ final themeModeProvider = StreamProvider<ThemeMode>((ref) {
   });
 });
 
-/// Bumped when native SQLite mutates pending_captures outside Drift
-/// (ignore from notification shade, etc.). Watchers should depend on this.
+/// Bumped when native SQLite mutates pending / transactions outside Drift
+/// (悬浮窗入账、通知栏忽略等). Watchers should depend on this.
 final pendingExternalWriteTickProvider = StateProvider<int>((ref) => 0);
 
 final pendingCountProvider = StreamProvider.family<int, String>((ref, ledgerId) {
@@ -75,6 +75,8 @@ final pendingCountProvider = StreamProvider.family<int, String>((ref, ledgerId) 
 /// Use as an invalidation signal only — never aggregate from the watched list;
 /// always re-query untruncated summaries (rangeSummaryInBase / netWorthInBase / …).
 final txnWriteSignalProvider = StreamProvider.family<int, String>((ref, ledgerId) {
+  // Native 写库不会推 Drift stream；外部 tick 也要能打到首页汇总/流水。
+  ref.watch(pendingExternalWriteTickProvider);
   var version = 0;
   return ref
       .watch(databaseProvider)

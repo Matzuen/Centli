@@ -12,6 +12,8 @@
     <string name="qs_tile_subtitle_off">已关闭</string>
     <string name="qs_tile_subtitle_need_access">需授权</string>
     <string name="qs_tile_need_notification_access">请开启 Centli 的通知使用权后再打开</string>
+    <string name="qs_tile_need_open_app_once">请先打开一次 Centli 完成初始化</string>
     <string name="qs_tile_turned_on">已开启自动记账监听</string>
+    <string name="qs_tile_turned_on_connecting">已开启，正在连接系统通知监听…</string>
     <string name="qs_tile_turned_off">已关闭自动记账监听</string>
 </resources>

@@ -525,7 +525,7 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
         onFix: _busy ? null : _requestPostNotifications,
       ),
       (
-        title: '3. 支付悬浮窗（LiteNote 式）',
+        title: '3. 支付悬浮窗',
         okHint: _overlayEnabled
             ? '已授权 · 支付后弹出快速记账'
             : '已授权 · 下方开关已关',
