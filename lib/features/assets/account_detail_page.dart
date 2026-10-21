@@ -6,7 +6,6 @@ import 'package:intl/intl.dart';
 import '../../core/constants/currencies.dart';
 import '../../core/utils/date_range.dart';
 import '../../core/utils/money.dart';
-import '../../core/widgets/category_visuals.dart';
 import '../../core/widgets/centli_icon.dart';
 import '../../core/widgets/txn_grouped_list.dart';
 import '../../core/widgets/txn_list_tile.dart';
@@ -372,7 +371,7 @@ class _AccountTxnTile extends ConsumerWidget {
                   future: _categoryMeta(db),
                   builder: (context, snap) {
                     final name = snap.data?.name ?? '';
-                    return CategoryCircleIcon(
+                    return CentliIconChip(
                       name: name,
                       kind: txn.type == 'transfer'
                           ? 'transfer'

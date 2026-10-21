@@ -8,7 +8,7 @@ import '../../data/db/database_provider.dart';
 import '../../data/db/txn_tags.dart';
 import '../../app/theme.dart';
 import '../../core/widgets/centli_error_state.dart';
-import '../../core/widgets/category_visuals.dart';
+import '../../core/widgets/centli_icon.dart';
 import '../../core/widgets/glass.dart';
 
 final _deletedTxProvider =
@@ -238,7 +238,7 @@ class _DeletedTile extends StatelessWidget {
     return CentliSoftCard(
       child: ListTile(
         onTap: onTap,
-        leading: CategoryCircleIcon(
+        leading: CentliIconChip(
           name: (cat?.name ?? '').trim(),
           kind: txn.type == 'transfer' ? 'transfer' : txn.type,
           iconKey: cat?.icon,

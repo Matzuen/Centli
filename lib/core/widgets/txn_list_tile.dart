@@ -10,7 +10,7 @@ import '../../data/db/database_provider.dart';
 import '../constants/currencies.dart';
 import '../utils/fx.dart';
 import '../utils/money.dart';
-import 'category_visuals.dart';
+import 'centli_icon.dart';
 
 /// Highlight colour for search keywords on transaction rows.
 const Color kKeywordHighlight = CentliTheme.brandPrimary;
@@ -90,7 +90,7 @@ class TxnListTile extends ConsumerWidget {
               builder: (context, constraints) => Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  CategoryCircleIcon(
+                  CentliIconChip(
                     name: (cat?.name ?? '').trim(),
                     kind: isTransfer ? 'transfer' : txn.type,
                     iconKey: cat?.icon,
