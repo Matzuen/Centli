@@ -92,7 +92,7 @@ void main() {
         matchOn: 'title',
       );
       final capture = NotiTemplate(
-        id: 'wechat_expense_zh',
+        id: 'wechat_zh',
         name: '微信支付成功',
         packages: const ['com.tencent.mm'],
         mustContainRegex: '支付成功',
@@ -311,7 +311,7 @@ void main() {
 
     test('非蒸馏规则不参与复用（交给本地兜底或 AI 判断）', () {
       final bundled = NotiTemplate(
-        id: 'wechat_expense_zh',
+        id: 'wechat_zh',
         name: '微信支付成功',
         packages: const ['com.tencent.mm'],
         mustContainRegex: '支付成功',

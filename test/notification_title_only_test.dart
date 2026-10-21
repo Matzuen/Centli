@@ -142,10 +142,10 @@ void main() {
     }
   });
 
-  test('assets JSON is v10 and every rule is title-only', () {
+  test('assets JSON is v11 and every rule is title-only', () {
     final map = jsonDecode(File('assets/noti_templates.json').readAsStringSync())
         as Map<String, dynamic>;
-    expect(map['version'], 10);
+    expect(map['version'], 11);
     for (final item in (map['templates'] as List).cast<Map<String, dynamic>>()) {
       expect(item['matchOn'], 'title', reason: item['id'] as String);
     }

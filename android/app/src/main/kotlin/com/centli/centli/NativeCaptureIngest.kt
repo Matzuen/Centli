@@ -276,7 +276,27 @@ object NativeCaptureIngest {
             "待还|应还|请于|即将到期|还款提醒|账单提醒|账单日|还款日",
     )
     private val EXPENSE_HINT: Pattern = Pattern.compile("支出|付款|支付|消费|扣款|转出|提现|买单|代扣|还款|还清|汇款|缴费|充值")
-    private val INCOME_HINT: Pattern = Pattern.compile("退款|退回|已退|收入|收款|到账|入账|转入|收到")
+    private val INCOME_HINT: Pattern = Pattern.compile(
+        "退款|退回|已退|收入|收款|到账|入账|转入|收到|转账成功|已转账|向你转账|转账给你",
+    )
+
+    /** Align Dart [inferCaptureDirection]: body first, then title. */
+    private fun inferCaptureDirection(title: String, text: String): String? {
+        fun hint(s: String): String? {
+            if (s.isBlank()) return null
+            if (INCOME_HINT.matcher(s).find()) return "in"
+            if (EXPENSE_HINT.matcher(s).find()) return "out"
+            if (s.contains("转账") &&
+                !s.contains("转账成功") &&
+                !s.contains("已转账") &&
+                !s.contains("向你转账")
+            ) {
+                return "out"
+            }
+            return null
+        }
+        return hint(text) ?: hint(title)
+    }
 
     private data class RuleMatch(
         val direction: String?,
@@ -347,8 +367,9 @@ object NativeCaptureIngest {
                 if (!must.isNullOrBlank() && !Pattern.compile(must).matcher(keyword).find()) {
                     continue
                 }
-                // refund/repay are legacy template values → in/out + note/tag in UI.
-                val dir = when (rule.direction) {
+                // 标题门控命中后：用正文判收支（对齐 Dart inferCaptureDirection）。
+                val inferred = inferCaptureDirection(title, text)
+                val dir = inferred ?: when (rule.direction) {
                     "in", "refund" -> "in"
                     "out", "repay" -> "out"
                     else -> "out"

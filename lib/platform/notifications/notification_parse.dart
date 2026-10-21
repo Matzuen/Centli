@@ -175,12 +175,10 @@ class NotiTemplate {
   }
 }
 
-/// Friendly names for builtin / official template ids.
+/// Friendly names for builtin template ids.
 const Map<String, String> kBuiltinTemplateNames = {
-  'alipay_income_zh': '支付宝收入',
-  'alipay_expense_zh': '支付宝支出',
-  'wechat_income_zh': '微信收入',
-  'wechat_expense_zh': '微信支出',
+  'alipay_zh': '支付宝',
+  'wechat_zh': '微信',
 };
 
 class RawNotification {
@@ -291,60 +289,74 @@ bool isRepaySignal({
       RegExp(r'还款|花呗|借呗|信用购').hasMatch(body);
 }
 
+/// 标题门控：出现任一交易词即进入解析（正文不参与是否抓取）。
+const kTitleCaptureWords =
+    '$kTitlePayWords|$kTitleReceiveWords|$kTitleRefundWords|'
+    '$kTitleRepayWords|$kTitleTransferWords|你领取了.+红包|转账成功|已转账';
+
+/// 命中标题门控后，用正文（不足再回退标题）判断 in / out。
+///
+/// 优先级：退款/收款类 → 收入；还款/支付/发起转账 → 支出；默认支出。
+String inferCaptureDirection({
+  required String title,
+  required String text,
+}) {
+  final fromBody = _directionHint(text);
+  if (fromBody != null) return fromBody;
+  final fromTitle = _directionHint(title);
+  if (fromTitle != null) return fromTitle;
+  return 'out';
+}
+
+String? _directionHint(String s) {
+  final t = s.trim();
+  if (t.isEmpty) return null;
+  if (RegExp(r'待还|应还|请于|即将到期|还款提醒|账单提醒').hasMatch(t)) {
+    // 提醒类不应单独定方向（标题门控通常已排除）。
+  }
+  final income = RegExp(
+    '$kTitleRefundWords|$kTitleReceiveWords|'
+    r'你领取了.+红包|转账成功|已转账|向你转账|转账给你|收到.+转账',
+  ).hasMatch(t);
+  final repay = RegExp(r'还款|还清').hasMatch(t) ||
+      (RegExp(r'代扣').hasMatch(t) &&
+          RegExp(r'还款|花呗|借呗|信用购').hasMatch(t));
+  final expense = RegExp(kTitlePayWords).hasMatch(t) ||
+      (RegExp(kTitleTransferWords).hasMatch(t) &&
+          !RegExp(r'转账成功|已转账|向你转账|转账给你').hasMatch(t));
+  // 同段既有退款/到账又有支付时：退款/收款优先（「退款到账」）。
+  if (income) return 'in';
+  if (repay || expense) return 'out';
+  return null;
+}
+
 /// 内置规则（同时镜像到 assets/noti_templates.json）。
 ///
-/// v10：每 App 两条——收入 / 支出。同 App 必须先收入后支出
-/// （「转账成功」进收入，「转账」进支出；退款/还款靠标题词打标签）。
-/// `matchOn: 'title'` 只匹配标题；正文不参与过滤。
+/// v11：每 App **一条**门控规则——标题含交易词才抓；**收支由正文判定**
+///（正文无方向词时回退标题；再没有则默认支出）。退款/还款仍靠词打标签。
 List<NotiTemplate> builtinNotiTemplates() => const [
       NotiTemplate(
-        id: 'alipay_income_zh',
-        name: '支付宝收入',
+        id: 'alipay_zh',
+        name: '支付宝',
         packages: ['com.eg.android.AlipayGphone'],
-        // 收款 + 退款。裸「转账」可能是发起转账（支出），收入侧不认。
-        mustContainRegex: '$kTitleReceiveWords|$kTitleRefundWords',
-        // 勿裸排除「账单」：会漏掉「账单退款成功」；提醒类用细粒度词。
-        excludeTextRegex: r'验证码|登录|服务通知|账单提醒|账单日',
-        amountRegex: kAmountRegex,
-        merchantRegex: r'(?:商户|来自|从)\s*(.+?)(?:\s|$)',
-        defaultAccountHint: 'alipay',
-        direction: 'in',
-        matchOn: 'title',
-      ),
-      NotiTemplate(
-        id: 'wechat_income_zh',
-        name: '微信收入',
-        packages: ['com.tencent.mm'],
-        // 收款 / 退款 / 领红包 / 转账成功（须排在支出「转账」之前）。
-        mustContainRegex:
-            '$kTitleReceiveWords|$kTitleRefundWords|你领取了.+红包|转账成功|已转账',
-        excludeTextRegex: r'验证码|登录|朋友圈|拍了拍|互动消息|新的朋友',
-        amountRegex: kAmountRegex,
-        merchantRegex: r'(?:商户|来自|从)\s*(.+?)(?:\s|$)',
-        defaultAccountHint: 'wechat',
-        direction: 'in',
-        matchOn: 'title',
-      ),
-      NotiTemplate(
-        id: 'alipay_expense_zh',
-        name: '支付宝支出',
-        packages: ['com.eg.android.AlipayGphone'],
-        // 支付 + 还款；提醒类「待还 / 还款提醒」必须 exclude。
-        mustContainRegex: '$kTitlePayWords|$kTitleRepayWords',
+        mustContainRegex: kTitleCaptureWords,
         excludeTextRegex:
             r'验证码|登录|服务通知|生活号|待还|应还|请于|即将到期|还款提醒|账单提醒|账单日|还款日',
         amountRegex: kAmountRegex,
-        merchantRegex: r'(?:向|给|商户)\s*(.+?)(?:\s|$)',
+        merchantRegex: r'(?:向|给|商户|来自|从)\s*(.+?)(?:\s|$)',
         defaultAccountHint: 'alipay',
+        // 仅作兜底；实际方向见 [inferCaptureDirection]。
         direction: 'out',
         matchOn: 'title',
       ),
       NotiTemplate(
-        id: 'wechat_expense_zh',
-        name: '微信支出',
+        id: 'wechat_zh',
+        name: '微信',
         packages: ['com.tencent.mm'],
-        mustContainRegex: '$kTitlePayWords|$kTitleTransferWords',
-        excludeTextRegex: r'验证码|登录|朋友圈|会话|拍了拍|互动消息|新的朋友',
+        mustContainRegex: kTitleCaptureWords,
+        excludeTextRegex:
+            r'验证码|登录|朋友圈|会话|拍了拍|互动消息|新的朋友|'
+            r'待还|应还|请于|即将到期|还款提醒|账单提醒|账单日|还款日',
         amountRegex: kAmountRegex,
         merchantRegex: r'(.+?)(?:-微信支付|付款)',
         merchantFromTitle: true,
@@ -375,7 +387,7 @@ ParseResult parseNotification(
           !notiRegex(t.titleRegex!).hasMatch(raw.title)) {
         continue;
       }
-      // 标题模式下只检查标题：正文里有任何词都不再影响是否解析。
+      // 门控只看标题（matchOn=title 时正文不参与是否抓取）。
       final keywordText = t.keywordText(raw);
       if (t.excludeTextRegex != null &&
           notiRegex(t.excludeTextRegex!).hasMatch(keywordText)) {
@@ -400,6 +412,11 @@ ParseResult parseNotification(
         if (m != null) merchant = (m.group(1) ?? '').trim();
       }
 
+      // 内置 / 标题门控规则：命中后再用正文判收支。
+      final direction = t.matchesTitleOnly
+          ? inferCaptureDirection(title: raw.title, text: raw.text)
+          : NotiTemplate.normalizeDirection(t.direction);
+
       return ParseResult(
         amountMinor: extracted?.minor,
         currency: extracted?.currency ?? t.defaultCurrency,
@@ -408,7 +425,7 @@ ParseResult parseNotification(
         ok: extracted != null,
         templateId: t.id,
         accountHint: t.defaultAccountHint,
-        direction: NotiTemplate.normalizeDirection(t.direction),
+        direction: direction,
       );
     } catch (_) {
       // Bad regex / rule - skip and try next template (R1-3 resilience).
@@ -516,6 +533,9 @@ ParseExplainResult explainNotificationParse(
       if (m != null) merchant = (m.group(1) ?? '').trim();
     }
 
+    final direction = t.matchesTitleOnly
+        ? inferCaptureDirection(title: raw.title, text: raw.text)
+        : NotiTemplate.normalizeDirection(t.direction);
     final result = ParseResult(
       amountMinor: extracted?.minor,
       currency: extracted?.currency ?? t.defaultCurrency,
@@ -524,9 +544,12 @@ ParseExplainResult explainNotificationParse(
       ok: extracted != null,
       templateId: t.id,
       accountHint: t.defaultAccountHint,
-      direction: NotiTemplate.normalizeDirection(t.direction),
+      direction: direction,
     );
     steps.add('命中「$label」(${t.id})');
+    if (t.matchesTitleOnly) {
+      steps.add('收支由正文判定 → $direction（正文无词时回退标题）');
+    }
     final reason = extracted == null
         ? '已匹配规则，但未解析出金额'
         : '解析成功';

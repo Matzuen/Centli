@@ -9,7 +9,7 @@ import 'package:path/path.dart' as p;
 Map<String, dynamic> _bundle({
   required int version,
   String must = '付款成功',
-  String id = 'alipay_expense_zh',
+  String id = 'alipay_zh',
 }) =>
     {
       'version': version,

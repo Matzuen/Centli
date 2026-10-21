@@ -66,10 +66,10 @@ void main() {
     });
   });
 
-  test('assets/noti_templates.json mirrors the builtin rules (v10)', () async {
+  test('assets/noti_templates.json mirrors the builtin rules (v11)', () async {
     final rawJson = await File('assets/noti_templates.json').readAsString();
     final map = jsonDecode(rawJson) as Map<String, dynamic>;
-    expect(map['version'], 10);
+    expect(map['version'], 11);
     final list = (map['templates'] as List).cast<Map<String, dynamic>>();
     final assets = {
       for (final item in list) item['id'] as String: NotiTemplate.fromJson(item),
@@ -93,11 +93,28 @@ void main() {
       expect(re.firstMatch('付款成功 ¥15.80')?.group(1), '15.80', reason: entry.key);
       expect(re.firstMatch('金额 15.80 元')?.group(1), isNull, reason: entry.key);
     }
-    // Order matters: same App 先收入后支出（「转账成功」vs「转账」）。
     final ids = [for (final item in list) item['id'] as String];
-    expect(ids.indexOf('alipay_income_zh'), lessThan(ids.indexOf('alipay_expense_zh')));
-    expect(ids.indexOf('wechat_income_zh'), lessThan(ids.indexOf('wechat_expense_zh')));
-    expect(ids.length, 4);
+    expect(ids, ['alipay_zh', 'wechat_zh']);
+  });
+
+  test('标题门控后由正文判收支', () {
+    final out = parseNotification(
+      raw(alipay, '向 星巴克 付款成功 ¥28.50', title: '支付成功'),
+    );
+    expect(out.templateId, 'alipay_zh');
+    expect(out.direction, 'out');
+
+    final income = parseNotification(
+      raw(alipay, '收到一笔转账 ¥200.00', title: '交易提醒'),
+    );
+    expect(income.templateId, 'alipay_zh');
+    expect(income.direction, 'in');
+
+    // 正文无方向词时回退标题。
+    final fromTitle = parseNotification(
+      raw(wechat, '¥8.88', title: '你领取了一个红包'),
+    );
+    expect(fromTitle.direction, 'in');
   });
 
   test('assets 模板：日期不抢金额；账单退款仍进收入', () async {
@@ -124,7 +141,7 @@ void main() {
       raw(alipay, '商家已退 ¥28.50', title: '账单退款成功'),
       templates,
     );
-    expect(refund.templateId, 'alipay_income_zh');
+    expect(refund.templateId, 'alipay_zh');
     expect(refund.direction, 'in');
     expect(
       isRefundSignal(templateId: refund.templateId, title: '账单退款成功'),
