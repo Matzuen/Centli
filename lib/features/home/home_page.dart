@@ -218,6 +218,75 @@ class _HomePageState extends ConsumerState<HomePage> {
   /// Local month for calendar grid; independent of [homeRangeProvider].
   DateTime? _calendarMonth;
 
+  Future<void> _pickLedger({
+    required String currentId,
+    required List<Ledger> ledgers,
+  }) async {
+    final scheme = Theme.of(context).colorScheme;
+    final id = await showGlassSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+              child: Text(
+                '切换记账本',
+                style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+            ),
+            for (var i = 0; i < ledgers.length; i++) ...[
+              if (i > 0)
+                Divider(
+                  height: 1,
+                  indent: 20,
+                  endIndent: 20,
+                  color: scheme.outlineVariant.withValues(alpha: 0.65),
+                ),
+              Builder(
+                builder: (_) {
+                  final l = ledgers[i];
+                  final selected = l.id == currentId;
+                  return ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+                    title: Text(
+                      l.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight:
+                            selected ? FontWeight.w700 : FontWeight.w500,
+                        color: selected ? scheme.primary : scheme.onSurface,
+                      ),
+                    ),
+                    trailing: selected
+                        ? Icon(
+                            Icons.check_rounded,
+                            size: 20,
+                            color: scheme.primary,
+                          )
+                        : null,
+                    onTap: () => Navigator.pop(ctx, l.id),
+                  );
+                },
+              ),
+            ],
+            const SizedBox(height: CentliSpacing.item),
+          ],
+        ),
+      ),
+    );
+    if (id == null || id == currentId || !mounted) return;
+    await ref.read(databaseProvider).setCurrentLedgerId(id);
+    ref.invalidate(currentLedgerProvider);
+  }
+
   @override
   Widget build(BuildContext context) {
     final ledgerAsync = ref.watch(currentLedgerProvider);
@@ -356,98 +425,35 @@ class _HomePageState extends ConsumerState<HomePage> {
                   padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
                   child: Row(
                     children: [
-                      PopupMenuButton<String>(
-                        tooltip: '切换记账本',
-                        offset: const Offset(0, 6),
-                        elevation: 8,
-                        shadowColor: scheme.shadow.withValues(alpha: 0.22),
-                        color: scheme.surface,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          side: BorderSide(
-                            color: scheme.outlineVariant.withValues(alpha: 0.55),
+                      Tooltip(
+                        message: '切换记账本',
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(8),
+                          onTap: () => _pickLedger(
+                            currentId: ledgerId,
+                            ledgers: ledgers,
                           ),
-                        ),
-                        onSelected: (id) async {
-                          if (id == ledgerId) return;
-                          await ref
-                              .read(databaseProvider)
-                              .setCurrentLedgerId(id);
-                          ref.invalidate(currentLedgerProvider);
-                        },
-                        itemBuilder: (ctx) {
-                          final items = <PopupMenuEntry<String>>[];
-                          for (var i = 0; i < ledgers.length; i++) {
-                            if (i > 0) {
-                              items.add(
-                                PopupMenuDivider(
-                                  height: 1,
-                                  color: scheme.outlineVariant
-                                      .withValues(alpha: 0.65),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 4,
+                              horizontal: 2,
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  ledger.name,
+                                  style:
+                                      Theme.of(context).textTheme.titleLarge,
                                 ),
-                              );
-                            }
-                            final l = ledgers[i];
-                            final selected = l.id == ledgerId;
-                            items.add(
-                              PopupMenuItem<String>(
-                                value: l.id,
-                                height: 46,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 14,
+                                const SizedBox(width: 2),
+                                Icon(
+                                  Icons.keyboard_arrow_down_rounded,
+                                  size: 22,
+                                  color: scheme.onSurfaceVariant,
                                 ),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        l.name,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          fontSize: 15,
-                                          fontWeight: selected
-                                              ? FontWeight.w700
-                                              : FontWeight.w500,
-                                          color: selected
-                                              ? scheme.primary
-                                              : scheme.onSurface,
-                                        ),
-                                      ),
-                                    ),
-                                    if (selected) ...[
-                                      const SizedBox(width: 8),
-                                      Icon(
-                                        Icons.check_rounded,
-                                        size: 18,
-                                        color: scheme.primary,
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                              ),
-                            );
-                          }
-                          return items;
-                        },
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            vertical: 4,
-                            horizontal: 2,
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                ledger.name,
-                                style: Theme.of(context).textTheme.titleLarge,
-                              ),
-                              const SizedBox(width: 2),
-                              Icon(
-                                Icons.keyboard_arrow_down_rounded,
-                                size: 22,
-                                color: scheme.onSurfaceVariant,
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                       ),
