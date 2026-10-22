@@ -9,11 +9,11 @@ import 'bookkeeping_sheet.dart' deferred as bookkeeping;
 import '../../core/constants/currencies.dart';
 import '../../core/utils/amount_expr.dart';
 import '../../core/utils/money.dart';
-import '../../core/widgets/centli_icon.dart';
 import '../../data/db/centli_database.dart';
 import '../../data/db/txn_tags.dart';
 import '../../data/db/database_provider.dart';
 import '../security/app_lock_controller.dart';
+import 'account_picker_sheet.dart';
 import 'category_picker_sheet.dart';
 import '../../app/theme.dart';
 import '../../core/widgets/glass.dart';
@@ -527,6 +527,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     return _sources ??= () async {
       final db = ref.read(databaseProvider);
       final accounts = await db.loadAccountsIncludingArchived(txn.ledgerId);
+      final assetTypes = await db.loadAssetTypes(txn.ledgerId);
       final outCats = await db.loadCategories(txn.ledgerId, 'out');
       final inCats = await db.loadCategories(txn.ledgerId, 'in');
       final tags = await db.listDistinctTags(txn.ledgerId);
@@ -539,6 +540,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       }
       return _EditSources(
         accounts: accounts,
+        assetTypes: assetTypes,
         outCats: outCats,
         inCats: inCats,
         categories: cats,
@@ -722,9 +724,10 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
   Future<void> _editAccount(BuildContext context) async {
     final s = await _ensureSources();
     if (s == null || !context.mounted) return;
-    final id = await _pickAccountSheet(
+    final id = await showAccountPickerSheet(
       context,
       accounts: s.accounts,
+      assetTypes: s.assetTypes,
       selectedId: _accountId,
       title: _isTransfer ? '选择转出资产账户' : '选择资产账户',
     );
@@ -743,9 +746,10 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
   Future<void> _editToAccount(BuildContext context) async {
     final s = await _ensureSources();
     if (s == null || !context.mounted) return;
-    final id = await _pickAccountSheet(
+    final id = await showAccountPickerSheet(
       context,
       accounts: s.accounts.where((a) => a.id != _accountId).toList(),
+      assetTypes: s.assetTypes,
       selectedId: _toAccountId,
       title: '选择转入资产账户',
     );
@@ -982,104 +986,6 @@ Future<String?> _pickTransactionType(
   );
 }
 
-/// Account picker; keeps archived accounts visible when part of history.
-Future<String?> _pickAccountSheet(
-  BuildContext context, {
-  required List<Account> accounts,
-  String? selectedId,
-  required String title,
-}) {
-  return showGlassSheet<String>(
-    context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
-    showDragHandle: true,
-    backgroundColor: Theme.of(context).colorScheme.surface,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-    ),
-    builder: (ctx) {
-      final scheme = Theme.of(ctx).colorScheme;
-      return SizedBox(
-        height: MediaQuery.sizeOf(ctx).height * 0.55,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 8, 0),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      title,
-                      style: Theme.of(ctx)
-                          .textTheme
-                          .titleMedium
-                          ?.copyWith(fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    icon: const Icon(Icons.close),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(height: 1),
-            Expanded(
-              child: accounts.isEmpty
-                  ? Center(
-                      child: Text(
-                        '暂无资产账户',
-                        style: TextStyle(color: scheme.onSurfaceVariant),
-                      ),
-                    )
-                  : ListView.separated(
-                      key: const Key('ledger_detail_account_sheet'),
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      itemCount: accounts.length,
-                      separatorBuilder: (_, _) =>
-                          const Divider(height: 1, indent: 72),
-                      itemBuilder: (context, i) {
-                        final a = accounts[i];
-                        final selected = a.id == selectedId;
-                        return ListTile(
-                          leading: CentliIconChip(
-                            name: a.name,
-                            kind: 'account',
-                            iconKey: a.icon,
-                            size: 40,
-                          ),
-                          title: Text(
-                            a.name,
-                            style: TextStyle(
-                              fontWeight: selected
-                                  ? FontWeight.w700
-                                  : FontWeight.w500,
-                            ),
-                          ),
-                          subtitle: Text(
-                            a.archived == 1
-                                ? '${currencyLabel(a.currency)} · 已归档'
-                                : currencyLabel(a.currency),
-                          ),
-                          trailing: selected
-                              ? Icon(
-                                  Icons.check_circle,
-                                  color: CentliTheme.softBlue,
-                                )
-                              : null,
-                          onTap: () => Navigator.pop(ctx, a.id),
-                        );
-                      },
-                    ),
-            ),
-          ],
-        ),
-      );
-    },
-  );
-}
-
 /// Small numeric prompt (evaluates + - × ÷ expressions like the keypad).
 Future<String?> _promptAmount(
   BuildContext context, {
@@ -1284,6 +1190,7 @@ Future<List<String>?> showTagEditorDialog(
 class _EditSources {
   const _EditSources({
     required this.accounts,
+    required this.assetTypes,
     required this.outCats,
     required this.inCats,
     required this.categories,
@@ -1291,6 +1198,7 @@ class _EditSources {
   });
 
   final List<Account> accounts;
+  final List<AssetType> assetTypes;
   final List<Category> outCats;
   final List<Category> inCats;
   final List<Category> categories;

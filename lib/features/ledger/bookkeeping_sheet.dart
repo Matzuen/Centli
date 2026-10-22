@@ -13,6 +13,7 @@ import '../../data/db/centli_database.dart';
 import '../../data/db/txn_tags.dart';
 import '../../data/db/database_provider.dart';
 import '../security/app_lock_controller.dart';
+import 'account_picker_sheet.dart';
 import 'category_picker_sheet.dart';
 import 'ledger_detail_page.dart' show showTagEditorDialog;
 import '../../core/widgets/glass.dart';
@@ -95,6 +96,7 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
   final _noteCtrl = TextEditingController();
   List<String> _tags = [];
 List<Account> _accounts = [];
+  List<AssetType> _assetTypes = [];
   List<Category> _categories = [];
   String? _ledgerId;
   bool _loading = true;
@@ -140,6 +142,7 @@ List<Account> _accounts = [];
       return;
     }
     var accounts = await db.loadActiveAccounts(ledgerId);
+    final assetTypes = await db.loadAssetTypes(ledgerId);
     final existing = widget.existing;
     if (existing != null) {
       final need = <String>{
@@ -175,6 +178,7 @@ List<Account> _accounts = [];
     setState(() {
       _ledgerId = ledgerId;
       _accounts = accounts;
+      _assetTypes = assetTypes;
       if (existing != null) {
         _type = existing.type;
         _amountText = fromMinor(
@@ -688,23 +692,15 @@ List<Account> _accounts = [];
 
   Future<void> _pickAccount({required bool toAccount}) async {
     final current = toAccount ? _toAccountId : _accountId;
-    final id = await showGlassSheet<String>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) {
-        return _AccountPickerSheet(
-          accounts: _accounts,
-          selectedId: current,
-          title: toAccount
-              ? '\u9009\u62e9\u8f6c\u5165\u8d44\u4ea7\u8d26\u6237'
-              : '\u9009\u62e9\u8d44\u4ea7\u8d26\u6237',
-        );
-      },
+    final pool = toAccount
+        ? _accounts.where((a) => a.id != _accountId).toList()
+        : _accounts;
+    final id = await showAccountPickerSheet(
+      context,
+      accounts: pool,
+      assetTypes: _assetTypes,
+      selectedId: current,
+      title: toAccount ? '选择转入资产账户' : '选择资产账户',
     );
     if (id == null || !mounted) return;
     setState(() {
@@ -1192,88 +1188,6 @@ class _MetaChip extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _AccountPickerSheet extends StatelessWidget {
-  const _AccountPickerSheet({
-    required this.accounts,
-    required this.title,
-    this.selectedId,
-  });
-
-  final List<Account> accounts;
-  final String title;
-  final String? selectedId;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final height = MediaQuery.sizeOf(context).height * 0.55;
-    return SizedBox(
-      height: height,
-      child: Column(
-        children: [
-          const SizedBox(height: CentliSpacing.item),
-          Container(
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: scheme.outlineVariant,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
-            child: Row(
-              children: [
-                Text(
-                  title,
-                  style: Theme.of(context).textTheme.titleMedium
-                      ?.copyWith(fontWeight: FontWeight.w700),
-                ),
-                const Spacer(),
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close),
-                ),
-              ],
-            ),
-          ),
-          const Divider(height: 1),
-          Expanded(
-            child: ListView.separated(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              itemCount: accounts.length,
-              separatorBuilder: (_, _) => const Divider(height: 1, indent: 72),
-              itemBuilder: (context, i) {
-                final a = accounts[i];
-                final selected = a.id == selectedId;
-                return ListTile(
-                  leading: CentliIconChip(
-                    name: a.name,
-                    kind: 'account',
-                    iconKey: a.icon,
-                    size: 40,
-                  ),
-                  title: Text(
-                    a.name,
-                    style: TextStyle(
-                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                    ),
-                  ),
-                  subtitle: Text(currencyLabel(a.currency)),
-                  trailing: selected
-                      ? Icon(Icons.check_circle, color: CentliTheme.softBlue)
-                      : null,
-                  onTap: () => Navigator.pop(context, a.id),
-                );
-              },
-            ),
-          ),
-        ],
       ),
     );
   }
