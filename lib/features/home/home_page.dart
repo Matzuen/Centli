@@ -942,10 +942,10 @@ Future<void> _toggleHomeAmountVisibility(
 /// ```
 /// 记账本名                            👁
 /// ¥ 3,375.20                         ▲ ¥xx
-/// 本月收入 / 本月支出 / 本月结余
+/// 资产 ¥…              负债 ¥…
+/// 总收入 ¥…            总支出 ¥…
 /// ─────────────────────────────
-/// 资产  ¥…            负债  ¥…
-///   总收入 ¥…           总支出 ¥…
+/// 本月收入 / 本月支出 / 本月结余
 /// ```
 class _LedgerSummaryCard extends StatelessWidget {
   const _LedgerSummaryCard({
@@ -1038,56 +1038,53 @@ class _LedgerSummaryCard extends StatelessWidget {
       color: scheme.onSurface,
     );
 
-    Widget subLine(String label, String? value, Color color) {
-      return Padding(
-        padding: const EdgeInsets.only(top: 2),
-        child: Row(
-          children: [
-            Text(label, style: subLabel),
-            const SizedBox(width: 3),
-            Flexible(
-              child: Text(
-                value ?? '—',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: subValue?.copyWith(color: color),
-              ),
+    Widget sideCell({
+      required String label,
+      required String value,
+      required Color valueColor,
+      TextAlign align = TextAlign.start,
+    }) {
+      return Column(
+        crossAxisAlignment: align == TextAlign.end
+            ? CrossAxisAlignment.end
+            : CrossAxisAlignment.start,
+        children: [
+          Text(label, style: labelSmall),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: align,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: valueColor,
             ),
-          ],
-        ),
+          ),
+        ],
       );
     }
 
-    // 一列：资产 + 总收入，或 负债 + 总支出（月收支已在上方三列，不重复）
-    Widget column({
-      required String title,
-      required String total,
-      required Color totalColor,
-      required String lifeLabel,
-      required String? lifeValue,
-      required Color lifeColor,
+    Widget lifeCell({
+      required String label,
+      required String? value,
+      required Color color,
+      TextAlign align = TextAlign.start,
     }) {
       return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: align == TextAlign.end
+            ? CrossAxisAlignment.end
+            : CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Text(title, style: labelSmall),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  total,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: totalColor,
-                  ),
-                ),
-              ),
-            ],
+          Text(label, style: subLabel),
+          const SizedBox(height: 2),
+          Text(
+            value ?? '—',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: align,
+            style: subValue?.copyWith(color: color),
           ),
-          subLine(lifeLabel, lifeValue, lifeColor),
         ],
       );
     }
@@ -1129,7 +1126,7 @@ class _LedgerSummaryCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: CentliSpacing.dense),
-          // 净资产（左）+ 区间涨跌（贴右；涨跌块不要再套 flex:1，否则会停在行中）
+          // 净资产（左）+ 区间涨跌（贴右）
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
@@ -1176,7 +1173,53 @@ class _LedgerSummaryCard extends StatelessWidget {
             ),
           ],
           const SizedBox(height: CentliSpacing.section),
-          // 本月收入 / 支出 / 结余（文档 2.2 三列概览）
+          // 资产 | 负债（明确左右）
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: sideCell(
+                  label: '资产',
+                  value: _money(asset),
+                  valueColor: CentliTheme.incomeGreen,
+                ),
+              ),
+              Expanded(
+                child: sideCell(
+                  label: '负债',
+                  value: _money(liability),
+                  valueColor: CentliTheme.expenseRed,
+                  align: TextAlign.end,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: CentliSpacing.item),
+          // 总收入 | 总支出
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: lifeCell(
+                  label: '总收入',
+                  value: life == null ? null : _money(life.incomeMinor),
+                  color: CentliTheme.incomeGreen,
+                ),
+              ),
+              Expanded(
+                child: lifeCell(
+                  label: '总支出',
+                  value: life == null ? null : _money(life.expenseMinor),
+                  color: CentliTheme.expenseRed,
+                  align: TextAlign.end,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: CentliSpacing.section),
+          const Divider(height: 1),
+          const SizedBox(height: CentliSpacing.item),
+          // 本月收入 / 支出 / 结余（放最下）
           Row(
             children: [
               Expanded(
@@ -1204,35 +1247,6 @@ class _LedgerSummaryCard extends StatelessWidget {
                       : ((month.incomeMinor - month.expenseMinor) >= 0
                           ? CentliTheme.incomeGreen
                           : CentliTheme.expenseRed),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: CentliSpacing.section),
-          const Divider(height: 1),
-          const SizedBox(height: CentliSpacing.item),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: column(
-                  title: '资产',
-                  total: _money(asset),
-                  totalColor: CentliTheme.incomeGreen,
-                  lifeLabel: '总收入',
-                  lifeValue: life == null ? null : _money(life.incomeMinor),
-                  lifeColor: CentliTheme.incomeGreen,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: column(
-                  title: '负债',
-                  total: _money(liability),
-                  totalColor: CentliTheme.expenseRed,
-                  lifeLabel: '总支出',
-                  lifeValue: life == null ? null : _money(life.expenseMinor),
-                  lifeColor: CentliTheme.expenseRed,
                 ),
               ),
             ],
