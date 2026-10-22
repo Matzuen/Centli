@@ -941,11 +941,11 @@ Future<void> _toggleHomeAmountVisibility(
 ///
 /// ```
 /// 记账本名                            👁
-/// ¥ 3,375.20                ▲ ¥ 3,375.20
+/// ¥ 3,375.20                         ▲ ¥xx
+/// 本月收入 / 本月支出 / 本月结余
 /// ─────────────────────────────
-/// 资产  ¥5,010.00      负债  ¥1,634.80
-///   月收入 ¥5,724.00     月支出 ¥1,388.58
-///   总收入 ¥11,841.96    总支出 ¥7,067.68
+/// 资产  ¥…            负债  ¥…
+///   总收入 ¥…           总支出 ¥…
 /// ```
 class _LedgerSummaryCard extends StatelessWidget {
   const _LedgerSummaryCard({
@@ -1058,14 +1058,11 @@ class _LedgerSummaryCard extends StatelessWidget {
       );
     }
 
-    // 一列：资产 / 月收入 / 总收入 或 负债 / 月支出 / 总支出
+    // 一列：资产 + 总收入，或 负债 + 总支出（月收支已在上方三列，不重复）
     Widget column({
       required String title,
       required String total,
       required Color totalColor,
-      required String monthLabel,
-      required String? monthValue,
-      required Color monthColor,
       required String lifeLabel,
       required String? lifeValue,
       required Color lifeColor,
@@ -1090,7 +1087,6 @@ class _LedgerSummaryCard extends StatelessWidget {
               ),
             ],
           ),
-          subLine(monthLabel, monthValue, monthColor),
           subLine(lifeLabel, lifeValue, lifeColor),
         ],
       );
@@ -1133,7 +1129,7 @@ class _LedgerSummaryCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: CentliSpacing.dense),
-          // 净资产 + 区间涨跌
+          // 净资产（左）+ 区间涨跌（贴右；涨跌块不要再套 flex:1，否则会停在行中）
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
@@ -1148,34 +1144,26 @@ class _LedgerSummaryCard extends StatelessWidget {
                   ),
                 ),
               ),
-              if (s != null)
-                // 大金额 + 窄屏时这一块必须能收缩，否则整行溢出。
-                Flexible(
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        deltaPositive
-                            ? Icons.arrow_upward_rounded
-                            : Icons.arrow_downward_rounded,
-                        size: 16,
-                        color: deltaColor,
-                      ),
-                      const SizedBox(width: 2),
-                      Flexible(
-                        child: Text(
-                          _money(delta.abs()),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.labelLarge?.copyWith(
-                            color: deltaColor,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ],
+              if (s != null) ...[
+                const SizedBox(width: 8),
+                Icon(
+                  deltaPositive
+                      ? Icons.arrow_upward_rounded
+                      : Icons.arrow_downward_rounded,
+                  size: 16,
+                  color: deltaColor,
+                ),
+                const SizedBox(width: 2),
+                Text(
+                  _money(delta.abs()),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: deltaColor,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
+              ],
             ],
           ),
           if (nw != null && nw.hasUnconverted) ...[
@@ -1231,9 +1219,6 @@ class _LedgerSummaryCard extends StatelessWidget {
                   title: '资产',
                   total: _money(asset),
                   totalColor: CentliTheme.incomeGreen,
-                  monthLabel: '月收入',
-                  monthValue: month == null ? null : _money(month.incomeMinor),
-                  monthColor: CentliTheme.incomeGreen,
                   lifeLabel: '总收入',
                   lifeValue: life == null ? null : _money(life.incomeMinor),
                   lifeColor: CentliTheme.incomeGreen,
@@ -1245,9 +1230,6 @@ class _LedgerSummaryCard extends StatelessWidget {
                   title: '负债',
                   total: _money(liability),
                   totalColor: CentliTheme.expenseRed,
-                  monthLabel: '月支出',
-                  monthValue: month == null ? null : _money(month.expenseMinor),
-                  monthColor: CentliTheme.expenseRed,
                   lifeLabel: '总支出',
                   lifeValue: life == null ? null : _money(life.expenseMinor),
                   lifeColor: CentliTheme.expenseRed,
