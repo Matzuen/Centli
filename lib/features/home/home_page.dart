@@ -251,7 +251,6 @@ class _HomePageState extends ConsumerState<HomePage> {
               endMs: range.endMs,
               base: base,
             );
-            final summary = ref.watch(_rangeBaseProvider(baseArgs));
             final recent = ref.watch(_rangeTxProvider(args));
             final nw = ref.watch(
               _netWorthHomeProvider((ledgerId: ledgerId, base: base)),
@@ -359,44 +358,77 @@ class _HomePageState extends ConsumerState<HomePage> {
                     children: [
                       PopupMenuButton<String>(
                         tooltip: '切换记账本',
+                        offset: const Offset(0, 6),
+                        elevation: 8,
+                        shadowColor: scheme.shadow.withValues(alpha: 0.22),
+                        color: scheme.surface,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          side: BorderSide(
+                            color: scheme.outlineVariant.withValues(alpha: 0.55),
+                          ),
+                        ),
                         onSelected: (id) async {
-                          if (id == '__manage__') {
-                            if (context.mounted) {
-                              context.push('/me/ledgers');
-                            }
-                            return;
-                          }
                           if (id == ledgerId) return;
                           await ref
                               .read(databaseProvider)
                               .setCurrentLedgerId(id);
                           ref.invalidate(currentLedgerProvider);
                         },
-                        itemBuilder: (ctx) => [
-                          for (final l in ledgers)
-                            PopupMenuItem(
-                              value: l.id,
-                              child: Row(
-                                children: [
-                                  if (l.id == ledgerId)
-                                    Icon(
-                                      Icons.check,
-                                      size: 18,
-                                      color: scheme.primary,
-                                    )
-                                  else
-                                    const SizedBox(width: 18),
-                                  const SizedBox(width: 8),
-                                  Expanded(child: Text(l.name)),
-                                ],
+                        itemBuilder: (ctx) {
+                          final items = <PopupMenuEntry<String>>[];
+                          for (var i = 0; i < ledgers.length; i++) {
+                            if (i > 0) {
+                              items.add(
+                                PopupMenuDivider(
+                                  height: 1,
+                                  color: scheme.outlineVariant
+                                      .withValues(alpha: 0.65),
+                                ),
+                              );
+                            }
+                            final l = ledgers[i];
+                            final selected = l.id == ledgerId;
+                            items.add(
+                              PopupMenuItem<String>(
+                                value: l.id,
+                                height: 46,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        l.name,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: selected
+                                              ? FontWeight.w700
+                                              : FontWeight.w500,
+                                          color: selected
+                                              ? scheme.primary
+                                              : scheme.onSurface,
+                                        ),
+                                      ),
+                                    ),
+                                    if (selected) ...[
+                                      const SizedBox(width: 8),
+                                      Icon(
+                                        Icons.check_rounded,
+                                        size: 18,
+                                        color: scheme.primary,
+                                      ),
+                                    ],
+                                  ],
+                                ),
                               ),
-                            ),
-                          const PopupMenuDivider(),
-                          const PopupMenuItem(
-                            value: '__manage__',
-                            child: Text('管理记账本…'),
-                          ),
-                        ],
+                            );
+                          }
+                          return items;
+                        },
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
                             vertical: 4,
@@ -409,10 +441,10 @@ class _HomePageState extends ConsumerState<HomePage> {
                                 ledger.name,
                                 style: Theme.of(context).textTheme.titleLarge,
                               ),
-                              const SizedBox(width: 4),
+                              const SizedBox(width: 2),
                               Icon(
-                                Icons.unfold_more,
-                                size: 20,
+                                Icons.keyboard_arrow_down_rounded,
+                                size: 22,
                                 color: scheme.onSurfaceVariant,
                               ),
                             ],
