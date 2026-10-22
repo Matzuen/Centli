@@ -849,23 +849,26 @@ WHERE pending_id IS NOT NULL
         .watch();
   }
 
+  /// [limit] ≤0：不截断，返回区间内全部流水。
   Stream<List<Transaction>> watchTransactionsInRange(
     String ledgerId,
     int startMs,
     int endMs, {
     int limit = 200,
   }) {
-    return (select(transactions)
-          ..where(
-            (t) =>
-                t.ledgerId.equals(ledgerId) &
-                t.deletedAt.isNull() &
-                t.happenAt.isBiggerOrEqualValue(startMs) &
-                t.happenAt.isSmallerThanValue(endMs),
-          )
-          ..orderBy([(t) => OrderingTerm.desc(t.happenAt)])
-          ..limit(limit))
-        .watch();
+    final q = select(transactions)
+      ..where(
+        (t) =>
+            t.ledgerId.equals(ledgerId) &
+            t.deletedAt.isNull() &
+            t.happenAt.isBiggerOrEqualValue(startMs) &
+            t.happenAt.isSmallerThanValue(endMs),
+      )
+      ..orderBy([(t) => OrderingTerm.desc(t.happenAt)]);
+    if (limit > 0) {
+      q.limit(limit);
+    }
+    return q.watch();
   }
 
   /// Bill search: optional keyword (note / merchant / amount) plus filters.
@@ -883,7 +886,10 @@ WHERE pending_id IS NOT NULL
     String? accountId,
     int? startMs,
     int? endMs,
+    /// ≤0：不截断，返回全部匹配行（「查看全部账单」）。
     int limit = 200,
+    /// 无关键词、无筛选时仍列出该账本全部未删除流水。
+    bool listAll = false,
   }) async {
     final q = query.trim();
     final hasFilter = type != null ||
@@ -891,7 +897,7 @@ WHERE pending_id IS NOT NULL
         accountId != null ||
         startMs != null ||
         endMs != null;
-    if (q.isEmpty && !hasFilter) return const [];
+    if (q.isEmpty && !hasFilter && !listAll) return const [];
 
     // Space (incl. full-width) separates keywords; any token may match (OR).
     final tokens = q
@@ -909,72 +915,74 @@ WHERE pending_id IS NOT NULL
         : await (select(accounts)..where((t) => t.ledgerId.equals(ledgerId)))
             .get();
 
-    // Fetch one extra row to detect truncation for UI notice.
-    final fetchLimit = limit < 0 ? 200 : limit + 1;
+    // limit≤0：不设 LIMIT；否则多取 1 条供 UI 判断截断。
+    final capped = limit > 0;
+    final fetchLimit = capped ? limit + 1 : null;
 
-    final rows = await (select(transactions)
-          ..where((t) {
-            Expression<bool> pred =
-                t.ledgerId.equals(ledgerId) & t.deletedAt.isNull();
+    final qBuilder = select(transactions)
+      ..where((t) {
+        Expression<bool> pred =
+            t.ledgerId.equals(ledgerId) & t.deletedAt.isNull();
 
-            if (type != null) {
-              pred = pred & t.type.equals(type);
-            }
-            if (categoryId != null) {
-              pred = pred & t.categoryId.equals(categoryId);
-            }
-            if (accountId != null) {
-              pred = pred &
-                  (t.accountId.equals(accountId) |
-                      t.toAccountId.equals(accountId));
-            }
-            if (startMs != null) {
-              pred = pred & t.happenAt.isBiggerOrEqualValue(startMs);
-            }
-            if (endMs != null) {
-              pred = pred & t.happenAt.isSmallerThanValue(endMs);
-            }
+        if (type != null) {
+          pred = pred & t.type.equals(type);
+        }
+        if (categoryId != null) {
+          pred = pred & t.categoryId.equals(categoryId);
+        }
+        if (accountId != null) {
+          pred = pred &
+              (t.accountId.equals(accountId) |
+                  t.toAccountId.equals(accountId));
+        }
+        if (startMs != null) {
+          pred = pred & t.happenAt.isBiggerOrEqualValue(startMs);
+        }
+        if (endMs != null) {
+          pred = pred & t.happenAt.isSmallerThanValue(endMs);
+        }
 
-            if (tokens.isNotEmpty) {
-              Expression<bool>? anyTok;
-              for (final tok in tokens) {
-                final pattern = '%$tok%';
-                Expression<bool> textHit =
-                    t.note.lower().like(pattern) | t.tags.lower().like(pattern);
-                // 仅当前词匹配的分类 / 账户名，避免把「羽毛球」分类串到「商飞」上。
-                final catHits = [
-                  for (final c in cats)
-                    if (c.name.toLowerCase() == tok) c.id,
-                ];
-                if (catHits.isNotEmpty) {
-                  textHit = textHit | t.categoryId.isIn(catHits);
-                }
-                final accHits = [
-                  for (final a in accs)
-                    if (a.name.toLowerCase() == tok) a.id,
-                ];
-                if (accHits.isNotEmpty) {
-                  textHit = textHit |
-                      t.accountId.isIn(accHits) |
-                      t.toAccountId.isIn(accHits);
-                }
-                if (tok == '\u8f6c\u8d26') {
-                  textHit = textHit | t.type.equals('transfer');
-                }
-                final amountMinors = _amountMinorCandidates(tok);
-                final tokHit = amountMinors.isEmpty
-                    ? textHit
-                    : (textHit | t.amountMinor.isIn(amountMinors));
-                anyTok = anyTok == null ? tokHit : (anyTok | tokHit);
-              }
-              pred = pred & anyTok!;
+        if (tokens.isNotEmpty) {
+          Expression<bool>? anyTok;
+          for (final tok in tokens) {
+            final pattern = '%$tok%';
+            Expression<bool> textHit =
+                t.note.lower().like(pattern) | t.tags.lower().like(pattern);
+            // 仅当前词匹配的分类 / 账户名，避免把「羽毛球」分类串到「商飞」上。
+            final catHits = [
+              for (final c in cats)
+                if (c.name.toLowerCase() == tok) c.id,
+            ];
+            if (catHits.isNotEmpty) {
+              textHit = textHit | t.categoryId.isIn(catHits);
             }
-            return pred;
-          })
-          ..orderBy([(t) => OrderingTerm.desc(t.happenAt)])
-          ..limit(fetchLimit))
-        .get();
-    return rows;
+            final accHits = [
+              for (final a in accs)
+                if (a.name.toLowerCase() == tok) a.id,
+            ];
+            if (accHits.isNotEmpty) {
+              textHit = textHit |
+                  t.accountId.isIn(accHits) |
+                  t.toAccountId.isIn(accHits);
+            }
+            if (tok == '\u8f6c\u8d26') {
+              textHit = textHit | t.type.equals('transfer');
+            }
+            final amountMinors = _amountMinorCandidates(tok);
+            final tokHit = amountMinors.isEmpty
+                ? textHit
+                : (textHit | t.amountMinor.isIn(amountMinors));
+            anyTok = anyTok == null ? tokHit : (anyTok | tokHit);
+          }
+          pred = pred & anyTok!;
+        }
+        return pred;
+      })
+      ..orderBy([(t) => OrderingTerm.desc(t.happenAt)]);
+    if (fetchLimit != null) {
+      qBuilder.limit(fetchLimit);
+    }
+    return qBuilder.get();
   }
 
   /// Parse user amount input into possible minor-unit values (0 / 2 decimals).

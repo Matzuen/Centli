@@ -110,6 +110,7 @@ final _rangeTxProvider =
         args.ledgerId,
         args.startMs,
         args.endMs,
+        limit: 0, // 概览列出选中区间全部流水
       );
     });
 
@@ -659,31 +660,9 @@ class _HomePageState extends ConsumerState<HomePage> {
                                         ),
                                       );
                                     }
-                                    final preview = txns.length > 10
-                                        ? txns.take(10).toList()
-                                        : txns;
-                                    return Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.stretch,
-                                      children: [
-                                        TxnGroupedSection(
-                                          txns: preview,
-                                          hide: hide,
-                                        ),
-                                        const SizedBox(
-                                          height: CentliSpacing.item,
-                                        ),
-                                        TextButton(
-                                          key: const Key('home_view_all_txns'),
-                                          onPressed: () =>
-                                              context.push('/home/search'),
-                                          child: Text(
-                                            txns.length > 10
-                                                ? '查看全部账单（共 ${txns.length} 笔）'
-                                                : '查看全部账单',
-                                          ),
-                                        ),
-                                      ],
+                                    return TxnGroupedSection(
+                                      txns: txns,
+                                      hide: hide,
                                     );
                                   },
                                 ),
