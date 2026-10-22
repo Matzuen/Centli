@@ -548,9 +548,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                                   ref,
                                   currentlyHidden: hide,
                                 ),
-                            range: range,
                             netWorth: nw,
-                            summary: summary,
                             assetLiability: alSplit,
                             lifetime: lifetime,
                             monthSummary: monthSummary,
@@ -937,15 +935,16 @@ Future<void> _toggleHomeAmountVisibility(
   if (ok) ref.read(amountsRevealedProvider.notifier).reveal();
 }
 
-/// 概览卡：
+/// 概览卡（对齐参考稿）：
 ///
 /// ```
 /// 记账本名                            👁
-/// ¥ 3,375.20                         ▲ ¥xx
-/// 资产 ¥…              负债 ¥…
-/// 总收入 ¥…            总支出 ¥…
+/// ¥9,862.9                    ▴ ¥3,822.03   ← 本月结余
 /// ─────────────────────────────
-/// 本月收入 / 本月支出 / 本月结余
+/// 资产              │  负债
+/// ¥9,888.16         │  ¥25.26
+/// 月收入：¥…        │  月支出：¥…
+/// 总收入：¥…        │  总支出：¥…
 /// ```
 class _LedgerSummaryCard extends StatelessWidget {
   const _LedgerSummaryCard({
@@ -954,9 +953,7 @@ class _LedgerSummaryCard extends StatelessWidget {
     required this.hide,
     required this.showAmountEye,
     required this.onToggleAmountVisibility,
-    required this.range,
     required this.netWorth,
-    required this.summary,
     required this.assetLiability,
     required this.lifetime,
     required this.monthSummary,
@@ -969,9 +966,7 @@ class _LedgerSummaryCard extends StatelessWidget {
   final bool hide;
   final bool showAmountEye;
   final VoidCallback onToggleAmountVisibility;
-  final DateRangeWindow range;
   final AsyncValue<BaseNetWorth> netWorth;
-  final AsyncValue<BaseRangeSummary> summary;
   final BaseAssetLiability? assetLiability;
   final AsyncValue<({int incomeMinor, int expenseMinor})> lifetime;
   final AsyncValue<BaseRangeSummary> monthSummary;
@@ -984,29 +979,28 @@ class _LedgerSummaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final loading = netWorth.isLoading || summary.isLoading;
-    final failed = netWorth.hasError || summary.hasError;
+    final loading = netWorth.isLoading || monthSummary.isLoading;
+    final failed = netWorth.hasError || monthSummary.hasError;
     final nw = netWorth.valueOrNull;
-    final s = summary.valueOrNull;
-    final income = s?.incomeMinor ?? 0;
-    final expense = s?.expenseMinor ?? 0;
-    final delta = income - expense;
     final net = nw?.totalMinor ?? 0;
     final asset = assetLiability?.assetMinor ?? (net > 0 ? net : 0);
     final liability = assetLiability?.liabilityMinor ?? (net < 0 ? -net : 0);
     final month = monthSummary.valueOrNull;
     final life = lifetime.valueOrNull;
+    final monthBalance = month == null
+        ? null
+        : (month.incomeMinor - month.expenseMinor);
 
     if (failed) {
       return CentliSoftCard(
         padding: const EdgeInsets.all(CentliSpacing.cardPad),
         child: CentliErrorState(
-          error: netWorth.error ?? summary.error,
+          error: netWorth.error ?? monthSummary.error,
           compact: true,
         ),
       );
     }
-    if (loading && nw == null && s == null) {
+    if (loading && nw == null && month == null) {
       return CentliSoftCard(
         padding: const EdgeInsets.all(CentliSpacing.cardPad),
         child: SizedBox(
@@ -1021,80 +1015,76 @@ class _LedgerSummaryCard extends StatelessWidget {
       );
     }
 
-    final deltaPositive = delta >= 0;
-    final deltaColor = deltaPositive
-        ? CentliTheme.incomeGreen
-        : CentliTheme.expenseRed;
-    final labelSmall = theme.textTheme.labelMedium?.copyWith(
-      color: scheme.onSurfaceVariant,
+    final muted = scheme.onSurfaceVariant;
+    final titleStyle = theme.textTheme.bodyMedium?.copyWith(
+      color: scheme.onSurface,
+      fontWeight: FontWeight.w500,
     );
-    final subLabel = theme.textTheme.bodySmall?.copyWith(
-      color: scheme.onSurfaceVariant,
-      fontSize: 11.5,
-    );
-    final subValue = theme.textTheme.bodySmall?.copyWith(
-      fontWeight: FontWeight.w600,
-      fontSize: 12.5,
+    final netStyle = theme.textTheme.headlineMedium?.copyWith(
+      letterSpacing: -0.6,
+      fontWeight: FontWeight.w700,
       color: scheme.onSurface,
     );
+    final colTitle = theme.textTheme.bodyMedium?.copyWith(
+      color: muted,
+      fontWeight: FontWeight.w500,
+    );
+    final colAmount = theme.textTheme.titleLarge?.copyWith(
+      fontWeight: FontWeight.w700,
+      color: scheme.onSurface,
+      letterSpacing: -0.3,
+    );
+    final subStyle = theme.textTheme.bodySmall?.copyWith(
+      color: muted,
+      fontSize: 12.5,
+      height: 1.35,
+    );
 
-    Widget sideCell({
-      required String label,
-      required String value,
-      required Color valueColor,
-      TextAlign align = TextAlign.start,
+    Widget column({
+      required String title,
+      required String amount,
+      required String monthLine,
+      required String lifeLine,
     }) {
       return Column(
-        crossAxisAlignment: align == TextAlign.end
-            ? CrossAxisAlignment.end
-            : CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: labelSmall),
-          const SizedBox(height: 2),
+          Text(title, style: colTitle),
+          const SizedBox(height: 4),
           Text(
-            value,
+            amount,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            textAlign: align,
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: valueColor,
-            ),
+            style: colAmount,
+          ),
+          const SizedBox(height: CentliSpacing.item),
+          Text(
+            monthLine,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: subStyle,
+          ),
+          const SizedBox(height: 2),
+          Text(
+            lifeLine,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: subStyle,
           ),
         ],
       );
     }
 
-    Widget lifeCell({
-      required String label,
-      required String? value,
-      required Color color,
-      TextAlign align = TextAlign.start,
-    }) {
-      return Column(
-        crossAxisAlignment: align == TextAlign.end
-            ? CrossAxisAlignment.end
-            : CrossAxisAlignment.start,
-        children: [
-          Text(label, style: subLabel),
-          const SizedBox(height: 2),
-          Text(
-            value ?? '—',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: align,
-            style: subValue?.copyWith(color: color),
-          ),
-        ],
-      );
-    }
+    final balancePositive = (monthBalance ?? 0) >= 0;
+    final balanceColor = balancePositive
+        ? CentliTheme.incomeGreen
+        : CentliTheme.expenseRed;
 
     return CentliSoftCard(
       padding: const EdgeInsets.all(CentliSpacing.cardPad),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 记账本名 +（资产锁开启时）眼睛
           Row(
             children: [
               Expanded(
@@ -1102,7 +1092,7 @@ class _LedgerSummaryCard extends StatelessWidget {
                   ledgerName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: labelSmall,
+                  style: titleStyle,
                 ),
               ),
               if (showAmountEye)
@@ -1120,43 +1110,32 @@ class _LedgerSummaryCard extends StatelessWidget {
                         ? Icons.visibility_off_outlined
                         : Icons.visibility_outlined,
                     size: 20,
-                    color: scheme.onSurfaceVariant,
+                    color: muted,
                   ),
                 ),
             ],
           ),
           const SizedBox(height: CentliSpacing.dense),
-          // 净资产（左）+ 区间涨跌（贴右）
           Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
             children: [
               Expanded(
                 child: Text(
                   _money(net),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.headlineMedium?.copyWith(
-                    letterSpacing: -0.6,
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: netStyle,
                 ),
               ),
-              if (s != null) ...[
+              if (monthBalance != null) ...[
                 const SizedBox(width: 8),
-                Icon(
-                  deltaPositive
-                      ? Icons.arrow_upward_rounded
-                      : Icons.arrow_downward_rounded,
-                  size: 16,
-                  color: deltaColor,
-                ),
-                const SizedBox(width: 2),
                 Text(
-                  _money(delta.abs()),
+                  '${balancePositive ? '▴' : '▾'} ${_money(monthBalance.abs())}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    color: deltaColor,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: balanceColor,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -1167,89 +1146,46 @@ class _LedgerSummaryCard extends StatelessWidget {
             const SizedBox(height: CentliSpacing.item),
             Text(
               '未折算：${nw.unconvertedByCcy.entries.map((e) => '${e.key} ${formatMinor(e.key, e.value, hide: hide)}').join('、')}',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: scheme.onSurfaceVariant,
-              ),
+              style: subStyle,
             ),
           ],
           const SizedBox(height: CentliSpacing.section),
-          // 资产 | 负债（明确左右）
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: sideCell(
-                  label: '资产',
-                  value: _money(asset),
-                  valueColor: CentliTheme.incomeGreen,
-                ),
-              ),
-              Expanded(
-                child: sideCell(
-                  label: '负债',
-                  value: _money(liability),
-                  valueColor: CentliTheme.expenseRed,
-                  align: TextAlign.end,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: CentliSpacing.item),
-          // 总收入 | 总支出
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: lifeCell(
-                  label: '总收入',
-                  value: life == null ? null : _money(life.incomeMinor),
-                  color: CentliTheme.incomeGreen,
-                ),
-              ),
-              Expanded(
-                child: lifeCell(
-                  label: '总支出',
-                  value: life == null ? null : _money(life.expenseMinor),
-                  color: CentliTheme.expenseRed,
-                  align: TextAlign.end,
-                ),
-              ),
-            ],
-          ),
+          Divider(height: 1, color: scheme.outlineVariant.withValues(alpha: 0.7)),
           const SizedBox(height: CentliSpacing.section),
-          const Divider(height: 1),
-          const SizedBox(height: CentliSpacing.item),
-          // 本月收入 / 支出 / 结余（放最下）
-          Row(
-            children: [
-              Expanded(
-                child: _MonthStatCell(
-                  label: '本月收入',
-                  value: month == null ? '—' : _money(month.incomeMinor),
-                  color: CentliTheme.incomeGreen,
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: column(
+                    title: '资产',
+                    amount: _money(asset),
+                    monthLine:
+                        '月收入：${month == null ? '—' : _money(month.incomeMinor)}',
+                    lifeLine:
+                        '总收入：${life == null ? '—' : _money(life.incomeMinor)}',
+                  ),
                 ),
-              ),
-              Expanded(
-                child: _MonthStatCell(
-                  label: '本月支出',
-                  value: month == null ? '—' : _money(month.expenseMinor),
-                  color: CentliTheme.expenseRed,
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: VerticalDivider(
+                    width: 1,
+                    thickness: 1,
+                    color: scheme.outlineVariant.withValues(alpha: 0.7),
+                  ),
                 ),
-              ),
-              Expanded(
-                child: _MonthStatCell(
-                  label: '本月结余',
-                  value: month == null
-                      ? '—'
-                      : _money(month.incomeMinor - month.expenseMinor),
-                  color: month == null
-                      ? scheme.onSurface
-                      : ((month.incomeMinor - month.expenseMinor) >= 0
-                          ? CentliTheme.incomeGreen
-                          : CentliTheme.expenseRed),
+                Expanded(
+                  child: column(
+                    title: '负债',
+                    amount: _money(liability),
+                    monthLine:
+                        '月支出：${month == null ? '—' : _money(month.expenseMinor)}',
+                    lifeLine:
+                        '总支出：${life == null ? '—' : _money(life.expenseMinor)}',
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
           if (showBudgetCard)
             _HomeBudgetStrip(
@@ -1259,43 +1195,6 @@ class _LedgerSummaryCard extends StatelessWidget {
             ),
         ],
       ),
-    );
-  }
-}
-
-class _MonthStatCell extends StatelessWidget {
-  const _MonthStatCell({
-    required this.label,
-    required this.value,
-    required this.color,
-  });
-
-  final String label;
-  final String value;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(
-      children: [
-        Text(
-          label,
-          style: theme.textTheme.labelSmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: theme.textTheme.titleSmall?.copyWith(
-            fontWeight: FontWeight.w700,
-            color: color,
-          ),
-        ),
-      ],
     );
   }
 }
