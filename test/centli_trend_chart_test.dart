@@ -163,14 +163,22 @@ void main() {
   });
 
   group('formatTrendYAxisLabel', () {
-    test('below 1000 plain; 1k..<1M uses k; ≥1M uses m', () {
+    test('below 1000: hundreds integers; k/m: at most 1 decimal', () {
       expect(
         formatTrendYAxisLabel(500, interval: 100, axisMaxAbs: 500),
         '500',
       );
       expect(
+        formatTrendYAxisLabel(800, interval: 100, axisMaxAbs: 800),
+        '800',
+      );
+      expect(
         formatTrendYAxisLabel(5000, interval: 1000, axisMaxAbs: 5000),
         '5k',
+      );
+      expect(
+        formatTrendYAxisLabel(10100, interval: 100, axisMaxAbs: 10200),
+        '10.1k',
       );
       expect(
         formatTrendYAxisLabel(20000, interval: 10000, axisMaxAbs: 20000),
@@ -184,10 +192,15 @@ void main() {
         formatTrendYAxisLabel(2000000, interval: 1000000, axisMaxAbs: 2000000),
         '2m',
       );
+      expect(
+        formatTrendYAxisLabel(1200000, interval: 100000, axisMaxAbs: 1500000),
+        '1.2m',
+      );
     });
 
-    test('narrow swing around 10k keeps unique k labels', () {
+    test('narrow swing around 10k keeps unique ≤1-decimal k labels', () {
       final axis = trendYAxis([10000.0, 10000.0, 9973.67, 9973.67]);
+      expect(axis.interval, greaterThanOrEqualTo(100));
       final maxAbs = axis.ticks
           .map((t) => t.abs())
           .fold<double>(0, (a, b) => a > b ? a : b);
@@ -200,21 +213,41 @@ void main() {
           ),
       ];
       expect(labels.toSet().length, labels.length, reason: labels.join(','));
-      expect(labels.every((s) => s.endsWith('k')), isTrue, reason: labels.join(','));
+      expect(
+        labels.every((s) => s == '0' || s.endsWith('k')),
+        isTrue,
+        reason: labels.join(','),
+      );
+      for (final s in labels) {
+        if (!s.endsWith('k')) continue;
+        final body = s.substring(0, s.length - 1);
+        final dot = body.indexOf('.');
+        if (dot >= 0) {
+          expect(body.length - dot - 1, 1, reason: s);
+        }
+      }
     });
 
-    test('straddle 10k uses k consistently', () {
-      const interval = 50.0;
-      const ticks = [9950.0, 10000.0, 10050.0, 10100.0, 10150.0, 10200.0];
-      const maxAbs = 10200.0;
+    test('straddle 10k with min interval keeps unique 1-decimal k', () {
+      // interval < 100 会在一位小数下撞号；轴侧保证 ≥100。
+      const interval = 100.0;
+      const ticks = [9900.0, 10000.0, 10100.0, 10200.0, 10300.0, 10400.0];
+      const maxAbs = 10400.0;
       final labels = [
         for (final t in ticks)
           formatTrendYAxisLabel(t, interval: interval, axisMaxAbs: maxAbs),
       ];
       expect(labels.every((s) => s.endsWith('k')), isTrue, reason: labels.join(','));
       expect(labels.toSet().length, labels.length, reason: labels.join(','));
-      expect(labels.last, '10.20k');
-      expect(labels.first, '9.95k');
+      expect(labels.first, '9.9k');
+      expect(labels[1], '10k');
+      expect(labels.last, '10.4k');
+    });
+
+    test('minTrendYInterval matches scale', () {
+      expect(minTrendYInterval(500), 100);
+      expect(minTrendYInterval(5000), 100);
+      expect(minTrendYInterval(1500000), 100000);
     });
   });
 

@@ -63,9 +63,12 @@ double niceTrendYInterval(double raw) {
 /// Format a Y-axis stop so neighbouring ticks never share the same text.
 ///
 /// Rules (axis-wide via [axisMaxAbs]):
-/// - |ref| &lt; 1000 → plain number
-/// - 1000 ≤ |ref| &lt; 1_000_000 → `k` (e.g. `10.2k`)
-/// - |ref| ≥ 1_000_000 → `m` (e.g. `1.5m`)
+/// - |ref| &lt; 1000 → 以百为单位的整数（`100` / `500` / `800`）
+/// - 1000 ≤ |ref| &lt; 1_000_000 → `k`，**最多一位小数**（`10k` / `10.1k`）
+/// - |ref| ≥ 1_000_000 → `m`，最多一位小数（`1m` / `1.2m`）
+///
+/// 刻度间距由 [minTrendYInterval] 保证：一位小数下相邻标签不会撞成同一个
+/// `10.1k` / `1.2m`。
 ///
 /// Pass [axisMaxAbs] (= max |tick|) so every stop uses the same style.
 @visibleForTesting
@@ -77,41 +80,35 @@ String formatTrendYAxisLabel(
 }) {
   if (hide) return '****';
   if (value.abs() < 1e-9) return '0';
-  final step = interval.isFinite && interval > 1e-12 ? interval.abs() : 1.0;
   final ref = (axisMaxAbs != null && axisMaxAbs.isFinite)
       ? axisMaxAbs.abs()
       : value.abs();
 
   if (ref >= 1000000) {
-    final decimals = _compactUnitDecimals(step, unit: 1000000);
-    if (decimals != null) {
-      return '${(value / 1000000).toStringAsFixed(decimals)}m';
-    }
-  } else if (ref >= 1000) {
-    final decimals = _compactUnitDecimals(step, unit: 1000);
-    if (decimals != null) {
-      return '${(value / 1000).toStringAsFixed(decimals)}k';
-    }
+    return _formatCompactOneDecimal(value / 1000000, 'm');
   }
-  return _plainTrendAxisNumber(value, step);
+  if (ref >= 1000) {
+    return _formatCompactOneDecimal(value / 1000, 'k');
+  }
+  // 未到 k：整数（轴上已是百的倍数）。
+  return value.round().toString();
 }
 
-/// How many decimals a compact unit needs so two ticks [step] apart stay
-/// distinct; null means fall back to plain numbers.
-int? _compactUnitDecimals(double step, {required double unit}) {
-  // quantum = unit / 10^d  <  step  →  d > log10(unit / step)
-  if (step >= unit) return 0;
-  final need = math.log(unit / step) / math.ln10;
-  final decimals = need.ceil();
-  if (decimals < 1) return 1;
-  if (decimals > 3) return null;
-  return decimals;
+/// K/M 紧凑标签：最多一位小数；整千/整百万去掉 `.0`。
+String _formatCompactOneDecimal(double major, String suffix) {
+  final rounded = (major * 10).roundToDouble() / 10;
+  if ((rounded - rounded.roundToDouble()).abs() < 1e-9) {
+    return '${rounded.round()}$suffix';
+  }
+  return '${rounded.toStringAsFixed(1)}$suffix';
 }
 
-String _plainTrendAxisNumber(double value, double step) {
-  if (step >= 1) return value.round().toString();
-  if (step >= 0.1) return value.toStringAsFixed(1);
-  return value.toStringAsFixed(2);
+/// 保证标签唯一的最小步长：plain/k → 100；m → 100_000（= 0.1 个单位）。
+@visibleForTesting
+double minTrendYInterval(double axisMaxAbs) {
+  final a = axisMaxAbs.abs();
+  if (a >= 1000000) return 100000;
+  return 100;
 }
 
 /// The [ticks] labels shown on the chart's Y axis.
@@ -172,20 +169,22 @@ TrendYAxis? _axisFor(
   double span,
   int want,
 ) {
-  final rawStep = span < 1e-9 ? 0.0 : span / (want - 1);
-  var interval = rawStep > 0 ? _niceStep(rawStep) : 1.0;
-  if (interval <= 0) interval = 1.0;
+  final dataAbs = math.max(yMinRaw.abs(), yMaxRaw.abs());
+  // 预估轴上界（数据再垫一层），选 minInterval 时避免低估成 plain。
+  final approxAbs = math.max(dataAbs, span);
+  final floorIv = minTrendYInterval(approxAbs);
+
+  final rawStep = span < 1e-9 ? floorIv : span / (want - 1);
+  var interval = rawStep > 0 ? _niceStep(rawStep) : floorIv;
+  if (interval < floorIv) interval = floorIv;
+  if (interval <= 0) interval = floorIv;
 
   // 数据全部相同（水平线）时，围绕它上下各开一格，否则线会贴在轴线上。
   if (span < 1e-9) {
     var t = (yMinRaw / interval).floor() * interval;
     if (t >= yMinRaw) t -= interval;
-    return TrendYAxis(
-      minY: t,
-      maxY: t + interval * (want - 1),
-      interval: interval,
-      ticks: [for (var i = 0; i < want; i++) t + interval * i],
-    );
+    final flatTicks = [for (var i = 0; i < want; i++) t + interval * i];
+    return _cleanedAxis(flatTicks, interval);
   }
   // 以 0 为锚点铺格，让 0 尽量落在刻度上。
   var minY = (yMinRaw / interval).floor() * interval;
@@ -201,6 +200,7 @@ TrendYAxis? _axisFor(
     if (ticks.first > yMinRaw + 1e-9) {
       // 仍然装不下：加粗一档步长再试一次。
       interval = _niceStep(interval * 1.01);
+      if (interval < floorIv) interval = floorIv;
       minY = (yMinRaw / interval).floor() * interval;
       ticks = [for (var i = 0; i < want; i++) minY + interval * i];
       if (ticks.last < yMaxRaw - 1e-9) {
@@ -210,6 +210,23 @@ TrendYAxis? _axisFor(
       }
     }
   }
+  // 最终按真实轴幅再抬一次下限（数据小、垫宽后进了 k/m）。
+  final axisAbs = math.max(ticks.first.abs(), ticks.last.abs());
+  final needIv = minTrendYInterval(axisAbs);
+  if (interval + 1e-9 < needIv) {
+    interval = needIv;
+    minY = (yMinRaw / interval).floor() * interval;
+    ticks = [for (var i = 0; i < want; i++) minY + interval * i];
+    if (ticks.last < yMaxRaw - 1e-9) {
+      minY = (yMaxRaw / interval).floor() * interval - interval * (want - 1);
+      ticks = [for (var i = 0; i < want; i++) minY + interval * i];
+      if (ticks.first > yMinRaw + 1e-9) return null;
+    }
+  }
+  return _cleanedAxis(ticks, interval);
+}
+
+TrendYAxis _cleanedAxis(List<double> ticks, double interval) {
   // 抹平浮点尾差（0.6000000000000001 → 0.6），标签才不会出现长小数。
   double clean(double v) => (v * 1e6).roundToDouble() / 1e6;
   final cleaned = [for (final t in ticks) clean(t)];
