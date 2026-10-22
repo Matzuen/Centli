@@ -1036,7 +1036,7 @@ class _LedgerSummaryCard extends StatelessWidget {
     );
     final subStyle = theme.textTheme.bodySmall?.copyWith(
       color: muted,
-      fontSize: 12.5,
+      fontSize: 11.5,
       height: 1.35,
     );
 
