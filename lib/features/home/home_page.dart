@@ -203,6 +203,56 @@ final homeDailyExpenseProvider = _dailyExpenseProvider;
 @visibleForTesting
 final homeDailyIncomeProvider = _dailyIncomeProvider;
 
+class _LedgerMenuTile extends StatelessWidget {
+  const _LedgerMenuTile({
+    required this.name,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String name;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 22,
+              child: selected
+                  ? Icon(
+                      Icons.check_rounded,
+                      size: 18,
+                      color: scheme.primary,
+                    )
+                  : null,
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                  color: selected ? scheme.primary : scheme.onSurface,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
 
@@ -218,69 +268,83 @@ class _HomePageState extends ConsumerState<HomePage> {
   /// Local month for calendar grid; independent of [homeRangeProvider].
   DateTime? _calendarMonth;
 
+  /// 锚点旁弹出毛玻璃账本菜单（左上角下拉，非底部 sheet）。
   Future<void> _pickLedger({
+    required BuildContext anchorContext,
     required String currentId,
     required List<Ledger> ledgers,
   }) async {
+    final box = anchorContext.findRenderObject() as RenderBox?;
+    final overlay =
+        Overlay.of(anchorContext).context.findRenderObject() as RenderBox?;
+    if (box == null || overlay == null) return;
+
+    final origin = box.localToGlobal(Offset.zero, ancestor: overlay);
+    final size = box.size;
     final scheme = Theme.of(context).colorScheme;
-    final id = await showGlassSheet<String>(
+    final maxMenuW = MediaQuery.sizeOf(context).width - origin.dx - 16;
+
+    final id = await showGeneralDialog<String>(
       context: context,
-      showDragHandle: true,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+      barrierDismissible: true,
+      barrierLabel: '关闭',
+      barrierColor: Colors.transparent,
+      transitionDuration: const Duration(milliseconds: 140),
+      pageBuilder: (ctx, anim, _) {
+        return Stack(
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
-              child: Text(
-                '切换记账本',
-                style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => Navigator.pop(ctx),
+                child: const SizedBox.expand(),
               ),
             ),
-            for (var i = 0; i < ledgers.length; i++) ...[
-              if (i > 0)
-                Divider(
-                  height: 1,
-                  indent: 20,
-                  endIndent: 20,
-                  color: scheme.outlineVariant.withValues(alpha: 0.65),
-                ),
-              Builder(
-                builder: (_) {
-                  final l = ledgers[i];
-                  final selected = l.id == currentId;
-                  return ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 20),
-                    title: Text(
-                      l.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight:
-                            selected ? FontWeight.w700 : FontWeight.w500,
-                        color: selected ? scheme.primary : scheme.onSurface,
+            Positioned(
+              left: origin.dx.clamp(8.0, double.infinity),
+              top: origin.dy + size.height + 4,
+              child: FadeTransition(
+                opacity: anim,
+                child: Material(
+                  color: Colors.transparent,
+                  child: CentliGlass(
+                    borderRadius: BorderRadius.circular(14),
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minWidth: 148,
+                        maxWidth: maxMenuW.clamp(148.0, 260.0),
+                      ),
+                      child: IntrinsicWidth(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            for (var i = 0; i < ledgers.length; i++) ...[
+                              if (i > 0)
+                                Divider(
+                                  height: 1,
+                                  thickness: 1,
+                                  color: scheme.outlineVariant
+                                      .withValues(alpha: 0.55),
+                                ),
+                              _LedgerMenuTile(
+                                name: ledgers[i].name,
+                                selected: ledgers[i].id == currentId,
+                                onTap: () =>
+                                    Navigator.pop(ctx, ledgers[i].id),
+                              ),
+                            ],
+                          ],
+                        ),
                       ),
                     ),
-                    trailing: selected
-                        ? Icon(
-                            Icons.check_rounded,
-                            size: 20,
-                            color: scheme.primary,
-                          )
-                        : null,
-                    onTap: () => Navigator.pop(ctx, l.id),
-                  );
-                },
+                  ),
+                ),
               ),
-            ],
-            const SizedBox(height: CentliSpacing.item),
+            ),
           ],
-        ),
-      ),
+        );
+      },
     );
     if (id == null || id == currentId || !mounted) return;
     await ref.read(databaseProvider).setCurrentLedgerId(id);
@@ -425,34 +489,38 @@ class _HomePageState extends ConsumerState<HomePage> {
                   padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
                   child: Row(
                     children: [
-                      Tooltip(
-                        message: '切换记账本',
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(8),
-                          onTap: () => _pickLedger(
-                            currentId: ledgerId,
-                            ledgers: ledgers,
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              vertical: 4,
-                              horizontal: 2,
+                      Builder(
+                        builder: (anchorCtx) => Tooltip(
+                          message: '切换记账本',
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(8),
+                            onTap: () => _pickLedger(
+                              anchorContext: anchorCtx,
+                              currentId: ledgerId,
+                              ledgers: ledgers,
                             ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  ledger.name,
-                                  style:
-                                      Theme.of(context).textTheme.titleLarge,
-                                ),
-                                const SizedBox(width: 2),
-                                Icon(
-                                  Icons.keyboard_arrow_down_rounded,
-                                  size: 22,
-                                  color: scheme.onSurfaceVariant,
-                                ),
-                              ],
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 4,
+                                horizontal: 2,
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    ledger.name,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleLarge,
+                                  ),
+                                  const SizedBox(width: 2),
+                                  Icon(
+                                    Icons.keyboard_arrow_down_rounded,
+                                    size: 22,
+                                    color: scheme.onSurfaceVariant,
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ),
