@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -268,74 +270,84 @@ class _HomePageState extends ConsumerState<HomePage> {
   /// Local month for calendar grid; independent of [homeRangeProvider].
   DateTime? _calendarMonth;
 
-  /// 锚点旁弹出毛玻璃账本菜单（左上角下拉，非底部 sheet）。
+  /// 锚点旁弹出毛玻璃账本菜单。
+  ///
+  /// 必须用 [Overlay] 插入（不能用新 Dialog 路由）：否则 [BackdropFilter]
+  /// 采不到首页内容，看起来就像实心白底。
   Future<void> _pickLedger({
     required BuildContext anchorContext,
     required String currentId,
     required List<Ledger> ledgers,
   }) async {
+    final overlayState = Overlay.of(anchorContext, rootOverlay: true);
     final box = anchorContext.findRenderObject() as RenderBox?;
-    final overlay =
-        Overlay.of(anchorContext).context.findRenderObject() as RenderBox?;
-    if (box == null || overlay == null) return;
+    final overlayBox =
+        overlayState.context.findRenderObject() as RenderBox?;
+    if (box == null || overlayBox == null) return;
 
-    final origin = box.localToGlobal(Offset.zero, ancestor: overlay);
+    final origin = box.localToGlobal(Offset.zero, ancestor: overlayBox);
     final size = box.size;
     final scheme = Theme.of(context).colorScheme;
     final maxMenuW = MediaQuery.sizeOf(context).width - origin.dx - 16;
+    final dark = Theme.of(context).brightness == Brightness.dark;
 
-    final id = await showGeneralDialog<String>(
-      context: context,
-      barrierDismissible: true,
-      barrierLabel: '关闭',
-      barrierColor: Colors.transparent,
-      transitionDuration: const Duration(milliseconds: 140),
-      pageBuilder: (ctx, anim, _) {
+    final completer = Completer<String?>();
+    late OverlayEntry entry;
+
+    void close([String? id]) {
+      if (entry.mounted) entry.remove();
+      if (!completer.isCompleted) completer.complete(id);
+    }
+
+    entry = OverlayEntry(
+      builder: (ctx) {
         return Stack(
           children: [
             Positioned.fill(
               child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => Navigator.pop(ctx),
+                behavior: HitTestBehavior.translucent,
+                onTap: close,
                 child: const SizedBox.expand(),
               ),
             ),
             Positioned(
               left: origin.dx.clamp(8.0, double.infinity),
               top: origin.dy + size.height + 4,
-              child: FadeTransition(
-                opacity: anim,
-                child: Material(
-                  color: Colors.transparent,
-                  child: CentliGlass(
-                    borderRadius: BorderRadius.circular(14),
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                        minWidth: 148,
-                        maxWidth: maxMenuW.clamp(148.0, 260.0),
-                      ),
-                      child: IntrinsicWidth(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            for (var i = 0; i < ledgers.length; i++) ...[
-                              if (i > 0)
-                                Divider(
-                                  height: 1,
-                                  thickness: 1,
-                                  color: scheme.outlineVariant
-                                      .withValues(alpha: 0.55),
-                                ),
-                              _LedgerMenuTile(
-                                name: ledgers[i].name,
-                                selected: ledgers[i].id == currentId,
-                                onTap: () =>
-                                    Navigator.pop(ctx, ledgers[i].id),
+              child: Material(
+                type: MaterialType.transparency,
+                child: CentliGlass(
+                  borderRadius: BorderRadius.circular(14),
+                  blur: true,
+                  sigma: CentliTheme.glassDialogSigma,
+                  // 略透一点，磨砂才看得出来。
+                  tint: dark
+                      ? const Color(0xFF1B1F24).withValues(alpha: 0.55)
+                      : Colors.white.withValues(alpha: 0.55),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minWidth: 148,
+                      maxWidth: maxMenuW.clamp(148.0, 260.0),
+                    ),
+                    child: IntrinsicWidth(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          for (var i = 0; i < ledgers.length; i++) ...[
+                            if (i > 0)
+                              Divider(
+                                height: 1,
+                                thickness: 1,
+                                color: scheme.outlineVariant
+                                    .withValues(alpha: 0.55),
                               ),
-                            ],
+                            _LedgerMenuTile(
+                              name: ledgers[i].name,
+                              selected: ledgers[i].id == currentId,
+                              onTap: () => close(ledgers[i].id),
+                            ),
                           ],
-                        ),
+                        ],
                       ),
                     ),
                   ),
@@ -346,6 +358,9 @@ class _HomePageState extends ConsumerState<HomePage> {
         );
       },
     );
+
+    overlayState.insert(entry);
+    final id = await completer.future;
     if (id == null || id == currentId || !mounted) return;
     await ref.read(databaseProvider).setCurrentLedgerId(id);
     ref.invalidate(currentLedgerProvider);
