@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/utils/date_range.dart';
+import '../../core/utils/money.dart';
 import '../../core/widgets/date_range_control.dart';
 import '../../core/widgets/txn_grouped_list.dart';
 import '../../data/db/centli_database.dart';
@@ -335,6 +336,68 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     _runSearch();
   }
 
+  bool _isQuickRange(String kind) {
+    final r = _range;
+    if (r == null) return false;
+    switch (kind) {
+      case 'week':
+        final w = DateRangeWindow.thisWeek();
+        return r.startMs == w.startMs && r.endMs == w.endMs;
+      case 'month':
+        final m = DateRangeWindow.thisMonth();
+        return r.kind == DateRangeKind.month &&
+            r.startMs == m.startMs &&
+            r.endMs == m.endMs;
+      case 'lastMonth':
+        final lm = DateRangeWindow.lastMonth();
+        return r.kind == DateRangeKind.month &&
+            r.startMs == lm.startMs &&
+            r.endMs == lm.endMs;
+      default:
+        return false;
+    }
+  }
+
+  void _setQuickRange(String kind) {
+    DateRangeWindow next;
+    switch (kind) {
+      case 'week':
+        next = DateRangeWindow.thisWeek();
+      case 'month':
+        next = DateRangeWindow.thisMonth();
+      case 'lastMonth':
+        next = DateRangeWindow.lastMonth();
+      default:
+        return;
+    }
+    setState(() {
+      if (_isQuickRange(kind)) {
+        _range = null;
+      } else {
+        _range = next;
+      }
+    });
+    _runSearch();
+  }
+
+  ({int incomeMinor, int expenseMinor, String ccy}) _resultTotals(
+    List<Transaction> rows,
+    String baseCcy,
+  ) {
+    var income = 0;
+    var expense = 0;
+    for (final t in rows) {
+      // 多币种时只累计本位币，避免把不同货币的 minor 直接相加。
+      if (t.currency != baseCcy) continue;
+      if (t.type == 'in') {
+        income += t.amountMinor;
+      } else if (t.type == 'out') {
+        expense += t.amountMinor;
+      }
+    }
+    return (incomeMinor: income, expenseMinor: expense, ccy: baseCcy);
+  }
+
   /// Space-separated type words become the type filter instead of keywords.
   void _commitQuickType(String? type) {
     if (type == null) return;
@@ -518,6 +581,27 @@ class _SearchPageState extends ConsumerState<SearchPage> {
               selected: _range != null,
               onSelected: (_) => _pickRange(),
             ),
+            const SizedBox(width: 8),
+            FilterChip(
+              key: const Key('search_quick_this_week'),
+              label: const Text('本周'),
+              selected: _isQuickRange('week'),
+              onSelected: (_) => _setQuickRange('week'),
+            ),
+            const SizedBox(width: 8),
+            FilterChip(
+              key: const Key('search_quick_this_month'),
+              label: const Text('本月'),
+              selected: _isQuickRange('month'),
+              onSelected: (_) => _setQuickRange('month'),
+            ),
+            const SizedBox(width: 8),
+            FilterChip(
+              key: const Key('search_quick_last_month'),
+              label: const Text('上月'),
+              selected: _isQuickRange('lastMonth'),
+              onSelected: (_) => _setQuickRange('lastMonth'),
+            ),
             const SizedBox(width: 4),
             ActionChip(
               key: const Key('search_more_filters'),
@@ -670,6 +754,9 @@ class _SearchPageState extends ConsumerState<SearchPage> {
             : null,
       );
     }
+    final base =
+        ref.watch(currentLedgerProvider).valueOrNull?.baseCurrency ?? 'CNY';
+    final totals = _resultTotals(rows, base);
     return Column(
       children: [
         if (_truncated)
@@ -706,6 +793,32 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                   )),
                   child: const Text('把类型词当作筛选'),
                 ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 6, 16, 4),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '收入 ${hide ? '****' : formatMinor(totals.ccy, totals.incomeMinor)}',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: CentliTheme.incomeGreen,
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+              ),
+              Expanded(
+                child: Text(
+                  '支出 ${hide ? '****' : formatMinor(totals.ccy, totals.expenseMinor)}',
+                  textAlign: TextAlign.end,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: CentliTheme.expenseRed,
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+              ),
             ],
           ),
         ),

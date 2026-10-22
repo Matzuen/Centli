@@ -104,6 +104,9 @@ class ImportService {
 
   static const supportedExportVersion = 1;
 
+  /// 当前导出使用的 schema_version；偏低时预览警告但仍可导入。
+  static const latestSchemaVersion = 4;
+
   /// Parse UTF-8 JSON text into a validated [ImportBundle].
   ImportBundle parseJsonString(String text) {
     late final Object? decoded;
@@ -127,8 +130,14 @@ class ImportService {
       );
     }
     final schemaVersion = _asInt(map['schema_version'], 'schema_version');
-    if (schemaVersion < 1 || schemaVersion > 4) {
+    // 严重不兼容才硬失败；偏低版本由 [preview*] 警告后仍可继续。
+    if (schemaVersion < 1) {
       throw StateError('不支持的数据版本 schema_version=$schemaVersion');
+    }
+    if (schemaVersion > latestSchemaVersion) {
+      throw StateError(
+        '备份 schema_version=$schemaVersion 高于本机支持的 $latestSchemaVersion，请升级 App',
+      );
     }
 
     final ledgerRaw = map['ledger'];
@@ -229,6 +238,17 @@ class ImportService {
     );
   }
 
+  List<String> schemaWarningsFor(ImportBundle bundle) {
+    if (bundle.schemaVersion >= latestSchemaVersion) return const [];
+    return [
+      '备份库版本 schema_version=${bundle.schemaVersion} 低于当前 $latestSchemaVersion，'
+          '部分新字段可能为空；仍可继续导入。',
+    ];
+  }
+
+  List<String> _schemaWarnings(ImportBundle bundle) =>
+      schemaWarningsFor(bundle);
+
   Future<ImportPreview> previewFile(File file) async {
     final text = await file.readAsString();
     final bundle = parseJsonString(text);
@@ -237,6 +257,7 @@ class ImportService {
       sourceLabel: file.uri.pathSegments.isEmpty
           ? file.path
           : file.uri.pathSegments.last,
+      warnings: _schemaWarnings(bundle),
     );
   }
 
@@ -261,6 +282,39 @@ class ImportService {
       settingsMap: bundle.settings,
       settingsSkipKeys: _settingsSkipKeys,
       replaceFxRates: replaceFxRates,
+    );
+    return ImportResult(
+      ledgerId: stats.ledgerId,
+      ledgerName: stats.ledgerName,
+      accounts: stats.accounts,
+      categories: stats.categories,
+      transactions: stats.transactions,
+      merchantRules: stats.merchantRules,
+      pendingCaptures: stats.pendingCaptures,
+      fxRates: stats.fxRates,
+      budgets: stats.budgets,
+      settingsWritten: stats.settingsWritten,
+    );
+  }
+
+  /// 合并追加：不 wipe，只插入缺失 id 的行。
+  Future<ImportResult> merge(
+    ImportBundle bundle, {
+    bool mergeFxRates = false,
+  }) async {
+    final stats = await db.mergeFromImportBundle(
+      ledgerMap: bundle.ledger,
+      accountMaps: bundle.accounts,
+      assetTypeMaps: bundle.assetTypes,
+      categoryMaps: bundle.categories,
+      transactionMaps: bundle.transactions,
+      merchantRuleMaps: bundle.merchantRules,
+      pendingCaptureMaps: bundle.pendingCaptures,
+      fxRateMaps: bundle.fxRates,
+      budgetMaps: bundle.budgets,
+      settingsMap: bundle.settings,
+      settingsSkipKeys: _settingsSkipKeys,
+      mergeFxRates: mergeFxRates,
     );
     return ImportResult(
       ledgerId: stats.ledgerId,
@@ -395,7 +449,10 @@ class ImportService {
       bundle: parsed.bundle,
       sourceLabel: sourceLabel,
       sourceKind: 'excel',
-      warnings: parsed.warnings,
+      warnings: [
+        ...parsed.warnings,
+        ..._schemaWarnings(parsed.bundle),
+      ],
     );
   }
 

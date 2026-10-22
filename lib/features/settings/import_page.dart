@@ -17,10 +17,13 @@ class ImportPage extends ConsumerStatefulWidget {
   ConsumerState<ImportPage> createState() => _ImportPageState();
 }
 
+enum _ImportMode { overwrite, merge }
+
 class _ImportPageState extends ConsumerState<ImportPage> {
   ImportPreview? _preview;
   bool _busy = false;
   String? _error;
+  _ImportMode _mode = _ImportMode.overwrite;
 
   Future<void> _pick() async {
     setState(() {
@@ -58,7 +61,11 @@ class _ImportPageState extends ConsumerState<ImportPage> {
         final bytes = await picked.readAsBytes();
         final decoded = utf8.decode(bytes);
         final bundle = svc.parseJsonString(decoded);
-        preview = ImportPreview(bundle: bundle, sourceLabel: picked.name);
+        preview = ImportPreview(
+          bundle: bundle,
+          sourceLabel: picked.name,
+          warnings: svc.schemaWarningsFor(bundle),
+        );
       }
       if (!mounted) return;
       setState(() {
@@ -81,28 +88,57 @@ class _ImportPageState extends ConsumerState<ImportPage> {
     if (preview == null || _busy) return;
 
     final b = preview.bundle;
+    final mergeMode = _mode == _ImportMode.merge;
+    if (b.schemaVersion < ImportService.latestSchemaVersion) {
+      final proceed = await showGlassDialog<bool>(
+        context: context,
+        builder: (ctx) => CentliGlassDialog(
+          title: const Text('低版本备份'),
+          content: Text(
+            '备份 schema_version=${b.schemaVersion} 低于当前 '
+            '${ImportService.latestSchemaVersion}，部分字段可能缺失。仍要继续？',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('继续'),
+            ),
+          ],
+        ),
+      );
+      if (proceed != true || !mounted) return;
+    }
+
     final ok = await showGlassDialog<bool>(
       context: context,
       builder: (ctx) => CentliGlassDialog(
-        title: const Text('\u786e\u8ba4\u8fd8\u539f\uff1f'),
+        title: Text(mergeMode ? '确认合并导入？' : '确认还原？'),
         content: Text(
-          '将清空本机记账本「${b.ledgerName}」下的资产账户、分类、流水、待确认、商户规则与预算，'
-          '再写入备份内容。其它记账本不受影响。\n\n'
-          '${preview.sourceKind == 'excel'
-              ? 'Excel 不含汇率：本机汇率缓存会保留。\n\n'
-              : '汇率缓存会按备份整体替换（全局）。\n\n'}'
-          '通知识别规则（我的规则）不在此备份范围内，不会被清空或覆盖。\n'
-          '本机 PIN 与应用锁开关也不会从备份覆盖。\n\n'
-          '此操作不可撤销。',
+          mergeMode
+              ? '将向记账本「${b.ledgerName}」追加备份中本地尚不存在的账户、分类、流水等（按 id 跳过已有）。'
+                  '不会清空本机已有数据。\n\n'
+                  '通知识别规则与应用锁 PIN 不受影响。'
+              : '将清空本机记账本「${b.ledgerName}」下的资产账户、分类、流水、待确认、商户规则与预算，'
+                  '再写入备份内容。其它记账本不受影响。\n\n'
+                  '${preview.sourceKind == 'excel'
+                      ? 'Excel 不含汇率：本机汇率缓存会保留。\n\n'
+                      : '汇率缓存会按备份整体替换（全局）。\n\n'}'
+                  '通知识别规则（我的规则）不在此备份范围内，不会被清空或覆盖。\n'
+                  '本机 PIN 与应用锁开关也不会从备份覆盖。\n\n'
+                  '此操作不可撤销。',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('\u53d6\u6d88'),
+            child: const Text('取消'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('\u6e05\u7a7a\u5e76\u8fd8\u539f'),
+            child: Text(mergeMode ? '合并追加' : '清空并还原'),
           ),
         ],
       ),
@@ -115,10 +151,15 @@ class _ImportPageState extends ConsumerState<ImportPage> {
     });
     try {
       final svc = ImportService(ref.read(databaseProvider));
-      final result = await svc.restore(
-        b,
-        replaceFxRates: preview.sourceKind != 'excel',
-      );
+      final result = mergeMode
+          ? await svc.merge(
+              b,
+              mergeFxRates: preview.sourceKind != 'excel',
+            )
+          : await svc.restore(
+              b,
+              replaceFxRates: preview.sourceKind != 'excel',
+            );
       ref.invalidate(currentLedgerIdProvider);
       ref.invalidate(currentLedgerProvider);
       ref.invalidate(fxBookProvider);
@@ -127,11 +168,11 @@ class _ImportPageState extends ConsumerState<ImportPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            '\u5df2\u8fd8\u539f\u300c${result.ledgerName}\u300d\uff1a'
-            '${result.transactions} \u7b14\u6d41\u6c34 / '
-            '${result.accounts} \u8d44\u4ea7\u8d26\u6237 / '
-            '${result.categories} \u5206\u7c7b / '
-            '${result.budgets} \u9884\u7b97',
+            '${mergeMode ? '已合并' : '已还原'}「${result.ledgerName}」：'
+            '${result.transactions} 笔流水 / '
+            '${result.accounts} 资产账户 / '
+            '${result.categories} 分类 / '
+            '${result.budgets} 预算',
           ),
         ),
       );
@@ -139,7 +180,7 @@ class _ImportPageState extends ConsumerState<ImportPage> {
       if (!mounted) return;
       setState(() => _error = '$e');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('\u8fd8\u539f\u5931\u8d25\uff1a$e')),
+        SnackBar(content: Text('${mergeMode ? '合并' : '还原'}失败：$e')),
       );
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -251,8 +292,31 @@ class _ImportPageState extends ConsumerState<ImportPage> {
               ),
             ),
             const SizedBox(height: CentliSpacing.section),
+            Text('导入模式', style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: CentliSpacing.item),
+            SegmentedButton<_ImportMode>(
+              segments: const [
+                ButtonSegment(
+                  value: _ImportMode.overwrite,
+                  label: Text('覆盖当前账本'),
+                  icon: Icon(Icons.restore, size: 18),
+                ),
+                ButtonSegment(
+                  value: _ImportMode.merge,
+                  label: Text('合并追加'),
+                  icon: Icon(Icons.merge_type, size: 18),
+                ),
+              ],
+              selected: {_mode},
+              onSelectionChanged: _busy
+                  ? null
+                  : (s) => setState(() => _mode = s.first),
+            ),
+            const SizedBox(height: CentliSpacing.item),
             Text(
-              '\u8fd8\u539f\u4f1a\u5220\u9664\u672c\u673a\u73b0\u6709\u8d26\u672c\u6570\u636e\u540e\u5199\u5165\u5907\u4efd\u3002\u5e94\u7528\u9501 PIN \u4fdd\u7559\u5728\u672c\u673a\u5b89\u5168\u5b58\u50a8\u4e2d\u3002',
+              _mode == _ImportMode.merge
+                  ? '合并：只插入本地尚不存在的记录（按 id），不删除已有数据。'
+                  : '覆盖：清空该记账本本地数据后写入备份。应用锁 PIN 保留在本机安全存储中。',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.4),
             ),
             const SizedBox(height: CentliSpacing.section),
@@ -264,9 +328,15 @@ class _ImportPageState extends ConsumerState<ImportPage> {
                       height: 18,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Icon(Icons.restore),
+                  : Icon(
+                      _mode == _ImportMode.merge
+                          ? Icons.merge_type
+                          : Icons.restore,
+                    ),
               label: Text(
-                _busy ? '\u8fd8\u539f\u4e2d\u2026' : '\u6e05\u7a7a\u5e76\u8fd8\u539f',
+                _busy
+                    ? (_mode == _ImportMode.merge ? '合并中…' : '还原中…')
+                    : (_mode == _ImportMode.merge ? '合并追加' : '清空并还原'),
               ),
             ),
           ],

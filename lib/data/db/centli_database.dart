@@ -1651,10 +1651,30 @@ WHERE pending_id IS NOT NULL
     );
   }
 
+  Future<int> undeleteTransactions(Iterable<String> ids) async {
+    final list = ids.where((id) => id.isNotEmpty).toList();
+    if (list.isEmpty) return 0;
+    final ts = nowMs();
+    return (update(transactions)..where((t) => t.id.isIn(list))).write(
+      TransactionsCompanion(
+        deletedAt: const Value(null),
+        updatedAt: Value(ts),
+      ),
+    );
+  }
+
   /// Permanently remove a soft-deleted txn.
   Future<void> purgeDeletedTransaction(String id) async {
     await (delete(transactions)
           ..where((t) => t.id.equals(id) & t.deletedAt.isNotNull()))
+        .go();
+  }
+
+  Future<int> purgeDeletedTransactions(Iterable<String> ids) async {
+    final list = ids.where((id) => id.isNotEmpty).toList();
+    if (list.isEmpty) return 0;
+    return (delete(transactions)
+          ..where((t) => t.id.isIn(list) & t.deletedAt.isNotNull()))
         .go();
   }
 
@@ -1664,6 +1684,40 @@ WHERE pending_id IS NOT NULL
             (t) => t.ledgerId.equals(ledgerId) & t.deletedAt.isNotNull(),
           ))
         .go();
+  }
+
+  /// 永久删除回收站中 [deletedAt] 早于 [beforeMs] 的记录（跨账本或指定账本）。
+  Future<int> purgeDeletedOlderThan(int beforeMs, {String? ledgerId}) async {
+    return (delete(transactions)..where((t) {
+          var expr = t.deletedAt.isNotNull() & t.deletedAt.isSmallerThanValue(beforeMs);
+          if (ledgerId != null) {
+            expr = expr & t.ledgerId.equals(ledgerId);
+          }
+          return expr;
+        })).go();
+  }
+
+  /// 该分类最近一笔未删除流水的账户与备注（用于记账记忆）。
+  Future<({String? accountId, String? note})?> lastFieldsForCategory({
+    required String ledgerId,
+    required String categoryId,
+  }) async {
+    final row = await (select(transactions)
+          ..where(
+            (t) =>
+                t.ledgerId.equals(ledgerId) &
+                t.categoryId.equals(categoryId) &
+                t.deletedAt.isNull(),
+          )
+          ..orderBy([(t) => OrderingTerm.desc(t.happenAt)])
+          ..limit(1))
+        .getSingleOrNull();
+    if (row == null) return null;
+    final n = row.note?.trim();
+    return (
+      accountId: row.accountId,
+      note: (n == null || n.isEmpty) ? null : n,
+    );
   }
 
   Future<void> setIncludeInStat(String id, bool include) async {
@@ -3413,6 +3467,221 @@ WHERE pending_id IS NOT NULL
     out.remove('merchant');
     out['note'] = composed;
     return out;
+  }
+
+  /// 合并追加：不 wipe；仅插入本地缺失 id 的账户 / 分类 / 流水等。
+  Future<RestoreImportStats> mergeFromImportBundle({
+    required Map<String, dynamic> ledgerMap,
+    required List<Map<String, dynamic>> accountMaps,
+    List<Map<String, dynamic>> assetTypeMaps = const [],
+    required List<Map<String, dynamic>> categoryMaps,
+    required List<Map<String, dynamic>> transactionMaps,
+    required List<Map<String, dynamic>> merchantRuleMaps,
+    required List<Map<String, dynamic>> pendingCaptureMaps,
+    required List<Map<String, dynamic>> fxRateMaps,
+    required List<Map<String, dynamic>> budgetMaps,
+    required Map<String, String> settingsMap,
+    required Set<String> settingsSkipKeys,
+    bool mergeFxRates = false,
+  }) async {
+    final ledgerRow = Ledger.fromJson(ledgerMap);
+    final lid = ledgerRow.id;
+    final accountRows = [
+      for (final m in accountMaps) Account.fromJson(m).copyWith(ledgerId: lid),
+    ];
+    final categoryRows = _sortCategoriesForInsert([
+      for (final m in categoryMaps)
+        Category.fromJson(m).copyWith(ledgerId: lid),
+    ]);
+    final txnRows = [
+      for (final m in transactionMaps)
+        Transaction.fromJson(_normalizeTxnImportMap(m)).copyWith(ledgerId: lid),
+    ];
+    final ruleRows = [
+      for (final m in merchantRuleMaps)
+        MerchantRule.fromJson(m).copyWith(ledgerId: lid),
+    ];
+    final pendingRows = [
+      for (final m in pendingCaptureMaps)
+        PendingCapture.fromJson(_normalizePendingImportMap(m))
+            .copyWith(ledgerId: lid),
+    ];
+    final fxRows = [for (final m in fxRateMaps) FxRate.fromJson(m)];
+    final budgetRows = [
+      for (final m in budgetMaps) Budget.fromJson(m).copyWith(ledgerId: lid),
+    ];
+
+    var insertedAccounts = 0;
+    var insertedCategories = 0;
+    var insertedTxns = 0;
+    var insertedRules = 0;
+    var insertedPending = 0;
+    var insertedFx = 0;
+    var insertedBudgets = 0;
+    var settingsWritten = 0;
+
+    await transaction(() async {
+      final existingLedger =
+          await (select(ledgers)..where((t) => t.id.equals(lid)))
+              .getSingleOrNull();
+      if (existingLedger == null) {
+        await into(ledgers).insert(ledgerRow.toCompanion(true));
+        await seedDefaultAssetTypes(lid);
+      }
+
+      for (final m in assetTypeMaps) {
+        final name = '${m['name'] ?? ''}'.trim();
+        if (name.isEmpty) continue;
+        final existing = await (select(assetTypes)
+              ..where((t) => t.ledgerId.equals(lid) & t.name.equals(name)))
+            .get();
+        if (existing.isNotEmpty) continue;
+        final id = '${m['id'] ?? ''}'.trim().isEmpty ? newId() : '${m['id']}';
+        final ts = nowMs();
+        await into(assetTypes).insert(
+          AssetTypesCompanion.insert(
+            id: id,
+            ledgerId: lid,
+            name: name,
+            icon: Value(m['icon']?.toString()),
+            sortOrder: Value(
+              m['sortOrder'] as int? ?? m['sort_order'] as int? ?? 99,
+            ),
+            archived: Value(m['archived'] as int? ?? 0),
+            createdAt: m['createdAt'] as int? ?? ts,
+            updatedAt: m['updatedAt'] as int? ?? ts,
+          ),
+        );
+      }
+
+      final existingAccIds = {
+        for (final a in await (select(accounts)
+              ..where((t) => t.ledgerId.equals(lid)))
+            .get())
+          a.id,
+      };
+      for (final a in accountRows) {
+        if (existingAccIds.contains(a.id)) continue;
+        final typeId = await resolveAssetTypeId(ledgerId: lid, raw: a.type);
+        await into(accounts).insert(
+          a.copyWith(type: typeId).toCompanion(true),
+        );
+        existingAccIds.add(a.id);
+        insertedAccounts++;
+      }
+
+      final existingCatIds = {
+        for (final c in await (select(categories)
+              ..where((t) => t.ledgerId.equals(lid)))
+            .get())
+          c.id,
+      };
+      for (final c in categoryRows) {
+        if (existingCatIds.contains(c.id)) continue;
+        await into(categories).insert(c.toCompanion(true));
+        existingCatIds.add(c.id);
+        insertedCategories++;
+      }
+
+      final existingBudgetIds = {
+        for (final b in await (select(budgets)
+              ..where((t) => t.ledgerId.equals(lid)))
+            .get())
+          b.id,
+      };
+      for (final b in budgetRows) {
+        if (existingBudgetIds.contains(b.id)) continue;
+        await into(budgets).insert(b.toCompanion(true));
+        existingBudgetIds.add(b.id);
+        insertedBudgets++;
+      }
+
+      final existingTxnIds = {
+        for (final t in await (select(transactions)
+              ..where((t) => t.ledgerId.equals(lid)))
+            .get())
+          t.id,
+      };
+      final newTxns = [
+        for (final t in txnRows)
+          if (!existingTxnIds.contains(t.id)) t,
+      ];
+      if (newTxns.isNotEmpty) {
+        await batch((b) {
+          b.insertAll(
+            transactions,
+            [for (final t in newTxns) t.toCompanion(true)],
+          );
+        });
+        insertedTxns = newTxns.length;
+      }
+
+      final existingRuleIds = {
+        for (final r in await (select(merchantRules)
+              ..where((t) => t.ledgerId.equals(lid)))
+            .get())
+          r.id,
+      };
+      for (final r in ruleRows) {
+        if (existingRuleIds.contains(r.id)) continue;
+        await into(merchantRules).insert(r.toCompanion(true));
+        existingRuleIds.add(r.id);
+        insertedRules++;
+      }
+
+      final existingPendingIds = {
+        for (final p in await (select(pendingCaptures)
+              ..where((t) => t.ledgerId.equals(lid)))
+            .get())
+          p.id,
+      };
+      for (final p in pendingRows) {
+        if (existingPendingIds.contains(p.id)) continue;
+        await into(pendingCaptures).insert(p.toCompanion(true));
+        existingPendingIds.add(p.id);
+        insertedPending++;
+      }
+
+      if (mergeFxRates) {
+        final existingFxKeys = {
+          for (final f in await select(fxRates).get())
+            '${f.day}|${f.fromCcy}|${f.toCcy}',
+        };
+        for (final f in fxRows) {
+          final key = '${f.day}|${f.fromCcy}|${f.toCcy}';
+          if (existingFxKeys.contains(key)) continue;
+          await into(fxRates).insert(f.toCompanion(true));
+          existingFxKeys.add(key);
+          insertedFx++;
+        }
+        if (insertedFx > 0) _dropFxBookCache();
+      }
+
+      // 合并模式不覆盖本机设置（仅确保可切到该账本）。
+      for (final e in settingsMap.entries) {
+        if (settingsSkipKeys.contains(e.key)) continue;
+        if (e.key == 'current_ledger_id') continue;
+        final existing = await getSetting(e.key);
+        if (existing != null && existing.isNotEmpty) continue;
+        await setSetting(e.key, e.value);
+        settingsWritten++;
+      }
+      await setSetting('current_ledger_id', ledgerRow.id);
+      settingsWritten++;
+    });
+
+    return RestoreImportStats(
+      ledgerId: ledgerRow.id,
+      ledgerName: ledgerRow.name,
+      accounts: insertedAccounts,
+      categories: insertedCategories,
+      transactions: insertedTxns,
+      merchantRules: insertedRules,
+      pendingCaptures: insertedPending,
+      fxRates: insertedFx,
+      budgets: insertedBudgets,
+      settingsWritten: settingsWritten,
+    );
   }
 
   Future<RestoreImportStats> restoreFromImportBundle({

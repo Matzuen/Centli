@@ -22,7 +22,7 @@ final _recycleLookupsProvider =
 });
 
 /// Soft-deleted transactions: full details + undelete / purge permanently.
-class RecycleBinPage extends ConsumerWidget {
+class RecycleBinPage extends ConsumerStatefulWidget {
   const RecycleBinPage({super.key});
 
   static String typeLabel(String type) {
@@ -37,17 +37,85 @@ class RecycleBinPage extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<RecycleBinPage> createState() => _RecycleBinPageState();
+}
+
+class _RecycleBinPageState extends ConsumerState<RecycleBinPage> {
+  final _selected = <String>{};
+  var _selecting = false;
+
+  void _exitSelect() {
+    setState(() {
+      _selecting = false;
+      _selected.clear();
+    });
+  }
+
+  void _toggleSelect(String id) {
+    setState(() {
+      if (_selected.contains(id)) {
+        _selected.remove(id);
+        if (_selected.isEmpty) _selecting = false;
+      } else {
+        _selected.add(id);
+        _selecting = true;
+      }
+    });
+  }
+
+  void _selectAll(List<Transaction> items) {
+    setState(() {
+      _selecting = true;
+      _selected
+        ..clear()
+        ..addAll(items.map((t) => t.id));
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final ledgerAsync = ref.watch(currentLedgerProvider);
     return CentliGradientScaffold(
       appBar: AppBar(
-        title: const Text('回收站'),
+        title: Text(_selecting ? '已选 ${_selected.length}' : '回收站'),
+        leading: _selecting
+            ? IconButton(
+                tooltip: '取消选择',
+                icon: const Icon(Icons.close),
+                onPressed: _exitSelect,
+              )
+            : null,
         actions: [
-          IconButton(
-            tooltip: '清空回收站',
-            icon: const Icon(Icons.delete_forever_outlined),
-            onPressed: () => _purgeAll(context, ref),
-          ),
+          if (_selecting) ...[
+            IconButton(
+              tooltip: '批量恢复',
+              icon: const Icon(Icons.restore),
+              onPressed: _selected.isEmpty
+                  ? null
+                  : () => _batchRestore(context),
+            ),
+            IconButton(
+              tooltip: '批量永久删除',
+              icon: Icon(
+                Icons.delete_forever,
+                color: Theme.of(context).colorScheme.error,
+              ),
+              onPressed: _selected.isEmpty
+                  ? null
+                  : () => _batchPurge(context),
+            ),
+          ] else ...[
+            IconButton(
+              tooltip: '多选',
+              icon: const Icon(Icons.checklist),
+              onPressed: () => setState(() => _selecting = true),
+            ),
+            IconButton(
+              tooltip: '清空回收站',
+              icon: const Icon(Icons.delete_forever_outlined),
+              onPressed: () => _purgeAll(context),
+            ),
+          ],
         ],
       ),
       body: ledgerAsync.when(
@@ -72,21 +140,64 @@ class RecycleBinPage extends ConsumerWidget {
                   message: '删除流水后可在此查看详情并恢复。永久清空不可撤销。',
                 );
               }
-              return ListView.separated(
-                padding: const EdgeInsets.fromLTRB(
-                  CentliSpacing.pageH,
-                  CentliSpacing.section,
-                  CentliSpacing.pageH,
-                  CentliSpacing.pageBottom,
-                ),
-                itemCount: items.length,
-                separatorBuilder: (context, index) =>
-                    const SizedBox(height: CentliSpacing.item),
-                itemBuilder: (context, i) => _DeletedTile(
-                  txn: items[i],
-                  lookups: lookups,
-                  onTap: () => _showDetails(context, ref, items[i], lookups),
-                ),
+              return Column(
+                children: [
+                  if (_selecting)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                      child: Row(
+                        children: [
+                          TextButton(
+                            onPressed: () => _selectAll(items),
+                            child: const Text('全选'),
+                          ),
+                          TextButton(
+                            onPressed: _exitSelect,
+                            child: const Text('取消'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  Expanded(
+                    child: ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(
+                        CentliSpacing.pageH,
+                        CentliSpacing.section,
+                        CentliSpacing.pageH,
+                        CentliSpacing.pageBottom,
+                      ),
+                      itemCount: items.length,
+                      separatorBuilder: (context, index) =>
+                          const SizedBox(height: CentliSpacing.item),
+                      itemBuilder: (context, i) {
+                        final t = items[i];
+                        return _DeletedTile(
+                          txn: t,
+                          lookups: lookups,
+                          selecting: _selecting,
+                          selected: _selected.contains(t.id),
+                          onTap: () {
+                            if (_selecting) {
+                              _toggleSelect(t.id);
+                            } else {
+                              _showDetails(context, t, lookups);
+                            }
+                          },
+                          onLongPress: () {
+                            if (!_selecting) {
+                              setState(() {
+                                _selecting = true;
+                                _selected.add(t.id);
+                              });
+                            } else {
+                              _toggleSelect(t.id);
+                            }
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ],
               );
             },
           );
@@ -95,9 +206,48 @@ class RecycleBinPage extends ConsumerWidget {
     );
   }
 
+  Future<void> _batchRestore(BuildContext context) async {
+    final ids = _selected.toList();
+    if (ids.isEmpty) return;
+    final n = await ref.read(databaseProvider).undeleteTransactions(ids);
+    if (!context.mounted) return;
+    _exitSelect();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('已恢复 $n 条')),
+    );
+  }
+
+  Future<void> _batchPurge(BuildContext context) async {
+    final ids = _selected.toList();
+    if (ids.isEmpty) return;
+    final ok = await showGlassDialog<bool>(
+      context: context,
+      builder: (ctx) => CentliGlassDialog(
+        title: const Text('永久删除？'),
+        content: Text('将永久删除选中的 ${ids.length} 条，不可撤销。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !context.mounted) return;
+    final n = await ref.read(databaseProvider).purgeDeletedTransactions(ids);
+    if (!context.mounted) return;
+    _exitSelect();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('已永久删除 $n 条')),
+    );
+  }
+
   Future<void> _showDetails(
     BuildContext context,
-    WidgetRef ref,
     Transaction t,
     TxnListLookups lookups,
   ) async {
@@ -147,7 +297,7 @@ class RecycleBinPage extends ConsumerWidget {
     }
   }
 
-  Future<void> _purgeAll(BuildContext context, WidgetRef ref) async {
+  Future<void> _purgeAll(BuildContext context) async {
     final ledger = ref.read(currentLedgerProvider).valueOrNull;
     if (ledger == null) return;
     final count =
@@ -195,11 +345,17 @@ class _DeletedTile extends StatelessWidget {
     required this.txn,
     required this.lookups,
     required this.onTap,
+    required this.onLongPress,
+    required this.selecting,
+    required this.selected,
   });
 
   final Transaction txn;
   final TxnListLookups lookups;
   final VoidCallback onTap;
+  final VoidCallback onLongPress;
+  final bool selecting;
+  final bool selected;
 
   @override
   Widget build(BuildContext context) {
@@ -238,11 +394,18 @@ class _DeletedTile extends StatelessWidget {
     return CentliSoftCard(
       child: ListTile(
         onTap: onTap,
-        leading: CentliIconChip(
-          name: (cat?.name ?? '').trim(),
-          kind: txn.type == 'transfer' ? 'transfer' : txn.type,
-          iconKey: cat?.icon,
-        ),
+        onLongPress: onLongPress,
+        selected: selected,
+        leading: selecting
+            ? Checkbox(
+                value: selected,
+                onChanged: (_) => onTap(),
+              )
+            : CentliIconChip(
+                name: (cat?.name ?? '').trim(),
+                kind: txn.type == 'transfer' ? 'transfer' : txn.type,
+                iconKey: cat?.icon,
+              ),
         title: Text(
           title,
           maxLines: 1,

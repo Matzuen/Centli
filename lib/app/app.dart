@@ -6,7 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:home_widget/home_widget.dart';
 
+import '../core/constants/pref_keys.dart';
 import '../core/utils/date_range.dart';
+import '../data/db/centli_database.dart';
 import '../data/db/database_provider.dart';
 import '../features/security/app_lock_controller.dart';
 import '../platform/home_widget/centli_home_widget_sync.dart';
@@ -193,6 +195,22 @@ class _CentliAppState extends ConsumerState<CentliApp> {
     // 须等引导结束：否则权限框/小组件深链会盖在引导上，松手点穿「跳过」直接进首页。
     unawaited(_handleInitialWidgetLaunch());
     unawaited(_requestPostNotificationsOnLaunch());
+    unawaited(_maybePurgeRecycleBin(db));
+  }
+
+  /// 启动时按设置清理回收站超过 30 天的软删记录。
+  Future<void> _maybePurgeRecycleBin(CentliDatabase db) async {
+    try {
+      final raw = await db.getSetting(PrefKeys.recycleAutoPurge);
+      if (!prefBool(raw)) return;
+      final cutoff = DateTime.now()
+          .toUtc()
+          .subtract(const Duration(days: 30))
+          .millisecondsSinceEpoch;
+      await db.purgeDeletedOlderThan(cutoff);
+    } catch (_) {
+      // 启动清理失败不阻断 App。
+    }
   }
 
   /// 等到引导完成（或已完成）再继续；超时则放弃，避免卡死。

@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 
 import '../../app/theme.dart';
 import '../../core/constants/currencies.dart';
+import '../../core/constants/pref_keys.dart';
 import '../../core/utils/money.dart';
 import '../../core/utils/amount_expr.dart';
 import '../../core/widgets/centli_icon.dart';
@@ -103,6 +104,9 @@ List<Account> _accounts = [];
   bool _saving = false;
   late DateTime _happenAt;
   LastBookkeepingChoice? _lastChoice;
+  bool _moreExpanded = false;
+  bool _rememberCategoryAccount = true;
+  bool _rememberCategoryNote = true;
 
   @override
   void initState() {
@@ -143,6 +147,8 @@ List<Account> _accounts = [];
     }
     var accounts = await db.loadActiveAccounts(ledgerId);
     final assetTypes = await db.loadAssetTypes(ledgerId);
+    final rememberAccRaw = await db.getSetting(PrefKeys.rememberCategoryAccount);
+    final rememberNoteRaw = await db.getSetting(PrefKeys.rememberCategoryNote);
     final existing = widget.existing;
     if (existing != null) {
       final need = <String>{
@@ -179,6 +185,8 @@ List<Account> _accounts = [];
       _ledgerId = ledgerId;
       _accounts = accounts;
       _assetTypes = assetTypes;
+      _rememberCategoryAccount = prefBool(rememberAccRaw);
+      _rememberCategoryNote = prefBool(rememberNoteRaw);
       if (existing != null) {
         _type = existing.type;
         _amountText = fromMinor(
@@ -596,13 +604,15 @@ List<Account> _accounts = [];
       }
       if (!mounted) return;
       if (keepOpen && widget.existing == null) {
-        // 再记一笔：落库后保留面板，清空金额/备注，时间刷新为现在。
+        // 再记一笔：保留分类+账户，清空金额/备注/标签，时间刷新为现在。
         setState(() {
           _amountText = '0';
           _toAmountText = '0';
           _fxRateText = null;
           _noteCtrl.clear();
-              _happenAt = DateTime.now();
+          _tags = [];
+          _happenAt = DateTime.now();
+          _moreExpanded = false;
         });
         ScaffoldMessenger.of(context)
             .showSnackBar(const SnackBar(content: Text('已保存，可继续记账')));
@@ -624,6 +634,19 @@ List<Account> _accounts = [];
       return DateFormat('HH:mm').format(_happenAt);
     }
     return DateFormat('yyyy-MM-dd HH:mm').format(_happenAt);
+  }
+
+  void _setHappenDay(DateTime day) {
+    final now = DateTime.now();
+    setState(() {
+      _happenAt = DateTime(
+        day.year,
+        day.month,
+        day.day,
+        now.hour,
+        now.minute,
+      );
+    });
   }
 
   Future<void> _pickHappenAt() async {
@@ -684,10 +707,35 @@ List<Account> _accounts = [];
     if (!mounted) return;
     if (id != null) {
       setState(() => _categoryId = id);
+      await _applyCategoryMemory(id);
       return;
     }
     // Dismiss or 管理: refresh tree, keep selection when still valid.
     await _reloadCategories();
+  }
+
+  Future<void> _applyCategoryMemory(String categoryId) async {
+    if (_ledgerId == null || _type == 'transfer') return;
+    if (!_rememberCategoryAccount && !_rememberCategoryNote) return;
+    final db = ref.read(databaseProvider);
+    final last = await db.lastFieldsForCategory(
+      ledgerId: _ledgerId!,
+      categoryId: categoryId,
+    );
+    if (!mounted || last == null) return;
+    setState(() {
+      if (_rememberCategoryAccount &&
+          last.accountId != null &&
+          _accounts.any((a) => a.id == last.accountId)) {
+        _accountId = last.accountId;
+      }
+      if (_rememberCategoryNote &&
+          last.note != null &&
+          _noteCtrl.text.trim().isEmpty) {
+        _noteCtrl.text = last.note!;
+        _moreExpanded = true;
+      }
+    });
   }
 
   Future<void> _pickAccount({required bool toAccount}) async {
@@ -917,7 +965,7 @@ List<Account> _accounts = [];
                             ),
                           ),
                           const SizedBox(height: CentliSpacing.section),
-                          // Chips: time / category / account / tags (single scroll row)
+                          // Chips: time / 今天·昨天 / category / account
                           Padding(
                             key: const Key('bk_chips_row'),
                             padding: const EdgeInsets.only(left: 16),
@@ -927,6 +975,21 @@ List<Account> _accounts = [];
                                   icon: Icons.schedule_rounded,
                                   label: hide ? '**:**' : _happenAtLabel,
                                   onTap: _pickHappenAt,
+                                ),
+                                _MetaChip(
+                                  key: const Key('bk_day_today'),
+                                  label: '今天',
+                                  onTap: () => _setHappenDay(DateTime.now()),
+                                ),
+                                _MetaChip(
+                                  key: const Key('bk_day_yesterday'),
+                                  label: '昨天',
+                                  onTap: () {
+                                    final n = DateTime.now();
+                                    _setHappenDay(
+                                      n.subtract(const Duration(days: 1)),
+                                    );
+                                  },
                                 ),
                                 if (_type != 'transfer')
                                   Builder(
@@ -1016,15 +1079,6 @@ List<Account> _accounts = [];
                                     },
                                   ),
                                 ],
-                                _MetaChip(
-                                  icon: Icons.sell_outlined,
-                                  label: _tags.isEmpty
-                                      ? '标签'
-                                      : (hide
-                                          ? '****'
-                                          : _tags.take(2).join(' · ')),
-                                  onTap: _editSheetTags,
-                                ),
                               ],
                             ),
                           ),
@@ -1032,60 +1086,140 @@ List<Account> _accounts = [];
                             Padding(
                               padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
                               child: Text(
-                                '\u8de8\u5e01\uff1a\u4fdd\u5b58\u65f6\u4f1a\u8be2\u95ee\u5bf9\u65b9\u91d1\u989d/\u6c47\u7387',
+                                '跨币：保存时会询问对方金额/汇率',
                                 style: Theme.of(context).textTheme.bodySmall
                                     ?.copyWith(color: scheme.onSurfaceVariant),
                               ),
                             ),
-                          const SizedBox(height: CentliSpacing.item),
                           Padding(
-                            key: const Key('bk_note'),
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            child: SizedBox(
-                              height: 46,
-                              child: TextField(
-                                controller: _noteCtrl,
-                                style: const TextStyle(fontSize: 13),
-                                decoration: InputDecoration(
-                                  hintText: '\u5907\u6ce8',
-                                  hintStyle: TextStyle(
-                                    fontSize: 13,
-                                    color: scheme.onSurfaceVariant,
-                                  ),
-                                  isDense: true,
-                                  prefixIcon: Icon(
-                                    Icons.edit_outlined,
-                                    size: 16,
-                                    color: scheme.onSurfaceVariant,
-                                  ),
-                                  filled: true,
-                                  fillColor: scheme.surface,
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 12,
-                                  ),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                    borderSide: BorderSide(color: chipBorder),
-                                  ),
-                                  enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                    borderSide: BorderSide(color: chipBorder),
-                                  ),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                    borderSide:
-                                        BorderSide(color: scheme.primary),
-                                  ),
+                            padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
+                            child: Theme(
+                              data: Theme.of(context).copyWith(
+                                dividerColor: Colors.transparent,
+                              ),
+                              child: ExpansionTile(
+                                key: const Key('bk_more_options'),
+                                initiallyExpanded: _moreExpanded,
+                                onExpansionChanged: (v) =>
+                                    setState(() => _moreExpanded = v),
+                                tilePadding:
+                                    const EdgeInsets.symmetric(horizontal: 8),
+                                childrenPadding: EdgeInsets.zero,
+                                title: Text(
+                                  '更多选项',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleSmall
+                                      ?.copyWith(fontWeight: FontWeight.w600),
                                 ),
+                                subtitle: Text(
+                                  [
+                                    if (_tags.isNotEmpty)
+                                      hide
+                                          ? '标签 · ****'
+                                          : '标签 · ${_tags.take(2).join(' · ')}',
+                                    if (_noteCtrl.text.trim().isNotEmpty)
+                                      hide ? '有备注' : '有备注',
+                                  ].join(' · ').ifEmpty('标签、备注'),
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(
+                                        color: scheme.onSurfaceVariant,
+                                      ),
+                                ),
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.only(left: 16),
+                                    child: Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: _MetaChip(
+                                        icon: Icons.sell_outlined,
+                                        label: _tags.isEmpty
+                                            ? '标签'
+                                            : (hide
+                                                ? '****'
+                                                : _tags.take(2).join(' · ')),
+                                        onTap: _editSheetTags,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: CentliSpacing.item),
+                                  Padding(
+                                    key: const Key('bk_note'),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                    ),
+                                    child: SizedBox(
+                                      height: 46,
+                                      child: TextField(
+                                        controller: _noteCtrl,
+                                        style: const TextStyle(fontSize: 13),
+                                        onChanged: (_) => setState(() {}),
+                                        decoration: InputDecoration(
+                                          hintText: '备注',
+                                          hintStyle: TextStyle(
+                                            fontSize: 13,
+                                            color: scheme.onSurfaceVariant,
+                                          ),
+                                          isDense: true,
+                                          prefixIcon: Icon(
+                                            Icons.edit_outlined,
+                                            size: 16,
+                                            color: scheme.onSurfaceVariant,
+                                          ),
+                                          filled: true,
+                                          fillColor: scheme.surface,
+                                          contentPadding:
+                                              const EdgeInsets.symmetric(
+                                            horizontal: 12,
+                                            vertical: 12,
+                                          ),
+                                          border: OutlineInputBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(10),
+                                            borderSide:
+                                                BorderSide(color: chipBorder),
+                                          ),
+                                          enabledBorder: OutlineInputBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(10),
+                                            borderSide:
+                                                BorderSide(color: chipBorder),
+                                          ),
+                                          focusedBorder: OutlineInputBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(10),
+                                            borderSide: BorderSide(
+                                              color: scheme.primary,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: CentliSpacing.item),
+                                ],
                               ),
                             ),
                           ),
-                          const SizedBox(height: CentliSpacing.item),
                         ],
                       ),
                     ),
                   ),
+                  if (widget.existing == null)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton(
+                          key: const Key('bk_save_and_continue'),
+                          onPressed:
+                              _saving ? null : () => _save(keepOpen: true),
+                          child: const Text('保存并继续'),
+                        ),
+                      ),
+                    ),
                   _Keypad(
                     key: const Key('bk_keypad'),
                     onKey: _onKey,
@@ -1103,6 +1237,10 @@ List<Account> _accounts = [];
     ),
     );
   }
+}
+
+extension on String {
+  String ifEmpty(String fallback) => trim().isEmpty ? fallback : this;
 }
 
 /// Contract chip row: height 36, gap 8, horizontal scroll.
@@ -1135,6 +1273,7 @@ class _ChipScrollRow extends StatelessWidget {
 
 class _MetaChip extends StatelessWidget {
   const _MetaChip({
+    super.key,
     required this.label,
     required this.onTap,
     this.icon,

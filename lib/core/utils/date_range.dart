@@ -52,6 +52,33 @@ class DateRangeWindow {
     );
   }
 
+  /// 本周（周一 00:00 ～ 下周一 00:00，本地）。
+  factory DateRangeWindow.thisWeek({DateTime? nowLocal}) {
+    final now = nowLocal ?? DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final start = today.subtract(Duration(days: today.weekday - 1));
+    final end = start.add(const Duration(days: 7));
+    return DateRangeWindow._(
+      kind: DateRangeKind.custom,
+      startLocal: start,
+      endLocal: end,
+    );
+  }
+
+  /// 上个自然月。
+  factory DateRangeWindow.lastMonth({DateTime? nowLocal}) {
+    final now = nowLocal ?? DateTime.now();
+    final thisMonth = DateTime(now.year, now.month, 1);
+    final prev = DateTime(thisMonth.year, thisMonth.month - 1, 1);
+    return DateRangeWindow.forMonth(prev.year, prev.month);
+  }
+
+  /// 本自然月。
+  factory DateRangeWindow.thisMonth({DateTime? nowLocal}) {
+    final now = nowLocal ?? DateTime.now();
+    return DateRangeWindow.forMonth(now.year, now.month);
+  }
+
   /// [startInclusive] / [endInclusive] are calendar days (time-of-day ignored).
   factory DateRangeWindow.custom({
     required DateTime startInclusive,

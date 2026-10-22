@@ -7,10 +7,13 @@ import '../../app/theme.dart';
 import '../../data/db/centli_database.dart';
 import '../../data/db/txn_tags.dart';
 import '../../data/db/database_provider.dart';
+import '../../features/ledger/bookkeeping_sheet.dart';
 import '../constants/currencies.dart';
+import '../constants/pref_keys.dart';
 import '../utils/fx.dart';
 import '../utils/money.dart';
 import 'centli_icon.dart';
+import 'glass.dart';
 
 /// Highlight colour for search keywords on transaction rows.
 const Color kKeywordHighlight = CentliTheme.brandPrimary;
@@ -82,6 +85,7 @@ class TxnListTile extends ConsumerWidget {
           ),
         InkWell(
           onTap: () => context.push('/ledger/${txn.id}'),
+          onLongPress: () => _showTxnContextMenu(context, ref),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
             // 金额列按内容宽度贴右，但最多占 55%：大字号/大金额时省略，
@@ -242,6 +246,83 @@ class TxnListTile extends ConsumerWidget {
       }
     }
     return fromName;
+  }
+
+  Future<void> _showTxnContextMenu(BuildContext context, WidgetRef ref) async {
+    final action = await showGlassSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.edit_outlined),
+              title: const Text('编辑'),
+              onTap: () => Navigator.pop(ctx, 'edit'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.copy_outlined),
+              title: const Text('复制新建'),
+              subtitle: const Text('照着这笔再记一笔'),
+              onTap: () => Navigator.pop(ctx, 'copy'),
+            ),
+            ListTile(
+              leading: Icon(
+                Icons.delete_outline,
+                color: Theme.of(ctx).colorScheme.error,
+              ),
+              title: Text(
+                '删除',
+                style: TextStyle(color: Theme.of(ctx).colorScheme.error),
+              ),
+              onTap: () => Navigator.pop(ctx, 'delete'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (action == null || !context.mounted) return;
+    switch (action) {
+      case 'edit':
+        context.push('/ledger/${txn.id}');
+      case 'copy':
+        await showBookkeepingSheet(context, template: txn);
+      case 'delete':
+        await _softDeleteTxn(context, ref);
+      default:
+        break;
+    }
+  }
+
+  Future<void> _softDeleteTxn(BuildContext context, WidgetRef ref) async {
+    final db = ref.read(databaseProvider);
+    final confirmRaw = await db.getSetting(PrefKeys.confirmBeforeDelete);
+    if (prefBool(confirmRaw) && context.mounted) {
+      final ok = await showGlassDialog<bool>(
+        context: context,
+        builder: (ctx) => CentliGlassDialog(
+          title: const Text('删除账单'),
+          content: const Text('确定删除这笔账单？可在「回收站」恢复。'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('删除'),
+            ),
+          ],
+        ),
+      );
+      if (ok != true || !context.mounted) return;
+    }
+    await db.softDeleteTransaction(txn.id);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('已删除，可在回收站恢复')),
+    );
   }
 }
 

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/theme.dart';
+import '../../core/constants/pref_keys.dart';
 import '../../core/widgets/centli_error_state.dart';
 import '../../core/utils/date_range.dart';
 import '../../core/widgets/date_range_control.dart';
@@ -66,6 +67,18 @@ final _homeBudgetProgressProvider =
 
 final homeRangeProvider = StateProvider<DateRangeWindow>((ref) {
   return DateRangeWindow.lastDays(days: 30);
+});
+
+final _ledgersListProvider = StreamProvider<List<Ledger>>((ref) {
+  return ref.watch(databaseProvider).watchAllLedgers();
+});
+
+/// 首页预算条开关（跟随 app_settings 流，设置页改完即生效）。
+final homeShowBudgetCardProvider = StreamProvider<bool>((ref) {
+  return ref
+      .watch(databaseProvider)
+      .watchSetting(PrefKeys.homeShowBudgetCard)
+      .map(prefBool);
 });
 
 final _rangeBaseProvider =
@@ -332,6 +345,10 @@ class _HomePageState extends ConsumerState<HomePage> {
             final budgetProgress = ref.watch(
               _homeBudgetProgressProvider((ledgerId: ledgerId, base: base)),
             );
+            final showBudget =
+                ref.watch(homeShowBudgetCardProvider).valueOrNull ?? true;
+            final ledgers =
+                ref.watch(_ledgersListProvider).valueOrNull ?? const <Ledger>[];
 
             return Column(
               children: [
@@ -339,9 +356,46 @@ class _HomePageState extends ConsumerState<HomePage> {
                   padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
                   child: Row(
                     children: [
-                      InkWell(
-                        onTap: () => context.push('/me/ledgers'),
-                        borderRadius: BorderRadius.circular(8),
+                      PopupMenuButton<String>(
+                        tooltip: '切换记账本',
+                        onSelected: (id) async {
+                          if (id == '__manage__') {
+                            if (context.mounted) {
+                              context.push('/me/ledgers');
+                            }
+                            return;
+                          }
+                          if (id == ledgerId) return;
+                          await ref
+                              .read(databaseProvider)
+                              .setCurrentLedgerId(id);
+                          ref.invalidate(currentLedgerProvider);
+                        },
+                        itemBuilder: (ctx) => [
+                          for (final l in ledgers)
+                            PopupMenuItem(
+                              value: l.id,
+                              child: Row(
+                                children: [
+                                  if (l.id == ledgerId)
+                                    Icon(
+                                      Icons.check,
+                                      size: 18,
+                                      color: scheme.primary,
+                                    )
+                                  else
+                                    const SizedBox(width: 18),
+                                  const SizedBox(width: 8),
+                                  Expanded(child: Text(l.name)),
+                                ],
+                              ),
+                            ),
+                          const PopupMenuDivider(),
+                          const PopupMenuItem(
+                            value: '__manage__',
+                            child: Text('管理记账本…'),
+                          ),
+                        ],
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
                             vertical: 4,
@@ -501,6 +555,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                             lifetime: lifetime,
                             monthSummary: monthSummary,
                             budgetProgress: budgetProgress,
+                            showBudgetCard: showBudget,
                           ),
                           // 待确认 / 解析失败都空时「间距 + 卡片」整体不出现，
                           // 概览卡到图表的距离才和图表到账单的一致。
@@ -606,9 +661,31 @@ class _HomePageState extends ConsumerState<HomePage> {
                                         ),
                                       );
                                     }
-                                    return TxnGroupedSection(
-                                      txns: txns,
-                                      hide: hide,
+                                    final preview = txns.length > 10
+                                        ? txns.take(10).toList()
+                                        : txns;
+                                    return Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
+                                      children: [
+                                        TxnGroupedSection(
+                                          txns: preview,
+                                          hide: hide,
+                                        ),
+                                        const SizedBox(
+                                          height: CentliSpacing.item,
+                                        ),
+                                        TextButton(
+                                          key: const Key('home_view_all_txns'),
+                                          onPressed: () =>
+                                              context.push('/home/search'),
+                                          child: Text(
+                                            txns.length > 10
+                                                ? '查看全部账单（共 ${txns.length} 笔）'
+                                                : '查看全部账单',
+                                          ),
+                                        ),
+                                      ],
                                     );
                                   },
                                 ),
@@ -884,6 +961,7 @@ class _LedgerSummaryCard extends StatelessWidget {
     required this.lifetime,
     required this.monthSummary,
     required this.budgetProgress,
+    this.showBudgetCard = true,
   });
 
   final String ledgerName;
@@ -898,6 +976,7 @@ class _LedgerSummaryCard extends StatelessWidget {
   final AsyncValue<({int incomeMinor, int expenseMinor})> lifetime;
   final AsyncValue<BaseRangeSummary> monthSummary;
   final AsyncValue<MonthBudgetProgress> budgetProgress;
+  final bool showBudgetCard;
 
   String _money(int minor) => formatMinor(base, minor, hide: hide);
 
@@ -1109,6 +1188,39 @@ class _LedgerSummaryCard extends StatelessWidget {
             ),
           ],
           const SizedBox(height: CentliSpacing.section),
+          // 本月收入 / 支出 / 结余（文档 2.2 三列概览）
+          Row(
+            children: [
+              Expanded(
+                child: _MonthStatCell(
+                  label: '本月收入',
+                  value: month == null ? '—' : _money(month.incomeMinor),
+                  color: CentliTheme.incomeGreen,
+                ),
+              ),
+              Expanded(
+                child: _MonthStatCell(
+                  label: '本月支出',
+                  value: month == null ? '—' : _money(month.expenseMinor),
+                  color: CentliTheme.expenseRed,
+                ),
+              ),
+              Expanded(
+                child: _MonthStatCell(
+                  label: '本月结余',
+                  value: month == null
+                      ? '—'
+                      : _money(month.incomeMinor - month.expenseMinor),
+                  color: month == null
+                      ? scheme.onSurface
+                      : ((month.incomeMinor - month.expenseMinor) >= 0
+                          ? CentliTheme.incomeGreen
+                          : CentliTheme.expenseRed),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: CentliSpacing.section),
           const Divider(height: 1),
           const SizedBox(height: CentliSpacing.item),
           Row(
@@ -1143,13 +1255,51 @@ class _LedgerSummaryCard extends StatelessWidget {
               ),
             ],
           ),
-          _HomeBudgetStrip(
-            progress: budgetProgress.valueOrNull,
-            base: base,
-            hide: hide,
-          ),
+          if (showBudgetCard)
+            _HomeBudgetStrip(
+              progress: budgetProgress.valueOrNull,
+              base: base,
+              hide: hide,
+            ),
         ],
       ),
+    );
+  }
+}
+
+class _MonthStatCell extends StatelessWidget {
+  const _MonthStatCell({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      children: [
+        Text(
+          label,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w700,
+            color: color,
+          ),
+        ),
+      ],
     );
   }
 }
