@@ -280,6 +280,12 @@ List<Account> _accounts = [];
               : (cats.isNotEmpty ? cats.first.id : null);
         });
       }
+    } else if (existing == null &&
+        template == null &&
+        _categoryId != null &&
+        (widget.initialNote == null || widget.initialNote!.trim().isEmpty)) {
+      // 打开面板时已带上次分类：同步回填该分类上次备注 / 账户。
+      await _applyCategoryMemory(_categoryId!);
     }
   }
 
@@ -298,6 +304,9 @@ List<Account> _accounts = [];
         _categoryId = cats.isNotEmpty ? cats.first.id : null;
       }
     });
+    if (resetSelection && _categoryId != null) {
+      await _applyCategoryMemory(_categoryId!);
+    }
   }
 
   Account? _accountById(String? id) {
@@ -634,59 +643,7 @@ List<Account> _accounts = [];
     return DateFormat('yyyy-MM-dd HH:mm').format(_happenAt);
   }
 
-  void _setHappenDay(DateTime day) {
-    final now = DateTime.now();
-    setState(() {
-      _happenAt = DateTime(
-        day.year,
-        day.month,
-        day.day,
-        now.hour,
-        now.minute,
-      );
-    });
-  }
-
   Future<void> _pickHappenAt() async {
-    // 今天 / 昨天放进日期入口，避免芯片行挤占分类与账户。
-    final quick = await showGlassSheet<String>(
-      context: context,
-      showDragHandle: true,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              key: const Key('bk_day_today'),
-              leading: const Icon(Icons.today_outlined),
-              title: const Text('今天'),
-              onTap: () => Navigator.pop(ctx, 'today'),
-            ),
-            ListTile(
-              key: const Key('bk_day_yesterday'),
-              leading: const Icon(Icons.history),
-              title: const Text('昨天'),
-              onTap: () => Navigator.pop(ctx, 'yesterday'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.calendar_month_outlined),
-              title: const Text('选其他日期时间…'),
-              onTap: () => Navigator.pop(ctx, 'custom'),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (!mounted || quick == null) return;
-    if (quick == 'today') {
-      _setHappenDay(DateTime.now());
-      return;
-    }
-    if (quick == 'yesterday') {
-      _setHappenDay(DateTime.now().subtract(const Duration(days: 1)));
-      return;
-    }
-
     final today = DateTime.now();
     final last = DateTime(today.year, today.month, today.day);
     var initial = _happenAt;
@@ -743,22 +700,41 @@ List<Account> _accounts = [];
     );
     if (!mounted) return;
     if (id != null) {
-      setState(() => _categoryId = id);
-      await _applyCategoryMemory(id);
+      // 先查记忆再 setState，备注进面板时已经填好，不出现「先空再出」.
+      final memory = await _loadCategoryMemory(id);
+      if (!mounted) return;
+      setState(() {
+        _categoryId = id;
+        if (memory != null) {
+          if (_rememberCategoryAccount &&
+              memory.accountId != null &&
+              _accounts.any((a) => a.id == memory.accountId)) {
+            _accountId = memory.accountId;
+          }
+          if (_rememberCategoryNote && memory.note != null) {
+            _noteCtrl.text = memory.note!;
+          }
+        }
+      });
       return;
     }
     // Dismiss or 管理: refresh tree, keep selection when still valid.
     await _reloadCategories();
   }
 
+  Future<({String? accountId, String? note})?> _loadCategoryMemory(
+    String categoryId,
+  ) async {
+    if (_ledgerId == null || _type == 'transfer') return null;
+    if (!_rememberCategoryAccount && !_rememberCategoryNote) return null;
+    return ref.read(databaseProvider).lastFieldsForCategory(
+          ledgerId: _ledgerId!,
+          categoryId: categoryId,
+        );
+  }
+
   Future<void> _applyCategoryMemory(String categoryId) async {
-    if (_ledgerId == null || _type == 'transfer') return;
-    if (!_rememberCategoryAccount && !_rememberCategoryNote) return;
-    final db = ref.read(databaseProvider);
-    final last = await db.lastFieldsForCategory(
-      ledgerId: _ledgerId!,
-      categoryId: categoryId,
-    );
+    final last = await _loadCategoryMemory(categoryId);
     if (!mounted || last == null) return;
     setState(() {
       if (_rememberCategoryAccount &&
@@ -766,9 +742,7 @@ List<Account> _accounts = [];
           _accounts.any((a) => a.id == last.accountId)) {
         _accountId = last.accountId;
       }
-      if (_rememberCategoryNote &&
-          last.note != null &&
-          _noteCtrl.text.trim().isEmpty) {
+      if (_rememberCategoryNote && last.note != null) {
         _noteCtrl.text = last.note!;
       }
     });
