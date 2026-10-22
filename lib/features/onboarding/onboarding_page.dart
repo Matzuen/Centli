@@ -28,11 +28,22 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     super.dispose();
   }
 
-  Future<void> _finish({String route = '/me/auto'}) async {
-    await ref.read(databaseProvider).setSetting('onboarding_done', 'true');
-    ref.invalidate(onboardingDoneProvider);
-    if (!mounted) return;
-    context.go(PendingDeepLink.take() ?? route);
+  bool _finishing = false;
+
+  Future<void> _finish({String route = '/home'}) async {
+    if (_finishing) return;
+    _finishing = true;
+    try {
+      await ref.read(databaseProvider).setSetting('onboarding_done', 'true');
+      ref.invalidate(onboardingDoneProvider);
+      // 等 provider 读到 true，避免 redirect 把门禁又拦回引导。
+      await ref.read(onboardingDoneProvider.future);
+      if (!mounted) return;
+      context.go(PendingDeepLink.take() ?? route);
+    } catch (_) {
+      _finishing = false;
+      rethrow;
+    }
   }
 
   Future<void> _setupLedger() async {

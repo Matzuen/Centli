@@ -51,6 +51,17 @@ class CentliDatabase extends _$CentliDatabase {
 
   void _dropFxBookCache() => _fxBookCache = null;
 
+  /// Native（悬浮窗 / 通知栏）直接改 SQLite 时调用：让已订阅的 Drift
+  /// stream 重新 SELECT，否则前台 UI 会一直看到旧快照。
+  void notifyExternalMutation() {
+    _dropFxBookCache();
+    notifyUpdates({
+      const TableUpdate('transactions'),
+      const TableUpdate('pending_captures'),
+      const TableUpdate('accounts'),
+    });
+  }
+
   @override
   int get schemaVersion => 12;
 

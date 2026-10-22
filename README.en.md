@@ -5,7 +5,7 @@ Local-first personal bookkeeping (**Chinese UI only**): **clear every bill**.
 > Canonical docs are in Chinese: see [`README.md`](README.md) and [`docs/RELEASE_NOTES.md`](docs/RELEASE_NOTES.md).
 
 - Flutter · Drift (SQLite) · Riverpod · go_router
-- Version: `2.0.3+41`
+- Version: `2.1.2+44` (UI shows `2.1.2` only; see Chinese [`README.md`](README.md) changelog)
 - Currency display: `CNY · 人民币`
 - Bottom nav (5 tabs): 首页 / 统计 / 记账 / 资产 / 我的
 

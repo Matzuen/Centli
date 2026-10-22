@@ -10,4 +10,10 @@ void main() {
     expect(m, isNotNull);
     expect(kAppVersionFallback, m!.group(1));
   });
+
+  test('displayAppVersion hides build number', () {
+    expect(displayAppVersion('2.1.2+44'), '2.1.2');
+    expect(displayAppVersion('2.1.2'), '2.1.2');
+    expect(displayAppVersion(kAppVersionFallback), '2.1.2');
+  });
 }

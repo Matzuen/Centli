@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
-
-import '../../core/app_version.dart';
 import 'package:go_router/go_router.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../app/theme.dart';
+import '../../core/app_version.dart';
 
 /// About hub: version, privacy policy, OSS licenses.
 /// Wireframe §8: 关于 — 版本、开源许可、隐私说明链接.
@@ -17,22 +15,10 @@ class AboutPage extends StatefulWidget {
 
 class _AboutPageState extends State<AboutPage> {
   /// Fallback when [PackageInfo] is unavailable (tests / early frame).
-  static const String _fallbackVersion = kAppVersionFallback;
+  static final String _fallbackVersion =
+      displayAppVersion(kAppVersionFallback);
 
-  late final Future<String> _versionFuture = _loadVersion();
-
-  static Future<String> _loadVersion() async {
-    try {
-      final info = await PackageInfo.fromPlatform();
-      final name = info.version.trim();
-      final build = info.buildNumber.trim();
-      if (name.isEmpty) return _fallbackVersion;
-      if (build.isEmpty) return name;
-      return '$name+$build';
-    } catch (_) {
-      return _fallbackVersion;
-    }
-  }
+  late final Future<String> _versionFuture = loadDisplayAppVersion();
 
   @override
   Widget build(BuildContext context) {

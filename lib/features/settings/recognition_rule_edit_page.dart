@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-
 import '../../core/utils/id_gen.dart';
+import '../../platform/notifications/notification_listener_stub.dart';
 import '../../platform/notifications/notification_parse.dart';
 import '../../platform/notifications/noti_template_store.dart';
+import '../../platform/notifications/watched_package_resolve.dart';
 import '../../app/theme.dart';
 
 /// Add / edit a user recognition rule.
@@ -107,8 +108,7 @@ class _RecognitionRuleEditPageState extends State<RecognitionRuleEditPage> {
       case 'wechat':
         primary = const ['com.tencent.mm'];
       case 'other':
-        final p = _pkgOtherCtrl.text.trim();
-        primary = p.isEmpty ? const <String>[] : [p];
+        primary = resolvePackageInput(_pkgOtherCtrl.text);
       case 'alipay':
       default:
         primary = const ['com.eg.android.AlipayGphone'];
@@ -121,7 +121,88 @@ class _RecognitionRuleEditPageState extends State<RecognitionRuleEditPage> {
       if (t.isEmpty || !seen.add(t)) continue;
       extras.add(t);
     }
-    return [...primary, ...extras];
+    // Alias 展开时 primary 可能已有多个包名。
+    for (final p in primary.skip(1)) {
+      if (seen.add(p)) extras.add(p);
+    }
+    return [primary.first, ...extras];
+  }
+
+  Future<void> _pickInstalledApp() async {
+    final apps = await NotificationCaptureStub.listLaunchableApps();
+    if (!mounted) return;
+    if (apps.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('未能读取已安装应用，请手动填写包名')),
+      );
+      return;
+    }
+    final selected = await showModalBottomSheet<LaunchableAppInfo>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) {
+        var filter = '';
+        return StatefulBuilder(
+          builder: (ctx, setModal) {
+            final q = filter.trim().toLowerCase();
+            final filtered = q.isEmpty
+                ? apps
+                : apps
+                    .where(
+                      (a) =>
+                          a.label.toLowerCase().contains(q) ||
+                          a.packageName.toLowerCase().contains(q),
+                    )
+                    .toList();
+            return SafeArea(
+              child: SizedBox(
+                height: MediaQuery.of(ctx).size.height * 0.72,
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                      child: TextField(
+                        decoration: const InputDecoration(
+                          prefixIcon: Icon(Icons.search),
+                          hintText: '搜索应用名或包名',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.all(Radius.circular(14)),
+                          ),
+                        ),
+                        onChanged: (v) => setModal(() => filter = v),
+                      ),
+                    ),
+                    Expanded(
+                      child: ListView.builder(
+                        itemCount: filtered.length,
+                        itemBuilder: (_, i) {
+                          final a = filtered[i];
+                          return ListTile(
+                            title: Text(a.label),
+                            subtitle: Text(
+                              a.packageName,
+                              style: Theme.of(ctx).textTheme.bodySmall,
+                            ),
+                            onTap: () => Navigator.pop(ctx, a),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+    if (selected == null || !mounted) return;
+    setState(() {
+      _pkgOtherCtrl.text = selected.packageName;
+      if (_nameCtrl.text.trim().isEmpty) {
+        _nameCtrl.text = selected.label;
+      }
+    });
   }
 
   String? _hintForChoice() {
@@ -138,10 +219,17 @@ class _RecognitionRuleEditPageState extends State<RecognitionRuleEditPage> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_appChoice == 'other') {
+      final err = packageInputError(_pkgOtherCtrl.text);
+      if (err != null) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+        return;
+      }
+    }
     final packages = _packagesForChoice();
     if (packages.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请填写包名')),
+        const SnackBar(content: Text('请填写包名或从已安装应用选择')),
       );
       return;
     }
@@ -275,15 +363,23 @@ class _RecognitionRuleEditPageState extends State<RecognitionRuleEditPage> {
                     TextFormField(
                       controller: _pkgOtherCtrl,
                       decoration: const InputDecoration(
-                        labelText: '包名',
-                        border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
-                        hintText: 'com.xxx.app',
+                        labelText: '包名或应用名',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.all(Radius.circular(14)),
+                        ),
+                        hintText: 'com.android.bankabc 或 中国农业银行',
+                        helperText: '应用名会自动映射到常见银行包名；不确定请点下方选择',
                       ),
                       validator: (v) {
                         if (_appChoice != 'other') return null;
-                        if (v == null || v.trim().isEmpty) return '请填写包名';
-                        return null;
+                        return packageInputError(v ?? '');
                       },
+                    ),
+                    const SizedBox(height: CentliSpacing.item),
+                    OutlinedButton.icon(
+                      onPressed: _saving ? null : _pickInstalledApp,
+                      icon: const Icon(Icons.apps_outlined),
+                      label: const Text('从已安装应用选择'),
                     ),
                   ],
                   if (_extraPackages.isNotEmpty) ...[

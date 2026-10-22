@@ -193,6 +193,9 @@ class MainActivity : FlutterFragmentActivity() {
                     }
                     result.success(null)
                 }
+                "listLaunchableApps" -> {
+                    result.success(listLaunchableApps())
+                }
                 else -> result.notImplemented()
             }
         }
@@ -265,6 +268,37 @@ class MainActivity : FlutterFragmentActivity() {
             arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
             REQ_POST_NOTIFICATIONS,
         )
+    }
+
+    /** Installed launchable apps for 「其它」规则包名选择（无需 QUERY_ALL_PACKAGES）。 */
+    private fun listLaunchableApps(): List<Map<String, String>> {
+        return try {
+            val pm = packageManager
+            val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+            val resolves = pm.queryIntentActivities(intent, 0)
+            val out = ArrayList<Map<String, String>>(resolves.size)
+            val seen = HashSet<String>()
+            for (ri in resolves) {
+                val pkg = ri.activityInfo?.packageName?.trim().orEmpty()
+                if (pkg.isEmpty() || !seen.add(pkg)) continue
+                val label = try {
+                    ri.loadLabel(pm)?.toString()?.trim().orEmpty()
+                } catch (_: Exception) {
+                    ""
+                }
+                out.add(
+                    mapOf(
+                        "packageName" to pkg,
+                        "label" to label.ifEmpty { pkg },
+                    ),
+                )
+            }
+            out.sortBy { it["label"]?.lowercase() ?: it["packageName"] ?: "" }
+            out
+        } catch (e: Exception) {
+            Log.w("CentliMain", "listLaunchableApps failed", e)
+            emptyList()
+        }
     }
 
     /** System dialog for POST_NOTIFICATIONS (Android 13+). Completes [result]. */
@@ -545,15 +579,30 @@ class MainActivity : FlutterFragmentActivity() {
         @JvmStatic
         fun emitNotificationCapture(context: android.content.Context, payload: Map<String, Any?>) {
             ingestViaNative(context, payload)
+            val outcome = NativeCaptureIngest.takeLastOutcome()
 
             val ch = methodChannel
             if (ch != null && dartBridgeReadyGlobal && appInForeground) {
                 Handler(Looper.getMainLooper()).post {
                     try {
-                        // Dart 侧主要用于 AI 蒸馏；入库已由 native 完成。
                         val enriched = HashMap(payload)
-                        enriched["nativeIngested"] = true
-                        ch.invokeMethod("notification_capture", enriched)
+                        when (outcome) {
+                            NativeCaptureIngest.OUTCOME_INSERTED -> {
+                                // Dart 侧主要用于 AI 蒸馏；入库已由 native 完成。
+                                enriched["nativeIngested"] = true
+                                ch.invokeMethod("notification_capture", enriched)
+                            }
+                            NativeCaptureIngest.OUTCOME_SOFT_ALLOW,
+                            NativeCaptureIngest.OUTCOME_QUEUED,
+                            -> {
+                                // 仅加入监听、尚无硬规则：native 未落库，交给 Dart 精炼入库。
+                                enriched["nativeIngested"] = false
+                                ch.invokeMethod("notification_capture", enriched)
+                            }
+                            else -> {
+                                // dropped — 不打扰 Dart
+                            }
+                        }
                     } catch (e: Exception) {
                         Log.w("CentliMain", "notify dart after native ingest failed", e)
                     }
@@ -561,7 +610,7 @@ class MainActivity : FlutterFragmentActivity() {
             } else {
                 Log.d(
                     "CentliMain",
-                    "native-only (fg=$appInForeground bridge=$dartBridgeReadyGlobal)",
+                    "native-only outcome=$outcome (fg=$appInForeground bridge=$dartBridgeReadyGlobal)",
                 )
             }
         }

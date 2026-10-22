@@ -66,6 +66,16 @@ final themeModeProvider = StreamProvider<ThemeMode>((ref) {
 /// (悬浮窗入账、通知栏忽略等). Watchers should depend on this.
 final pendingExternalWriteTickProvider = StateProvider<int>((ref) => 0);
 
+/// Native / 下拉刷新：推 Drift stream + bump tick，让未监听 table updates 的
+/// Riverpod 也能重建。
+void notifyExternalSqliteWrite(
+  CentliDatabase db,
+  StateController<int> tick,
+) {
+  tick.state++;
+  db.notifyExternalMutation();
+}
+
 final pendingCountProvider = StreamProvider.family<int, String>((ref, ledgerId) {
   ref.watch(pendingExternalWriteTickProvider);
   return ref.watch(databaseProvider).watchPendingCount(ledgerId);

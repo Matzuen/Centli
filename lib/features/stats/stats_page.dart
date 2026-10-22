@@ -174,6 +174,10 @@ class StatsPage extends ConsumerWidget {
 
           return RefreshIndicator(
             onRefresh: () async {
+              notifyExternalSqliteWrite(
+                ref.read(databaseProvider),
+                ref.read(pendingExternalWriteTickProvider.notifier),
+              );
               ref.invalidate(_statsTotalsProvider(args));
               ref.invalidate(_statsBreakdownProvider((
                 ledgerId: ledgerId,
@@ -184,6 +188,7 @@ class StatsPage extends ConsumerWidget {
                 kind: kind,
               )));
               ref.invalidate(_statsAccountsProvider(args));
+              await Future<void>.delayed(const Duration(milliseconds: 50));
             },
             child: ListView(
               padding: const EdgeInsets.fromLTRB(

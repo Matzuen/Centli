@@ -167,7 +167,7 @@ Grok Bot 按新工单继续
 
 ### 6.2 版本与文档
 
-- 当前版本 **`2.0.3+40`**（见 `pubspec.yaml`）
+- 当前版本 **`2.1.2+44`**（见 `pubspec.yaml`；界面只展示 `2.1.2`）
 - 版本号的字面量**只允许出现在两处**：`pubspec.yaml` 与 `lib/core/app_version.dart`。
   其余 5 个调用点（`about_page` / `me_page` ×2 / `export_service` ×2）统一引用
   `kAppVersionFallback`，一致性由 `test/app_version_test.dart` 守卫（改 pubspec 不改常量 → 测试红）。

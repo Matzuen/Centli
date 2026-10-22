@@ -8,9 +8,11 @@ import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../../core/utils/id_gen.dart';
 import '../../data/db/centli_database.dart';
 import 'notification_listener_stub.dart';
 import 'notification_parse.dart';
+import 'watched_package_resolve.dart';
 
 /// Hot-reloadable notification templates.
 ///
@@ -931,6 +933,80 @@ abstract final class NotiTemplateStore {
     await syncWatchedPackagesToNative();
   }
 
+  /// 「加入监听」：写入 watched + 若尚无规则则建一条宽门控用户规则。
+  ///
+  /// 仅加包名会走 native softAllow，前台却曾误标 `nativeIngested`，表现为无反应。
+  static Future<JoinWatchResult> joinWatchPackage(
+    String pkg, {
+    String? displayTitle,
+  }) async {
+    await load();
+    final resolved = resolvePackageInput(pkg);
+    final packages = resolved.isNotEmpty
+        ? resolved
+        : (pkg.trim().isEmpty ? const <String>[] : [pkg.trim()]);
+    if (packages.isEmpty) {
+      return const JoinWatchResult(
+        ok: false,
+        message: '包名为空',
+        packages: [],
+        createdRule: false,
+      );
+    }
+
+    final covered = peek().any(
+      (t) => t.packages.any(packages.contains),
+    );
+    var createdRule = false;
+    if (!covered) {
+      final primary = packages.first;
+      final label = (displayTitle?.trim().isNotEmpty == true)
+          ? displayTitle!.trim()
+          : _displayLabelForPkg(primary);
+      final template = NotiTemplate(
+        id: 'user_${newId()}',
+        name: '$label · 自动监听',
+        packages: packages,
+        defaultCurrency: 'CNY',
+        mustContainRegex:
+            r'支付成功|付款成功|交易成功|消费成功|已支付|扣款|支出|转出|转入|收款|到账|入账|退款',
+        excludeTextRegex: r'验证码|登录|还款提醒|账单提醒|动态码',
+        amountRegex: kAmountRegex,
+        direction: 'out',
+        matchOn: 'body',
+      );
+      await upsertUserTemplate(template);
+      createdRule = true;
+    }
+
+    for (final p in packages) {
+      await addExtraWatchedPackage(p);
+    }
+    // upsert 已 sync；仅 covered 时也确保 native 刷新。
+    if (covered) {
+      await syncWatchedPackagesToNative();
+    }
+
+    final shown = packages.length == 1
+        ? packages.first
+        : '${packages.first} 等 ${packages.length} 个包名';
+    return JoinWatchResult(
+      ok: true,
+      message: createdRule ? '已加入监听并创建规则：$shown' : '已加入监听：$shown',
+      packages: packages,
+      createdRule: createdRule,
+    );
+  }
+
+  static String _displayLabelForPkg(String pkg) {
+    for (final e in kKnownAppPackageAliases.entries) {
+      if (e.value.contains(pkg)) return e.key;
+    }
+    if (pkg.contains('Alipay') || pkg.contains('alipay')) return '支付宝';
+    if (pkg.contains('tencent.mm')) return '微信';
+    return pkg;
+  }
+
   static Future<File> _officialDocumentsFile() async {
     final dir = await getApplicationDocumentsDirectory();
     return File(p.join(dir.path, 'noti_templates.json'));
@@ -998,6 +1074,20 @@ class TemplateUpdateResult {
 
 /// Keep in sync with assets/noti_templates.json `version`.
 const int kNotiTemplateFallbackVersion = 11;
+
+class JoinWatchResult {
+  const JoinWatchResult({
+    required this.ok,
+    required this.message,
+    required this.packages,
+    required this.createdRule,
+  });
+
+  final bool ok;
+  final String message;
+  final List<String> packages;
+  final bool createdRule;
+}
 
 /// Per-rule lifecycle for AI-distilled templates (side table in user JSON).
 class DistillRuleMeta {

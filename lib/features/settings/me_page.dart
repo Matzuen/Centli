@@ -12,7 +12,6 @@ import '../../data/db/database_provider.dart';
 import '../../platform/home_widget/centli_home_widget_sync.dart';
 import '../../platform/notifications/notification_listener_stub.dart';
 
-import 'package:package_info_plus/package_info_plus.dart';
 import '../../core/widgets/glass.dart';
 
 class MePage extends ConsumerWidget {
@@ -250,15 +249,7 @@ class MePage extends ConsumerWidget {
               child: Column(
                 children: [
                   FutureBuilder<String>(
-                    future: PackageInfo.fromPlatform()
-                        .then((info) {
-                          final name = info.version.trim();
-                          final build = info.buildNumber.trim();
-                          if (name.isEmpty) return kAppVersionFallback;
-                          if (build.isEmpty) return name;
-                          return '$name+$build';
-                        })
-                        .catchError((_) => kAppVersionFallback),
+                    future: loadDisplayAppVersion(),
                     builder: (context, snap) {
                       final v = snap.data ?? '…';
                       return _tile(
@@ -275,12 +266,13 @@ class MePage extends ConsumerWidget {
                     context,
                     icon: Icons.tour_outlined,
                     title: '重新查看引导',
-                    subtitle: '记账本 → 资产账户 → 记一笔与自动记账',
+                    subtitle: '记账本 → 资产账户 → 开自动记账',
                     onTap: () async {
                       await ref
                           .read(databaseProvider)
                           .setSetting('onboarding_done', 'false');
                       ref.invalidate(onboardingDoneProvider);
+                      await ref.read(onboardingDoneProvider.future);
                       if (context.mounted) context.go('/onboarding');
                     },
                   ),

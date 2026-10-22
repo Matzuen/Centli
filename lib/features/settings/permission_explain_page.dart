@@ -98,6 +98,7 @@ class _PermissionExplainPageState extends ConsumerState<PermissionExplainPage>
     if (widget.finishOnboarding) {
       await ref.read(databaseProvider).setSetting('onboarding_done', 'true');
       ref.invalidate(onboardingDoneProvider);
+      await ref.read(onboardingDoneProvider.future);
       if (!mounted) return;
       // 权限说明后进入自动记账清单（总开关 / 悬浮窗 / 保活）。
       context.go(PendingDeepLink.take() ?? '/me/auto');

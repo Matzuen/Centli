@@ -43,10 +43,12 @@ object PaymentOverlayManager {
     private const val PREFS = "centli_payment_overlay"
     private const val KEY_ENABLED = "overlay_enabled"
     private const val KEY_LAST_CATEGORY = "last_category_id"
+    private const val KEY_LAST_ACCOUNT = "last_account_id"
     private const val DB_NAME = "centli.sqlite"
     private const val AUTO_DISMISS_MS = 60_000L
     private const val SUCCESS_DISMISS_MS = 1_400L
     private const val CATEGORIES_PER_ROW = 3
+    private const val ACCOUNTS_PER_ROW = 3
     private const val MAX_VISIBLE_ROWS = 3
     private const val KEY_LAST_PERM_TOAST = "last_perm_toast_ms"
     private const val PERM_TOAST_COOLDOWN_MS = 30_000L
@@ -57,18 +59,29 @@ object PaymentOverlayManager {
     private var autoDismiss: Runnable? = null
     private var selectedCategoryId: String? = null
     private var selectedCategoryName: String? = null
+    private var selectedAccountId: String? = null
+    private var selectedAccountName: String? = null
+    private var suggestedAccountId: String? = null
     private var selectedDirection: String = "out"
     private var overlayCurrency: String = "CNY"
     private var allCategories: List<Category> = emptyList()
+    private var allAccounts: List<Account> = emptyList()
     /** null = showing root (L1); non-null = showing children of this parent (L2). */
     private var browsingParentId: String? = null
     private val categoryViews = mutableListOf<Pair<TextView, Category>>()
+    private val accountViews = mutableListOf<Pair<TextView, Account>>()
     private var hostActivity: WeakReference<Activity>? = null
 
     data class Category(
         val id: String,
         val name: String,
         val parentId: String? = null,
+    )
+
+    data class Account(
+        val id: String,
+        val name: String,
+        val currency: String,
     )
 
     fun isEnabled(context: Context): Boolean =
@@ -505,11 +518,16 @@ object PaymentOverlayManager {
     ) {
         selectedCategoryId = null
         selectedCategoryName = null
+        selectedAccountId = null
+        selectedAccountName = null
+        suggestedAccountId = null
         selectedDirection = dirOrOut(categoryKind)
         overlayCurrency = currency.ifBlank { "CNY" }
         browsingParentId = null
         allCategories = emptyList()
+        allAccounts = emptyList()
         categoryViews.clear()
+        accountViews.clear()
 
         view.findViewById<TextView>(R.id.tv_source).text = "检测到 $sourceLabel"
         val merchantTv = view.findViewById<TextView>(R.id.tv_merchant)
@@ -581,11 +599,7 @@ object PaymentOverlayManager {
         }
 
         fun refreshConfirmEnabled() {
-            val hasAmount = parseAmountMinor() != null
-            val hasCat = selectedCategoryId != null
-            val ok = hasAmount && hasCat
-            confirmBtn.isEnabled = ok
-            confirmBtn.alpha = if (ok) 1f else 0.5f
+            applyConfirmEnabled(view, confirmBtn)
         }
 
         amountEt.addTextChangedListener(object : TextWatcher {
@@ -612,6 +626,8 @@ object PaymentOverlayManager {
         confirmBtn.setOnClickListener {
             val catId = selectedCategoryId ?: return@setOnClickListener
             val catName = selectedCategoryName ?: ""
+            val accId = selectedAccountId ?: return@setOnClickListener
+            val accName = selectedAccountName ?: ""
             val amountMinor = parseAmountMinor()
             if (amountMinor == null) {
                 Toast.makeText(context, "请输入有效金额", Toast.LENGTH_SHORT).show()
@@ -626,19 +642,24 @@ object PaymentOverlayManager {
                     context,
                     pendingId = pendingId,
                     categoryId = catId,
+                    accountIdOverride = accId,
                     amountMinorOverride = amountMinor,
                     directionOverride = selectedDirection,
                     noteOverride = note,
                 )
                 mainHandler.post {
                     if (ok) {
-                        prefs(context).edit().putString(KEY_LAST_CATEGORY, catId).apply()
+                        prefs(context).edit()
+                            .putString(KEY_LAST_CATEGORY, catId)
+                            .putString(KEY_LAST_ACCOUNT, accId)
+                            .apply()
                         PendingConfirmNotifier.cancel(context, pendingId)
                         MainActivity.notifyPendingDbChanged()
                         showSuccess(
                             view,
                             NativeCaptureIngest.fromMinor(overlayCurrency, amountMinor),
                             catName,
+                            accName,
                         )
                     } else {
                         confirmBtn.isEnabled = true
@@ -650,7 +671,15 @@ object PaymentOverlayManager {
             }.start()
         }
 
+        loadAccounts(context, view, confirmBtn, pendingId)
         loadCategories(context, view, confirmBtn)
+    }
+
+    private fun applyConfirmEnabled(root: View, confirmBtn: Button) {
+        val amountOk = parseAmountMinorFrom(root.findViewById(R.id.et_amount)) != null
+        val ok = amountOk && selectedCategoryId != null && selectedAccountId != null
+        confirmBtn.isEnabled = ok
+        confirmBtn.alpha = if (ok) 1f else 0.5f
     }
 
     private fun hideKeyboard(context: Context, focus: View) {
@@ -670,6 +699,141 @@ object PaymentOverlayManager {
         }
         confirmBtn.isEnabled = false
         confirmBtn.alpha = 0.5f
+    }
+
+    private fun loadAccounts(
+        context: Context,
+        view: View,
+        confirmBtn: Button,
+        pendingId: String,
+    ) {
+        val scroll = view.findViewById<ScrollView>(R.id.scroll_accounts)
+        scroll.visibility = View.GONE
+        Thread {
+            val suggested = queryPendingSuggestedAccount(context, pendingId)
+            val accounts = queryAccounts(context)
+            mainHandler.post {
+                suggestedAccountId = suggested
+                allAccounts = accounts
+                renderAccounts(context, view, confirmBtn)
+            }
+        }.start()
+    }
+
+    private fun renderAccounts(
+        context: Context,
+        view: View,
+        confirmBtn: Button,
+    ) {
+        val scroll = view.findViewById<ScrollView>(R.id.scroll_accounts)
+        val container = view.findViewById<LinearLayout>(R.id.container_accounts)
+        val levelTv = view.findViewById<TextView>(R.id.tv_account_level)
+        container.removeAllViews()
+        accountViews.clear()
+        levelTv.text = "选择资产账户"
+
+        if (allAccounts.isEmpty()) {
+            val tip = TextView(context).apply {
+                text = "暂无资产账户，请点下方打开 App 确认"
+                setTextColor(0xFF888888.toInt())
+                textSize = 12f
+            }
+            container.addView(tip)
+            scroll.visibility = View.VISIBLE
+            return
+        }
+
+        val density = context.resources.displayMetrics.density
+        val lastId = prefs(context).getString(KEY_LAST_ACCOUNT, null)
+        val rowH = (40 * density).toInt()
+        val gap = (8 * density).toInt()
+        val chunks = allAccounts.chunked(ACCOUNTS_PER_ROW)
+        chunks.forEachIndexed { rowIndex, row ->
+            val rowLayout = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                ).apply {
+                    if (rowIndex < chunks.size - 1) bottomMargin = gap
+                }
+            }
+            for (acc in row) {
+                val chip = TextView(context).apply {
+                    text = acc.name
+                    textSize = 13f
+                    gravity = android.view.Gravity.CENTER
+                    setPadding(
+                        (8 * density).toInt(),
+                        (8 * density).toInt(),
+                        (8 * density).toInt(),
+                        (8 * density).toInt(),
+                    )
+                    setBackgroundResource(R.drawable.centli_overlay_chip)
+                    setTextColor(0xFF1A1A1A.toInt())
+                    isSelected = false
+                    layoutParams = LinearLayout.LayoutParams(0, rowH, 1f).apply {
+                        marginStart = (4 * density).toInt()
+                        marginEnd = (4 * density).toInt()
+                    }
+                    setOnClickListener {
+                        selectAccount(view, this, acc, confirmBtn)
+                    }
+                }
+                rowLayout.addView(chip)
+                accountViews.add(chip to acc)
+            }
+            repeat(ACCOUNTS_PER_ROW - row.size) {
+                rowLayout.addView(
+                    View(context).apply {
+                        layoutParams = LinearLayout.LayoutParams(0, 1, 1f).apply {
+                            marginStart = (4 * density).toInt()
+                            marginEnd = (4 * density).toInt()
+                        }
+                    },
+                )
+            }
+            container.addView(rowLayout)
+        }
+        if (chunks.size > MAX_VISIBLE_ROWS) {
+            scroll.layoutParams = scroll.layoutParams.apply {
+                height = MAX_VISIBLE_ROWS * rowH + (MAX_VISIBLE_ROWS - 1) * gap
+            }
+        } else {
+            scroll.layoutParams = scroll.layoutParams.apply {
+                height = LinearLayout.LayoutParams.WRAP_CONTENT
+            }
+        }
+        scroll.visibility = View.VISIBLE
+
+        val preferId = when {
+            !suggestedAccountId.isNullOrBlank() &&
+                allAccounts.any { it.id == suggestedAccountId } -> suggestedAccountId
+            !lastId.isNullOrBlank() && allAccounts.any { it.id == lastId } -> lastId
+            else -> allAccounts.firstOrNull()?.id
+        }
+        if (preferId != null) {
+            accountViews.firstOrNull { it.second.id == preferId }?.let { (chip, acc) ->
+                selectAccount(view, chip, acc, confirmBtn)
+            }
+        }
+    }
+
+    private fun selectAccount(
+        root: View,
+        chip: TextView,
+        acc: Account,
+        confirmBtn: Button,
+    ) {
+        selectedAccountId = acc.id
+        selectedAccountName = acc.name
+        for ((v, _) in accountViews) {
+            v.isSelected = false
+            v.setTextColor(0xFF1A1A1A.toInt())
+        }
+        chip.isSelected = true
+        chip.setTextColor(0xFFFFFFFF.toInt())
+        applyConfirmEnabled(root, confirmBtn)
     }
 
     private fun loadCategories(
@@ -866,9 +1030,7 @@ object PaymentOverlayManager {
         }
         chip.isSelected = true
         chip.setTextColor(0xFFFFFFFF.toInt())
-        val amountOk = parseAmountMinorFrom(root.findViewById(R.id.et_amount)) != null
-        confirmBtn.isEnabled = amountOk
-        confirmBtn.alpha = if (amountOk) 1f else 0.5f
+        applyConfirmEnabled(root, confirmBtn)
     }
 
     private fun parseAmountMinorFrom(amountEt: EditText?): Int? {
@@ -889,7 +1051,12 @@ object PaymentOverlayManager {
         }
     }
 
-    private fun showSuccess(view: View, amountMajor: Double, categoryName: String) {
+    private fun showSuccess(
+        view: View,
+        amountMajor: Double,
+        categoryName: String,
+        accountName: String,
+    ) {
         view.findViewById<View>(R.id.content_main).visibility = View.GONE
         val success = view.findViewById<View>(R.id.content_success)
         success.visibility = View.VISIBLE
@@ -898,8 +1065,9 @@ object PaymentOverlayManager {
             "EUR" -> "€"
             else -> "¥"
         }
+        val accPart = if (accountName.isNotBlank()) " · $accountName" else ""
         view.findViewById<TextView>(R.id.tv_success_detail).text =
-            "$symbol${formatMajor(overlayCurrency, amountMajor)} · $categoryName"
+            "$symbol${formatMajor(overlayCurrency, amountMajor)} · $categoryName$accPart"
         mainHandler.postDelayed({ dismissInternal() }, SUCCESS_DISMISS_MS)
     }
 
@@ -921,10 +1089,15 @@ object PaymentOverlayManager {
             overlayView = null
             selectedCategoryId = null
             selectedCategoryName = null
+            selectedAccountId = null
+            selectedAccountName = null
+            suggestedAccountId = null
             selectedDirection = "out"
             browsingParentId = null
             allCategories = emptyList()
+            allAccounts = emptyList()
             categoryViews.clear()
+            accountViews.clear()
             val act = hostActivity?.get()
             hostActivity = null
             if (act != null && !act.isFinishing) {
@@ -994,6 +1167,57 @@ object PaymentOverlayManager {
         }
     }
 
+    private fun queryAccounts(context: Context): List<Account> {
+        val db = openDb(context) ?: return emptyList()
+        try {
+            val ledgerId = querySetting(db, "current_ledger_id") ?: return emptyList()
+            val out = ArrayList<Account>()
+            db.rawQuery(
+                """
+                SELECT id, name, currency FROM accounts
+                WHERE ledger_id=? AND archived=0
+                ORDER BY sort_order ASC
+                LIMIT 60
+                """.trimIndent(),
+                arrayOf(ledgerId),
+            ).use { c ->
+                while (c.moveToNext()) {
+                    out.add(
+                        Account(
+                            id = c.getString(0),
+                            name = c.getString(1) ?: "",
+                            currency = c.getString(2) ?: "CNY",
+                        ),
+                    )
+                }
+            }
+            return out
+        } catch (e: Exception) {
+            Log.e(TAG, "queryAccounts", e)
+            return emptyList()
+        } finally {
+            db.close()
+        }
+    }
+
+    private fun queryPendingSuggestedAccount(context: Context, pendingId: String): String? {
+        val db = openDb(context) ?: return null
+        try {
+            db.rawQuery(
+                "SELECT suggested_account_id FROM pending_captures WHERE id=? LIMIT 1",
+                arrayOf(pendingId),
+            ).use { c ->
+                if (!c.moveToFirst() || c.isNull(0)) return null
+                return c.getString(0)?.trim()?.takeIf { it.isNotEmpty() }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "queryPendingSuggestedAccount", e)
+            return null
+        } finally {
+            db.close()
+        }
+    }
+
     private fun ignorePending(context: Context, pendingId: String) {
         val db = openDb(context) ?: return
         try {
@@ -1030,6 +1254,7 @@ object PaymentOverlayManager {
         context: Context,
         pendingId: String,
         categoryId: String,
+        accountIdOverride: String? = null,
         amountMinorOverride: Int? = null,
         directionOverride: String? = null,
         noteOverride: String? = null,
@@ -1097,7 +1322,9 @@ object PaymentOverlayManager {
             val amountMinor = amountMinorOverride ?: dbAmount
             if (amountMinor == null || amountMinor < 0) return false
 
-            if (accountId.isNullOrBlank()) {
+            if (!accountIdOverride.isNullOrBlank()) {
+                accountId = accountIdOverride
+            } else if (accountId.isNullOrBlank()) {
                 val hint = when {
                     sourcePkg.contains("Alipay", ignoreCase = true) -> "alipay"
                     sourcePkg.contains("tencent.mm") -> "wechat"
@@ -1108,6 +1335,13 @@ object PaymentOverlayManager {
                 )
             }
             if (accountId.isNullOrBlank()) return false
+            // 校验用户所选账户仍存在（避免用了已归档 id）。
+            db.rawQuery(
+                "SELECT 1 FROM accounts WHERE id=? AND ledger_id=? AND archived=0 LIMIT 1",
+                arrayOf(accountId, ledgerId),
+            ).use { c ->
+                if (!c.moveToFirst()) return false
+            }
 
             val rawDirection = directionOverride ?: dbDirection
             // 仅 in/out；退款/还款用标签与备注，不再单独成类型。

@@ -7,7 +7,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart'
-    show databaseProvider, isOnboardingDoneSetting;
+    show databaseProvider, isOnboardingDoneSetting, onboardingDoneProvider;
 import '../../data/fx/fx_remote_service.dart';
 import '../recurring/recurring_runner.dart';
 import '../../app/deep_link.dart';
@@ -49,6 +49,10 @@ class _SplashPageState extends ConsumerState<SplashPage> {
     if (!mounted) return;
     // 资产锁只藏金额，进 App 不再拦全屏解锁。
     ref.read(amountsRevealedProvider.notifier).conceal();
+    // 先对齐 Riverpod，避免 redirect 仍读到旧/空值放行进壳层。
+    ref.invalidate(onboardingDoneProvider);
+    await ref.read(onboardingDoneProvider.future);
+    if (!mounted) return;
     if (onboardingDone) {
       final deep = PendingDeepLink.take();
       context.go(deep ?? '/home');

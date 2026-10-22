@@ -81,7 +81,10 @@ class _CentliAppState extends ConsumerState<CentliApp> {
     }
     if (state != AppLifecycleState.resumed) return;
     // 悬浮窗/通知栏可能在后台改过库；回前台一律刷新 Drift 观察者。
-    ref.read(pendingExternalWriteTickProvider.notifier).state++;
+    notifyExternalSqliteWrite(
+      ref.read(databaseProvider),
+      ref.read(pendingExternalWriteTickProvider.notifier),
+    );
     if (!_wasBackgrounded) return;
     _wasBackgrounded = false;
     _relockIfNeeded();
@@ -97,19 +100,64 @@ class _CentliAppState extends ConsumerState<CentliApp> {
 
   String? _redirect(BuildContext context, GoRouterState state) {
     // 资产锁不再拦截路由；/lock 仅保留兼容，正常流程不会进入。
+    // 引导未完成时禁止进壳层（小组件 / 通知 open_route / 误跳过都会被拦回）。
+    final done = ref.read(onboardingDoneProvider).valueOrNull;
+    if (done == false) {
+      final path = state.uri.path;
+      if (path == '/splash' || path == '/onboarding') return null;
+      return '/onboarding';
+    }
     return null;
   }
 
   void _onPendingDbChanged() {
     if (!mounted) return;
-    ref.read(pendingExternalWriteTickProvider.notifier).state++;
+    notifyExternalSqliteWrite(
+      ref.read(databaseProvider),
+      ref.read(pendingExternalWriteTickProvider.notifier),
+    );
+  }
+
+  Future<bool> _isOnboardingDone() async {
+    final cached = ref.read(onboardingDoneProvider).valueOrNull;
+    if (cached != null) return cached;
+    final raw =
+        await ref.read(databaseProvider).getSetting('onboarding_done');
+    return isOnboardingDoneSetting(raw);
   }
 
   void _onOpenRoute(String route, String? pendingId, {bool review = false}) {
+    unawaited(_onOpenRouteGuarded(route, pendingId, review: review));
+  }
+
+  Future<void> _onOpenRouteGuarded(
+    String route,
+    String? pendingId, {
+    bool review = false,
+  }) async {
     final router = _router;
     if (router == null) return;
     // Native may have written the row; force Drift watchers to re-query.
-    ref.read(pendingExternalWriteTickProvider.notifier).state++;
+    notifyExternalSqliteWrite(
+      ref.read(databaseProvider),
+      ref.read(pendingExternalWriteTickProvider.notifier),
+    );
+    if (!await _isOnboardingDone()) {
+      // 冷启动深链留到引导结束再消费；勿把引导页冲掉。
+      if (pendingId != null && pendingId.isNotEmpty) {
+        final params = <String, String>{
+          'focus': pendingId,
+          if (review) 'review': '1',
+        };
+        final q = params.entries
+            .map((e) => '${e.key}=${Uri.encodeQueryComponent(e.value)}')
+            .join('&');
+        PendingDeepLink.capture('/home/pending?$q');
+      } else {
+        PendingDeepLink.capture(route);
+      }
+      return;
+    }
     if (pendingId != null && pendingId.isNotEmpty) {
       final params = <String, String>{
         'focus': pendingId,
@@ -137,23 +185,36 @@ class _CentliAppState extends ConsumerState<CentliApp> {
     await PendingCaptureIntake.start(
       db,
       navigate: (route) {
-        final router = _router;
-        if (router == null) return;
-        router.go(route);
+        _onOpenRoute(route, null);
       },
     );
     // Widget sync after first frame path — lower priority than first route.
     unawaited(_syncHomeWidget());
+    // 须等引导结束：否则权限框/小组件深链会盖在引导上，松手点穿「跳过」直接进首页。
     unawaited(_handleInitialWidgetLaunch());
-    // 冷启动后请求「允许发送通知」（待确认推送 / 支付提醒需要）。
     unawaited(_requestPostNotificationsOnLaunch());
+  }
+
+  /// 等到引导完成（或已完成）再继续；超时则放弃，避免卡死。
+  Future<bool> _waitUntilOnboardingDone({
+    Duration timeout = const Duration(minutes: 30),
+  }) async {
+    final deadline = DateTime.now().add(timeout);
+    while (mounted) {
+      if (await _isOnboardingDone()) return true;
+      if (DateTime.now().isAfter(deadline)) return false;
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+    }
+    return false;
   }
 
   /// 软件打开时弹出系统通知权限（Android 13+）；已授权则跳过。
   Future<void> _requestPostNotificationsOnLaunch() async {
     if (!NotificationCaptureStub.supported) return;
-    // 等 splash 切走，避免系统对话框盖在启动页上被误关。
-    await Future<void>.delayed(const Duration(milliseconds: 700));
+    // 绝不能在引导页弹出：系统对话框关闭时的点击会穿透到 AppBar「跳过」。
+    if (!await _waitUntilOnboardingDone()) return;
+    if (!mounted) return;
+    await Future<void>.delayed(const Duration(milliseconds: 400));
     if (!mounted) return;
     final already =
         await NotificationCaptureStub.isPostNotificationsGranted();
@@ -211,9 +272,19 @@ class _CentliAppState extends ConsumerState<CentliApp> {
     try {
       final uri = await HomeWidget.initiallyLaunchedFromHomeWidget();
       final route = CentliHomeWidgetSync.routeForUri(uri);
-      if (route != null) {
-        _onOpenRoute(route, null);
+      if (route == null) return;
+      // 未完成引导时只记下深链，等引导结束再走；勿冲掉引导页。
+      if (!await _isOnboardingDone()) {
+        PendingDeepLink.capture(route);
+        if (!await _waitUntilOnboardingDone()) return;
+        if (!mounted) return;
+        final pending = PendingDeepLink.take();
+        if (pending != null) {
+          _onOpenRoute(pending, null);
+        }
+        return;
       }
+      _onOpenRoute(route, null);
     } catch (e, st) {
       debugPrint('widget initial launch: $e\n$st');
     }
@@ -239,6 +310,9 @@ class _CentliAppState extends ConsumerState<CentliApp> {
     ref.listen<AsyncValue<bool>>(appLockEnabledProvider, (previous, next) {
       _refresh.ping();
     });
+    ref.listen<AsyncValue<bool>>(onboardingDoneProvider, (previous, next) {
+      _refresh.ping();
+    });
     ref.listen(currentLedgerProvider, (previous, next) {
       _scheduleHomeWidgetSync();
     });
@@ -246,6 +320,7 @@ class _CentliAppState extends ConsumerState<CentliApp> {
       _scheduleHomeWidgetSync();
     });
     ref.watch(appLockEnabledProvider);
+    ref.watch(onboardingDoneProvider);
 
     final router = _router;
     if (router == null) {

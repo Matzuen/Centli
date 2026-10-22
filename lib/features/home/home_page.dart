@@ -90,6 +90,8 @@ final _rangeTxProvider =
       List<Transaction>,
       ({String ledgerId, String key, int startMs, int endMs})
     >((ref, args) {
+      // Native 悬浮窗入账不经 Drift；必须听外部 tick，否则流水列表不刷新。
+      ref.watch(pendingExternalWriteTickProvider);
       final db = ref.watch(databaseProvider);
       return db.watchTransactionsInRange(
         args.ledgerId,
@@ -443,12 +445,31 @@ class _HomePageState extends ConsumerState<HomePage> {
                 Expanded(
                   child: RefreshIndicator(
                     onRefresh: () async {
+                      // 先推 Drift / tick，再 invalidate，否则 native 已写入的流水仍读旧快照。
+                      notifyExternalSqliteWrite(
+                        ref.read(databaseProvider),
+                        ref.read(pendingExternalWriteTickProvider.notifier),
+                      );
+                      ref.invalidate(_rangeTxProvider((
+                        ledgerId: ledgerId,
+                        key: range.key,
+                        startMs: range.startMs,
+                        endMs: range.endMs,
+                      )));
                       ref.invalidate(_rangeBaseProvider(baseArgs));
                       ref.invalidate(_dailyExpenseProvider(baseArgs));
                       ref.invalidate(_dailyIncomeProvider(baseArgs));
                       ref.invalidate(currentLedgerProvider);
                       ref.invalidate(
                         _netWorthHomeProvider((ledgerId: ledgerId, base: base)),
+                      );
+                      ref.invalidate(
+                        _lifetimeTotalsProvider((ledgerId: ledgerId, base: base)),
+                      );
+                      ref.invalidate(_homeBalancesProvider(ledgerId));
+                      ref.invalidate(_homePendingOkProvider(ledgerId));
+                      await Future<void>.delayed(
+                        const Duration(milliseconds: 50),
                       );
                     },
                     child: ListView(

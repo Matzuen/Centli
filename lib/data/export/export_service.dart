@@ -48,7 +48,8 @@ class ExportService {
 
   static const exportVersion = 1;
 
-  /// Matches About / pubspec via [PackageInfo]; fallback if unavailable.
+  /// Export metadata：保留完整 `name+build`（非 UI；便于排查）。
+  /// 界面展示请用 [loadDisplayAppVersion] / [displayAppVersion]。
   static Future<String> currentAppVersion() async {
     try {
       final info = await PackageInfo.fromPlatform();

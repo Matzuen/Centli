@@ -119,8 +119,11 @@ class _PendingPageBodyState extends ConsumerState<PendingPage> {
     if (!mounted || _handledFocusId == id) return;
     _handledFocusId = id;
     // Native insert may land just before we open — tick + short retry.
-    ref.read(pendingExternalWriteTickProvider.notifier).state++;
     final db = ref.read(databaseProvider);
+    notifyExternalSqliteWrite(
+      db,
+      ref.read(pendingExternalWriteTickProvider.notifier),
+    );
     PendingCapture? capture;
     for (var i = 0; i < 6; i++) {
       capture = await db.getPendingCapture(id);

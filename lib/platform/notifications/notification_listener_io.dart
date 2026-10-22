@@ -501,4 +501,41 @@ abstract final class NotificationCaptureStub {
       // no-op
     }
   }
+
+  /// Installed launchable apps: `{packageName, label}`.
+  static Future<List<LaunchableAppInfo>> listLaunchableApps() async {
+    if (!supported) return const [];
+    try {
+      final raw = await _channel.invokeMethod<List<dynamic>>('listLaunchableApps');
+      if (raw == null) return const [];
+      return raw
+          .whereType<Map>()
+          .map((e) {
+            final m = Map<Object?, Object?>.from(e);
+            final pkg = '${m['packageName'] ?? ''}'.trim();
+            final label = '${m['label'] ?? ''}'.trim();
+            if (pkg.isEmpty) return null;
+            return LaunchableAppInfo(
+              packageName: pkg,
+              label: label.isEmpty ? pkg : label,
+            );
+          })
+          .whereType<LaunchableAppInfo>()
+          .toList();
+    } on MissingPluginException {
+      return const [];
+    } on PlatformException {
+      return const [];
+    }
+  }
+}
+
+class LaunchableAppInfo {
+  const LaunchableAppInfo({
+    required this.packageName,
+    required this.label,
+  });
+
+  final String packageName;
+  final String label;
 }

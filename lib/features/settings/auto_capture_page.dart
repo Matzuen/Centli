@@ -487,10 +487,14 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
   Future<void> _joinWatch(DroppedNotification d) async {
     final db = ref.read(databaseProvider);
     NotiTemplateStore.bindDatabase(db);
-    await NotiTemplateStore.addExtraWatchedPackage(d.pkg);
+    final title = d.title.trim();
+    final result = await NotiTemplateStore.joinWatchPackage(
+      d.pkg,
+      displayTitle: title.isEmpty ? null : title,
+    );
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('已加入监听：${d.pkg}')),
+      SnackBar(content: Text(result.message)),
     );
     await _reload(soft: true);
   }

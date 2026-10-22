@@ -105,5 +105,18 @@ abstract final class NotificationCaptureStub {
     required String title,
     String reason = 'weak',
   }) async {}
+
+  static Future<List<LaunchableAppInfo>> listLaunchableApps() async =>
+      const [];
+}
+
+class LaunchableAppInfo {
+  const LaunchableAppInfo({
+    required this.packageName,
+    required this.label,
+  });
+
+  final String packageName;
+  final String label;
 }
 
