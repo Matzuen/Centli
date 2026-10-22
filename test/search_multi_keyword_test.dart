@@ -1,11 +1,12 @@
 import 'package:centli/data/db/centli_database.dart';
 import 'package:centli/core/widgets/txn_list_tile.dart';
 import 'package:centli/features/ledger/search_page.dart';
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// Search: space-separated AND keywords, keyword chips, row highlighting.
+/// Search: space-separated OR keywords, keyword chips, row highlighting.
 void main() {
   group('searchKeywords', () {
     test('splits on spaces and full-width spaces, dedupes', () {
@@ -60,7 +61,8 @@ void main() {
       final accounts = await db.loadActiveAccounts(ledgerId);
       final cats = await db.loadCategories(ledgerId, 'out');
       catsOut = cats.map((c) => c.id).toList();
-      Future<void> add(String note, int minor, String catId) => db.insertManualTransaction(
+      Future<void> add(String note, int minor, String catId) =>
+          db.insertManualTransaction(
             ledgerId: ledgerId,
             type: 'out',
             amountMinor: minor,
@@ -73,6 +75,8 @@ void main() {
       await add('午餐 支付宝', 1800, catsOut.first);
       await add('打车 支付宝', 3000, catsOut.first);
       await add('Shopee order', 9000, catsOut.last);
+      await add('商飞出差', 12000, catsOut.first);
+      await add('羽毛球馆', 2800, catsOut.first);
     });
 
     tearDown(() async => db.close());
@@ -86,20 +90,23 @@ void main() {
       expect((await notes('午餐')).length, 2);
     });
 
-    test('space-separated keywords are ANDed', () async {
+    test('space-separated keywords are ORed', () async {
+      final hit = await notes('商飞 羽毛球');
+      expect(hit.toSet(), {'商飞出差', '羽毛球馆'});
+    });
+
+    test('OR returns union of each keyword', () async {
       final hit = await notes('午餐 支付宝');
-      expect(hit, ['午餐 支付宝']);
-      // The AND must not degrade to OR.
-      expect(hit.contains('打车 支付宝'), isFalse);
+      expect(hit.toSet(), {
+        '午餐 公司楼下',
+        '午餐 支付宝',
+        '打车 支付宝',
+      });
     });
 
     test('full-width space separates keywords too', () async {
-      expect(await notes('午餐\u3000支付宝'), ['午餐 支付宝']);
-    });
-
-    test('three keywords all must hit', () async {
-      expect(await notes('午餐 支付宝 楼下'), isEmpty);
-      expect(await notes('午餐 公司 楼下'), ['午餐 公司楼下']);
+      final hit = await notes('商飞\u3000羽毛球');
+      expect(hit.toSet(), {'商飞出差', '羽毛球馆'});
     });
 
     test('keyword is case-insensitive', () async {
@@ -107,9 +114,13 @@ void main() {
       expect((await notes('shopee order')).length, 1);
     });
 
-    test('amount keyword narrows by exact amount', () async {
+    test('amount keyword matches exact amount among OR tokens', () async {
       final rows = await db.searchTransactions(ledgerId, '支付宝 18');
-      expect(rows.map((r) => r.amountMinor), [1800]);
+      expect(
+        rows.map((r) => r.amountMinor).toSet(),
+        {1800, 3000},
+        reason: '18 → 1800 与「支付宝」两条都应命中',
+      );
     });
 
     test('keyword plus category filter still applies', () async {
@@ -119,6 +130,16 @@ void main() {
         categoryId: catsOut.last,
       );
       expect(rows, isEmpty);
+    });
+
+    test('category-name token does not leak onto other tokens', () async {
+      final catId = catsOut.first;
+      await (db.update(db.categories)..where((t) => t.id.equals(catId))).write(
+        const CategoriesCompanion(name: Value('羽毛球')),
+      );
+      // 「商飞」 alone must not match every 羽毛球-category row via leaked catHits.
+      final onlyShangfei = await notes('商飞');
+      expect(onlyShangfei, ['商飞出差']);
     });
   });
 }

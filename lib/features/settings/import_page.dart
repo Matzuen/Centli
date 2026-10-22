@@ -119,8 +119,9 @@ class _ImportPageState extends ConsumerState<ImportPage> {
         title: Text(mergeMode ? '确认合并导入？' : '确认还原？'),
         content: Text(
           mergeMode
-              ? '将向记账本「${b.ledgerName}」追加备份中本地尚不存在的账户、分类、流水等（按 id 跳过已有）。'
-                  '不会清空本机已有数据。\n\n'
+              ? '将把备份内容合并进「当前记账本」（不是备份文件里的账本），'
+                  '只追加本地尚不存在的账户 / 分类 / 流水等（按 id 跳过已有）。'
+                  '不会清空、也不会切换当前账本。\n\n'
                   '通知识别规则与应用锁 PIN 不受影响。'
               : '将清空本机记账本「${b.ledgerName}」下的资产账户、分类、流水、待确认、商户规则与预算，'
                   '再写入备份内容。其它记账本不受影响。\n\n'
@@ -151,10 +152,12 @@ class _ImportPageState extends ConsumerState<ImportPage> {
     });
     try {
       final svc = ImportService(ref.read(databaseProvider));
+      final currentId = await ref.read(currentLedgerIdProvider.future);
       final result = mergeMode
           ? await svc.merge(
               b,
               mergeFxRates: preview.sourceKind != 'excel',
+              targetLedgerId: currentId,
             )
           : await svc.restore(
               b,
@@ -315,8 +318,8 @@ class _ImportPageState extends ConsumerState<ImportPage> {
             const SizedBox(height: CentliSpacing.item),
             Text(
               _mode == _ImportMode.merge
-                  ? '合并：只插入本地尚不存在的记录（按 id），不删除已有数据。'
-                  : '覆盖：清空该记账本本地数据后写入备份。应用锁 PIN 保留在本机安全存储中。',
+                  ? '合并：追加到当前记账本；只插入尚不存在的记录（按 id），保留已有流水。'
+                  : '覆盖：清空备份对应账本后写入。应用锁 PIN 保留在本机安全存储中。',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.4),
             ),
             const SizedBox(height: CentliSpacing.section),

@@ -297,10 +297,11 @@ class ImportService {
     );
   }
 
-  /// 合并追加：不 wipe，只插入缺失 id 的行。
+  /// 合并追加到当前账本：不 wipe，只插入缺失 id 的行；不切换当前账本。
   Future<ImportResult> merge(
     ImportBundle bundle, {
     bool mergeFxRates = false,
+    String? targetLedgerId,
   }) async {
     final stats = await db.mergeFromImportBundle(
       ledgerMap: bundle.ledger,
@@ -315,6 +316,7 @@ class ImportService {
       settingsMap: bundle.settings,
       settingsSkipKeys: _settingsSkipKeys,
       mergeFxRates: mergeFxRates,
+      targetLedgerId: targetLedgerId,
     );
     return ImportResult(
       ledgerId: stats.ledgerId,

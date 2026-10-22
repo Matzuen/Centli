@@ -731,7 +731,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
       return CentliEmptyState(
         icon: Icons.search,
         title: '搜索账单',
-        message: '输入备注 / 商户 / 金额，多个关键词用空格分开；'
+        message: '输入备注 / 商户 / 金额，多个关键词用空格分开（命中任一即可）；'
             '也可以用上面的分类、资产账户、日期快捷筛选。',
       );
     }
@@ -744,7 +744,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
         icon: Icons.search_off_outlined,
         title: '无匹配账单',
         message: _keywords.length > 1
-            ? '同时满足 ${_keywords.map((k) => '「$k」').join('、')} 的账单不存在，试试减少关键词。'
+            ? '未找到含 ${_keywords.map((k) => '「$k」').join('、')} 任一关键词的账单，试试换词或放宽筛选。'
             : '试试换个关键词，或放宽类型 / 分类 / 资产账户 / 日期筛选。',
         action: _hasFilters
             ? OutlinedButton(

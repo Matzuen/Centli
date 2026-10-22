@@ -872,8 +872,9 @@ WHERE pending_id IS NOT NULL
   ///
   /// Keyword may be empty when at least one filter is set (type / category /
   /// account / date range). Account filter matches [accountId] or [toAccountId].
-  /// Keywords separated by spaces / full-width spaces are ANDed: every token
-  /// must hit the note, tags, category name, account name, type word or amount.
+  /// Keywords separated by spaces / full-width spaces are **ORed**: a row
+  /// matches if **any** token hits note, tags, category name, account name,
+  /// type word or amount.
   Future<List<Transaction>> searchTransactions(
     String ledgerId,
     String query, {
@@ -892,37 +893,21 @@ WHERE pending_id IS NOT NULL
         endMs != null;
     if (q.isEmpty && !hasFilter) return const [];
 
-    // Space (incl. full-width) separates keywords; all of them must match.
+    // Space (incl. full-width) separates keywords; any token may match (OR).
     final tokens = q
         .split(RegExp(r'[\s\u3000]+'))
         .map((e) => e.trim().toLowerCase())
         .where((e) => e.isNotEmpty)
         .toList();
 
-    List<String>? nameCatIds;
-    List<String>? nameAccIds;
-    var matchTransferByName = false;
-    if (tokens.isNotEmpty) {
-      final cats = await (select(categories)
-            ..where((t) => t.ledgerId.equals(ledgerId)))
-          .get();
-      final accs = await (select(accounts)
-            ..where((t) => t.ledgerId.equals(ledgerId)))
-          .get();
-      // A token typed verbatim as a category / account name becomes an id hit
-      // (the LIKE only covers note / tags).
-      nameCatIds = [
-        for (final tok in tokens)
-          for (final c in cats)
-            if (c.name.toLowerCase() == tok) c.id,
-      ];
-      nameAccIds = [
-        for (final tok in tokens)
-          for (final a in accs)
-            if (a.name.toLowerCase() == tok) a.id,
-      ];
-      matchTransferByName = tokens.any((t) => '\u8f6c\u8d26'.contains(t));
-    }
+    final cats = tokens.isEmpty
+        ? const <Category>[]
+        : await (select(categories)..where((t) => t.ledgerId.equals(ledgerId)))
+            .get();
+    final accs = tokens.isEmpty
+        ? const <Account>[]
+        : await (select(accounts)..where((t) => t.ledgerId.equals(ledgerId)))
+            .get();
 
     // Fetch one extra row to detect truncation for UI notice.
     final fetchLimit = limit < 0 ? 200 : limit + 1;
@@ -950,35 +935,39 @@ WHERE pending_id IS NOT NULL
               pred = pred & t.happenAt.isSmallerThanValue(endMs);
             }
 
-            for (final tok in tokens) {
-              final pattern = '%$tok%';
-              Expression<bool> textHit =
-                  t.note.lower().like(pattern) | t.tags.lower().like(pattern);
-              final catHits = [
-                for (final c in nameCatIds ?? const <String>[])
-                  if (c.isNotEmpty) c,
-              ];
-              if (catHits.isNotEmpty) {
-                textHit = textHit | t.categoryId.isIn(catHits);
+            if (tokens.isNotEmpty) {
+              Expression<bool>? anyTok;
+              for (final tok in tokens) {
+                final pattern = '%$tok%';
+                Expression<bool> textHit =
+                    t.note.lower().like(pattern) | t.tags.lower().like(pattern);
+                // 仅当前词匹配的分类 / 账户名，避免把「羽毛球」分类串到「商飞」上。
+                final catHits = [
+                  for (final c in cats)
+                    if (c.name.toLowerCase() == tok) c.id,
+                ];
+                if (catHits.isNotEmpty) {
+                  textHit = textHit | t.categoryId.isIn(catHits);
+                }
+                final accHits = [
+                  for (final a in accs)
+                    if (a.name.toLowerCase() == tok) a.id,
+                ];
+                if (accHits.isNotEmpty) {
+                  textHit = textHit |
+                      t.accountId.isIn(accHits) |
+                      t.toAccountId.isIn(accHits);
+                }
+                if (tok == '\u8f6c\u8d26') {
+                  textHit = textHit | t.type.equals('transfer');
+                }
+                final amountMinors = _amountMinorCandidates(tok);
+                final tokHit = amountMinors.isEmpty
+                    ? textHit
+                    : (textHit | t.amountMinor.isIn(amountMinors));
+                anyTok = anyTok == null ? tokHit : (anyTok | tokHit);
               }
-              final accHits = [
-                for (final a in nameAccIds ?? const <String>[])
-                  if (a.isNotEmpty) a,
-              ];
-              if (accHits.isNotEmpty) {
-                textHit = textHit |
-                    t.accountId.isIn(accHits) |
-                    t.toAccountId.isIn(accHits);
-              }
-              if (matchTransferByName && tok == '\u8f6c\u8d26') {
-                textHit = textHit | t.type.equals('transfer');
-              }
-              final amountMinors = _amountMinorCandidates(tok);
-              if (amountMinors.isEmpty) {
-                pred = pred & textHit;
-              } else {
-                pred = pred & (textHit | t.amountMinor.isIn(amountMinors));
-              }
+              pred = pred & anyTok!;
             }
             return pred;
           })
@@ -3469,7 +3458,8 @@ WHERE pending_id IS NOT NULL
     return out;
   }
 
-  /// 合并追加：不 wipe；仅插入本地缺失 id 的账户 / 分类 / 流水等。
+  /// 合并追加到 [targetLedgerId]（默认当前账本）：不 wipe；
+  /// 仅插入本地缺失 id 的账户 / 分类 / 流水等；不切换当前账本。
   Future<RestoreImportStats> mergeFromImportBundle({
     required Map<String, dynamic> ledgerMap,
     required List<Map<String, dynamic>> accountMaps,
@@ -3483,9 +3473,22 @@ WHERE pending_id IS NOT NULL
     required Map<String, String> settingsMap,
     required Set<String> settingsSkipKeys,
     bool mergeFxRates = false,
+    String? targetLedgerId,
   }) async {
-    final ledgerRow = Ledger.fromJson(ledgerMap);
-    final lid = ledgerRow.id;
+    // 校验备份账本字段；实际写入目标是当前账本，不用备份里的 ledger id。
+    Ledger.fromJson(ledgerMap);
+    final currentId = await currentLedgerId();
+    // 合进当前账本，避免写到备份里的另一本并把视角切走（看起来像「原记录没了」）。
+    final lid = (targetLedgerId ?? currentId)?.trim();
+    if (lid == null || lid.isEmpty) {
+      throw StateError('没有当前记账本，无法合并追加');
+    }
+    final targetLedger =
+        await (select(ledgers)..where((t) => t.id.equals(lid))).getSingleOrNull();
+    if (targetLedger == null) {
+      throw StateError('当前记账本不存在，无法合并追加');
+    }
+
     final accountRows = [
       for (final m in accountMaps) Account.fromJson(m).copyWith(ledgerId: lid),
     ];
@@ -3518,16 +3521,10 @@ WHERE pending_id IS NOT NULL
     var insertedPending = 0;
     var insertedFx = 0;
     var insertedBudgets = 0;
-    var settingsWritten = 0;
+    const settingsWritten = 0;
 
     await transaction(() async {
-      final existingLedger =
-          await (select(ledgers)..where((t) => t.id.equals(lid)))
-              .getSingleOrNull();
-      if (existingLedger == null) {
-        await into(ledgers).insert(ledgerRow.toCompanion(true));
-        await seedDefaultAssetTypes(lid);
-      }
+      // 目标账本已存在；不改名、不 wipe、不切 current_ledger_id。
 
       for (final m in assetTypeMaps) {
         final name = '${m['name'] ?? ''}'.trim();
@@ -3657,22 +3654,12 @@ WHERE pending_id IS NOT NULL
         if (insertedFx > 0) _dropFxBookCache();
       }
 
-      // 合并模式不覆盖本机设置（仅确保可切到该账本）。
-      for (final e in settingsMap.entries) {
-        if (settingsSkipKeys.contains(e.key)) continue;
-        if (e.key == 'current_ledger_id') continue;
-        final existing = await getSetting(e.key);
-        if (existing != null && existing.isNotEmpty) continue;
-        await setSetting(e.key, e.value);
-        settingsWritten++;
-      }
-      await setSetting('current_ledger_id', ledgerRow.id);
-      settingsWritten++;
+      // 合并：不写设置、不切换当前账本，避免本机偏好被备份冲掉。
     });
 
     return RestoreImportStats(
-      ledgerId: ledgerRow.id,
-      ledgerName: ledgerRow.name,
+      ledgerId: targetLedger.id,
+      ledgerName: targetLedger.name,
       accounts: insertedAccounts,
       categories: insertedCategories,
       transactions: insertedTxns,
