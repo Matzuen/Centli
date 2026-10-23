@@ -73,15 +73,23 @@ class CentliGlass extends StatelessWidget {
     final doBlur = blur && sigma > 0 && CentliGlass.blurEnabled;
 
     // 半透明填充 + 高光描边；画在模糊层之上。
+    // Material(transparency) 必须在 DecoratedBox *之内*：否则 sheet/dialog
+    // 里裸 ListTile 向上找到的 Material 在玻璃外，_debugCheckBackgroundIsHidden
+    // 会报「ink splashes may be invisible」。CentliSoftCard 已各自包一层，
+    // 这里统一兜底，覆盖 showGlassSheet / showGlassDialog 全部路径。
+    final content = padding == null
+        ? child
+        : Padding(padding: padding!, child: child);
     Widget surface = DecoratedBox(
       decoration: BoxDecoration(
         color: fill,
         borderRadius: radius,
         border: Border.all(color: hairline, width: stroke),
       ),
-      child: padding == null
-          ? child
-          : Padding(padding: padding!, child: child),
+      child: Material(
+        type: MaterialType.transparency,
+        child: content,
+      ),
     );
 
     if (doBlur) {
