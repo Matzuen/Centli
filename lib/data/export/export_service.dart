@@ -84,6 +84,7 @@ class ExportService {
     final fx = await db.loadAllFxRates();
     final settings = await db.loadAllSettings();
     final budgetRows = await db.loadBudgetsForExport(ledgerId);
+    final subTypes = await db.loadSubTransactionTypesForExport();
     final pending = options.includePending
         ? await db.loadPendingCapturesForExport(ledgerId)
         : <PendingCapture>[];
@@ -98,6 +99,7 @@ class ExportService {
       'accounts': accounts.map((e) => e.toJson()).toList(),
       'asset_types': assetTypeRows.map((e) => e.toJson()).toList(),
       'categories': categories.map((e) => e.toJson()).toList(),
+      'sub_transaction_types': subTypes.map((e) => e.toJson()).toList(),
       'transactions': txns.map((e) => e.toJson()).toList(),
       'merchant_rules': rules.map((e) => e.toJson()).toList(),
       'pending_captures': pending.map((e) => e.toJson()).toList(),
@@ -391,6 +393,8 @@ class ExportService {
       TextCellValue('include_in_budget'),
       TextCellValue('fx_rate'),
       TextCellValue('to_amount_minor'),
+      TextCellValue('parent_id'),
+      TextCellValue('sub_type_id'),
       TextCellValue('deleted_at'),
     ]);
     for (final t in txns) {
@@ -430,9 +434,36 @@ class ExportService {
         t['toAmountMinor'] == null
             ? TextCellValue('')
             : IntCellValue(t['toAmountMinor'] as int),
+        TextCellValue('${t['parentId'] ?? ''}'),
+        TextCellValue('${t['subTypeId'] ?? ''}'),
         t['deletedAt'] == null
             ? TextCellValue('')
             : IntCellValue(t['deletedAt'] as int),
+      ]);
+    }
+
+    // sub_transaction_types (global templates)
+    final subTypeRows =
+        (bundle['sub_transaction_types'] as List?)?.cast<Map>() ?? const [];
+    final subSheet = excel['sub_transaction_types'];
+    row(subSheet, [
+      TextCellValue('id'),
+      TextCellValue('name'),
+      TextCellValue('sign'),
+      TextCellValue('icon_key'),
+      TextCellValue('sort_order'),
+      TextCellValue('deleted_at'),
+    ]);
+    for (final s in subTypeRows) {
+      row(subSheet, [
+        TextCellValue('${s['id']}'),
+        TextCellValue('${s['name']}'),
+        IntCellValue(s['sign'] as int? ?? 1),
+        TextCellValue('${s['iconKey'] ?? ''}'),
+        IntCellValue(s['sortOrder'] as int? ?? 0),
+        s['deletedAt'] == null
+            ? TextCellValue('')
+            : IntCellValue(s['deletedAt'] as int),
       ]);
     }
 

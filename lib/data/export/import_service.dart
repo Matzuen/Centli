@@ -18,6 +18,7 @@ class ImportBundle {
     required this.accounts,
     this.assetTypes = const [],
     required this.categories,
+    this.subTransactionTypes = const [],
     required this.transactions,
     required this.merchantRules,
     required this.pendingCaptures,
@@ -35,6 +36,7 @@ class ImportBundle {
   final List<Map<String, dynamic>> accounts;
   final List<Map<String, dynamic>> assetTypes;
   final List<Map<String, dynamic>> categories;
+  final List<Map<String, dynamic>> subTransactionTypes;
   final List<Map<String, dynamic>> transactions;
   final List<Map<String, dynamic>> merchantRules;
   final List<Map<String, dynamic>> pendingCaptures;
@@ -166,6 +168,10 @@ class ImportService {
     final categories = _asMapList(map['categories'], 'categories')
         .map(_normalizeCategory)
         .toList();
+    final subTransactionTypes = _asMapList(
+      map['sub_transaction_types'] ?? const <dynamic>[],
+      'sub_transaction_types',
+    ).map(_normalizeSubTransactionType).toList();
     final transactions = _asMapList(map['transactions'], 'transactions')
         .map(_normalizeTransaction)
         .toList();
@@ -200,6 +206,9 @@ class ImportService {
       for (final c in categories) {
         Category.fromJson(c);
       }
+      for (final s in subTransactionTypes) {
+        SubTransactionType.fromJson(s);
+      }
       for (final t in transactions) {
         Transaction.fromJson(t);
       }
@@ -229,6 +238,7 @@ class ImportService {
       accounts: accounts,
       assetTypes: assetTypeMaps,
       categories: categories,
+      subTransactionTypes: subTransactionTypes,
       transactions: transactions,
       merchantRules: rules,
       pendingCaptures: pending,
@@ -274,6 +284,7 @@ class ImportService {
       accountMaps: bundle.accounts,
       assetTypeMaps: bundle.assetTypes,
       categoryMaps: bundle.categories,
+      subTransactionTypeMaps: bundle.subTransactionTypes,
       transactionMaps: bundle.transactions,
       merchantRuleMaps: bundle.merchantRules,
       pendingCaptureMaps: bundle.pendingCaptures,
@@ -308,6 +319,7 @@ class ImportService {
       accountMaps: bundle.accounts,
       assetTypeMaps: bundle.assetTypes,
       categoryMaps: bundle.categories,
+      subTransactionTypeMaps: bundle.subTransactionTypes,
       transactionMaps: bundle.transactions,
       merchantRuleMaps: bundle.merchantRules,
       pendingCaptureMaps: bundle.pendingCaptures,
@@ -390,7 +402,43 @@ class ImportService {
     } else if (m['tags'] is! String) {
       m['tags'] = null;
     }
+    if (m.containsKey('parent_id') && !m.containsKey('parentId')) {
+      final v = m['parent_id'];
+      m['parentId'] = (v == null || '$v'.isEmpty) ? null : '$v';
+    }
+    if (m.containsKey('sub_type_id') && !m.containsKey('subTypeId')) {
+      final v = m['sub_type_id'];
+      m['subTypeId'] = (v == null || '$v'.isEmpty) ? null : '$v';
+    }
+    m.putIfAbsent('parentId', () => null);
+    m.putIfAbsent('subTypeId', () => null);
     final ts = DateTime.now().millisecondsSinceEpoch;
+    m.putIfAbsent('createdAt', () => ts);
+    m.putIfAbsent('updatedAt', () => ts);
+    return m;
+  }
+
+  static Map<String, dynamic> _normalizeSubTransactionType(
+    Map<String, dynamic> m,
+  ) {
+    if (m.containsKey('icon_key') && !m.containsKey('iconKey')) {
+      m['iconKey'] = m['icon_key'];
+    }
+    if (m.containsKey('sort_order') && !m.containsKey('sortOrder')) {
+      m['sortOrder'] = m['sort_order'];
+    }
+    if (m.containsKey('deleted_at') && !m.containsKey('deletedAt')) {
+      m['deletedAt'] = m['deleted_at'];
+    }
+    if (m.containsKey('created_at') && !m.containsKey('createdAt')) {
+      m['createdAt'] = m['created_at'];
+    }
+    if (m.containsKey('updated_at') && !m.containsKey('updatedAt')) {
+      m['updatedAt'] = m['updated_at'];
+    }
+    final ts = DateTime.now().millisecondsSinceEpoch;
+    m.putIfAbsent('sign', () => 1);
+    m.putIfAbsent('sortOrder', () => 0);
     m.putIfAbsent('createdAt', () => ts);
     m.putIfAbsent('updatedAt', () => ts);
     return m;
@@ -618,10 +666,41 @@ class ImportService {
             : 1,
         'fxRate': fxRaw.isEmpty ? null : double.tryParse(fxRaw),
         'toAmountMinor': toAmtRaw.isEmpty ? null : int.tryParse(toAmtRaw),
+        'parentId': () {
+          final v = _cellBy(row, txnHeader, 'parent_id');
+          return v.isEmpty ? null : v;
+        }(),
+        'subTypeId': () {
+          final v = _cellBy(row, txnHeader, 'sub_type_id');
+          return v.isEmpty ? null : v;
+        }(),
         'deletedAt': delRaw.isEmpty ? null : int.tryParse(delRaw),
         'createdAt': ts,
         'updatedAt': ts,
       });
+    }
+
+    final subTransactionTypes = <Map<String, dynamic>>[];
+    final subHeader = _headerIndex(excel, 'sub_transaction_types');
+    if (subHeader.isNotEmpty) {
+      for (final row in _dataRows(excel, 'sub_transaction_types')) {
+        final id = _cellBy(row, subHeader, 'id');
+        if (id.isEmpty) continue;
+        final delRaw = _cellBy(row, subHeader, 'deleted_at');
+        subTransactionTypes.add({
+          'id': id,
+          'name': _cellBy(row, subHeader, 'name'),
+          'sign': _cellIntBy(row, subHeader, 'sign', fallback: 1),
+          'iconKey': () {
+            final v = _cellBy(row, subHeader, 'icon_key');
+            return v.isEmpty ? null : v;
+          }(),
+          'sortOrder': _cellIntBy(row, subHeader, 'sort_order', fallback: 0),
+          'deletedAt': delRaw.isEmpty ? null : int.tryParse(delRaw),
+          'createdAt': ts,
+          'updatedAt': ts,
+        });
+      }
     }
 
     final pending = <Map<String, dynamic>>[];
@@ -694,6 +773,7 @@ class ImportService {
       'accounts': accounts,
       'asset_types': assetTypes,
       'categories': categories,
+      'sub_transaction_types': subTransactionTypes,
       'transactions': transactions,
       'merchant_rules': rules,
       'pending_captures': pending,
