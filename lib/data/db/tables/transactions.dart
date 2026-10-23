@@ -36,6 +36,10 @@ class Transactions extends Table {
   /// Idempotency key for recurring generations: `rec:ruleId:ms`.
   TextColumn get occurrenceKey =>
       text().named('occurrence_key').nullable()();
+  /// Parent bill id when this row is a sub-transaction; null = top-level.
+  TextColumn get parentId => text().named('parent_id').nullable()();
+  /// Template from [SubTransactionTypes] when this is a sub-transaction.
+  TextColumn get subTypeId => text().named('sub_type_id').nullable()();
   IntColumn get createdAt => integer().named('created_at')();
   IntColumn get updatedAt => integer().named('updated_at')();
   IntColumn get deletedAt => integer().named('deleted_at').nullable()();

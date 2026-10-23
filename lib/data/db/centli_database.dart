@@ -21,6 +21,7 @@ import 'tables/merchant_rules.dart';
 import 'tables/pending_captures.dart';
 import 'tables/budgets.dart';
 import 'tables/recurring_rules.dart';
+import 'tables/sub_transaction_types.dart';
 import 'tables/transactions.dart';
 import 'txn_tags.dart';
 
@@ -39,6 +40,7 @@ part 'centli_database.g.dart';
     Budgets,
     AppSettings,
     RecurringRules,
+    SubTransactionTypes,
   ],
 )
 class CentliDatabase extends _$CentliDatabase {
@@ -63,7 +65,7 @@ class CentliDatabase extends _$CentliDatabase {
   }
 
   @override
-  int get schemaVersion => 13;
+  int get schemaVersion => 14;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -157,7 +159,7 @@ END
 WHERE member IS NOT NULL AND length(trim(member)) > 0
 ''');
             }
-            await m.alterTable(TableMigration(transactions));
+            await _alterTransactionsSafe(m);
             await m.alterTable(TableMigration(pendingCaptures));
           }
           if (from < 9) {
@@ -186,7 +188,7 @@ UPDATE transactions SET note = CASE
 END
 WHERE member IS NOT NULL AND length(trim(member)) > 0
 ''');
-              await m.alterTable(TableMigration(transactions));
+              await _alterTransactionsSafe(m);
             }
           }
           if (from < 12) {
@@ -204,6 +206,16 @@ WHERE pending_id IS NOT NULL
           if (from < 13) {
             await ensureTransferCategoriesForAllLedgers();
           }
+          if (from < 14) {
+            await m.createTable(subTransactionTypes);
+            if (!await _hasTableColumn('transactions', 'parent_id')) {
+              await m.addColumn(transactions, transactions.parentId);
+            }
+            if (!await _hasTableColumn('transactions', 'sub_type_id')) {
+              await m.addColumn(transactions, transactions.subTypeId);
+            }
+            await seedDefaultSubTransactionTypes();
+          }
           await _ensureQueryIndexes();
         },
         beforeOpen: (details) async {
@@ -217,6 +229,24 @@ WHERE pending_id IS NOT NULL
     final rows = await customSelect('PRAGMA table_info($table)').get();
     return rows.any((r) => r.read<String>('name') == column);
   }
+
+
+  /// Rebuild [transactions] while Drift's current table already has columns
+  /// added in later migrations (e.g. parent_id @ v14). Without [newColumns],
+  /// alterTable would SELECT those names from the old table → "no such column".
+  Future<void> _alterTransactionsSafe(Migrator m) async {
+    final newCols = <GeneratedColumn>[];
+    if (!await _hasTableColumn('transactions', 'parent_id')) {
+      newCols.add(transactions.parentId);
+    }
+    if (!await _hasTableColumn('transactions', 'sub_type_id')) {
+      newCols.add(transactions.subTypeId);
+    }
+    await m.alterTable(
+      TableMigration(transactions, newColumns: newCols),
+    );
+  }
+
 
   /// Hot-path indexes (idempotent). Called from onUpgrade + beforeOpen.
   Future<void> _ensureQueryIndexes() async {
@@ -248,6 +278,10 @@ WHERE pending_id IS NOT NULL
     await customStatement(
       'CREATE INDEX IF NOT EXISTS idx_txn_ledger_live_happen '
       'ON transactions(ledger_id, happen_at) WHERE deleted_at IS NULL',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_txn_parent '
+      'ON transactions(parent_id) WHERE parent_id IS NOT NULL',
     );
     await customStatement(
       'CREATE INDEX IF NOT EXISTS idx_pending_ledger_status '
@@ -591,6 +625,7 @@ WHERE pending_id IS NOT NULL
         value: 'false',
       ),
     );
+    await seedDefaultSubTransactionTypes();
   }
 
   /// Fill icon keys for built-in categories/accounts that still have null icon.
@@ -912,7 +947,10 @@ WHERE pending_id IS NOT NULL
   }) {
     return (select(transactions)
           ..where(
-            (t) => t.ledgerId.equals(ledgerId) & t.deletedAt.isNull(),
+            (t) =>
+                t.ledgerId.equals(ledgerId) &
+                t.deletedAt.isNull() &
+                t.parentId.isNull(),
           )
           ..orderBy([(t) => OrderingTerm.desc(t.happenAt)])
           ..limit(limit))
@@ -931,6 +969,7 @@ WHERE pending_id IS NOT NULL
         (t) =>
             t.ledgerId.equals(ledgerId) &
             t.deletedAt.isNull() &
+            t.parentId.isNull() &
             t.happenAt.isBiggerOrEqualValue(startMs) &
             t.happenAt.isSmallerThanValue(endMs),
       )
@@ -991,8 +1030,9 @@ WHERE pending_id IS NOT NULL
 
     final qBuilder = select(transactions)
       ..where((t) {
-        Expression<bool> pred =
-            t.ledgerId.equals(ledgerId) & t.deletedAt.isNull();
+        Expression<bool> pred = t.ledgerId.equals(ledgerId) &
+            t.deletedAt.isNull() &
+            t.parentId.isNull();
 
         if (type != null) {
           pred = pred & t.type.equals(type);
@@ -1101,6 +1141,7 @@ WHERE pending_id IS NOT NULL
             (t) =>
                 t.ledgerId.equals(ledgerId) &
                 t.deletedAt.isNull() &
+                t.parentId.isNull() &
                 t.includeInStat.equals(1) &
                 t.happenAt.isBiggerOrEqualValue(startMs) &
                 t.happenAt.isSmallerThanValue(endMs),
@@ -1151,6 +1192,7 @@ WHERE pending_id IS NOT NULL
             (t) =>
                 t.ledgerId.equals(ledgerId) &
                 t.deletedAt.isNull() &
+                t.parentId.isNull() &
                 t.includeInStat.equals(1) &
                 t.type.equals(kind) &
                 t.happenAt.isBiggerOrEqualValue(startMs) &
@@ -1230,7 +1272,8 @@ WHERE pending_id IS NOT NULL
     });
   }
 
-  Future<void> insertManualTransaction({
+  /// Returns the new row id (parent or child).
+  Future<String> insertManualTransaction({
     required String ledgerId,
     required String type,
     required int amountMinor,
@@ -1247,12 +1290,15 @@ WHERE pending_id IS NOT NULL
     int includeInStat = 1,
     int includeInBudget = 1,
     String? occurrenceKey,
+    String? parentId,
+    String? subTypeId,
   }) async {
     final ts = nowMs();
     final happen = happenAt?.toUtc().millisecondsSinceEpoch ?? ts;
+    final id = newId();
     await into(transactions).insert(
       TransactionsCompanion.insert(
-        id: newId(),
+        id: id,
         ledgerId: ledgerId,
         type: type,
         amountMinor: amountMinor,
@@ -1268,10 +1314,13 @@ WHERE pending_id IS NOT NULL
         includeInStat: Value(includeInStat),
         includeInBudget: Value(includeInBudget),
         occurrenceKey: Value(occurrenceKey),
+        parentId: Value(parentId),
+        subTypeId: Value(subTypeId),
         createdAt: ts,
         updatedAt: ts,
       ),
     );
+    return id;
   }
 
   // --- Last-used / note-level quick bookkeeping memory (settings JSON) ---
@@ -1678,12 +1727,15 @@ WHERE pending_id IS NOT NULL
 
   Future<void> softDeleteTransaction(String id) async {
     final ts = nowMs();
-    await (update(transactions)..where((t) => t.id.equals(id))).write(
-      TransactionsCompanion(
-        deletedAt: Value(ts),
-        updatedAt: Value(ts),
-      ),
+    final patch = TransactionsCompanion(
+      deletedAt: Value(ts),
+      updatedAt: Value(ts),
     );
+    await (update(transactions)..where((t) => t.id.equals(id))).write(patch);
+    // Cascade soft-delete child sub-transactions.
+    await (update(transactions)
+          ..where((t) => t.parentId.equals(id) & t.deletedAt.isNull()))
+        .write(patch);
   }
 
   Stream<List<Transaction>> watchDeletedTransactions(String ledgerId) {
@@ -1708,21 +1760,259 @@ WHERE pending_id IS NOT NULL
   }
 
   /// Clear deleted_at so the txn reappears in home / stats.
+  ///
+  /// Cascades only to children that were soft-deleted together with this
+  /// parent (same [deletedAt]); earlier soft-deleted children stay deleted.
   Future<void> undeleteTransaction(String id) async {
+    final row = await (select(transactions)..where((t) => t.id.equals(id)))
+        .getSingleOrNull();
+    if (row == null) return;
     final ts = nowMs();
-    await (update(transactions)..where((t) => t.id.equals(id))).write(
-      TransactionsCompanion(
-        deletedAt: const Value(null),
+    final patch = TransactionsCompanion(
+      deletedAt: const Value(null),
+      updatedAt: Value(ts),
+    );
+    await (update(transactions)..where((t) => t.id.equals(id))).write(patch);
+    final deletedAt = row.deletedAt;
+    if (deletedAt != null) {
+      await (update(transactions)
+            ..where(
+              (t) =>
+                  t.parentId.equals(id) & t.deletedAt.equals(deletedAt),
+            ))
+          .write(patch);
+    }
+  }
+
+  // --- Sub-transaction types (global templates) ---
+
+  static const kDefaultSubTransactionTypes = <(String name, int sign)>[
+    ('AA', 1),
+    ('退款', 1),
+    ('返现', 1),
+    ('手续费', -1),
+    ('补差价', -1),
+  ];
+
+  static const kSubTypesSeededKey = 'sub_types_seeded';
+
+  /// Seed built-in sub-transaction types once.
+  ///
+  /// Called from onCreate / v14 migration only — not from [beforeOpen], so
+  /// deleting every type stays deleted (no resurrection).
+  Future<void> seedDefaultSubTransactionTypes() async {
+    final flagged = await getSetting(kSubTypesSeededKey);
+    if (flagged == '1') return;
+    final existing = await (select(subTransactionTypes)..limit(1)).get();
+    if (existing.isNotEmpty) {
+      await setSetting(kSubTypesSeededKey, '1');
+      return;
+    }
+    final ts = nowMs();
+    for (var i = 0; i < kDefaultSubTransactionTypes.length; i++) {
+      final (name, sign) = kDefaultSubTransactionTypes[i];
+      await into(subTransactionTypes).insert(
+        SubTransactionTypesCompanion.insert(
+          id: newId(),
+          name: name,
+          sign: sign,
+          sortOrder: Value(i),
+          createdAt: ts,
+          updatedAt: ts,
+        ),
+      );
+    }
+    await setSetting(kSubTypesSeededKey, '1');
+  }
+
+  Stream<List<SubTransactionType>> watchSubTransactionTypes() {
+    return (select(subTransactionTypes)
+          ..where((t) => t.deletedAt.isNull())
+          ..orderBy([(t) => OrderingTerm.asc(t.sortOrder)]))
+        .watch();
+  }
+
+  Future<List<SubTransactionType>> loadSubTransactionTypes() {
+    return (select(subTransactionTypes)
+          ..where((t) => t.deletedAt.isNull())
+          ..orderBy([(t) => OrderingTerm.asc(t.sortOrder)]))
+        .get();
+  }
+
+  /// All templates including soft-deleted (backup / restore).
+  Future<List<SubTransactionType>> loadSubTransactionTypesForExport() {
+    return (select(subTransactionTypes)
+          ..orderBy([(t) => OrderingTerm.asc(t.sortOrder)]))
+        .get();
+  }
+
+  /// Upsert sub-transaction types from import (by id). Missing maps are no-ops.
+  Future<int> upsertSubTransactionTypesFromImport(
+    List<Map<String, dynamic>> maps,
+  ) async {
+    if (maps.isEmpty) return 0;
+    var n = 0;
+    final ts = nowMs();
+    for (final raw in maps) {
+      final m = Map<String, dynamic>.from(raw);
+      // Accept snake_case from Excel.
+      if (m.containsKey('icon_key') && !m.containsKey('iconKey')) {
+        m['iconKey'] = m['icon_key'];
+      }
+      if (m.containsKey('sort_order') && !m.containsKey('sortOrder')) {
+        m['sortOrder'] = m['sort_order'];
+      }
+      if (m.containsKey('deleted_at') && !m.containsKey('deletedAt')) {
+        m['deletedAt'] = m['deleted_at'];
+      }
+      if (m.containsKey('created_at') && !m.containsKey('createdAt')) {
+        m['createdAt'] = m['created_at'];
+      }
+      if (m.containsKey('updated_at') && !m.containsKey('updatedAt')) {
+        m['updatedAt'] = m['updated_at'];
+      }
+      m.putIfAbsent('createdAt', () => ts);
+      m.putIfAbsent('updatedAt', () => ts);
+      m.putIfAbsent('sortOrder', () => 0);
+      m.putIfAbsent('sign', () => 1);
+      final id = '${m['id'] ?? ''}'.trim();
+      if (id.isEmpty) continue;
+      m['id'] = id;
+      final name = '${m['name'] ?? ''}'.trim();
+      if (name.isEmpty) continue;
+      m['name'] = name;
+      final row = SubTransactionType.fromJson(m);
+      final existing = await (select(subTransactionTypes)
+            ..where((t) => t.id.equals(id)))
+          .getSingleOrNull();
+      if (existing == null) {
+        await into(subTransactionTypes).insert(row.toCompanion(true));
+      } else {
+        await (update(subTransactionTypes)..where((t) => t.id.equals(id)))
+            .write(row.toCompanion(true));
+      }
+      n++;
+    }
+    if (n > 0) {
+      await setSetting(kSubTypesSeededKey, '1');
+    }
+    return n;
+  }
+
+  Future<SubTransactionType?> getSubTransactionType(String id) {
+    return (select(subTransactionTypes)..where((t) => t.id.equals(id)))
+        .getSingleOrNull();
+  }
+
+  Future<String> insertSubTransactionType({
+    required String name,
+    required int sign,
+    String? iconKey,
+  }) async {
+    final ts = nowMs();
+    final siblings = await loadSubTransactionTypes();
+    final order = siblings.isEmpty
+        ? 0
+        : siblings.map((t) => t.sortOrder).reduce((a, b) => a > b ? a : b) + 1;
+    final id = newId();
+    await into(subTransactionTypes).insert(
+      SubTransactionTypesCompanion.insert(
+        id: id,
+        name: name.trim(),
+        sign: sign >= 0 ? 1 : -1,
+        iconKey: Value(iconKey),
+        sortOrder: Value(order),
+        createdAt: ts,
+        updatedAt: ts,
+      ),
+    );
+    return id;
+  }
+
+  Future<void> updateSubTransactionType({
+    required String id,
+    String? name,
+    int? sign,
+    String? iconKey,
+    bool updateIcon = false,
+  }) async {
+    await (update(subTransactionTypes)..where((t) => t.id.equals(id))).write(
+      SubTransactionTypesCompanion(
+        name: name != null ? Value(name.trim()) : const Value.absent(),
+        sign: sign != null ? Value(sign >= 0 ? 1 : -1) : const Value.absent(),
+        iconKey: updateIcon ? Value(iconKey) : const Value.absent(),
+        updatedAt: Value(nowMs()),
+      ),
+    );
+  }
+
+  Future<void> reorderSubTransactionTypes(List<String> orderedIds) async {
+    if (orderedIds.isEmpty) return;
+    final ts = nowMs();
+    await transaction(() async {
+      for (var i = 0; i < orderedIds.length; i++) {
+        await (update(subTransactionTypes)
+              ..where((t) => t.id.equals(orderedIds[i])))
+            .write(
+          SubTransactionTypesCompanion(
+            sortOrder: Value(i),
+            updatedAt: Value(ts),
+          ),
+        );
+      }
+    });
+  }
+
+  Future<void> softDeleteSubTransactionType(String id) async {
+    final ts = nowMs();
+    await (update(subTransactionTypes)..where((t) => t.id.equals(id))).write(
+      SubTransactionTypesCompanion(
+        deletedAt: Value(ts),
         updatedAt: Value(ts),
       ),
     );
+  }
+
+  Stream<List<Transaction>> watchChildTransactions(String parentId) {
+    return (select(transactions)
+          ..where(
+            (t) => t.parentId.equals(parentId) & t.deletedAt.isNull(),
+          )
+          ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]))
+        .watch();
+  }
+
+  Future<List<Transaction>> loadChildTransactions(String parentId) {
+    return (select(transactions)
+          ..where(
+            (t) => t.parentId.equals(parentId) & t.deletedAt.isNull(),
+          )
+          ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]))
+        .get();
   }
 
   Future<int> undeleteTransactions(Iterable<String> ids) async {
-    final list = ids.where((id) => id.isNotEmpty).toList();
+    final list = ids.where((id) => id.isNotEmpty).toSet().toList();
     if (list.isEmpty) return 0;
     final ts = nowMs();
-    return (update(transactions)..where((t) => t.id.isIn(list))).write(
+    final rows =
+        await (select(transactions)..where((t) => t.id.isIn(list))).get();
+    final extra = <String>{};
+    for (final row in rows) {
+      final deletedAt = row.deletedAt;
+      if (deletedAt == null) continue;
+      final children = await (select(transactions)
+            ..where(
+              (t) =>
+                  t.parentId.equals(row.id) & t.deletedAt.equals(deletedAt),
+            ))
+          .get();
+      for (final c in children) {
+        extra.add(c.id);
+      }
+    }
+    final all = {...list, ...extra}.toList();
+    return (update(transactions)..where((t) => t.id.isIn(all))).write(
       TransactionsCompanion(
         deletedAt: const Value(null),
         updatedAt: Value(ts),
@@ -1730,8 +2020,9 @@ WHERE pending_id IS NOT NULL
     );
   }
 
-  /// Permanently remove a soft-deleted txn.
+  /// Permanently remove a soft-deleted txn (and any child rows by parent_id).
   Future<void> purgeDeletedTransaction(String id) async {
+    await (delete(transactions)..where((t) => t.parentId.equals(id))).go();
     await (delete(transactions)
           ..where((t) => t.id.equals(id) & t.deletedAt.isNotNull()))
         .go();
@@ -1740,6 +2031,7 @@ WHERE pending_id IS NOT NULL
   Future<int> purgeDeletedTransactions(Iterable<String> ids) async {
     final list = ids.where((id) => id.isNotEmpty).toList();
     if (list.isEmpty) return 0;
+    await (delete(transactions)..where((t) => t.parentId.isIn(list))).go();
     return (delete(transactions)
           ..where((t) => t.id.isIn(list) & t.deletedAt.isNotNull()))
         .go();
@@ -1850,6 +2142,7 @@ WHERE pending_id IS NOT NULL
     required String id,
     String? type,
     int? amountMinor,
+    String? currency,
     String? accountId,
     Value<String?>? toAccountId,
     String? categoryId,
@@ -1860,12 +2153,15 @@ WHERE pending_id IS NOT NULL
     int? includeInBudget,
     Value<int?>? toAmountMinor,
     Value<double?>? fxRate,
+    String? parentId,
+    String? subTypeId,
   }) async {
     await (update(transactions)..where((t) => t.id.equals(id))).write(
       TransactionsCompanion(
         type: type != null ? Value(type) : const Value.absent(),
         amountMinor:
             amountMinor != null ? Value(amountMinor) : const Value.absent(),
+        currency: currency != null ? Value(currency) : const Value.absent(),
         accountId: accountId != null ? Value(accountId) : const Value.absent(),
         toAccountId: toAccountId ?? const Value.absent(),
         categoryId: categoryId != null
@@ -1883,6 +2179,8 @@ WHERE pending_id IS NOT NULL
             : const Value.absent(),
         toAmountMinor: toAmountMinor ?? const Value.absent(),
         fxRate: fxRate ?? const Value.absent(),
+        parentId: parentId != null ? Value(parentId) : const Value.absent(),
+        subTypeId: subTypeId != null ? Value(subTypeId) : const Value.absent(),
         updatedAt: Value(nowMs()),
       ),
     );
@@ -2641,6 +2939,7 @@ WHERE pending_id IS NOT NULL
     final where = <String>[
       'ledger_id = ?',
       'deleted_at IS NULL',
+      'parent_id IS NULL',
       'currency = ?',
     ];
     final vars = <Variable<Object>>[
@@ -2688,6 +2987,7 @@ WHERE pending_id IS NOT NULL
     final where = <String>[
       'ledger_id = ?',
       'deleted_at IS NULL',
+      'parent_id IS NULL',
       'currency != ?',
     ];
     final vars = <Variable<Object>>[
@@ -2737,7 +3037,11 @@ WHERE pending_id IS NOT NULL
     bool statOnly = false,
     bool budgetOnly = false,
   }) async {
-    final where = <String>['ledger_id = ?', 'deleted_at IS NULL'];
+    final where = <String>[
+      'ledger_id = ?',
+      'deleted_at IS NULL',
+      'parent_id IS NULL',
+    ];
     final vars = <Variable<Object>>[Variable<String>(ledgerId)];
     if (statOnly) where.add('include_in_stat = 1');
     if (budgetOnly) where.add('include_in_budget = 1');
@@ -2769,7 +3073,8 @@ WHERE pending_id IS NOT NULL
       '''
       SELECT COALESCE(category_id, '_none') AS cid, SUM(amount_minor) AS total
       FROM transactions
-      WHERE ledger_id = ? AND deleted_at IS NULL AND include_in_stat = 1
+      WHERE ledger_id = ? AND deleted_at IS NULL AND parent_id IS NULL
+        AND include_in_stat = 1
         AND currency = ? AND type = ?
         AND happen_at >= ? AND happen_at < ?
       GROUP BY cid
@@ -2799,7 +3104,8 @@ WHERE pending_id IS NOT NULL
       SELECT CAST((happen_at + ?) / 86400000 AS INTEGER) AS bucket,
              SUM(amount_minor) AS total
       FROM transactions
-      WHERE ledger_id = ? AND deleted_at IS NULL AND include_in_stat = 1
+      WHERE ledger_id = ? AND deleted_at IS NULL AND parent_id IS NULL
+        AND include_in_stat = 1
         AND currency = ? AND type = ?
         AND happen_at >= ? AND happen_at < ?
       GROUP BY bucket
@@ -2857,7 +3163,8 @@ WHERE pending_id IS NOT NULL
       final baseCount = await customSelect(
         '''
         SELECT COUNT(*) AS c FROM transactions
-        WHERE ledger_id = ? AND deleted_at IS NULL AND include_in_stat = 1
+        WHERE ledger_id = ? AND deleted_at IS NULL AND parent_id IS NULL
+          AND include_in_stat = 1
           AND currency = ? AND type IN ('in','out')
           AND happen_at >= ? AND happen_at < ?
         ''',
@@ -3042,7 +3349,8 @@ WHERE pending_id IS NOT NULL
       '''
       SELECT account_id, type, SUM(amount_minor) AS total
       FROM transactions
-      WHERE ledger_id = ? AND deleted_at IS NULL AND include_in_stat = 1
+      WHERE ledger_id = ? AND deleted_at IS NULL AND parent_id IS NULL
+        AND include_in_stat = 1
         AND currency = ? AND type != 'transfer'
         AND happen_at >= ? AND happen_at < ?
       GROUP BY account_id, type
@@ -3277,6 +3585,7 @@ WHERE pending_id IS NOT NULL
           ..where((t) {
             final base = t.ledgerId.equals(ledgerId) &
                 t.deletedAt.isNull() &
+                t.parentId.isNull() &
                 t.includeInStat.equals(1) &
                 t.type.equals(kind) &
                 t.happenAt.isBiggerOrEqualValue(startMs) &
@@ -3424,7 +3733,8 @@ WHERE pending_id IS NOT NULL
       '''
       SELECT COALESCE(category_id, '') AS cid, type, SUM(amount_minor) AS total
       FROM transactions
-      WHERE ledger_id = ? AND deleted_at IS NULL AND include_in_budget = 1
+      WHERE ledger_id = ? AND deleted_at IS NULL AND parent_id IS NULL
+        AND include_in_budget = 1
         AND currency = ? AND type = 'out'
         AND happen_at >= ? AND happen_at < ?
       GROUP BY cid, type
@@ -3524,6 +3834,17 @@ WHERE pending_id IS NOT NULL
     );
     out.remove('merchant');
     out['note'] = composed;
+    // Excel / older JSON may use snake_case; Drift fromJson expects camelCase.
+    if (out.containsKey('parent_id') && !out.containsKey('parentId')) {
+      final v = out['parent_id'];
+      out['parentId'] = (v == null || '$v'.isEmpty) ? null : '$v';
+    }
+    if (out.containsKey('sub_type_id') && !out.containsKey('subTypeId')) {
+      final v = out['sub_type_id'];
+      out['subTypeId'] = (v == null || '$v'.isEmpty) ? null : '$v';
+    }
+    out.putIfAbsent('parentId', () => null);
+    out.putIfAbsent('subTypeId', () => null);
     return out;
   }
 
@@ -3545,6 +3866,7 @@ WHERE pending_id IS NOT NULL
     required List<Map<String, dynamic>> accountMaps,
     List<Map<String, dynamic>> assetTypeMaps = const [],
     required List<Map<String, dynamic>> categoryMaps,
+    List<Map<String, dynamic>> subTransactionTypeMaps = const [],
     required List<Map<String, dynamic>> transactionMaps,
     required List<Map<String, dynamic>> merchantRuleMaps,
     required List<Map<String, dynamic>> pendingCaptureMaps,
@@ -3673,6 +3995,8 @@ WHERE pending_id IS NOT NULL
         insertedBudgets++;
       }
 
+      await upsertSubTransactionTypesFromImport(subTransactionTypeMaps);
+
       final existingTxnIds = {
         for (final t in await (select(transactions)
               ..where((t) => t.ledgerId.equals(lid)))
@@ -3756,6 +4080,7 @@ WHERE pending_id IS NOT NULL
     required List<Map<String, dynamic>> accountMaps,
     List<Map<String, dynamic>> assetTypeMaps = const [],
     required List<Map<String, dynamic>> categoryMaps,
+    List<Map<String, dynamic>> subTransactionTypeMaps = const [],
     required List<Map<String, dynamic>> transactionMaps,
     required List<Map<String, dynamic>> merchantRuleMaps,
     required List<Map<String, dynamic>> pendingCaptureMaps,
@@ -3860,6 +4185,7 @@ WHERE pending_id IS NOT NULL
       for (final b in budgetRows) {
         await into(budgets).insert(b.toCompanion(true));
       }
+      await upsertSubTransactionTypesFromImport(subTransactionTypeMaps);
       if (txnRows.isNotEmpty) {
         await batch((b) {
           b.insertAll(

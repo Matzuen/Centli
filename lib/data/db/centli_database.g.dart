@@ -2296,6 +2296,28 @@ class $TransactionsTable extends Transactions
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _parentIdMeta = const VerificationMeta(
+    'parentId',
+  );
+  @override
+  late final GeneratedColumn<String> parentId = GeneratedColumn<String>(
+    'parent_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _subTypeIdMeta = const VerificationMeta(
+    'subTypeId',
+  );
+  @override
+  late final GeneratedColumn<String> subTypeId = GeneratedColumn<String>(
+    'sub_type_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -2350,6 +2372,8 @@ class $TransactionsTable extends Transactions
     source,
     pendingId,
     occurrenceKey,
+    parentId,
+    subTypeId,
     createdAt,
     updatedAt,
     deletedAt,
@@ -2512,6 +2536,18 @@ class $TransactionsTable extends Transactions
         ),
       );
     }
+    if (data.containsKey('parent_id')) {
+      context.handle(
+        _parentIdMeta,
+        parentId.isAcceptableOrUnknown(data['parent_id']!, _parentIdMeta),
+      );
+    }
+    if (data.containsKey('sub_type_id')) {
+      context.handle(
+        _subTypeIdMeta,
+        subTypeId.isAcceptableOrUnknown(data['sub_type_id']!, _subTypeIdMeta),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -2619,6 +2655,14 @@ class $TransactionsTable extends Transactions
         DriftSqlType.string,
         data['${effectivePrefix}occurrence_key'],
       ),
+      parentId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}parent_id'],
+      ),
+      subTypeId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}sub_type_id'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}created_at'],
@@ -2664,6 +2708,12 @@ class Transaction extends DataClass implements Insertable<Transaction> {
 
   /// Idempotency key for recurring generations: `rec:ruleId:ms`.
   final String? occurrenceKey;
+
+  /// Parent bill id when this row is a sub-transaction; null = top-level.
+  final String? parentId;
+
+  /// Template from [SubTransactionTypes] when this is a sub-transaction.
+  final String? subTypeId;
   final int createdAt;
   final int updatedAt;
   final int? deletedAt;
@@ -2687,6 +2737,8 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     required this.source,
     this.pendingId,
     this.occurrenceKey,
+    this.parentId,
+    this.subTypeId,
     required this.createdAt,
     required this.updatedAt,
     this.deletedAt,
@@ -2731,6 +2783,12 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     if (!nullToAbsent || occurrenceKey != null) {
       map['occurrence_key'] = Variable<String>(occurrenceKey);
     }
+    if (!nullToAbsent || parentId != null) {
+      map['parent_id'] = Variable<String>(parentId);
+    }
+    if (!nullToAbsent || subTypeId != null) {
+      map['sub_type_id'] = Variable<String>(subTypeId);
+    }
     map['created_at'] = Variable<int>(createdAt);
     map['updated_at'] = Variable<int>(updatedAt);
     if (!nullToAbsent || deletedAt != null) {
@@ -2774,6 +2832,12 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       occurrenceKey: occurrenceKey == null && nullToAbsent
           ? const Value.absent()
           : Value(occurrenceKey),
+      parentId: parentId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(parentId),
+      subTypeId: subTypeId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(subTypeId),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
       deletedAt: deletedAt == null && nullToAbsent
@@ -2807,6 +2871,8 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       source: serializer.fromJson<String>(json['source']),
       pendingId: serializer.fromJson<String?>(json['pendingId']),
       occurrenceKey: serializer.fromJson<String?>(json['occurrenceKey']),
+      parentId: serializer.fromJson<String?>(json['parentId']),
+      subTypeId: serializer.fromJson<String?>(json['subTypeId']),
       createdAt: serializer.fromJson<int>(json['createdAt']),
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
       deletedAt: serializer.fromJson<int?>(json['deletedAt']),
@@ -2835,6 +2901,8 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       'source': serializer.toJson<String>(source),
       'pendingId': serializer.toJson<String?>(pendingId),
       'occurrenceKey': serializer.toJson<String?>(occurrenceKey),
+      'parentId': serializer.toJson<String?>(parentId),
+      'subTypeId': serializer.toJson<String?>(subTypeId),
       'createdAt': serializer.toJson<int>(createdAt),
       'updatedAt': serializer.toJson<int>(updatedAt),
       'deletedAt': serializer.toJson<int?>(deletedAt),
@@ -2861,6 +2929,8 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     String? source,
     Value<String?> pendingId = const Value.absent(),
     Value<String?> occurrenceKey = const Value.absent(),
+    Value<String?> parentId = const Value.absent(),
+    Value<String?> subTypeId = const Value.absent(),
     int? createdAt,
     int? updatedAt,
     Value<int?> deletedAt = const Value.absent(),
@@ -2890,6 +2960,8 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     occurrenceKey: occurrenceKey.present
         ? occurrenceKey.value
         : this.occurrenceKey,
+    parentId: parentId.present ? parentId.value : this.parentId,
+    subTypeId: subTypeId.present ? subTypeId.value : this.subTypeId,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
     deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
@@ -2931,6 +3003,8 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       occurrenceKey: data.occurrenceKey.present
           ? data.occurrenceKey.value
           : this.occurrenceKey,
+      parentId: data.parentId.present ? data.parentId.value : this.parentId,
+      subTypeId: data.subTypeId.present ? data.subTypeId.value : this.subTypeId,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
@@ -2959,6 +3033,8 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           ..write('source: $source, ')
           ..write('pendingId: $pendingId, ')
           ..write('occurrenceKey: $occurrenceKey, ')
+          ..write('parentId: $parentId, ')
+          ..write('subTypeId: $subTypeId, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('deletedAt: $deletedAt')
@@ -2987,6 +3063,8 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     source,
     pendingId,
     occurrenceKey,
+    parentId,
+    subTypeId,
     createdAt,
     updatedAt,
     deletedAt,
@@ -3014,6 +3092,8 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           other.source == this.source &&
           other.pendingId == this.pendingId &&
           other.occurrenceKey == this.occurrenceKey &&
+          other.parentId == this.parentId &&
+          other.subTypeId == this.subTypeId &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt &&
           other.deletedAt == this.deletedAt);
@@ -3039,6 +3119,8 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
   final Value<String> source;
   final Value<String?> pendingId;
   final Value<String?> occurrenceKey;
+  final Value<String?> parentId;
+  final Value<String?> subTypeId;
   final Value<int> createdAt;
   final Value<int> updatedAt;
   final Value<int?> deletedAt;
@@ -3063,6 +3145,8 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     this.source = const Value.absent(),
     this.pendingId = const Value.absent(),
     this.occurrenceKey = const Value.absent(),
+    this.parentId = const Value.absent(),
+    this.subTypeId = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.deletedAt = const Value.absent(),
@@ -3088,6 +3172,8 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     this.source = const Value.absent(),
     this.pendingId = const Value.absent(),
     this.occurrenceKey = const Value.absent(),
+    this.parentId = const Value.absent(),
+    this.subTypeId = const Value.absent(),
     required int createdAt,
     required int updatedAt,
     this.deletedAt = const Value.absent(),
@@ -3121,6 +3207,8 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     Expression<String>? source,
     Expression<String>? pendingId,
     Expression<String>? occurrenceKey,
+    Expression<String>? parentId,
+    Expression<String>? subTypeId,
     Expression<int>? createdAt,
     Expression<int>? updatedAt,
     Expression<int>? deletedAt,
@@ -3146,6 +3234,8 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       if (source != null) 'source': source,
       if (pendingId != null) 'pending_id': pendingId,
       if (occurrenceKey != null) 'occurrence_key': occurrenceKey,
+      if (parentId != null) 'parent_id': parentId,
+      if (subTypeId != null) 'sub_type_id': subTypeId,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (deletedAt != null) 'deleted_at': deletedAt,
@@ -3173,6 +3263,8 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     Value<String>? source,
     Value<String?>? pendingId,
     Value<String?>? occurrenceKey,
+    Value<String?>? parentId,
+    Value<String?>? subTypeId,
     Value<int>? createdAt,
     Value<int>? updatedAt,
     Value<int?>? deletedAt,
@@ -3198,6 +3290,8 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       source: source ?? this.source,
       pendingId: pendingId ?? this.pendingId,
       occurrenceKey: occurrenceKey ?? this.occurrenceKey,
+      parentId: parentId ?? this.parentId,
+      subTypeId: subTypeId ?? this.subTypeId,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       deletedAt: deletedAt ?? this.deletedAt,
@@ -3265,6 +3359,12 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     if (occurrenceKey.present) {
       map['occurrence_key'] = Variable<String>(occurrenceKey.value);
     }
+    if (parentId.present) {
+      map['parent_id'] = Variable<String>(parentId.value);
+    }
+    if (subTypeId.present) {
+      map['sub_type_id'] = Variable<String>(subTypeId.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<int>(createdAt.value);
     }
@@ -3302,6 +3402,8 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
           ..write('source: $source, ')
           ..write('pendingId: $pendingId, ')
           ..write('occurrenceKey: $occurrenceKey, ')
+          ..write('parentId: $parentId, ')
+          ..write('subTypeId: $subTypeId, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('deletedAt: $deletedAt, ')
@@ -7027,6 +7129,515 @@ class RecurringRulesCompanion extends UpdateCompanion<RecurringRule> {
   }
 }
 
+class $SubTransactionTypesTable extends SubTransactionTypes
+    with TableInfo<$SubTransactionTypesTable, SubTransactionType> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SubTransactionTypesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _signMeta = const VerificationMeta('sign');
+  @override
+  late final GeneratedColumn<int> sign = GeneratedColumn<int>(
+    'sign',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _iconKeyMeta = const VerificationMeta(
+    'iconKey',
+  );
+  @override
+  late final GeneratedColumn<String> iconKey = GeneratedColumn<String>(
+    'icon_key',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sortOrderMeta = const VerificationMeta(
+    'sortOrder',
+  );
+  @override
+  late final GeneratedColumn<int> sortOrder = GeneratedColumn<int>(
+    'sort_order',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<int> createdAt = GeneratedColumn<int>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<int> updatedAt = GeneratedColumn<int>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
+    'deletedAt',
+  );
+  @override
+  late final GeneratedColumn<int> deletedAt = GeneratedColumn<int>(
+    'deleted_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    name,
+    sign,
+    iconKey,
+    sortOrder,
+    createdAt,
+    updatedAt,
+    deletedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'sub_transaction_types';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SubTransactionType> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('sign')) {
+      context.handle(
+        _signMeta,
+        sign.isAcceptableOrUnknown(data['sign']!, _signMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_signMeta);
+    }
+    if (data.containsKey('icon_key')) {
+      context.handle(
+        _iconKeyMeta,
+        iconKey.isAcceptableOrUnknown(data['icon_key']!, _iconKeyMeta),
+      );
+    }
+    if (data.containsKey('sort_order')) {
+      context.handle(
+        _sortOrderMeta,
+        sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('deleted_at')) {
+      context.handle(
+        _deletedAtMeta,
+        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  SubTransactionType map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SubTransactionType(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      sign: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sign'],
+      )!,
+      iconKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}icon_key'],
+      ),
+      sortOrder: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sort_order'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}deleted_at'],
+      ),
+    );
+  }
+
+  @override
+  $SubTransactionTypesTable createAlias(String alias) {
+    return $SubTransactionTypesTable(attachedDatabase, alias);
+  }
+}
+
+class SubTransactionType extends DataClass
+    implements Insertable<SubTransactionType> {
+  final String id;
+  final String name;
+  final int sign;
+  final String? iconKey;
+  final int sortOrder;
+  final int createdAt;
+  final int updatedAt;
+  final int? deletedAt;
+  const SubTransactionType({
+    required this.id,
+    required this.name,
+    required this.sign,
+    this.iconKey,
+    required this.sortOrder,
+    required this.createdAt,
+    required this.updatedAt,
+    this.deletedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['name'] = Variable<String>(name);
+    map['sign'] = Variable<int>(sign);
+    if (!nullToAbsent || iconKey != null) {
+      map['icon_key'] = Variable<String>(iconKey);
+    }
+    map['sort_order'] = Variable<int>(sortOrder);
+    map['created_at'] = Variable<int>(createdAt);
+    map['updated_at'] = Variable<int>(updatedAt);
+    if (!nullToAbsent || deletedAt != null) {
+      map['deleted_at'] = Variable<int>(deletedAt);
+    }
+    return map;
+  }
+
+  SubTransactionTypesCompanion toCompanion(bool nullToAbsent) {
+    return SubTransactionTypesCompanion(
+      id: Value(id),
+      name: Value(name),
+      sign: Value(sign),
+      iconKey: iconKey == null && nullToAbsent
+          ? const Value.absent()
+          : Value(iconKey),
+      sortOrder: Value(sortOrder),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+      deletedAt: deletedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deletedAt),
+    );
+  }
+
+  factory SubTransactionType.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SubTransactionType(
+      id: serializer.fromJson<String>(json['id']),
+      name: serializer.fromJson<String>(json['name']),
+      sign: serializer.fromJson<int>(json['sign']),
+      iconKey: serializer.fromJson<String?>(json['iconKey']),
+      sortOrder: serializer.fromJson<int>(json['sortOrder']),
+      createdAt: serializer.fromJson<int>(json['createdAt']),
+      updatedAt: serializer.fromJson<int>(json['updatedAt']),
+      deletedAt: serializer.fromJson<int?>(json['deletedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'name': serializer.toJson<String>(name),
+      'sign': serializer.toJson<int>(sign),
+      'iconKey': serializer.toJson<String?>(iconKey),
+      'sortOrder': serializer.toJson<int>(sortOrder),
+      'createdAt': serializer.toJson<int>(createdAt),
+      'updatedAt': serializer.toJson<int>(updatedAt),
+      'deletedAt': serializer.toJson<int?>(deletedAt),
+    };
+  }
+
+  SubTransactionType copyWith({
+    String? id,
+    String? name,
+    int? sign,
+    Value<String?> iconKey = const Value.absent(),
+    int? sortOrder,
+    int? createdAt,
+    int? updatedAt,
+    Value<int?> deletedAt = const Value.absent(),
+  }) => SubTransactionType(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    sign: sign ?? this.sign,
+    iconKey: iconKey.present ? iconKey.value : this.iconKey,
+    sortOrder: sortOrder ?? this.sortOrder,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
+  );
+  SubTransactionType copyWithCompanion(SubTransactionTypesCompanion data) {
+    return SubTransactionType(
+      id: data.id.present ? data.id.value : this.id,
+      name: data.name.present ? data.name.value : this.name,
+      sign: data.sign.present ? data.sign.value : this.sign,
+      iconKey: data.iconKey.present ? data.iconKey.value : this.iconKey,
+      sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SubTransactionType(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('sign: $sign, ')
+          ..write('iconKey: $iconKey, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    name,
+    sign,
+    iconKey,
+    sortOrder,
+    createdAt,
+    updatedAt,
+    deletedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SubTransactionType &&
+          other.id == this.id &&
+          other.name == this.name &&
+          other.sign == this.sign &&
+          other.iconKey == this.iconKey &&
+          other.sortOrder == this.sortOrder &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt &&
+          other.deletedAt == this.deletedAt);
+}
+
+class SubTransactionTypesCompanion extends UpdateCompanion<SubTransactionType> {
+  final Value<String> id;
+  final Value<String> name;
+  final Value<int> sign;
+  final Value<String?> iconKey;
+  final Value<int> sortOrder;
+  final Value<int> createdAt;
+  final Value<int> updatedAt;
+  final Value<int?> deletedAt;
+  final Value<int> rowid;
+  const SubTransactionTypesCompanion({
+    this.id = const Value.absent(),
+    this.name = const Value.absent(),
+    this.sign = const Value.absent(),
+    this.iconKey = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  SubTransactionTypesCompanion.insert({
+    required String id,
+    required String name,
+    required int sign,
+    this.iconKey = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    required int createdAt,
+    required int updatedAt,
+    this.deletedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       name = Value(name),
+       sign = Value(sign),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<SubTransactionType> custom({
+    Expression<String>? id,
+    Expression<String>? name,
+    Expression<int>? sign,
+    Expression<String>? iconKey,
+    Expression<int>? sortOrder,
+    Expression<int>? createdAt,
+    Expression<int>? updatedAt,
+    Expression<int>? deletedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (name != null) 'name': name,
+      if (sign != null) 'sign': sign,
+      if (iconKey != null) 'icon_key': iconKey,
+      if (sortOrder != null) 'sort_order': sortOrder,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (deletedAt != null) 'deleted_at': deletedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  SubTransactionTypesCompanion copyWith({
+    Value<String>? id,
+    Value<String>? name,
+    Value<int>? sign,
+    Value<String?>? iconKey,
+    Value<int>? sortOrder,
+    Value<int>? createdAt,
+    Value<int>? updatedAt,
+    Value<int?>? deletedAt,
+    Value<int>? rowid,
+  }) {
+    return SubTransactionTypesCompanion(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      sign: sign ?? this.sign,
+      iconKey: iconKey ?? this.iconKey,
+      sortOrder: sortOrder ?? this.sortOrder,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      deletedAt: deletedAt ?? this.deletedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (sign.present) {
+      map['sign'] = Variable<int>(sign.value);
+    }
+    if (iconKey.present) {
+      map['icon_key'] = Variable<String>(iconKey.value);
+    }
+    if (sortOrder.present) {
+      map['sort_order'] = Variable<int>(sortOrder.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<int>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<int>(updatedAt.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<int>(deletedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SubTransactionTypesCompanion(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('sign: $sign, ')
+          ..write('iconKey: $iconKey, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$CentliDatabase extends GeneratedDatabase {
   _$CentliDatabase(QueryExecutor e) : super(e);
   $CentliDatabaseManager get managers => $CentliDatabaseManager(this);
@@ -7043,6 +7654,8 @@ abstract class _$CentliDatabase extends GeneratedDatabase {
   late final $BudgetsTable budgets = $BudgetsTable(this);
   late final $AppSettingsTable appSettings = $AppSettingsTable(this);
   late final $RecurringRulesTable recurringRules = $RecurringRulesTable(this);
+  late final $SubTransactionTypesTable subTransactionTypes =
+      $SubTransactionTypesTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -7059,6 +7672,7 @@ abstract class _$CentliDatabase extends GeneratedDatabase {
     budgets,
     appSettings,
     recurringRules,
+    subTransactionTypes,
   ];
 }
 
@@ -9539,6 +10153,8 @@ typedef $$TransactionsTableCreateCompanionBuilder =
       Value<String> source,
       Value<String?> pendingId,
       Value<String?> occurrenceKey,
+      Value<String?> parentId,
+      Value<String?> subTypeId,
       required int createdAt,
       required int updatedAt,
       Value<int?> deletedAt,
@@ -9565,6 +10181,8 @@ typedef $$TransactionsTableUpdateCompanionBuilder =
       Value<String> source,
       Value<String?> pendingId,
       Value<String?> occurrenceKey,
+      Value<String?> parentId,
+      Value<String?> subTypeId,
       Value<int> createdAt,
       Value<int> updatedAt,
       Value<int?> deletedAt,
@@ -9725,6 +10343,16 @@ class $$TransactionsTableFilterComposer
 
   ColumnFilters<String> get occurrenceKey => $composableBuilder(
     column: $table.occurrenceKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get parentId => $composableBuilder(
+    column: $table.parentId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get subTypeId => $composableBuilder(
+    column: $table.subTypeId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -9920,6 +10548,16 @@ class $$TransactionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get parentId => $composableBuilder(
+    column: $table.parentId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get subTypeId => $composableBuilder(
+    column: $table.subTypeId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -10094,6 +10732,12 @@ class $$TransactionsTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<String> get parentId =>
+      $composableBuilder(column: $table.parentId, builder: (column) => column);
+
+  GeneratedColumn<String> get subTypeId =>
+      $composableBuilder(column: $table.subTypeId, builder: (column) => column);
+
   GeneratedColumn<int> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
 
@@ -10248,6 +10892,8 @@ class $$TransactionsTableTableManager
                 Value<String> source = const Value.absent(),
                 Value<String?> pendingId = const Value.absent(),
                 Value<String?> occurrenceKey = const Value.absent(),
+                Value<String?> parentId = const Value.absent(),
+                Value<String?> subTypeId = const Value.absent(),
                 Value<int> createdAt = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<int?> deletedAt = const Value.absent(),
@@ -10272,6 +10918,8 @@ class $$TransactionsTableTableManager
                 source: source,
                 pendingId: pendingId,
                 occurrenceKey: occurrenceKey,
+                parentId: parentId,
+                subTypeId: subTypeId,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 deletedAt: deletedAt,
@@ -10298,6 +10946,8 @@ class $$TransactionsTableTableManager
                 Value<String> source = const Value.absent(),
                 Value<String?> pendingId = const Value.absent(),
                 Value<String?> occurrenceKey = const Value.absent(),
+                Value<String?> parentId = const Value.absent(),
+                Value<String?> subTypeId = const Value.absent(),
                 required int createdAt,
                 required int updatedAt,
                 Value<int?> deletedAt = const Value.absent(),
@@ -10322,6 +10972,8 @@ class $$TransactionsTableTableManager
                 source: source,
                 pendingId: pendingId,
                 occurrenceKey: occurrenceKey,
+                parentId: parentId,
+                subTypeId: subTypeId,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 deletedAt: deletedAt,
@@ -12671,6 +13323,290 @@ typedef $$RecurringRulesTableProcessedTableManager =
       RecurringRule,
       PrefetchHooks Function({bool ledgerId, bool accountId, bool categoryId})
     >;
+typedef $$SubTransactionTypesTableCreateCompanionBuilder =
+    SubTransactionTypesCompanion Function({
+      required String id,
+      required String name,
+      required int sign,
+      Value<String?> iconKey,
+      Value<int> sortOrder,
+      required int createdAt,
+      required int updatedAt,
+      Value<int?> deletedAt,
+      Value<int> rowid,
+    });
+typedef $$SubTransactionTypesTableUpdateCompanionBuilder =
+    SubTransactionTypesCompanion Function({
+      Value<String> id,
+      Value<String> name,
+      Value<int> sign,
+      Value<String?> iconKey,
+      Value<int> sortOrder,
+      Value<int> createdAt,
+      Value<int> updatedAt,
+      Value<int?> deletedAt,
+      Value<int> rowid,
+    });
+
+class $$SubTransactionTypesTableFilterComposer
+    extends Composer<_$CentliDatabase, $SubTransactionTypesTable> {
+  $$SubTransactionTypesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sign => $composableBuilder(
+    column: $table.sign,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get iconKey => $composableBuilder(
+    column: $table.iconKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$SubTransactionTypesTableOrderingComposer
+    extends Composer<_$CentliDatabase, $SubTransactionTypesTable> {
+  $$SubTransactionTypesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sign => $composableBuilder(
+    column: $table.sign,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get iconKey => $composableBuilder(
+    column: $table.iconKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$SubTransactionTypesTableAnnotationComposer
+    extends Composer<_$CentliDatabase, $SubTransactionTypesTable> {
+  $$SubTransactionTypesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<int> get sign =>
+      $composableBuilder(column: $table.sign, builder: (column) => column);
+
+  GeneratedColumn<String> get iconKey =>
+      $composableBuilder(column: $table.iconKey, builder: (column) => column);
+
+  GeneratedColumn<int> get sortOrder =>
+      $composableBuilder(column: $table.sortOrder, builder: (column) => column);
+
+  GeneratedColumn<int> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<int> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<int> get deletedAt =>
+      $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+}
+
+class $$SubTransactionTypesTableTableManager
+    extends
+        RootTableManager<
+          _$CentliDatabase,
+          $SubTransactionTypesTable,
+          SubTransactionType,
+          $$SubTransactionTypesTableFilterComposer,
+          $$SubTransactionTypesTableOrderingComposer,
+          $$SubTransactionTypesTableAnnotationComposer,
+          $$SubTransactionTypesTableCreateCompanionBuilder,
+          $$SubTransactionTypesTableUpdateCompanionBuilder,
+          (
+            SubTransactionType,
+            BaseReferences<
+              _$CentliDatabase,
+              $SubTransactionTypesTable,
+              SubTransactionType
+            >,
+          ),
+          SubTransactionType,
+          PrefetchHooks Function()
+        > {
+  $$SubTransactionTypesTableTableManager(
+    _$CentliDatabase db,
+    $SubTransactionTypesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SubTransactionTypesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SubTransactionTypesTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$SubTransactionTypesTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<int> sign = const Value.absent(),
+                Value<String?> iconKey = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+                Value<int> createdAt = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+                Value<int?> deletedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SubTransactionTypesCompanion(
+                id: id,
+                name: name,
+                sign: sign,
+                iconKey: iconKey,
+                sortOrder: sortOrder,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String name,
+                required int sign,
+                Value<String?> iconKey = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+                required int createdAt,
+                required int updatedAt,
+                Value<int?> deletedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SubTransactionTypesCompanion.insert(
+                id: id,
+                name: name,
+                sign: sign,
+                iconKey: iconKey,
+                sortOrder: sortOrder,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$SubTransactionTypesTable, SubTransactionType>(
+                    table,
+                  ),
+                  BaseReferences<
+                    _$CentliDatabase,
+                    $SubTransactionTypesTable,
+                    SubTransactionType
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$SubTransactionTypesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$CentliDatabase,
+      $SubTransactionTypesTable,
+      SubTransactionType,
+      $$SubTransactionTypesTableFilterComposer,
+      $$SubTransactionTypesTableOrderingComposer,
+      $$SubTransactionTypesTableAnnotationComposer,
+      $$SubTransactionTypesTableCreateCompanionBuilder,
+      $$SubTransactionTypesTableUpdateCompanionBuilder,
+      (
+        SubTransactionType,
+        BaseReferences<
+          _$CentliDatabase,
+          $SubTransactionTypesTable,
+          SubTransactionType
+        >,
+      ),
+      SubTransactionType,
+      PrefetchHooks Function()
+    >;
 
 class $CentliDatabaseManager {
   final _$CentliDatabase _db;
@@ -12697,4 +13633,6 @@ class $CentliDatabaseManager {
       $$AppSettingsTableTableManager(_db, _db.appSettings);
   $$RecurringRulesTableTableManager get recurringRules =>
       $$RecurringRulesTableTableManager(_db, _db.recurringRules);
+  $$SubTransactionTypesTableTableManager get subTransactionTypes =>
+      $$SubTransactionTypesTableTableManager(_db, _db.subTransactionTypes);
 }
