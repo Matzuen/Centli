@@ -104,7 +104,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                 ),
                 FilledButton(
                   onPressed: () => Navigator.pop(ctx, true),
-                  child: const Text('保存'),
+                  child: const Text('确定'),
                 ),
               ],
             );

@@ -152,7 +152,7 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                             icon: const Icon(Icons.category_outlined),
                           ),
                           IconButton(
-                            tooltip: '新建资产账户',
+                            tooltip: '添加账户',
                             onPressed: () async {
                               await showAccountEditor(
                                 context,
@@ -160,7 +160,7 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                                 ledgerId: ledger.id,
                               );
                             },
-                            icon: const Icon(Icons.add_rounded),
+                            icon: const Icon(Icons.add),
                           ),
                         ],
                       ],
@@ -323,7 +323,7 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                                     );
                                   },
                                   icon: const Icon(Icons.add, size: 18),
-                                  label: const Text('新建资产账户'),
+                                  label: const Text('添加账户'),
                                 ),
                         ),
                       )
@@ -1258,7 +1258,7 @@ Future<void> showAccountEditor(
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('保存'),
+                child: const Text('确定'),
               ),
             ],
           );

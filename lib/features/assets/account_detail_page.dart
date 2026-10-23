@@ -128,10 +128,10 @@ class _AccountDetailBody extends ConsumerWidget {
         ),
         actions: [
           if (account.archived != 0)
-            FilledButton.tonalIcon(
-              onPressed: () => _confirmUnarchive(context, ref, account),
+            IconButton(
+              tooltip: '\u53d6\u6d88\u5f52\u6863',
               icon: const Icon(Icons.unarchive_outlined),
-              label: const Text('\u53d6\u6d88\u5f52\u6863'),
+              onPressed: () => _confirmUnarchive(context, ref, account),
             )
           else ...[
             IconButton(

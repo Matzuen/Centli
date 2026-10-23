@@ -1420,7 +1420,7 @@ Future<List<String>?> showTagEditorDialog(
                 key: const Key('ledger_detail_tags_save'),
                 onPressed: () =>
                     Navigator.pop(ctx, List<String>.from(current)),
-                child: const Text('保存'),
+                child: const Text('确定'),
               ),
             ],
           );

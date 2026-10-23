@@ -290,7 +290,7 @@ class _RecurringWizardPageState extends ConsumerState<RecurringWizardPage> {
                           _save();
                         }
                       },
-                child: Text(_step == 0 ? '下一步' : '保存'),
+                child: Text(_step == 0 ? '下一步' : '确定'),
               ),
             ],
           ),

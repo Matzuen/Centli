@@ -554,11 +554,6 @@ class _RecognitionRuleEditPageState extends State<RecognitionRuleEditPage> {
                     value: _merchantFromTitle,
                     onChanged: (v) => setState(() => _merchantFromTitle = v),
                   ),
-                  const SizedBox(height: CentliSpacing.sectionLoose + CentliSpacing.item),
-                  FilledButton(
-                    onPressed: _saving ? null : _save,
-                    child: const Text('保存'),
-                  ),
                 ],
               ),
             ),

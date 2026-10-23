@@ -24,24 +24,15 @@ class SubTransactionsPage extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('子交易管理'),
         actions: [
-          CentliSoftCard(
-            margin: const EdgeInsets.only(right: 12),
-            padding: EdgeInsets.zero,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  tooltip: '添加',
-                  icon: const Icon(Icons.add),
-                  onPressed: () => _promptCreate(context, ref),
-                ),
-                IconButton(
-                  tooltip: '说明',
-                  icon: const Icon(Icons.info_outline),
-                  onPressed: () => _showInfo(context),
-                ),
-              ],
-            ),
+          IconButton(
+            tooltip: '添加',
+            icon: const Icon(Icons.add),
+            onPressed: () => _promptCreate(context, ref),
+          ),
+          IconButton(
+            tooltip: '说明',
+            icon: const Icon(Icons.info_outline),
+            onPressed: () => _showInfo(context),
           ),
         ],
       ),
