@@ -13,7 +13,7 @@ import '../../app/theme.dart';
 /// 1. 外层承担阴影（阴影要被圆角裁掉就看不见了）
 /// 2. `ClipRRect` 限制模糊的作用范围
 /// 3. `BackdropFilter` 采样下方像素并模糊
-/// 4. 最内层是半透明填充 + 1px 高光描边
+/// 4. 最内层是半透明填充 + 描边（宽度见 [CentliTheme.glassBorderWidth]）
 ///
 /// [blur] 为 false 时只保留半透明 + 描边：卡片这类「背后只有一层平滑渐变」
 /// 的表面用不着模糊（视觉上没有差别，却要付出真实的 GPU 开销），弹窗这类
@@ -27,6 +27,7 @@ class CentliGlass extends StatelessWidget {
     this.blur = true,
     this.tint,
     this.borderColor,
+    this.borderWidth,
     this.shadow = true,
     this.padding,
     this.margin,
@@ -51,8 +52,11 @@ class CentliGlass extends StatelessWidget {
   /// 玻璃底色；默认浅色白 / 深色炭灰的半透明版本。
   final Color? tint;
 
-  /// 1px 描边；默认浅色白 / 深色白低透明度，用来勾边。
+  /// 描边颜色；默认 [CentliTheme.glassBorder]。
   final Color? borderColor;
+
+  /// 描边线宽；默认 [CentliTheme.glassBorderWidth]。
+  final double? borderWidth;
 
   final bool shadow;
   final EdgeInsetsGeometry? padding;
@@ -65,6 +69,7 @@ class CentliGlass extends StatelessWidget {
     final radius = borderRadius ?? BorderRadius.circular(CentliTheme.cardRadius);
     final fill = tint ?? CentliTheme.glassTint(context, dark: dark);
     final hairline = borderColor ?? CentliTheme.glassBorder(context, dark: dark);
+    final stroke = borderWidth ?? CentliTheme.glassBorderWidth;
     final doBlur = blur && sigma > 0 && CentliGlass.blurEnabled;
 
     // 半透明填充 + 高光描边；画在模糊层之上。
@@ -72,7 +77,7 @@ class CentliGlass extends StatelessWidget {
       decoration: BoxDecoration(
         color: fill,
         borderRadius: radius,
-        border: Border.all(color: hairline),
+        border: Border.all(color: hairline, width: stroke),
       ),
       child: padding == null
           ? child
@@ -105,11 +110,8 @@ class CentliGlass extends StatelessWidget {
   }
 }
 
-/// `showDialog` 的毛玻璃版本：调用点只需换函数名，其余参数逐一透传。
-///
-/// 玻璃感来自**弹窗自身的半透明表面**（见 [CentliGlassDialog] 里的那层
-/// `BackdropFilter`）：它模糊的是自己身后的页面内容，而不是给整页再加一层
-/// 模糊。系统遮罩只做轻微压暗，避免与玻璃叠加成一片灰。
+/// 毛玻璃弹窗：用 [showGeneralDialog]（不要用系统 [Dialog] 路由的默认材质），
+/// 这样 [BackdropFilter] 才能采到身后页面，效果与浮动菜单一致。
 Future<T?> showGlassDialog<T>({
   required BuildContext context,
   required WidgetBuilder builder,
@@ -126,20 +128,37 @@ Future<T?> showGlassDialog<T>({
   AnimationStyle? animationStyle,
 }) {
   assert(debugCheckHasMaterialLocalizations(context));
-  return showDialog<T>(
+  final label =
+      barrierLabel ?? MaterialLocalizations.of(context).modalBarrierDismissLabel;
+  return showGeneralDialog<T>(
     context: context,
     barrierDismissible: barrierDismissible,
-    barrierColor: barrierColor ?? Colors.black.withValues(alpha: 0.18),
-    barrierLabel: barrierLabel,
-    useSafeArea: useSafeArea,
+    barrierLabel: label,
+    // 高透毛玻璃下不再叠黑幕；点外侧仍可关闭。
+    barrierColor: barrierColor ?? Colors.transparent,
     useRootNavigator: useRootNavigator,
     routeSettings: routeSettings,
     anchorPoint: anchorPoint,
-    traversalEdgeBehavior: traversalEdgeBehavior,
-    fullscreenDialog: fullscreenDialog,
     requestFocus: requestFocus,
-    animationStyle: animationStyle,
-    builder: builder,
+    transitionDuration: const Duration(milliseconds: 150),
+    pageBuilder: (ctx, anim, secondaryAnim) {
+      Widget page = builder(ctx);
+      if (useSafeArea) {
+        page = SafeArea(child: page);
+      }
+      return page;
+    },
+    transitionBuilder: (ctx, anim, secondaryAnim, child) {
+      return FadeTransition(
+        opacity: CurvedAnimation(parent: anim, curve: Curves.easeOut),
+        child: ScaleTransition(
+          scale: Tween<double>(begin: 0.96, end: 1).animate(
+            CurvedAnimation(parent: anim, curve: Curves.easeOutCubic),
+          ),
+          child: child,
+        ),
+      );
+    },
   );
 }
 
@@ -163,7 +182,8 @@ Future<T?> showGlassSheet<T>({
   bool isScrollControlled = false,
   double scrollControlDisabledMaxHeightRatio =
       _kDefaultScrollControlDisabledMaxHeightRatio,
-  bool useRootNavigator = false,
+  // 默认走根 Navigator：Shell 底栏在 body 之上，挂分支 Navigator 会被底栏挡住。
+  bool useRootNavigator = true,
   bool isDismissible = true,
   bool enableDrag = true,
   bool? showDragHandle,
@@ -180,7 +200,8 @@ Future<T?> showGlassSheet<T>({
   return showModalBottomSheet<T>(
     context: context,
     barrierLabel: barrierLabel,
-    barrierColor: barrierColor ?? Colors.black.withValues(alpha: 0.24),
+    // 高透毛玻璃下不再叠黑幕（否则整页发灰）；点外侧仍可关闭。
+    barrierColor: barrierColor ?? Colors.transparent,
     constraints: constraints,
     isScrollControlled: isScrollControlled,
     scrollControlDisabledMaxHeightRatio: scrollControlDisabledMaxHeightRatio,
@@ -198,16 +219,25 @@ Future<T?> showGlassSheet<T>({
     clipBehavior: clipBehavior,
     // 让 route 的材质透明，玻璃表面由 builder 里的 CentliGlass 自己画。
     backgroundColor: Colors.transparent,
-    shape:
-        shape ??
+    shape: shape ??
         const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
     builder: (ctx) {
       final body = Builder(builder: builder);
+      final effectiveShape = shape ??
+          const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          );
+      // 圆角跟 shape 对齐；未传 backgroundColor 时用全局调教好的雾面。
+      final radiusGeometry = effectiveShape is RoundedRectangleBorder
+          ? effectiveShape.borderRadius
+          : const BorderRadius.vertical(top: Radius.circular(24));
       return CentliGlass(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        tint: backgroundColor,
+        borderRadius: radiusGeometry.resolve(Directionality.of(ctx)),
+        blur: true,
+        sigma: CentliTheme.glassSigma,
+        tint: backgroundColor ?? CentliTheme.glassTint(ctx),
         child: paintHandleInside
             ? _GlassSheetBodyWithHandle(child: body)
             : body,
@@ -265,8 +295,7 @@ class _GlassSheetBodyWithHandle extends StatelessWidget {
 /// 毛玻璃弹窗面板：`AlertDialog` 的等价替代。
 ///
 /// 只覆盖项目里实际用到的 `title` / `content` / `actions` / `insetPadding`
-/// 四个参数，内部布局与 `AlertDialog` 对齐（24 边距、按钮右对齐），但表面是
-/// 一层真正模糊身后内容的玻璃，而不是给整页加模糊。
+/// 四个参数；**不再包一层系统 [Dialog]**（其材质会挡掉 BackdropFilter）。
 class CentliGlassDialog extends StatelessWidget {
   const CentliGlassDialog({
     super.key,
@@ -286,56 +315,56 @@ class CentliGlassDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final dark = theme.brightness == Brightness.dark;
-    return Dialog(
-      // 表面全部由 CentliGlass 负责，route 自己的材质保持全透明。
-      backgroundColor: Colors.transparent,
-      shadowColor: Colors.transparent,
-      surfaceTintColor: Colors.transparent,
-      elevation: 0,
-      insetPadding:
-          insetPadding ??
-          const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minWidth: 280, maxWidth: 560),
-        child: CentliGlass(
-          borderRadius: BorderRadius.circular(CentliTheme.cardRadius),
-          tint: CentliTheme.glassSurface(context, dark: dark),
-          sigma: CentliTheme.glassDialogSigma,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
-                child: DefaultTextStyle(
-                  // 与 AlertDialog 的标题样式保持一致（主题里的 headlineSmall）。
-                  style: theme.textTheme.headlineSmall!,
-                  child: title,
-                ),
-              ),
-              Flexible(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-                  child: DefaultTextStyle(
-                    style: theme.textTheme.bodyMedium!.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
+    final pad =
+        insetPadding ??
+        const EdgeInsets.symmetric(horizontal: 40, vertical: 24);
+    return Center(
+      child: Padding(
+        padding: pad,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 280, maxWidth: 560),
+          child: Material(
+            type: MaterialType.transparency,
+            child: CentliGlass(
+              borderRadius: BorderRadius.circular(CentliTheme.cardRadius),
+              blur: true,
+              sigma: CentliTheme.glassDialogSigma,
+              tint: CentliTheme.glassTint(context),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+                    child: DefaultTextStyle(
+                      style: theme.textTheme.headlineSmall!,
+                      child: title,
                     ),
-                    child: content,
                   ),
-                ),
+                  Flexible(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                      child: DefaultTextStyle(
+                        style: theme.textTheme.bodyMedium!.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                        child: content,
+                      ),
+                    ),
+                  ),
+                  if (actions != null && actions!.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+                      child: OverflowBar(
+                        alignment: MainAxisAlignment.end,
+                        spacing: 8,
+                        overflowSpacing: 4,
+                        children: actions!,
+                      ),
+                    ),
+                ],
               ),
-              if (actions != null && actions!.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
-                  child: OverflowBar(
-                    alignment: MainAxisAlignment.end,
-                    spacing: 8,
-                    overflowSpacing: 4,
-                    children: actions!,
-                  ),
-                ),
-            ],
+            ),
           ),
         ),
       ),
@@ -345,3 +374,384 @@ class CentliGlassDialog extends StatelessWidget {
 
 // 与 SDK 内部常量保持一致，避免两条路径的默认高度比例不同。
 const double _kDefaultScrollControlDisabledMaxHeightRatio = 9.0 / 16.0;
+
+/// 毛玻璃浮动菜单的一项（与首页账本下拉同款：勾选 / 分隔 / 文案）。
+class CentliMenuItem<T> {
+  const CentliMenuItem({
+    required this.value,
+    required this.label,
+    this.icon,
+    this.selected = false,
+    this.destructive = false,
+  });
+
+  final T value;
+  final String label;
+  final IconData? icon;
+  final bool selected;
+  final bool destructive;
+}
+
+/// 在锚点旁弹出毛玻璃菜单；样式与首页账本下拉一致。
+///
+/// 用 [showGeneralDialog] 挂在路由层，[BackdropFilter] 才能采到身后页面。
+Future<T?> showGlassMenu<T>({
+  required BuildContext context,
+  required BuildContext anchorContext,
+  required List<CentliMenuItem<T>> items,
+  double minWidth = 148,
+  double maxWidth = 280,
+  /// `true` 时菜单右缘对齐锚点右缘（顶栏 / trailing 三点菜单）。
+  bool alignEnd = false,
+}) {
+  assert(items.isNotEmpty, 'showGlassMenu items must not be empty');
+  final box = anchorContext.findRenderObject() as RenderBox?;
+  final overlay =
+      Navigator.of(context).overlay?.context.findRenderObject() as RenderBox?;
+  if (box == null || overlay == null) {
+    return Future<T?>.value(null);
+  }
+
+  final topLeft = box.localToGlobal(Offset.zero, ancestor: overlay);
+  final size = box.size;
+  final menuTop = topLeft.dy + size.height + 4;
+  final screenW = overlay.size.width;
+  final cappedMax = maxWidth.clamp(minWidth, screenW - 16);
+
+  double menuLeft;
+  double? menuRight;
+  if (alignEnd) {
+    menuRight = screenW - (topLeft.dx + size.width);
+    if (menuRight < 8) menuRight = 8;
+    menuLeft = 8;
+  } else {
+    menuLeft = topLeft.dx.clamp(8.0, screenW - minWidth - 8);
+    menuRight = null;
+  }
+
+  final scheme = Theme.of(context).colorScheme;
+
+  return showGeneralDialog<T>(
+    context: context,
+    barrierDismissible: true,
+    barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+    barrierColor: Colors.transparent,
+    transitionDuration: const Duration(milliseconds: 120),
+    pageBuilder: (ctx, anim, secondaryAnim) {
+      return Stack(
+        children: [
+          Positioned(
+            left: alignEnd ? null : menuLeft,
+            right: alignEnd ? menuRight : null,
+            top: menuTop,
+            child: FadeTransition(
+              opacity: CurvedAnimation(parent: anim, curve: Curves.easeOut),
+              child: Material(
+                type: MaterialType.transparency,
+                child: CentliGlass(
+                  borderRadius: BorderRadius.circular(
+                    CentliTheme.glassMenuRadius,
+                  ),
+                  blur: true,
+                  sigma: CentliTheme.glassSigma,
+                  tint: CentliTheme.glassTint(ctx),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minWidth: minWidth,
+                      maxWidth: cappedMax,
+                    ),
+                    child: IntrinsicWidth(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          for (var i = 0; i < items.length; i++) ...[
+                            if (i > 0)
+                              Divider(
+                                height: 1,
+                                thickness: 1,
+                                color: scheme.outlineVariant
+                                    .withValues(alpha: 0.45),
+                              ),
+                            _CentliMenuTile<T>(item: items[i]),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    },
+  );
+}
+
+class _CentliMenuTile<T> extends StatelessWidget {
+  const _CentliMenuTile({required this.item});
+
+  final CentliMenuItem<T> item;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final color = item.destructive
+        ? scheme.error
+        : item.selected
+            ? scheme.primary
+            : scheme.onSurface;
+    return InkWell(
+      onTap: () => Navigator.pop(context, item.value),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 22,
+              child: item.selected
+                  ? Icon(Icons.check_rounded, size: 18, color: color)
+                  : item.icon != null
+                      ? Icon(item.icon, size: 18, color: color)
+                      : null,
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                item.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight:
+                      item.selected ? FontWeight.w700 : FontWeight.w500,
+                  color: color,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 轻提示语义：底色 + 字色同色系（成功绿 / 失败红 / 警告·提示黄）。
+enum GlassSnackTone { info, success, error, warning }
+
+/// 按文案猜语义；调用方可显式传 [GlassSnackTone] 覆盖。
+GlassSnackTone inferGlassSnackTone(String message) {
+  final m = message.trim();
+  if (RegExp(r'失败|错误|无效|无法|不能|禁止|异常').hasMatch(m)) {
+    return GlassSnackTone.error;
+  }
+  if (RegExp(r'已入账|已保存|已删除|已恢复|已清空|已忽略|成功|完成|已复制').hasMatch(m)) {
+    return GlassSnackTone.success;
+  }
+  if (RegExp(r'^请|注意|将补|未选|缺少|即将').hasMatch(m)) {
+    return GlassSnackTone.warning;
+  }
+  return GlassSnackTone.info;
+}
+
+/// 浅色底约 0.72 透明，仍带一点毛玻璃透感。
+const double _kGlassSnackTintAlpha = 0.72;
+
+Color _glassSnackTint(bool dark, GlassSnackTone tone) {
+  if (dark) {
+    return switch (tone) {
+      GlassSnackTone.success =>
+        const Color(0xFF1B3D2A).withValues(alpha: _kGlassSnackTintAlpha),
+      GlassSnackTone.error =>
+        const Color(0xFF4A1F1F).withValues(alpha: _kGlassSnackTintAlpha),
+      GlassSnackTone.warning || GlassSnackTone.info =>
+        const Color(0xFF3D3420).withValues(alpha: _kGlassSnackTintAlpha),
+    };
+  }
+  return switch (tone) {
+    GlassSnackTone.success =>
+      const Color(0xFFE8F5E9).withValues(alpha: _kGlassSnackTintAlpha),
+    GlassSnackTone.error =>
+      const Color(0xFFFFEBEE).withValues(alpha: _kGlassSnackTintAlpha),
+    GlassSnackTone.warning || GlassSnackTone.info =>
+      const Color(0xFFFFF8E1).withValues(alpha: _kGlassSnackTintAlpha),
+  };
+}
+
+/// 与底同色系、加深，保证对比度。
+Color _glassSnackForeground(bool dark, GlassSnackTone tone) {
+  if (dark) {
+    return switch (tone) {
+      GlassSnackTone.success => const Color(0xFFA5D6A7),
+      GlassSnackTone.error => const Color(0xFFEF9A9A),
+      GlassSnackTone.warning || GlassSnackTone.info =>
+        const Color(0xFFFFE082),
+    };
+  }
+  return switch (tone) {
+    GlassSnackTone.success => const Color(0xFF2E7D32),
+    GlassSnackTone.error => const Color(0xFFC62828),
+    GlassSnackTone.warning || GlassSnackTone.info =>
+      const Color(0xFF8D6E00),
+  };
+}
+
+Color _glassSnackBorder(bool dark, GlassSnackTone tone) {
+  if (dark) {
+    return switch (tone) {
+      GlassSnackTone.success =>
+        const Color(0xFF81C784).withValues(alpha: 0.35),
+      GlassSnackTone.error =>
+        const Color(0xFFE57373).withValues(alpha: 0.35),
+      GlassSnackTone.warning || GlassSnackTone.info =>
+        const Color(0xFFFFD54F).withValues(alpha: 0.30),
+    };
+  }
+  return switch (tone) {
+    GlassSnackTone.success =>
+      const Color(0xFF43A047).withValues(alpha: 0.28),
+    GlassSnackTone.error =>
+      const Color(0xFFE53935).withValues(alpha: 0.28),
+    GlassSnackTone.warning || GlassSnackTone.info =>
+      const Color(0xFFF9A825).withValues(alpha: 0.35),
+  };
+}
+
+/// 毛玻璃轻提示：短时显示在底部，不挡住周围点击。
+///
+/// 不用系统 [SnackBar]（全宽实心底 + 默认 4 秒 + 命中区域过大）。
+void showGlassSnackBar(
+  BuildContext context,
+  String message, {
+  GlassSnackTone? tone,
+  Duration duration = const Duration(milliseconds: 1600),
+}) {
+  // 清掉可能残留的实心 SnackBar，避免叠两层。
+  ScaffoldMessenger.maybeOf(context)?.hideCurrentSnackBar();
+
+  final resolved = tone ?? inferGlassSnackTone(message);
+  final dark = Theme.of(context).brightness == Brightness.dark;
+  final fg = _glassSnackForeground(dark, resolved);
+  final overlay = Overlay.maybeOf(context, rootOverlay: true);
+  if (overlay == null) {
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      SnackBar(
+        content: Text(message, style: TextStyle(color: fg)),
+        backgroundColor: _glassSnackTint(dark, resolved),
+        duration: duration,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+    return;
+  }
+
+  late OverlayEntry entry;
+  entry = OverlayEntry(
+    builder: (ctx) {
+      final isDark = Theme.of(ctx).brightness == Brightness.dark;
+      final bottom =
+          MediaQuery.paddingOf(ctx).bottom + CentliTheme.glassSnackBottomGap;
+      // 只用 Positioned 包住这一条：条外区域不进命中测试，背后可点。
+      return Positioned(
+        left: 16,
+        right: 16,
+        bottom: bottom,
+        child: Material(
+          type: MaterialType.transparency,
+          child: GestureDetector(
+            onTap: () {
+              if (entry.mounted) entry.remove();
+            },
+            child: CentliGlass(
+              borderRadius: BorderRadius.circular(14),
+              blur: true,
+              sigma: CentliTheme.glassSigma,
+              tint: _glassSnackTint(isDark, resolved),
+              borderColor: _glassSnackBorder(isDark, resolved),
+              borderWidth: 1,
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 12,
+              ),
+              child: Text(
+                message,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: _glassSnackForeground(isDark, resolved),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    },
+  );
+  overlay.insert(entry);
+  Future<void>.delayed(duration, () {
+    if (entry.mounted) entry.remove();
+  });
+}
+
+/// [PopupMenuButton] 的毛玻璃替代：三点 / 自定义 child 都可。
+class CentliGlassPopupButton<T> extends StatelessWidget {
+  const CentliGlassPopupButton({
+    super.key,
+    required this.items,
+    required this.onSelected,
+    this.icon = const Icon(Icons.more_vert),
+    this.tooltip,
+    this.child,
+    this.alignEnd = true,
+    this.enabled = true,
+    this.minWidth = 148,
+    this.maxWidth = 280,
+  });
+
+  final List<CentliMenuItem<T>> items;
+  final ValueChanged<T> onSelected;
+  final Widget? icon;
+  final String? tooltip;
+  final Widget? child;
+  final bool alignEnd;
+  final bool enabled;
+  final double minWidth;
+  final double maxWidth;
+
+  Future<void> _open(BuildContext anchorContext) async {
+    if (!enabled || items.isEmpty) return;
+    final value = await showGlassMenu<T>(
+      context: anchorContext,
+      anchorContext: anchorContext,
+      items: items,
+      alignEnd: alignEnd,
+      minWidth: minWidth,
+      maxWidth: maxWidth,
+    );
+    if (value != null) onSelected(value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Builder(
+      builder: (anchorCtx) {
+        if (child != null) {
+          final tap = InkWell(
+            onTap: enabled ? () => _open(anchorCtx) : null,
+            borderRadius: BorderRadius.circular(20),
+            child: child,
+          );
+          if (tooltip == null || tooltip!.isEmpty) return tap;
+          return Tooltip(message: tooltip!, child: tap);
+        }
+        return IconButton(
+          tooltip: tooltip,
+          onPressed: enabled ? () => _open(anchorCtx) : null,
+          icon: icon ?? const Icon(Icons.more_vert),
+        );
+      },
+    );
+  }
+}

@@ -43,10 +43,16 @@ class AppShell extends ConsumerWidget {
         : navigationShell.currentIndex;
 
     return CentliGradientScaffold(
+      // 内容延伸到底栏后方，BackdropFilter 才能采到页面内容。
+      extendBody: true,
       body: navigationShell,
       bottomNavigationBar: CentliGlass(
         borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+        blur: true,
+        sigma: CentliTheme.glassSigma,
+        tint: CentliTheme.glassNavTint(context),
         child: NavigationBar(
+          backgroundColor: Colors.transparent,
           selectedIndex: selectedIndex,
           onDestinationSelected: (index) {
             if (index == 2) {

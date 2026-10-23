@@ -62,16 +62,18 @@ abstract final class CentliTheme {
   /// Soft mint accent (pairs with purple in the gradient).
   static const brandGreen = Color(0xFF6BB89A);
 
-  // 背景渐变更淡：近白的薄荷绿 → 淡紫 → 丁香紫。
-  static const gradientTop = Color(0xFFF4FAF7);
-  static const gradientMid = Color(0xFFF7F4FB);
-  static const gradientBottom = Color(0xFFFAF5FC);
+  // 背景渐变：薄荷绿 → 淡紫 → 丁香紫（浅色紫略提亮，避免发闷）。
+  static const gradientTop = Color(0xFFE4F2EC);
+  static const gradientMid = Color(0xFFF3EFFA);
+  static const gradientBottom = Color(0xFFF6F1FB);
 
   static const cardRadius = 22.0;
   static const pillRadius = 28.0;
 
   static const expenseRed = Color(0xFFE53935);
   static const incomeGreen = Color(0xFF43A047);
+  static const warningAmber = Color(0xFFF9A825);
+  static const transferBlue = Color(0xFF1E88E5);
   /// Legacy name kept for call sites; value is [brandPrimary].
   static const softBlue = brandPrimary;
   static const coral = Color(0xFFFF8A80);
@@ -135,8 +137,8 @@ abstract final class CentliTheme {
 
   static List<Color> scaffoldGradientColors({bool dark = false}) {
     if (dark) {
-      // 深色同样压低饱和，避免绿/紫发闷。
-      return const [Color(0xFF161C1A), Color(0xFF1A1822), Color(0xFF1E1A24)];
+      // 深色：墨绿 → 靛紫 → 丁香暗紫，看得出青紫渐变但不刺眼。
+      return const [Color(0xFF15241E), Color(0xFF1A1828), Color(0xFF241828)];
     }
     return const [gradientTop, gradientMid, gradientBottom];
   }
@@ -167,26 +169,38 @@ abstract final class CentliTheme {
   // 玻璃层叠在渐变之上，所以视觉主色不变，只多了一层磨砂质感。
   // ---------------------------------------------------------------------------
 
-  /// 模糊半径：卡片 / 弹层表面。
-  static const double glassSigma = 18;
+  /// 模糊半径：卡片 / 弹层 / 浮动菜单统一磨砂强度。
+  static const double glassSigma = 28;
 
-  /// 模糊半径：弹窗自身的玻璃面板（它模糊身后的页面内容）。
-  static const double glassDialogSigma = 24;
+  /// 模糊半径：弹窗自身的玻璃面板（与 [glassSigma] 同档）。
+  static const double glassDialogSigma = 28;
 
-  /// 玻璃填充色（半透明）：浅色是透白的雾面，深色是透炭灰的雾面。
+  /// 浮动菜单圆角（与首页账本下拉一致）。
+  static const double glassMenuRadius = 16;
+
+  /// 毛玻璃轻提示距底栏上方的间距。
+  static const double glassSnackBottomGap = 88;
+
+
+  /// 玻璃填充色：浅色白雾 0.2 / 深色炭灰 0.15。
   static Color glassTint(BuildContext context, {bool? dark}) {
     final d = dark ?? Theme.of(context).brightness == Brightness.dark;
     return d
-        ? const Color(0xFF1B1F24).withValues(alpha: 0.66)
-        : Colors.white.withValues(alpha: 0.70);
+        ? const Color(0xFF1B1F24).withValues(alpha: 0.15)
+        : Colors.white.withValues(alpha: 0.2);
   }
 
-  /// 弹窗 / 弹层表面：比卡片略实，保证正文可读，但仍要能透出身后的磨砂内容。
-  static Color glassSurface(BuildContext context, {bool? dark}) {
+  /// 底部导航：浅色白雾约 0.4，比卡片略实、仍透渐变。
+  static Color glassNavTint(BuildContext context, {bool? dark}) {
     final d = dark ?? Theme.of(context).brightness == Brightness.dark;
     return d
-        ? const Color(0xFF1B1F24).withValues(alpha: 0.72)
-        : Colors.white.withValues(alpha: 0.68);
+        ? const Color(0xFF1B1F24).withValues(alpha: 0.42)
+        : Colors.white.withValues(alpha: 0.4);
+  }
+
+  /// 弹窗 / 弹层 / 菜单表面：与 [glassTint] 同套调教参数。
+  static Color glassSurface(BuildContext context, {bool? dark}) {
+    return glassTint(context, dark: dark);
   }
 
   /// 磨砂底的色纱：很薄，只把对比度抬一点，避免纯模糊发灰。
@@ -197,12 +211,26 @@ abstract final class CentliTheme {
         : Colors.white.withValues(alpha: 0.16);
   }
 
-  /// 玻璃边缘的高光描边。
+  /// 玻璃描边线宽（弹窗 / sheet / 菜单 / 底栏）。
+  static const double glassBorderWidth = 1.5;
+
+  /// 玻璃边缘描边：浅色深灰约 20% 透明，深色白边提高对比。
   static Color glassBorder(BuildContext context, {bool? dark}) {
     final d = dark ?? Theme.of(context).brightness == Brightness.dark;
     return d
+        ? Colors.white.withValues(alpha: 0.28)
+        : const Color(0xFF3D4A5C).withValues(alpha: 0.20);
+  }
+
+  /// 卡片描边线宽（仅 [CentliSoftCard]）。
+  static const double glassCardBorderWidth = 0.5;
+
+  /// 卡片描边：浅色 `#3D4A5C` 5% / 深色白 10%。
+  static Color glassCardBorder(BuildContext context, {bool? dark}) {
+    final d = dark ?? Theme.of(context).brightness == Brightness.dark;
+    return d
         ? Colors.white.withValues(alpha: 0.10)
-        : Colors.white.withValues(alpha: 0.60);
+        : const Color(0xFF3D4A5C).withValues(alpha: 0.05);
   }
 
   /// 玻璃卡片的投影：比纯白卡片略深，玻璃才「浮」得起来。
@@ -226,55 +254,74 @@ abstract final class CentliTheme {
   }
 
   static ThemeData _chrome(ThemeData theme, {required bool dark}) {
-    // 毛玻璃：弹窗 / 弹层 / 菜单的表面都换成半透明，背后的模糊层才透得出来。
+    // 毛玻璃：弹窗 / 弹层 / 菜单统一用调教好的半透雾面（浅 0.2 / 深 0.15）。
     final surface = dark
-        ? const Color(0xFF1B1F24).withValues(alpha: 0.86)
-        : Colors.white.withValues(alpha: 0.86);
-    final menuSurface = dark
-        ? const Color(0xFF1B1F24).withValues(alpha: 0.88)
-        : Colors.white.withValues(alpha: 0.88);
+        ? const Color(0xFF1B1F24).withValues(alpha: 0.15)
+        : Colors.white.withValues(alpha: 0.2);
+    // 与 [glassBorder] 同色同宽，避免主题兜底描边和 CentliGlass 不一致。
     final hairline = dark
-        ? Colors.white.withValues(alpha: 0.10)
-        : Colors.white.withValues(alpha: 0.65);
+        ? Colors.white.withValues(alpha: 0.28)
+        : const Color(0xFF3D4A5C).withValues(alpha: 0.20);
+    final edge = BorderSide(color: hairline, width: glassBorderWidth);
     final menuShape = RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(16),
-      side: BorderSide(color: hairline),
+      borderRadius: BorderRadius.circular(glassMenuRadius),
+      side: edge,
     );
     return theme.copyWith(
       dialogTheme: DialogThemeData(
-        backgroundColor: surface,
+        // 透明：毛玻璃由 CentliGlassDialog 自己画，避免主题再盖一层实底。
+        backgroundColor: Colors.transparent,
         elevation: 0,
+        shadowColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(cardRadius),
-          side: BorderSide(color: hairline),
+          side: edge,
         ),
       ),
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: surface,
         surfaceTintColor: Colors.transparent,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        shape: RoundedRectangleBorder(
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          side: edge,
         ),
       ),
       popupMenuTheme: PopupMenuThemeData(
-        color: menuSurface,
+        color: surface,
         elevation: 2,
         surfaceTintColor: Colors.transparent,
         shape: menuShape,
       ),
       menuTheme: MenuThemeData(
         style: MenuStyle(
-          backgroundColor: WidgetStatePropertyAll(menuSurface),
+          backgroundColor: WidgetStatePropertyAll(surface),
           surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
           shape: WidgetStatePropertyAll(menuShape),
         ),
       ),
       dropdownMenuTheme: DropdownMenuThemeData(
         menuStyle: MenuStyle(
-          backgroundColor: WidgetStatePropertyAll(menuSurface),
+          backgroundColor: WidgetStatePropertyAll(surface),
           surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
           shape: WidgetStatePropertyAll(menuShape),
         ),
+      ),
+      // 未走 showGlassSnackBar 的旧 SnackBar：浮动 + 半透，少挡一点。
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        elevation: 0,
+        backgroundColor: surface,
+        contentTextStyle: theme.textTheme.bodyMedium?.copyWith(
+          color: theme.colorScheme.onSurface,
+          fontWeight: FontWeight.w600,
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: edge,
+        ),
+        insetPadding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+        dismissDirection: DismissDirection.horizontal,
       ),
     );
   }
@@ -371,9 +418,9 @@ abstract final class CentliTheme {
         elevation: 0,
         shadowColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
-        // 与卡片同色纯白，贴在粉紫渐变底上，避免发灰发闷。
-        backgroundColor: Colors.white,
-        indicatorColor: softBlue.withValues(alpha: 0.10),
+        // 透明：毛玻璃由外层 CentliGlass 画，不能再盖一层实心白。
+        backgroundColor: Colors.transparent,
+        indicatorColor: softBlue.withValues(alpha: 0.18),
         indicatorShape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
         ),
@@ -383,14 +430,15 @@ abstract final class CentliTheme {
           return TextStyle(
             fontSize: 11,
             fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-            color: selected ? softBlue : const Color(0xFF9AA3B5),
+            // 未选中加深，浅紫底上才分得清。
+            color: selected ? softBlue : const Color(0xFF5C6578),
           );
         }),
         iconTheme: WidgetStateProperty.resolveWith((states) {
           final selected = states.contains(WidgetState.selected);
           return IconThemeData(
             size: 24,
-            color: selected ? softBlue : const Color(0xFF9AA3B5),
+            color: selected ? softBlue : const Color(0xFF5C6578),
           );
         }),
       ),
@@ -550,7 +598,8 @@ abstract final class CentliTheme {
         elevation: 0,
         shadowColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
-        backgroundColor: scheme.surfaceContainerHighest,
+        // 透明：毛玻璃由外层 CentliGlass 画。
+        backgroundColor: Colors.transparent,
         indicatorColor: softBlue.withValues(alpha: 0.16),
         indicatorShape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
@@ -697,9 +746,10 @@ class CentliSoftCard extends StatelessWidget {
       borderRadius: radius,
       clipBehavior: clipBehavior,
       tint: color,
-      // 卡片背后只有一层平滑渐变，模糊看不出差别却要付真实开销，
-      // 所以卡片只保留半透明 + 高光边；真模糊留给弹窗 / 弹层。
+      // 卡片背后只有平滑渐变，不开模糊；弹窗 / sheet 仍走真毛玻璃。
       blur: false,
+      borderColor: CentliTheme.glassCardBorder(context, dark: dark),
+      borderWidth: CentliTheme.glassCardBorderWidth,
       child: content,
     );
   }
