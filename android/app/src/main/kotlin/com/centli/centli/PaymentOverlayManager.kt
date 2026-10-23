@@ -1,9 +1,12 @@
 package com.centli.centli
 
-import android.app.AppOpsManager
 import android.app.Activity
+import android.app.AppOpsManager
+import android.app.KeyguardManager
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.database.sqlite.SQLiteDatabase
 import android.graphics.PixelFormat
 import android.net.Uri
@@ -12,13 +15,14 @@ import android.os.Handler
 import android.os.Looper
 import android.os.Process
 import android.provider.Settings
+import android.text.Editable
+import android.text.TextWatcher
 import android.util.Log
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
-import android.text.Editable
-import android.text.TextWatcher
 import android.view.inputmethod.InputMethodManager
 import android.widget.Button
 import android.widget.EditText
@@ -31,6 +35,7 @@ import java.io.File
 import java.lang.ref.WeakReference
 import java.util.Locale
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * LiteNote 式支付悬浮窗：在其他 App 上层弹出待确认卡片，
@@ -44,12 +49,14 @@ object PaymentOverlayManager {
     private const val KEY_ENABLED = "overlay_enabled"
     private const val KEY_LAST_CATEGORY = "last_category_id"
     private const val KEY_LAST_ACCOUNT = "last_account_id"
+    private const val KEY_LAST_TO_ACCOUNT = "last_to_account_id"
     private const val DB_NAME = "centli.sqlite"
     private const val AUTO_DISMISS_MS = 60_000L
     private const val SUCCESS_DISMISS_MS = 1_400L
     private const val CATEGORIES_PER_ROW = 3
     private const val ACCOUNTS_PER_ROW = 3
-    private const val MAX_VISIBLE_ROWS = 3
+    /** 账户 / 分类网格最多露出两行，其余可滚动。 */
+    private const val MAX_VISIBLE_ROWS = 2
     private const val KEY_LAST_PERM_TOAST = "last_perm_toast_ms"
     private const val PERM_TOAST_COOLDOWN_MS = 30_000L
 
@@ -61,6 +68,8 @@ object PaymentOverlayManager {
     private var selectedCategoryName: String? = null
     private var selectedAccountId: String? = null
     private var selectedAccountName: String? = null
+    private var selectedToAccountId: String? = null
+    private var selectedToAccountName: String? = null
     private var suggestedAccountId: String? = null
     private var selectedDirection: String = "out"
     private var overlayCurrency: String = "CNY"
@@ -70,7 +79,53 @@ object PaymentOverlayManager {
     private var browsingParentId: String? = null
     private val categoryViews = mutableListOf<Pair<TextView, Category>>()
     private val accountViews = mutableListOf<Pair<TextView, Account>>()
+    private val toAccountViews = mutableListOf<Pair<TextView, Account>>()
     private var hostActivity: WeakReference<Activity>? = null
+
+    /** 锁屏期间推迟弹出；解锁后再 show，避免 WM 窗在解锁后变成「看得见但关不掉」。 */
+    private var deferredShow: DeferredShow? = null
+    /** 当前正在展示的那一笔；锁屏时挪到 [deferredShow]，解锁后重建新窗。 */
+    private var activeShow: DeferredShow? = null
+    private val unlockReceiverRegistered = AtomicBoolean(false)
+
+    private data class DeferredShow(
+        val pendingId: String,
+        val amountMinor: Int?,
+        val currency: String,
+        val sourcePkg: String,
+        val merchant: String?,
+        val direction: String?,
+    )
+
+    private val unlockReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent?) {
+            val action = intent?.action ?: return
+            val app = context.applicationContext
+            when (action) {
+                Intent.ACTION_SCREEN_OFF -> mainHandler.post {
+                    // 亮屏弹出 → 息屏锁屏：必须先拆窗。否则解锁后 OEM 上常见「看得见关不掉」。
+                    parkOverlayForLock(app, reason = "screen_off")
+                }
+                Intent.ACTION_USER_PRESENT -> mainHandler.post {
+                    // SCREEN_OFF 在部分机型上可能收不到；解锁时若窗还在，同样 park。
+                    parkOverlayForLock(app, reason = "user_present")
+                    forceRemoveOrphanOverlay(app)
+                    val pending = deferredShow ?: return@post
+                    deferredShow = null
+                    Log.i(TAG, "user present → show deferred overlay id=${pending.pendingId}")
+                    showPending(
+                        app,
+                        pendingId = pending.pendingId,
+                        amountMinor = pending.amountMinor,
+                        currency = pending.currency,
+                        sourcePkg = pending.sourcePkg,
+                        merchant = pending.merchant,
+                        direction = pending.direction,
+                    )
+                }
+            }
+        }
+    }
 
     data class Category(
         val id: String,
@@ -313,14 +368,41 @@ object PaymentOverlayManager {
             else -> "out"
         }
         val granted = hasPermission(app)
+        val locked = isKeyguardLocked(app)
         Log.i(
             TAG,
-            "showPending id=$pendingId amount=$amountMajor granted=$granted " +
+            "showPending id=$pendingId amount=$amountMajor granted=$granted locked=$locked " +
                 "canDraw=${if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) Settings.canDrawOverlays(app) else true}",
         )
 
         mainHandler.post {
+            ensureUnlockReceiver(app)
             dismissInternal()
+
+            // 锁屏时绝不用 WindowManager：OEM 解锁后窗体常成僵尸（看得见、点关闭无效）。
+            // 推迟到 USER_PRESENT 再弹；期间用户仍可从系统通知点「确认」。
+            if (locked) {
+                deferredShow = DeferredShow(
+                    pendingId = pendingId,
+                    amountMinor = amountMinor,
+                    currency = currency,
+                    sourcePkg = sourcePkg,
+                    merchant = merchant,
+                    direction = direction,
+                )
+                Log.i(TAG, "keyguard locked → defer overlay id=$pendingId")
+                return@post
+            }
+
+            deferredShow = null
+            val payload = DeferredShow(
+                pendingId = pendingId,
+                amountMinor = amountMinor,
+                currency = currency,
+                sourcePkg = sourcePkg,
+                merchant = merchant,
+                direction = direction,
+            )
             if (tryShowWindowOverlay(
                     app,
                     pendingId = pendingId,
@@ -331,6 +413,7 @@ object PaymentOverlayManager {
                     categoryKind = dir,
                 )
             ) {
+                activeShow = payload
                 return@post
             }
             if (tryShowOverlayActivity(
@@ -343,9 +426,60 @@ object PaymentOverlayManager {
                     direction = direction,
                 )
             ) {
+                activeShow = payload
                 return@post
             }
+            activeShow = null
             maybeToastNeedPermission(app)
+        }
+    }
+
+    private fun isKeyguardLocked(context: Context): Boolean {
+        val km = context.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
+            ?: return false
+        return km.isKeyguardLocked
+    }
+
+    /**
+     * 亮屏已弹出 → 息屏/解锁：拆掉当前窗并记入 [deferredShow]。
+     * 解锁后再 [showPending] 建新窗，避免僵尸悬浮窗关不掉。
+     */
+    private fun parkOverlayForLock(context: Context, reason: String) {
+        val showing = overlayView != null || hostActivity?.get() != null
+        if (!showing) return
+        val snap = activeShow
+        if (snap != null) {
+            deferredShow = snap
+            Log.i(TAG, "$reason → park overlay id=${snap.pendingId}")
+        } else {
+            Log.i(TAG, "$reason → dismiss overlay (no active payload)")
+        }
+        ensureUnlockReceiver(context)
+        dismissInternal()
+    }
+
+    private fun ensureUnlockReceiver(context: Context) {
+        if (!unlockReceiverRegistered.compareAndSet(false, true)) return
+        try {
+            val filter = IntentFilter().apply {
+                addAction(Intent.ACTION_USER_PRESENT)
+                addAction(Intent.ACTION_SCREEN_OFF)
+            }
+            // 系统广播必须 EXPORTED，否则 Android 13+ 收不到 SCREEN_OFF / USER_PRESENT。
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                context.applicationContext.registerReceiver(
+                    unlockReceiver,
+                    filter,
+                    Context.RECEIVER_EXPORTED,
+                )
+            } else {
+                @Suppress("UnspecifiedRegisterReceiverFlag")
+                context.applicationContext.registerReceiver(unlockReceiver, filter)
+            }
+            Log.i(TAG, "registered SCREEN_OFF + USER_PRESENT receiver (exported)")
+        } catch (e: Exception) {
+            unlockReceiverRegistered.set(false)
+            Log.w(TAG, "register screen lifecycle receiver failed", e)
         }
     }
 
@@ -385,8 +519,11 @@ object PaymentOverlayManager {
         }
     }
 
-    private fun dirOrOut(kind: String): String =
-        if (kind == "in" || kind == "refund") "in" else "out"
+    private fun dirOrOut(kind: String): String = when (kind) {
+        "in", "refund" -> "in"
+        "transfer" -> "transfer"
+        else -> "out"
+    }
 
     private fun tryShowOverlayActivity(
         app: Context,
@@ -459,6 +596,14 @@ object PaymentOverlayManager {
         mainHandler.post { dismissInternal() }
     }
 
+    /** [PaymentOverlayActivity] 销毁时清弱引用，避免 finish 已死 Activity。 */
+    fun onHostDestroyed(activity: Activity) {
+        val cur = hostActivity?.get()
+        if (cur === activity || cur == null) {
+            hostActivity = null
+        }
+    }
+
     private fun prefs(context: Context) =
         context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
@@ -520,6 +665,8 @@ object PaymentOverlayManager {
         selectedCategoryName = null
         selectedAccountId = null
         selectedAccountName = null
+        selectedToAccountId = null
+        selectedToAccountName = null
         suggestedAccountId = null
         selectedDirection = dirOrOut(categoryKind)
         overlayCurrency = currency.ifBlank { "CNY" }
@@ -528,16 +675,12 @@ object PaymentOverlayManager {
         allAccounts = emptyList()
         categoryViews.clear()
         accountViews.clear()
+        toAccountViews.clear()
 
-        view.findViewById<TextView>(R.id.tv_source).text = "检测到 $sourceLabel"
-        val merchantTv = view.findViewById<TextView>(R.id.tv_merchant)
+        view.findViewById<TextView>(R.id.tv_title).text =
+            "快速记账 · 检测到$sourceLabel"
+
         val m = merchant?.trim().orEmpty()
-        if (m.isNotEmpty()) {
-            merchantTv.visibility = View.VISIBLE
-            merchantTv.text = m
-        } else {
-            merchantTv.visibility = View.GONE
-        }
 
         val amountEt = view.findViewById<EditText>(R.id.et_amount)
         if (amountMajor != null) {
@@ -558,30 +701,35 @@ object PaymentOverlayManager {
 
         val btnOut = view.findViewById<TextView>(R.id.btn_dir_out)
         val btnIn = view.findViewById<TextView>(R.id.btn_dir_in)
+        val btnTransfer = view.findViewById<TextView>(R.id.btn_dir_transfer)
         fun paintDirection() {
-            val outSel = selectedDirection != "in"
-            btnOut.isSelected = outSel
-            btnIn.isSelected = !outSel
-            btnOut.setTextColor(if (outSel) 0xFFFFFFFF.toInt() else 0xFF1A1A1A.toInt())
-            btnIn.setTextColor(if (!outSel) 0xFFFFFFFF.toInt() else 0xFF1A1A1A.toInt())
+            fun paint(btn: TextView, selected: Boolean) {
+                btn.isSelected = selected
+                btn.setTextColor(
+                    if (selected) 0xFFFFFFFF.toInt() else 0xFF1A1A1A.toInt(),
+                )
+            }
+            paint(btnOut, selectedDirection == "out")
+            paint(btnIn, selectedDirection == "in")
+            paint(btnTransfer, selectedDirection == "transfer")
+        }
+        fun onDirectionPicked(dir: String) {
+            if (selectedDirection == dir) return
+            selectedDirection = dir
+            paintDirection()
+            clearCategorySelection(confirmBtn)
+            browsingParentId = null
+            if (dir != "transfer") {
+                selectedToAccountId = null
+                selectedToAccountName = null
+            }
+            renderAccounts(context, view, confirmBtn)
+            loadCategories(context, view, confirmBtn)
         }
         paintDirection()
-        btnOut.setOnClickListener {
-            if (selectedDirection == "out") return@setOnClickListener
-            selectedDirection = "out"
-            paintDirection()
-            clearCategorySelection(confirmBtn)
-            browsingParentId = null
-            loadCategories(context, view, confirmBtn)
-        }
-        btnIn.setOnClickListener {
-            if (selectedDirection == "in") return@setOnClickListener
-            selectedDirection = "in"
-            paintDirection()
-            clearCategorySelection(confirmBtn)
-            browsingParentId = null
-            loadCategories(context, view, confirmBtn)
-        }
+        btnOut.setOnClickListener { onDirectionPicked("out") }
+        btnIn.setOnClickListener { onDirectionPicked("in") }
+        btnTransfer.setOnClickListener { onDirectionPicked("transfer") }
 
         view.findViewById<TextView>(R.id.btn_cat_back).setOnClickListener {
             browsingParentId = null
@@ -628,6 +776,18 @@ object PaymentOverlayManager {
             val catName = selectedCategoryName ?: ""
             val accId = selectedAccountId ?: return@setOnClickListener
             val accName = selectedAccountName ?: ""
+            val toAccId = selectedToAccountId
+            val toAccName = selectedToAccountName ?: ""
+            if (selectedDirection == "transfer") {
+                if (toAccId.isNullOrBlank()) {
+                    Toast.makeText(context, "请选择转入账户", Toast.LENGTH_SHORT).show()
+                    return@setOnClickListener
+                }
+                if (toAccId == accId) {
+                    Toast.makeText(context, "转出与转入账户不能相同", Toast.LENGTH_SHORT).show()
+                    return@setOnClickListener
+                }
+            }
             val amountMinor = parseAmountMinor()
             if (amountMinor == null) {
                 Toast.makeText(context, "请输入有效金额", Toast.LENGTH_SHORT).show()
@@ -643,23 +803,32 @@ object PaymentOverlayManager {
                     pendingId = pendingId,
                     categoryId = catId,
                     accountIdOverride = accId,
+                    toAccountIdOverride = if (selectedDirection == "transfer") toAccId else null,
                     amountMinorOverride = amountMinor,
                     directionOverride = selectedDirection,
                     noteOverride = note,
                 )
                 mainHandler.post {
                     if (ok) {
-                        prefs(context).edit()
+                        val ed = prefs(context).edit()
                             .putString(KEY_LAST_CATEGORY, catId)
                             .putString(KEY_LAST_ACCOUNT, accId)
-                            .apply()
+                        if (selectedDirection == "transfer" && !toAccId.isNullOrBlank()) {
+                            ed.putString(KEY_LAST_TO_ACCOUNT, toAccId)
+                        }
+                        ed.apply()
                         PendingConfirmNotifier.cancel(context, pendingId)
                         MainActivity.notifyPendingDbChanged()
+                        val accountLabel = if (selectedDirection == "transfer") {
+                            "$accName → $toAccName"
+                        } else {
+                            accName
+                        }
                         showSuccess(
                             view,
                             NativeCaptureIngest.fromMinor(overlayCurrency, amountMinor),
                             catName,
-                            accName,
+                            accountLabel,
                         )
                     } else {
                         confirmBtn.isEnabled = true
@@ -677,7 +846,13 @@ object PaymentOverlayManager {
 
     private fun applyConfirmEnabled(root: View, confirmBtn: Button) {
         val amountOk = parseAmountMinorFrom(root.findViewById(R.id.et_amount)) != null
-        val ok = amountOk && selectedCategoryId != null && selectedAccountId != null
+        val transferOk = selectedDirection != "transfer" ||
+            (!selectedToAccountId.isNullOrBlank() &&
+                selectedToAccountId != selectedAccountId)
+        val ok = amountOk &&
+            selectedCategoryId != null &&
+            selectedAccountId != null &&
+            transferOk
         confirmBtn.isEnabled = ok
         confirmBtn.alpha = if (ok) 1f else 0.5f
     }
@@ -728,9 +903,20 @@ object PaymentOverlayManager {
         val scroll = view.findViewById<ScrollView>(R.id.scroll_accounts)
         val container = view.findViewById<LinearLayout>(R.id.container_accounts)
         val levelTv = view.findViewById<TextView>(R.id.tv_account_level)
+        val toLevel = view.findViewById<TextView>(R.id.tv_to_account_level)
+        val toScroll = view.findViewById<ScrollView>(R.id.scroll_to_accounts)
         container.removeAllViews()
         accountViews.clear()
-        levelTv.text = "选择资产账户"
+        val transfer = selectedDirection == "transfer"
+        levelTv.text = if (transfer) "选择转出账户" else "选择账户"
+        toLevel.visibility = if (transfer) View.VISIBLE else View.GONE
+        toScroll.visibility = if (transfer) View.VISIBLE else View.GONE
+        if (!transfer) {
+            selectedToAccountId = null
+            selectedToAccountName = null
+            toAccountViews.clear()
+            view.findViewById<LinearLayout>(R.id.container_to_accounts).removeAllViews()
+        }
 
         if (allAccounts.isEmpty()) {
             val tip = TextView(context).apply {
@@ -743,8 +929,80 @@ object PaymentOverlayManager {
             return
         }
 
-        val density = context.resources.displayMetrics.density
+        fillAccountGrid(
+            context = context,
+            container = container,
+            scroll = scroll,
+            views = accountViews,
+            onPick = { chip, acc -> selectAccount(view, chip, acc, confirmBtn) },
+        )
+        scroll.visibility = View.VISIBLE
+
         val lastId = prefs(context).getString(KEY_LAST_ACCOUNT, null)
+        val preferId = when {
+            !suggestedAccountId.isNullOrBlank() &&
+                allAccounts.any { it.id == suggestedAccountId } -> suggestedAccountId
+            !lastId.isNullOrBlank() && allAccounts.any { it.id == lastId } -> lastId
+            else -> allAccounts.firstOrNull()?.id
+        }
+        if (preferId != null) {
+            accountViews.firstOrNull { it.second.id == preferId }?.let { (chip, acc) ->
+                selectAccount(view, chip, acc, confirmBtn)
+            }
+        }
+
+        if (transfer) {
+            renderToAccounts(context, view, confirmBtn)
+        }
+    }
+
+    private fun renderToAccounts(
+        context: Context,
+        view: View,
+        confirmBtn: Button,
+    ) {
+        val scroll = view.findViewById<ScrollView>(R.id.scroll_to_accounts)
+        val container = view.findViewById<LinearLayout>(R.id.container_to_accounts)
+        container.removeAllViews()
+        toAccountViews.clear()
+        if (allAccounts.size < 2) {
+            val tip = TextView(context).apply {
+                text = "转账至少需要两个资产账户"
+                setTextColor(0xFF888888.toInt())
+                textSize = 12f
+            }
+            container.addView(tip)
+            return
+        }
+        fillAccountGrid(
+            context = context,
+            container = container,
+            scroll = scroll,
+            views = toAccountViews,
+            onPick = { chip, acc -> selectToAccount(view, chip, acc, confirmBtn) },
+        )
+        val lastTo = prefs(context).getString(KEY_LAST_TO_ACCOUNT, null)
+        val preferTo = when {
+            !lastTo.isNullOrBlank() &&
+                lastTo != selectedAccountId &&
+                allAccounts.any { it.id == lastTo } -> lastTo
+            else -> allAccounts.firstOrNull { it.id != selectedAccountId }?.id
+        }
+        if (preferTo != null) {
+            toAccountViews.firstOrNull { it.second.id == preferTo }?.let { (chip, acc) ->
+                selectToAccount(view, chip, acc, confirmBtn)
+            }
+        }
+    }
+
+    private fun fillAccountGrid(
+        context: Context,
+        container: LinearLayout,
+        scroll: ScrollView,
+        views: MutableList<Pair<TextView, Account>>,
+        onPick: (TextView, Account) -> Unit,
+    ) {
+        val density = context.resources.displayMetrics.density
         val rowH = (40 * density).toInt()
         val gap = (8 * density).toInt()
         val chunks = allAccounts.chunked(ACCOUNTS_PER_ROW)
@@ -776,12 +1034,10 @@ object PaymentOverlayManager {
                         marginStart = (4 * density).toInt()
                         marginEnd = (4 * density).toInt()
                     }
-                    setOnClickListener {
-                        selectAccount(view, this, acc, confirmBtn)
-                    }
+                    setOnClickListener { onPick(this, acc) }
                 }
                 rowLayout.addView(chip)
-                accountViews.add(chip to acc)
+                views.add(chip to acc)
             }
             repeat(ACCOUNTS_PER_ROW - row.size) {
                 rowLayout.addView(
@@ -804,19 +1060,6 @@ object PaymentOverlayManager {
                 height = LinearLayout.LayoutParams.WRAP_CONTENT
             }
         }
-        scroll.visibility = View.VISIBLE
-
-        val preferId = when {
-            !suggestedAccountId.isNullOrBlank() &&
-                allAccounts.any { it.id == suggestedAccountId } -> suggestedAccountId
-            !lastId.isNullOrBlank() && allAccounts.any { it.id == lastId } -> lastId
-            else -> allAccounts.firstOrNull()?.id
-        }
-        if (preferId != null) {
-            accountViews.firstOrNull { it.second.id == preferId }?.let { (chip, acc) ->
-                selectAccount(view, chip, acc, confirmBtn)
-            }
-        }
     }
 
     private fun selectAccount(
@@ -828,6 +1071,39 @@ object PaymentOverlayManager {
         selectedAccountId = acc.id
         selectedAccountName = acc.name
         for ((v, _) in accountViews) {
+            v.isSelected = false
+            v.setTextColor(0xFF1A1A1A.toInt())
+        }
+        chip.isSelected = true
+        chip.setTextColor(0xFFFFFFFF.toInt())
+        if (selectedDirection == "transfer" && selectedToAccountId == acc.id) {
+            selectedToAccountId = null
+            selectedToAccountName = null
+            for ((v, _) in toAccountViews) {
+                v.isSelected = false
+                v.setTextColor(0xFF1A1A1A.toInt())
+            }
+            toAccountViews.firstOrNull { it.second.id != acc.id }?.let { (c, a) ->
+                selectToAccount(root, c, a, confirmBtn)
+                return
+            }
+        }
+        applyConfirmEnabled(root, confirmBtn)
+    }
+
+    private fun selectToAccount(
+        root: View,
+        chip: TextView,
+        acc: Account,
+        confirmBtn: Button,
+    ) {
+        if (acc.id == selectedAccountId) {
+            Toast.makeText(root.context, "转入不能与转出相同", Toast.LENGTH_SHORT).show()
+            return
+        }
+        selectedToAccountId = acc.id
+        selectedToAccountName = acc.name
+        for ((v, _) in toAccountViews) {
             v.isSelected = false
             v.setTextColor(0xFF1A1A1A.toInt())
         }
@@ -855,6 +1131,41 @@ object PaymentOverlayManager {
                 renderCategoryLevel(context, view, confirmBtn)
             }
         }.start()
+    }
+
+    /** 转账分类为空时补一条「转账」（与 Drift v13 种子对齐）。 */
+    private fun ensureTransferCategory(db: SQLiteDatabase, ledgerId: String): Category? {
+        db.rawQuery(
+            """
+            SELECT id, name, parent_id FROM categories
+            WHERE ledger_id=? AND kind='transfer' AND archived=0
+            ORDER BY sort_order ASC LIMIT 1
+            """.trimIndent(),
+            arrayOf(ledgerId),
+        ).use { c ->
+            if (c.moveToFirst()) {
+                val parent = if (c.isNull(2)) null else c.getString(2)
+                return Category(c.getString(0), c.getString(1), parent)
+            }
+        }
+        val id = UUID.randomUUID().toString()
+        val now = System.currentTimeMillis()
+        return try {
+            db.execSQL(
+                """
+                INSERT INTO categories(
+                  id, ledger_id, name, parent_id, kind, icon, sort_order, archived, created_at
+                ) VALUES(?,?,?,?,?,?,?,?,?)
+                """.trimIndent(),
+                arrayOf<Any?>(
+                    id, ledgerId, "转账", null, "transfer", "transfer", 0, 0, now,
+                ),
+            )
+            Category(id, "转账", null)
+        } catch (e: Exception) {
+            Log.e(TAG, "ensureTransferCategory", e)
+            null
+        }
     }
 
     private fun rootsOf(cats: List<Category>): List<Category> {
@@ -891,7 +1202,7 @@ object PaymentOverlayManager {
         val items: List<Category>
         if (parentId == null) {
             back.visibility = View.GONE
-            levelTv.text = "选择一级分类"
+            levelTv.text = if (selectedDirection == "transfer") "选择分类" else "选择一级分类"
             items = rootsOf(allCategories)
         } else {
             back.visibility = View.VISIBLE
@@ -1079,34 +1390,94 @@ object PaymentOverlayManager {
     }
 
     private fun dismissInternal() {
-        try {
-            autoDismiss?.let { mainHandler.removeCallbacks(it) }
-            autoDismiss = null
-            overlayView?.let { windowManager?.removeView(it) }
-        } catch (e: Exception) {
-            Log.w(TAG, "dismiss failed", e)
-        } finally {
-            overlayView = null
-            selectedCategoryId = null
-            selectedCategoryName = null
-            selectedAccountId = null
-            selectedAccountName = null
-            suggestedAccountId = null
-            selectedDirection = "out"
-            browsingParentId = null
-            allCategories = emptyList()
-            allAccounts = emptyList()
-            categoryViews.clear()
-            accountViews.clear()
-            val act = hostActivity?.get()
-            hostActivity = null
-            if (act != null && !act.isFinishing) {
-                try {
-                    act.finish()
-                } catch (_: Exception) {
-                }
-            }
+        autoDismiss?.let { mainHandler.removeCallbacks(it) }
+        autoDismiss = null
+        activeShow = null
+
+        val view = overlayView
+        overlayView = null
+        if (view != null) {
+            removeOverlayViewSafely(view)
         }
+
+        selectedCategoryId = null
+        selectedCategoryName = null
+        selectedAccountId = null
+        selectedAccountName = null
+        selectedToAccountId = null
+        selectedToAccountName = null
+        suggestedAccountId = null
+        selectedDirection = "out"
+        browsingParentId = null
+        allCategories = emptyList()
+        allAccounts = emptyList()
+        toAccountViews.clear()
+        categoryViews.clear()
+        accountViews.clear()
+
+        val act = hostActivity?.get()
+        hostActivity = null
+        finishHostActivity(act)
+    }
+
+    /** 多路径拆除 WM 窗，避免 unlock 后 removeView 抛错导致「关不掉」。 */
+    private fun removeOverlayViewSafely(view: View) {
+        val app = view.context.applicationContext
+        val wm = windowManager
+            ?: app.getSystemService(Context.WINDOW_SERVICE) as? WindowManager
+        windowManager = wm
+        // 锁屏后再解锁：isAttachedToWindow 有时已是 false，但仍要强拆。
+        try {
+            wm?.removeViewImmediate(view)
+            Log.i(TAG, "overlay removed via removeViewImmediate")
+            return
+        } catch (e: Exception) {
+            Log.w(TAG, "removeViewImmediate failed: ${e.message}")
+        }
+        try {
+            wm?.removeView(view)
+            Log.i(TAG, "overlay removed via removeView")
+            return
+        } catch (e: Exception) {
+            Log.w(TAG, "removeView failed: ${e.message}")
+        }
+        try {
+            (view.parent as? ViewGroup)?.removeView(view)
+            Log.i(TAG, "overlay removed via parent.removeView")
+        } catch (e: Exception) {
+            Log.e(TAG, "all remove paths failed — view may stick until process death", e)
+        }
+    }
+
+    private fun finishHostActivity(act: Activity?) {
+        if (act == null || act.isFinishing || act.isDestroyed) return
+        try {
+            act.finish()
+        } catch (e: Exception) {
+            Log.w(TAG, "finish host failed", e)
+        }
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                act.finishAndRemoveTask()
+            }
+        } catch (_: Exception) {
+        }
+    }
+
+    /**
+     * 解锁后兜底：引用已丢但仍挂在 WM 上的僵尸窗无法通过 [dismissInternal] 清掉。
+     * 这里再扫一次；若进程里还有 [overlayView] 就强拆。
+     */
+    private fun forceRemoveOrphanOverlay(context: Context) {
+        val view = overlayView
+        if (view != null) {
+            Log.w(TAG, "force-remove orphan overlay still referenced")
+            dismissInternal()
+            return
+        }
+        // 引用已丢：无法再 remove；至少确保 Activity 宿主关掉。
+        finishHostActivity(hostActivity?.get())
+        hostActivity = null
     }
 
     private fun openReview(context: Context, pendingId: String) {
@@ -1143,6 +1514,9 @@ object PaymentOverlayManager {
         val db = openDb(context) ?: return emptyList()
         try {
             val ledgerId = querySetting(db, "current_ledger_id") ?: return emptyList()
+            if (kind == "transfer") {
+                ensureTransferCategory(db, ledgerId)
+            }
             val out = ArrayList<Category>()
             db.rawQuery(
                 """
@@ -1255,6 +1629,7 @@ object PaymentOverlayManager {
         pendingId: String,
         categoryId: String,
         accountIdOverride: String? = null,
+        toAccountIdOverride: String? = null,
         amountMinorOverride: Int? = null,
         directionOverride: String? = null,
         noteOverride: String? = null,
@@ -1320,7 +1695,7 @@ object PaymentOverlayManager {
                 return true
             }
             val amountMinor = amountMinorOverride ?: dbAmount
-            if (amountMinor == null || amountMinor < 0) return false
+            if (amountMinor == null || amountMinor <= 0) return false
 
             if (!accountIdOverride.isNullOrBlank()) {
                 accountId = accountIdOverride
@@ -1335,23 +1710,47 @@ object PaymentOverlayManager {
                 )
             }
             if (accountId.isNullOrBlank()) return false
-            // 校验用户所选账户仍存在（避免用了已归档 id）。
+            // 校验用户所选账户仍存在；币种跟转出账户走。
+            var accountCurrency = currency
             db.rawQuery(
-                "SELECT 1 FROM accounts WHERE id=? AND ledger_id=? AND archived=0 LIMIT 1",
+                "SELECT currency FROM accounts WHERE id=? AND ledger_id=? AND archived=0 LIMIT 1",
                 arrayOf(accountId, ledgerId),
             ).use { c ->
                 if (!c.moveToFirst()) return false
+                accountCurrency = c.getString(0) ?: currency
             }
 
             val rawDirection = directionOverride ?: dbDirection
-            // 仅 in/out；退款/还款用标签与备注，不再单独成类型。
+            // in / out / transfer；退款/还款用标签与备注，不再单独成类型。
             val type = when (rawDirection) {
                 "in", "refund" -> "in"
+                "transfer" -> "transfer"
                 else -> "out"
             }
             val direction = type
-            val refund = isRefundSignal(rawDirection, rawTitle, rawText)
-            val repay = isRepaySignal(rawDirection, rawTitle, rawText)
+            val toAccountId = if (type == "transfer") toAccountIdOverride else null
+            if (type == "transfer") {
+                if (toAccountId.isNullOrBlank() || toAccountId == accountId) return false
+                var toCurrency = accountCurrency
+                db.rawQuery(
+                    "SELECT currency FROM accounts WHERE id=? AND ledger_id=? AND archived=0 LIMIT 1",
+                    arrayOf(toAccountId, ledgerId),
+                ).use { c ->
+                    if (!c.moveToFirst()) return false
+                    toCurrency = c.getString(0) ?: accountCurrency
+                }
+                // 悬浮窗不做跨币种换算，避免余额写错。
+                if (!toCurrency.equals(accountCurrency, ignoreCase = true)) {
+                    Log.w(TAG, "confirmPending reject cross-currency transfer")
+                    return false
+                }
+            }
+            // 流水币种与转出账户一致（同币种转账两边相同）。
+            val txnCurrency = accountCurrency
+            val refund = type != "transfer" &&
+                isRefundSignal(rawDirection, rawTitle, rawText)
+            val repay = type != "transfer" &&
+                isRepaySignal(rawDirection, rawTitle, rawText)
             var note = when {
                 noteOverride != null -> noteOverride
                 else -> dbNote
@@ -1372,19 +1771,22 @@ object PaymentOverlayManager {
             }
             val now = System.currentTimeMillis()
             val txnId = UUID.randomUUID().toString()
+            val toAmountMinor = if (type == "transfer") amountMinor else null
             try {
                 db.execSQL(
                     """
                     INSERT INTO transactions(
                       id, ledger_id, type, amount_minor, currency, account_id,
-                      category_id, note, happen_at, source, tags, pending_id,
-                      include_in_stat, include_in_budget, created_at, updated_at
-                    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                      to_account_id, to_amount_minor, category_id, note, happen_at,
+                      source, tags, pending_id, include_in_stat, include_in_budget,
+                      created_at, updated_at
+                    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                     """.trimIndent(),
                     arrayOf<Any?>(
-                        txnId, ledgerId, type, amountMinor, currency, accountId,
-                        categoryId, note, happenAt, "notification", tagsJson, pendingId,
-                        1, 1, now, now,
+                        txnId, ledgerId, type, amountMinor, txnCurrency, accountId,
+                        toAccountId, toAmountMinor, categoryId, note, happenAt,
+                        "notification", tagsJson, pendingId, 1, 1,
+                        now, now,
                     ),
                 )
             } catch (e: android.database.sqlite.SQLiteConstraintException) {
@@ -1404,7 +1806,7 @@ object PaymentOverlayManager {
                 WHERE id=? AND status=?
                 """.trimIndent(),
                 arrayOf<Any?>(
-                    "confirmed", amountMinor, currency, categoryId, accountId,
+                    "confirmed", amountMinor, txnCurrency, categoryId, accountId,
                     note, direction, retired, now, pendingId, "pending",
                 ),
             )

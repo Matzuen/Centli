@@ -22,18 +22,24 @@
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
+            <!-- 标题：快速记账 · 检测到某某支付 + 关闭 -->
             <RelativeLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content">
 
                 <TextView
-                    android:layout_width="wrap_content"
+                    android:id="@+id/tv_title"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_alignParentStart="true"
                     android:layout_centerVertical="true"
+                    android:layout_toStartOf="@+id/btn_close_x"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:paddingEnd="8dp"
                     android:text="快速记账"
                     android:textColor="#FF1A1A1A"
-                    android:textSize="18sp"
+                    android:textSize="16sp"
                     android:textStyle="bold" />
 
                 <ImageButton
@@ -47,23 +53,11 @@
                     android:src="@android:drawable/ic_menu_close_clear_cancel" />
             </RelativeLayout>
 
-            <TextView
-                android:id="@+id/tv_source"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:background="#FFF4F2FA"
-                android:gravity="center"
-                android:padding="10dp"
-                android:text="检测到支付"
-                android:textColor="#FF5B4B8A"
-                android:textSize="13sp"
-                android:textStyle="bold" />
-
+            <!-- 支出 / 收入 / 转账 -->
             <LinearLayout
                 android:id="@+id/row_direction"
                 android:layout_width="match_parent"
-                android:layout_height="40dp"
+                android:layout_height="44dp"
                 android:layout_marginTop="14dp"
                 android:orientation="horizontal">
 
@@ -71,7 +65,7 @@
                     android:id="@+id/btn_dir_out"
                     android:layout_width="0dp"
                     android:layout_height="match_parent"
-                    android:layout_marginEnd="6dp"
+                    android:layout_marginEnd="4dp"
                     android:layout_weight="1"
                     android:background="@drawable/centli_overlay_chip"
                     android:gravity="center"
@@ -84,7 +78,7 @@
                     android:id="@+id/btn_dir_in"
                     android:layout_width="0dp"
                     android:layout_height="match_parent"
-                    android:layout_marginStart="6dp"
+                    android:layout_marginHorizontal="4dp"
                     android:layout_weight="1"
                     android:background="@drawable/centli_overlay_chip"
                     android:gravity="center"
@@ -92,13 +86,27 @@
                     android:textColor="#FF1A1A1A"
                     android:textSize="14sp"
                     android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/btn_dir_transfer"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_marginStart="4dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/centli_overlay_chip"
+                    android:gravity="center"
+                    android:text="转账"
+                    android:textColor="#FF1A1A1A"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
             </LinearLayout>
 
+            <!-- 金额居中 -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:gravity="center_vertical"
+                android:layout_marginTop="16dp"
+                android:gravity="center"
                 android:orientation="horizontal">
 
                 <TextView
@@ -112,39 +120,30 @@
 
                 <EditText
                     android:id="@+id/et_amount"
-                    android:layout_width="0dp"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="4dp"
-                    android:layout_weight="1"
                     android:background="@null"
                     android:fontFamily="monospace"
+                    android:gravity="center"
                     android:hint="0.00"
                     android:imeOptions="actionNext"
                     android:importantForAutofill="no"
                     android:inputType="numberDecimal"
                     android:maxLines="1"
+                    android:minWidth="96dp"
                     android:textColor="#FF1A1A1A"
                     android:textColorHint="#FFBBBBBB"
                     android:textSize="32sp"
                     android:textStyle="bold" />
             </LinearLayout>
 
-            <TextView
-                android:id="@+id/tv_merchant"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:gravity="center"
-                android:text=""
-                android:textColor="#FF666666"
-                android:textSize="13sp"
-                android:visibility="gone" />
-
+            <!-- 备注 -->
             <EditText
                 android:id="@+id/et_note"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
+                android:layout_marginTop="12dp"
                 android:background="@drawable/centli_overlay_chip"
                 android:hint="备注（可选）"
                 android:imeOptions="actionDone"
@@ -157,12 +156,13 @@
                 android:textColorHint="#FF999999"
                 android:textSize="13sp" />
 
+            <!-- 选择账户 / 转出账户（最多两行可见） -->
             <TextView
                 android:id="@+id/tv_account_level"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="14dp"
-                android:text="选择资产账户"
+                android:text="选择账户"
                 android:textColor="#FF666666"
                 android:textSize="12sp" />
 
@@ -181,6 +181,34 @@
                     android:orientation="vertical" />
             </ScrollView>
 
+            <!-- 转入账户（仅转账时显示） -->
+            <TextView
+                android:id="@+id/tv_to_account_level"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:text="选择转入账户"
+                android:textColor="#FF666666"
+                android:textSize="12sp"
+                android:visibility="gone" />
+
+            <ScrollView
+                android:id="@+id/scroll_to_accounts"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:overScrollMode="never"
+                android:scrollbars="none"
+                android:visibility="gone">
+
+                <LinearLayout
+                    android:id="@+id/container_to_accounts"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+            </ScrollView>
+
+            <!-- 选择一级分类（最多两行可见） -->
             <LinearLayout
                 android:id="@+id/row_category_header"
                 android:layout_width="match_parent"
@@ -193,8 +221,8 @@
                     android:id="@+id/btn_cat_back"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:paddingEnd="8dp"
                     android:paddingVertical="4dp"
+                    android:paddingEnd="8dp"
                     android:text="‹ 返回"
                     android:textColor="#FF5B4B8A"
                     android:textSize="13sp"
@@ -248,6 +276,7 @@
                     android:textSize="12sp" />
             </LinearLayout>
 
+            <!-- 忽略 / 稍后 / 入账 -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"

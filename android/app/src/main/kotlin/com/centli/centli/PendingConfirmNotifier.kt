@@ -17,19 +17,41 @@ import android.widget.RemoteViews
  * - 「忽略」→ 标记忽略，不打开 UI
  */
 object PendingConfirmNotifier {
-    const val CHANNEL_ID = "centli_pending_confirm"
+    /**
+     * v2：旧 channel 若曾被用户/OEM 降成「静默」，系统不允许再改 importance，
+     * 换新 id 才能重新以 HIGH 出现在通知一级页（而不是「更多通知」）。
+     */
+    const val CHANNEL_ID = "centli_pending_confirm_v2"
+    private const val LEGACY_CHANNEL_ID = "centli_pending_confirm"
+
     const val EXTRA_OPEN = "centli_open"
     const val EXTRA_PENDING_ID = "centli_pending_id"
     /** When true, Flutter should open the confirm sheet for [EXTRA_PENDING_ID]. */
     const val EXTRA_REVIEW = "centli_review"
 
     private const val CHANNEL_NAME = "待确认记账"
-    private const val CHANNEL_DESC = "支付通知解析后的待确认提醒"
+    private const val CHANNEL_DESC = "支付通知解析后的待确认提醒（需保持「紧急/高」才会出现在通知一级页）"
 
     fun ensureChannel(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        if (nm.getNotificationChannel(CHANNEL_ID) != null) return
+        // 清掉已被降权的旧通道，避免继续往「更多通知」里塞。
+        try {
+            if (nm.getNotificationChannel(LEGACY_CHANNEL_ID) != null) {
+                nm.deleteNotificationChannel(LEGACY_CHANNEL_ID)
+            }
+        } catch (_: Exception) {
+        }
+        val existing = nm.getNotificationChannel(CHANNEL_ID)
+        if (existing != null) {
+            // 仍被降到 DEFAULT 以下时重建（多数机型只能删了再建）。
+            if (existing.importance >= NotificationManager.IMPORTANCE_DEFAULT) return
+            try {
+                nm.deleteNotificationChannel(CHANNEL_ID)
+            } catch (_: Exception) {
+                return
+            }
+        }
         val channel = NotificationChannel(
             CHANNEL_ID,
             CHANNEL_NAME,
@@ -37,6 +59,8 @@ object PendingConfirmNotifier {
         ).apply {
             description = CHANNEL_DESC
             enableVibration(true)
+            setShowBadge(true)
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
         }
         nm.createNotificationChannel(channel)
     }
@@ -99,15 +123,7 @@ object PendingConfirmNotifier {
             "点「确认」直接弹窗核对入账；点「详情」进入 App；点「忽略」跳过。",
         ).joinToString("\n")
 
-        val compact = buildRemoteViews(
-            app,
-            R.layout.centli_pending_notif,
-            title,
-            shortBody,
-            confirmPi,
-            detailPi,
-            ignorePi,
-        )
+        // 展开态自定义按钮区；折叠态不用 customContentView，减少被 OEM 丢进「更多通知」。
         val expanded = buildRemoteViews(
             app,
             R.layout.centli_pending_notif_big,
@@ -125,26 +141,26 @@ object PendingConfirmNotifier {
             Notification.Builder(app)
         }
         builder
-            .setSmallIcon(android.R.drawable.ic_menu_save)
+            .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(title)
             .setContentText(shortBody)
+            .setStyle(Notification.BigTextStyle().bigText(longBody))
             // 点整条通知 = 确认（弹悬浮窗）
             .setContentIntent(confirmPi)
             .setAutoCancel(true)
             .setOnlyAlertOnce(true)
-            .setCategory(Notification.CATEGORY_REMINDER)
-            .setCustomContentView(compact)
+            .setCategory(Notification.CATEGORY_STATUS)
+            .setVisibility(Notification.VISIBILITY_PUBLIC)
+            .setShowWhen(true)
+            .setWhen(System.currentTimeMillis())
+            // 仅展开用自定义按钮；不 setCustomContentView / 不 addAction，避免重复按钮且利于一级展示。
             .setCustomBigContentView(expanded)
-            .setCustomHeadsUpContentView(compact)
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            builder.setStyle(Notification.DecoratedCustomViewStyle())
-        }
-        // 按钮只放在自定义 RemoteViews 里；再 addAction 会在展开态再出一排重复按钮。
 
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
             @Suppress("DEPRECATION")
             builder.setPriority(Notification.PRIORITY_HIGH)
+            @Suppress("DEPRECATION")
+            builder.setDefaults(Notification.DEFAULT_ALL)
         }
 
         // 资产锁开启时不挂全屏 Intent，避免锁屏绕过 PIN 一键入账。

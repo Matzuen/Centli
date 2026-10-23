@@ -3,6 +3,7 @@ package com.centli.centli
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
 
@@ -32,7 +33,14 @@ class PaymentOverlayActivity : Activity() {
             finish()
             return
         }
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+        }
+        window.addFlags(
+            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+        )
         val view = layoutInflater.inflate(R.layout.centli_payment_overlay, null)
         setContentView(view)
         val amountMinor = if (intent.hasExtra(EXTRA_AMOUNT_MINOR)) {
@@ -50,6 +58,12 @@ class PaymentOverlayActivity : Activity() {
             merchant = intent.getStringExtra(EXTRA_MERCHANT),
             direction = intent.getStringExtra(EXTRA_DIRECTION),
         )
+    }
+
+    override fun onDestroy() {
+        // 宿主被系统杀掉时也清掉 Manager 里的弱引用，避免下次 dismiss 误伤。
+        PaymentOverlayManager.onHostDestroyed(this)
+        super.onDestroy()
     }
 
     @Deprecated("Deprecated in Java")
