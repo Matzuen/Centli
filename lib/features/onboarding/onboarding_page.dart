@@ -116,9 +116,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     nameCtrl.dispose();
     if (ok != true || !mounted) return;
     if (name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请输入记账本名称')),
-      );
+      showGlassSnackBar(context, '请输入记账本名称');
       return;
     }
     if (ledger != null) {
@@ -133,9 +131,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     ref.invalidate(currentLedgerIdProvider);
     ref.invalidate(currentLedgerProvider);
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('记账本已设为「$name」')),
-    );
+    showGlassSnackBar(context, '记账本已设为「$name」');
     _next();
   }
 

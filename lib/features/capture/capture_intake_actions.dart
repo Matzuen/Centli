@@ -3,7 +3,6 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../data/db/database_provider.dart';
@@ -11,19 +10,7 @@ import '../../platform/pending/pending_capture_intake.dart';
 import '../../core/widgets/glass.dart';
 
 void _showResultSnackBar(BuildContext context, ManualIngestResult result) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text(result.snackbarText()),
-      action: result.ok
-          ? SnackBarAction(
-              label: '查看',
-              onPressed: () {
-                if (context.mounted) context.push('/home/pending?tab=pending');
-              },
-            )
-          : null,
-    ),
-  );
+  showGlassSnackBar(context, result.snackbarText());
 }
 
 /// Pick a screenshot (gallery/camera), confirm AI consent once, then ingest.
@@ -82,9 +69,7 @@ Future<void> importCaptureFromScreenshot(
     consented = true;
   }
   if (!context.mounted) return;
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(content: Text('正在识别截图…')),
-  );
+  showGlassSnackBar(context, '正在识别截图…');
   final result = await PendingCaptureIntake.ingestImagePath(
     db,
     file.path,

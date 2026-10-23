@@ -10,6 +10,7 @@ import '../../app/theme.dart';
 import '../../core/widgets/centli_error_state.dart';
 import '../../core/widgets/centli_icon.dart';
 import '../../core/widgets/glass.dart';
+import '../../core/widgets/txn_list_tile.dart';
 
 final _deletedTxProvider =
     StreamProvider.family<List<Transaction>, String>((ref, ledgerId) {
@@ -212,9 +213,7 @@ class _RecycleBinPageState extends ConsumerState<RecycleBinPage> {
     final n = await ref.read(databaseProvider).undeleteTransactions(ids);
     if (!context.mounted) return;
     _exitSelect();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('已恢复 $n 条')),
-    );
+    showGlassSnackBar(context, '已恢复 $n 条');
   }
 
   Future<void> _batchPurge(BuildContext context) async {
@@ -241,9 +240,7 @@ class _RecycleBinPageState extends ConsumerState<RecycleBinPage> {
     final n = await ref.read(databaseProvider).purgeDeletedTransactions(ids);
     if (!context.mounted) return;
     _exitSelect();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('已永久删除 $n 条')),
-    );
+    showGlassSnackBar(context, '已永久删除 $n 条');
   }
 
   Future<void> _showDetails(
@@ -265,9 +262,7 @@ class _RecycleBinPageState extends ConsumerState<RecycleBinPage> {
     if (action == 'undelete') {
       await db.undeleteTransaction(t.id);
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('已恢复')),
-        );
+        showGlassSnackBar(context, '已恢复');
       }
     } else if (action == 'purge') {
       final ok = await showGlassDialog<bool>(
@@ -290,9 +285,7 @@ class _RecycleBinPageState extends ConsumerState<RecycleBinPage> {
       if (ok != true) return;
       await db.purgeDeletedTransaction(t.id);
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('已永久删除')),
-        );
+        showGlassSnackBar(context, '已永久删除');
       }
     }
   }
@@ -304,9 +297,7 @@ class _RecycleBinPageState extends ConsumerState<RecycleBinPage> {
         await ref.read(databaseProvider).countDeletedTransactions(ledger.id);
     if (count == 0) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('回收站为空')),
-        );
+        showGlassSnackBar(context, '回收站为空');
       }
       return;
     }
@@ -333,9 +324,7 @@ class _RecycleBinPageState extends ConsumerState<RecycleBinPage> {
         .read(databaseProvider)
         .purgeAllDeletedTransactions(ledger.id);
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('已清空 $n 条')),
-      );
+      showGlassSnackBar(context, '已清空 $n 条');
     }
   }
 }
@@ -386,10 +375,10 @@ class _DeletedTile extends StatelessWidget {
       if ((txn.note ?? '').trim().isNotEmpty) txn.note!.trim(),
     ];
     final amountColor = txn.type == 'in'
-        ? const Color(0xFF43A047)
+        ? kTxnIncomeGreen
         : (txn.type == 'transfer'
-            ? scheme.onSurface
-            : const Color(0xFFE53935));
+            ? kTxnTransferBlue
+            : kTxnExpenseRed);
 
     return CentliSoftCard(
       child: ListTile(

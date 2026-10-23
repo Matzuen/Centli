@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/db/database_provider.dart';
 import '../../data/export/export_service.dart';
 import '../../app/theme.dart';
+import '../../core/widgets/glass.dart';
 
 class ExportPage extends ConsumerStatefulWidget {
   const ExportPage({super.key});
@@ -21,20 +22,14 @@ class _ExportPageState extends ConsumerState<ExportPage> {
 
   Future<void> _run() async {
     if (!_wantJson && !_wantExcel) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('\u81f3\u5c11\u9009\u62e9\u4e00\u79cd\u683c\u5f0f\uff08JSON \u6216 Excel\uff09'),
-        ),
-      );
+      showGlassSnackBar(context, '\u81f3\u5c11\u9009\u62e9\u4e00\u79cd\u683c\u5f0f\uff08JSON \u6216 Excel\uff09');
       return;
     }
 
     final ledgerId = await ref.read(currentLedgerIdProvider.future);
     if (ledgerId == null) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('\u8d26\u672c\u672a\u521d\u59cb\u5316')),
-      );
+      showGlassSnackBar(context, '\u8d26\u672c\u672a\u521d\u59cb\u5316');
       return;
     }
 
@@ -60,20 +55,12 @@ class _ExportPageState extends ConsumerState<ExportPage> {
 
       if (!mounted) return;
       final names = result.files.map((f) => f.uri.pathSegments.last).join(', ');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            names.isEmpty
+      showGlassSnackBar(context, names.isEmpty
                 ? '\u5bfc\u51fa\u5b8c\u6210'
-                : '\u5df2\u751f\u6210\u5e76\u5206\u4eab\uff1a$names',
-          ),
-        ),
-      );
+                : '\u5df2\u751f\u6210\u5e76\u5206\u4eab\uff1a$names',);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('\u5bfc\u51fa\u5931\u8d25\uff1a$e')),
-      );
+      showGlassSnackBar(context, '\u5bfc\u51fa\u5931\u8d25\uff1a$e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }

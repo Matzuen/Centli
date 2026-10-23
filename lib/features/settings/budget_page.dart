@@ -441,9 +441,7 @@ Future<void> _showAmountEditor(
   final major = double.tryParse(raw);
   if (major == null || major < 0) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('\u8bf7\u8f93\u5165\u6709\u6548\u91d1\u989d')),
-      );
+      showGlassSnackBar(context, '\u8bf7\u8f93\u5165\u6709\u6548\u91d1\u989d');
     }
     return;
   }
@@ -484,11 +482,7 @@ Future<void> _showCategoryBudgetEditor(
   final available = cats.where((c) => !taken.contains(c.id)).toList();
   if (available.isEmpty) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('\u6240\u6709\u652f\u51fa\u5206\u7c7b\u5df2\u8bbe\u9884\u7b97\uff0c\u6216\u6682\u65e0\u5206\u7c7b'),
-        ),
-      );
+      showGlassSnackBar(context, '\u6240\u6709\u652f\u51fa\u5206\u7c7b\u5df2\u8bbe\u9884\u7b97\uff0c\u6216\u6682\u65e0\u5206\u7c7b');
     }
     return;
   }
@@ -560,9 +554,7 @@ Future<void> _showCategoryBudgetEditor(
   final major = double.tryParse(raw);
   if (major == null || major <= 0) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('\u8bf7\u8f93\u5165\u5927\u4e8e 0 \u7684\u91d1\u989d')),
-      );
+      showGlassSnackBar(context, '\u8bf7\u8f93\u5165\u5927\u4e8e 0 \u7684\u91d1\u989d');
     }
     return;
   }

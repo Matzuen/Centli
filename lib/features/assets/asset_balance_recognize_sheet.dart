@@ -253,23 +253,15 @@ class _AssetBalanceRecognizeSheetState
       }
       if (!mounted) return;
       Navigator.pop(context, true);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            [
+      showGlassSnackBar(context, [
               if (created > 0) '新建 $created 个资产账户',
               if (updated > 0) '校正 $updated 个余额',
               if (created == 0 && updated == 0) '没有需要写入的项',
-            ].join('，'),
-          ),
-        ),
-      );
+            ].join('，'),);
     } catch (e) {
       if (!mounted) return;
       setState(() => _busy = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('写入失败：$e')),
-      );
+      showGlassSnackBar(context, '写入失败：$e');
     }
   }
 }

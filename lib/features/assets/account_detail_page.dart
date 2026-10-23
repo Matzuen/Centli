@@ -144,7 +144,7 @@ class _AccountDetailBody extends ConsumerWidget {
                 existing: account,
               ),
             ),
-            PopupMenuButton<String>(
+            CentliGlassPopupButton<String>(
               onSelected: (v) async {
                 if (v == 'adjust') {
                   await _showAdjustBalance(context, ref, account, bal);
@@ -152,15 +152,9 @@ class _AccountDetailBody extends ConsumerWidget {
                   await _confirmArchive(context, ref, account);
                 }
               },
-              itemBuilder: (ctx) => const [
-                PopupMenuItem(
-                  value: 'adjust',
-                  child: Text('\u8c03\u6574\u4f59\u989d'),
-                ),
-                PopupMenuItem(
-                  value: 'archive',
-                  child: Text('\u5f52\u6863\u8d44\u4ea7\u8d26\u6237'),
-                ),
+              items: const [
+                CentliMenuItem(value: 'adjust', label: '调整余额'),
+                CentliMenuItem(value: 'archive', label: '归档资产账户'),
               ],
             ),
           ],
@@ -342,9 +336,11 @@ class _AccountTxnTile extends ConsumerWidget {
     final signed = _signedMinor();
     final isNeg = signed < 0;
     final isZero = signed == 0;
-    final amountColor = isZero
-        ? scheme.onSurface
-        : (isNeg ? kTxnExpenseRed : kTxnIncomeGreen);
+    final amountColor = txn.type == 'transfer'
+        ? kTxnTransferBlue
+        : isZero
+            ? scheme.onSurface
+            : (isNeg ? kTxnExpenseRed : kTxnIncomeGreen);
     final time =
         DateTime.fromMillisecondsSinceEpoch(txn.happenAt, isUtc: true).toLocal();
     final timeLabel = DateFormat('HH:mm').format(time);
@@ -587,9 +583,7 @@ Future<void> _showAdjustBalance(
   ctrl.dispose();
   if (major == null) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('\u8bf7\u8f93\u5165\u6709\u6548\u91d1\u989d')),
-      );
+      showGlassSnackBar(context, '\u8bf7\u8f93\u5165\u6709\u6548\u91d1\u989d');
     }
     return;
   }
@@ -600,9 +594,7 @@ Future<void> _showAdjustBalance(
         currentBalanceMinor: currentBalanceMinor,
       );
   if (context.mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('\u5df2\u8bb0\u5165\u4f59\u989d\u6821\u6b63')),
-    );
+    showGlassSnackBar(context, '\u5df2\u8bb0\u5165\u4f59\u989d\u6821\u6b63');
   }
 }
 
@@ -633,9 +625,7 @@ Future<void> _confirmArchive(
   if (ok != true || !context.mounted) return;
   await ref.read(databaseProvider).archiveAccount(account.id);
   if (context.mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('\u5df2\u5f52\u6863')),
-    );
+    showGlassSnackBar(context, '\u5df2\u5f52\u6863');
     context.pop();
   }
 }
@@ -667,8 +657,6 @@ Future<void> _confirmUnarchive(
   if (ok != true || !context.mounted) return;
   await ref.read(databaseProvider).unarchiveAccount(account.id);
   if (context.mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('\u5df2\u53d6\u6d88\u5f52\u6863')),
-    );
+    showGlassSnackBar(context, '\u5df2\u53d6\u6d88\u5f52\u6863');
   }
 }

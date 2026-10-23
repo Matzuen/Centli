@@ -85,9 +85,7 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
     });
     final notice = _settings.lastMigrationNotice;
     if (notice != null && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(notice)),
-      );
+      showGlassSnackBar(context, notice);
     }
   }
 
@@ -115,9 +113,7 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
         _hasKey = hasKey;
         if (keyText.isNotEmpty) _keyCtrl.clear();
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已保存 AI 增强设置')),
-      );
+      showGlassSnackBar(context, '已保存 AI 增强设置');
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -157,9 +153,7 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
       _hasKey = false;
       _keyCtrl.clear();
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('已清除接口密钥')),
-    );
+    showGlassSnackBar(context, '已清除接口密钥');
   }
 
   Future<void> _testConnection() async {
@@ -291,16 +285,11 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
                         const SizedBox(height: CentliSpacing.item),
                         GestureDetector(
                           onLongPress: () async {
-                            final messenger = ScaffoldMessenger.of(context);
                             await Clipboard.setData(
                               ClipboardData(text: _testResult!),
                             );
                             if (!mounted) return;
-                            messenger.showSnackBar(
-                              const SnackBar(
-                                content: Text('已复制'),
-                              ),
-                            );
+                            showGlassSnackBar(context, '已复制');
                           },
                           child: Text(
                             '$_testResult\n(长按可复制)',

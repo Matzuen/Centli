@@ -168,23 +168,15 @@ class _ImportPageState extends ConsumerState<ImportPage> {
       ref.invalidate(fxBookProvider);
       ref.invalidate(onboardingDoneProvider);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '${mergeMode ? '已合并' : '已还原'}「${result.ledgerName}」：'
+      showGlassSnackBar(context, '${mergeMode ? '已合并' : '已还原'}「${result.ledgerName}」：'
             '${result.transactions} 笔流水 / '
             '${result.accounts} 资产账户 / '
             '${result.categories} 分类 / '
-            '${result.budgets} 预算',
-          ),
-        ),
-      );
+            '${result.budgets} 预算',);
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = '$e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${mergeMode ? '合并' : '还原'}失败：$e')),
-      );
+      showGlassSnackBar(context, '${mergeMode ? '合并' : '还原'}失败：$e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }

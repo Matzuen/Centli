@@ -1280,8 +1280,7 @@ Future<void> showAccountEditor(
 
   if (name.isEmpty) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('请输入资产账户名称')));
+      showGlassSnackBar(context, '请输入资产账户名称');
     }
     return;
   }
@@ -1315,8 +1314,7 @@ Future<void> showAccountEditor(
       currentBalanceMinor: currentBalanceMinor,
     );
     if (context.mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('已记入余额校正')));
+      showGlassSnackBar(context, '已记入余额校正');
     }
   }
 }

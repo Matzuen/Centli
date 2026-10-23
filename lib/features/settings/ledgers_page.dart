@@ -109,9 +109,7 @@ class LedgersPage extends ConsumerWidget {
     ref.invalidate(currentLedgerIdProvider);
     ref.invalidate(currentLedgerProvider);
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('已切换到「${l.name}」')),
-      );
+      showGlassSnackBar(context, '已切换到「${l.name}」');
     }
   }
 
@@ -125,9 +123,7 @@ class LedgersPage extends ConsumerWidget {
       final active = await ref.read(databaseProvider).loadAllLedgers();
       if (active.length <= 1) {
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('至少保留一个未归档记账本')),
-          );
+          showGlassSnackBar(context, '至少保留一个未归档记账本');
         }
         return;
       }
@@ -136,9 +132,7 @@ class LedgersPage extends ConsumerWidget {
     ref.invalidate(currentLedgerIdProvider);
     ref.invalidate(currentLedgerProvider);
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(archive ? '已归档' : '已恢复归档')),
-      );
+      showGlassSnackBar(context, archive ? '已归档' : '已恢复归档');
     }
   }
 
@@ -200,9 +194,7 @@ class LedgersPage extends ConsumerWidget {
     if (ok != true) return;
     if (name.isEmpty) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('请输入记账本名称')),
-        );
+        showGlassSnackBar(context, '请输入记账本名称');
       }
       return;
     }
@@ -214,9 +206,7 @@ class LedgersPage extends ConsumerWidget {
     ref.invalidate(currentLedgerIdProvider);
     ref.invalidate(currentLedgerProvider);
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('已创建并切换到「${ledger.name}」')),
-      );
+      showGlassSnackBar(context, '已创建并切换到「${ledger.name}」');
     }
   }
 }
@@ -250,7 +240,7 @@ class _LedgerTile extends StatelessWidget {
         '${isCurrent ? ' · 当前' : ''}'
         '${archived ? ' · 已归档' : ''}',
       ),
-      trailing: PopupMenuButton<String>(
+      trailing: CentliGlassPopupButton<String>(
         onSelected: (v) {
           switch (v) {
             case 'switch':
@@ -261,13 +251,13 @@ class _LedgerTile extends StatelessWidget {
               onArchive();
           }
         },
-        itemBuilder: (ctx) => [
+        items: [
           if (!archived && !isCurrent && onSwitch != null)
-            const PopupMenuItem(value: 'switch', child: Text('设为当前')),
-          const PopupMenuItem(value: 'edit', child: Text('编辑')),
-          PopupMenuItem(
+            const CentliMenuItem(value: 'switch', label: '设为当前'),
+          const CentliMenuItem(value: 'edit', label: '编辑'),
+          CentliMenuItem(
             value: 'archive',
-            child: Text(archived ? '取消归档' : '归档'),
+            label: archived ? '取消归档' : '归档',
           ),
         ],
       ),

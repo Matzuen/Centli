@@ -5,6 +5,7 @@ import '../../app/theme.dart';
 import '../../data/db/database_provider.dart';
 import '../security/app_lock_controller.dart';
 import '../security/pin_pad.dart';
+import '../../core/widgets/glass.dart';
 
 /// Security settings: 资产锁, biometric, PIN.
 class SecurityPage extends ConsumerStatefulWidget {
@@ -47,9 +48,7 @@ class _SecurityPageState extends ConsumerState<SecurityPage> {
       await db.setAppLockEnabled(true);
       ref.read(amountsRevealedProvider.notifier).conceal();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('资产锁已开启，金额默认隐藏')),
-        );
+        showGlassSnackBar(context, '资产锁已开启，金额默认隐藏');
       }
     } else {
       final ok = await _authToChange();
@@ -59,9 +58,7 @@ class _SecurityPageState extends ConsumerState<SecurityPage> {
       await db.setAppLockBiometric(false);
       ref.read(amountsRevealedProvider.notifier).conceal();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('资产锁已关闭')),
-        );
+        showGlassSnackBar(context, '资产锁已关闭');
       }
     }
   }
@@ -73,17 +70,13 @@ class _SecurityPageState extends ConsumerState<SecurityPage> {
     if (pin == null || !mounted) return;
     await ref.read(appLockServiceProvider).setPin(pin);
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('PIN 已更新')),
-      );
+      showGlassSnackBar(context, 'PIN 已更新');
     }
   }
 
   Future<void> _onBiometricChanged(bool enable) async {
     if (enable && !(_bioHw ?? false)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('此设备不支持生物识别')),
-      );
+      showGlassSnackBar(context, '此设备不支持生物识别');
       return;
     }
     final ok = await _authToChange();

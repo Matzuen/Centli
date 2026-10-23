@@ -126,7 +126,7 @@ class _AssetTypeTile extends ConsumerWidget {
                         },
                   icon: const Icon(Icons.arrow_downward_rounded),
                 ),
-                PopupMenuButton<String>(
+                CentliGlassPopupButton<String>(
                   onSelected: (v) async {
                     try {
                       if (v == 'rename') {
@@ -140,21 +140,24 @@ class _AssetTypeTile extends ConsumerWidget {
                       }
                     } catch (e) {
                       if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('$e')),
-                        );
+                        showGlassSnackBar(context, '$e');
                       }
                     }
                   },
-                  itemBuilder: (ctx) => [
-                    const PopupMenuItem(value: 'rename', child: Text('重命名')),
+                  items: [
+                    const CentliMenuItem(value: 'rename', label: '重命名'),
                     if (archived)
-                      const PopupMenuItem(
-                          value: 'unarchive', child: Text('取消归档'))
+                      const CentliMenuItem(
+                        value: 'unarchive',
+                        label: '取消归档',
+                      )
                     else
-                      const PopupMenuItem(
-                          value: 'archive', child: Text('归档')),
-                    const PopupMenuItem(value: 'delete', child: Text('删除')),
+                      const CentliMenuItem(value: 'archive', label: '归档'),
+                    const CentliMenuItem(
+                      value: 'delete',
+                      label: '删除',
+                      destructive: true,
+                    ),
                   ],
                 ),
               ],
@@ -204,7 +207,7 @@ Future<void> _promptCreate(
         );
   } catch (e) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      showGlassSnackBar(context, '$e');
     }
   }
 }
@@ -247,7 +250,7 @@ Future<void> _promptRename(
         );
   } catch (e) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      showGlassSnackBar(context, '$e');
     }
   }
 }
@@ -296,7 +299,7 @@ Future<void> _promptDelete(
     await ref.read(databaseProvider).deleteAssetType(type.id);
   } catch (e) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      showGlassSnackBar(context, '$e');
     }
   }
 }

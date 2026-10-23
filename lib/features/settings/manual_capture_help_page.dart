@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../app/theme.dart';
+import '../../core/widgets/glass.dart';
 
 /// Help for the three manual pending-capture paths when send-out
 /// (red packet / transfer) has no system notification.
@@ -80,9 +81,7 @@ class ManualCaptureHelpPage extends StatelessWidget {
                 onPressed: () async {
                   await Clipboard.setData(const ClipboardData(text: sampleUrl));
                   if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('已复制示例链接')),
-                    );
+                    showGlassSnackBar(context, '已复制示例链接');
                   }
                 },
                 icon: const Icon(Icons.copy),

@@ -179,9 +179,7 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
       if (!mounted) return;
       setState(() => _postNotificationsGranted = ok);
       if (!ok) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('请在系统设置中允许 Centli 发送通知')),
-        );
+        showGlassSnackBar(context, '请在系统设置中允许 Centli 发送通知');
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -214,8 +212,7 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
         if (!mounted) return;
         setState(() => _granted = granted);
         if (!granted) {
-          ScaffoldMessenger.of(context)
-              .showSnackBar(const SnackBar(content: Text('请先在系统设置中开启通知使用权')));
+          showGlassSnackBar(context, '请先在系统设置中开启通知使用权');
           return;
         }
       }
@@ -247,15 +244,9 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
         _listenerConnecting = false;
       });
       if (wantOn && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              batteryIgnored
+        showGlassSnackBar(context, batteryIgnored
                   ? '已开启。清后台后仍会继续捕获（不显示常驻通知）。'
-                  : '已开启，但未关闭电池优化时，清后台后可能丢通知，请在系统里允许无限制。',
-            ),
-          ),
-        );
+                  : '已开启，但未关闭电池优化时，清后台后可能丢通知，请在系统里允许无限制。',);
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -274,8 +265,7 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
         _listenerConnecting = false;
       });
       if (connected) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('已重新连接通知监听')));
+        showGlassSnackBar(context, '已重新连接通知监听');
         return;
       }
     }
@@ -302,15 +292,9 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
         _resurrectScheduled = scheduled;
         _listenerConnected = connected;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            scheduled
+      showGlassSnackBar(context, scheduled
                 ? '后台复活任务已安排（约 15 分钟一次，无常驻通知）'
-                : '未能安排：请确认已开启自动记账，并允许自启动/后台运行',
-          ),
-        ),
-      );
+                : '未能安排：请确认已开启自动记账，并允许自启动/后台运行',);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -339,9 +323,7 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
       final map = await ref.read(databaseProvider).getCaptureAccountMap();
       if (!mounted) return;
       setState(() => _accountMap = map);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(accountId == null ? '已清除映射' : '已保存默认资产账户')),
-      );
+      showGlassSnackBar(context, accountId == null ? '已清除映射' : '已保存默认资产账户');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -363,8 +345,7 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
         _templateUpdatedAt = NotiTemplateStore.updatedAt;
         _templateSource = result.source;
       });
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(result.message)));
+      showGlassSnackBar(context, result.message);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -375,8 +356,7 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
     if (ledgerId == null) return;
     if (_pendingCount == 0) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('暂无待确认账单')));
+      showGlassSnackBar(context, '暂无待确认账单');
       return;
     }
 
@@ -406,9 +386,7 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
       await NotificationCaptureStub.cancelAllPendingConfirm();
       if (!mounted) return;
       setState(() => _pendingCount = 0);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(n == 0 ? '没有可清空的记录' : '已清空 $n 条待确认')),
-      );
+      showGlassSnackBar(context, n == 0 ? '没有可清空的记录' : '已清空 $n 条待确认');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -493,9 +471,7 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
       displayTitle: title.isEmpty ? null : title,
     );
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(result.message)),
-    );
+    showGlassSnackBar(context, result.message);
     await _reload(soft: true);
   }
 

@@ -88,15 +88,11 @@ class _FxRatesPageState extends ConsumerState<FxRatesPage> {
             '已写入 ${result.upserted} 条 ${result.day}（→${result.baseCurrency}）'
             '$skip';
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('远程汇率已更新（${result.source}）')),
-      );
+      showGlassSnackBar(context, '远程汇率已更新（${result.source}）');
     } catch (e) {
       if (!mounted) return;
       setState(() => _statusHint = '刷新失败：$e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('刷新失败：$e')),
-      );
+      showGlassSnackBar(context, '刷新失败：$e');
     } finally {
       if (mounted) setState(() => _refreshing = false);
     }
@@ -402,11 +398,7 @@ Future<void> _showEditor(
       rate <= 0 ||
       from == to) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('请检查日期、币种与汇率'),
-        ),
-      );
+      showGlassSnackBar(context, '请检查日期、币种与汇率');
     }
     return;
   }

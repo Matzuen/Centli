@@ -13,7 +13,6 @@ Future<void> showQuickBookkeepingSheet(BuildContext context) {
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    backgroundColor: Theme.of(context).colorScheme.surface,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
     ),
@@ -57,9 +56,7 @@ class _QuickBookkeepingSheetState extends ConsumerState<QuickBookkeepingSheet> {
     final ledgerId = await db.currentLedgerId();
     if (ledgerId == null) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请先选择记账本')),
-      );
+      showGlassSnackBar(context, '请先选择记账本');
       return;
     }
     final accounts = await db.loadActiveAccounts(ledgerId);
@@ -74,14 +71,10 @@ class _QuickBookkeepingSheetState extends ConsumerState<QuickBookkeepingSheet> {
       if (!mounted) return;
       if (!outcome.ok) {
         setState(() => _error = outcome.errorMessage ?? '记账失败');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(outcome.errorMessage ?? '记账失败')),
-        );
+        showGlassSnackBar(context, outcome.errorMessage ?? '记账失败');
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(outcome.summary ?? '已记账')),
-      );
+      showGlassSnackBar(context, outcome.summary ?? '已记账');
       if (keepOpen) {
         _textCtrl.clear();
         setState(() => _error = null);

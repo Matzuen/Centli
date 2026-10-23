@@ -5,7 +5,6 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../core/utils/image_for_llm.dart';
@@ -82,24 +81,12 @@ Future<void> importAssetBalancesFromScreenshot(
         : config.apiKey.trim().isEmpty
             ? '请先在「我的 · AI 增强」填写并保存 API Key'
             : '请先在「我的 · AI 增强」填写服务地址';
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        action: SnackBarAction(
-          label: '去设置',
-          onPressed: () {
-            if (context.mounted) context.push('/me/smart-fill');
-          },
-        ),
-      ),
-    );
+    showGlassSnackBar(context, message);
     return;
   }
 
   if (!context.mounted) return;
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(content: Text('正在识别资产截图…')),
-  );
+  showGlassSnackBar(context, '正在识别资产截图…');
 
   try {
     final raw = await File(file.path).readAsBytes();
@@ -127,13 +114,9 @@ Future<void> importAssetBalancesFromScreenshot(
     );
   } on LlmVisionException catch (e) {
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(e.message)),
-    );
+    showGlassSnackBar(context, e.message);
   } catch (e) {
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('识别失败：$e')),
-    );
+    showGlassSnackBar(context, '识别失败：$e');
   }
 }
