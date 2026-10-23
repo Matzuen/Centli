@@ -35,7 +35,7 @@ class MePage extends ConsumerWidget {
           padding: CentliSpacing.pagePaddingNav,
           children: [
             Text(
-              '设置',
+              '我的',
               style: Theme.of(context).textTheme.headlineSmall
                   ?.copyWith(fontWeight: FontWeight.w800),
             ),
