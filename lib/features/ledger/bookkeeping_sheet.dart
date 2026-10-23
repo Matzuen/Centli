@@ -573,35 +573,37 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
           toAmountMinor: toAmountMinor,
         );
       } else {
-        final parentId = await db.insertManualTransaction(
-          ledgerId: _ledgerId!,
-          type: _type,
-          amountMinor: amountMinor,
-          currency: _currency,
-          accountId: _accountId!,
-          toAccountId: toAcc,
-          categoryId: cat,
-          note: note,
-          tags: _tags,
-          happenAt: _happenAt,
-          fxRate: fxRate,
-          toAmountMinor: toAmountMinor,
-        );
-        for (final sub in _draftSubs) {
-          await db.insertManualTransaction(
+        await db.transaction(() async {
+          final parentId = await db.insertManualTransaction(
             ledgerId: _ledgerId!,
-            type: sub.type,
-            amountMinor: sub.amountMinor,
-            currency: sub.currency,
-            accountId: sub.accountId,
-            note: sub.subTypeName,
+            type: _type,
+            amountMinor: amountMinor,
+            currency: _currency,
+            accountId: _accountId!,
+            toAccountId: toAcc,
+            categoryId: cat,
+            note: note,
+            tags: _tags,
             happenAt: _happenAt,
-            includeInStat: sub.includeInStat,
-            includeInBudget: sub.includeInBudget,
-            parentId: parentId,
-            subTypeId: sub.subTypeId,
+            fxRate: fxRate,
+            toAmountMinor: toAmountMinor,
           );
-        }
+          for (final sub in _draftSubs) {
+            await db.insertManualTransaction(
+              ledgerId: _ledgerId!,
+              type: sub.type,
+              amountMinor: sub.amountMinor,
+              currency: sub.currency,
+              accountId: sub.accountId,
+              note: sub.subTypeName,
+              happenAt: _happenAt,
+              includeInStat: sub.includeInStat,
+              includeInBudget: sub.includeInBudget,
+              parentId: parentId,
+              subTypeId: sub.subTypeId,
+            );
+          }
+        });
       }
       // 记住这次的选择：下次「记一笔」直接沿用资产账户 / 分类。
       if (!mounted) return;
@@ -795,7 +797,11 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
     final major = _evalAmount(_amountText) ?? 0;
     final label = major > 0
         ? formatMinor(_currency, toMinor(_currency, major))
-        : (_noteCtrl.text.trim().isNotEmpty ? '备注' : '标签');
+        : (_noteCtrl.text.trim().isNotEmpty
+            ? '备注'
+            : (_tags.isNotEmpty
+                ? '标签'
+                : (_draftSubs.isNotEmpty ? '附加子交易' : '内容')));
     final ok = await showGlassDialog<bool>(
       context: context,
       builder: (ctx) => CentliGlassDialog(

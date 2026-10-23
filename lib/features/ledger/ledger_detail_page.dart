@@ -66,6 +66,17 @@ class LedgerDetailPage extends ConsumerWidget {
             body: const Center(child: Text('账单不存在或已删除')),
           );
         }
+        // Sub-transactions are edited from the parent detail sheet.
+        final parentId = txn.parentId;
+        if (parentId != null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (context.mounted) context.replace('/ledger/$parentId');
+          });
+          return CentliGradientScaffold(
+            appBar: AppBar(title: const Text('账单')),
+            body: const Center(child: CircularProgressIndicator()),
+          );
+        }
         return _DetailBody(
           key: ValueKey(txn.id),
           txn: txn,
@@ -483,6 +494,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       parentId: txn.id,
       ledgerId: txn.ledgerId,
       initialAccountId: _accountId,
+      happenAt: _happenAt,
     );
   }
 

@@ -44,6 +44,7 @@ Future<DraftSubTxn?> showSubTransactionSheet(
   String? parentId,
   String? ledgerId,
   String? initialAccountId,
+  DateTime? happenAt,
   Transaction? existing,
   DraftSubTxn? initialDraft,
 }) {
@@ -59,6 +60,7 @@ Future<DraftSubTxn?> showSubTransactionSheet(
       parentId: parentId,
       ledgerId: ledgerId,
       initialAccountId: initialAccountId,
+      happenAt: happenAt,
       existing: existing,
       initialDraft: initialDraft,
     ),
@@ -71,6 +73,7 @@ class _SubTxnBody extends ConsumerStatefulWidget {
     this.parentId,
     this.ledgerId,
     this.initialAccountId,
+    this.happenAt,
     this.existing,
     this.initialDraft,
   });
@@ -79,6 +82,7 @@ class _SubTxnBody extends ConsumerStatefulWidget {
   final String? parentId;
   final String? ledgerId;
   final String? initialAccountId;
+  final DateTime? happenAt;
   final Transaction? existing;
   final DraftSubTxn? initialDraft;
 
@@ -444,6 +448,7 @@ class _SubTxnBodyState extends ConsumerState<_SubTxnBody> {
           currency: draft.currency,
           accountId: draft.accountId,
           note: draft.subTypeName,
+          happenAt: widget.happenAt,
           includeInStat: draft.includeInStat,
           includeInBudget: draft.includeInBudget,
           parentId: parentId,

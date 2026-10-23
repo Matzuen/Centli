@@ -1136,12 +1136,13 @@ WHERE pending_id IS NOT NULL
     int startMs,
     int endMs,
   ) async {
+    // Include child sub-transactions when include_in_stat=1 (list UIs still
+    // filter parent_id IS NULL).
     final rows = await (select(transactions)
           ..where(
             (t) =>
                 t.ledgerId.equals(ledgerId) &
                 t.deletedAt.isNull() &
-                t.parentId.isNull() &
                 t.includeInStat.equals(1) &
                 t.happenAt.isBiggerOrEqualValue(startMs) &
                 t.happenAt.isSmallerThanValue(endMs),
@@ -1192,7 +1193,6 @@ WHERE pending_id IS NOT NULL
             (t) =>
                 t.ledgerId.equals(ledgerId) &
                 t.deletedAt.isNull() &
-                t.parentId.isNull() &
                 t.includeInStat.equals(1) &
                 t.type.equals(kind) &
                 t.happenAt.isBiggerOrEqualValue(startMs) &
@@ -1738,10 +1738,14 @@ WHERE pending_id IS NOT NULL
         .write(patch);
   }
 
+  /// Soft-deleted top-level bills only (children restored with their parent).
   Stream<List<Transaction>> watchDeletedTransactions(String ledgerId) {
     return (select(transactions)
           ..where(
-            (t) => t.ledgerId.equals(ledgerId) & t.deletedAt.isNotNull(),
+            (t) =>
+                t.ledgerId.equals(ledgerId) &
+                t.deletedAt.isNotNull() &
+                t.parentId.isNull(),
           )
           ..orderBy([(t) => OrderingTerm.desc(t.deletedAt)]))
         .watch();
@@ -1752,7 +1756,8 @@ WHERE pending_id IS NOT NULL
       ..addColumns([transactions.id.count()])
       ..where(
         transactions.ledgerId.equals(ledgerId) &
-            transactions.deletedAt.isNotNull(),
+            transactions.deletedAt.isNotNull() &
+            transactions.parentId.isNull(),
       );
     final rows = await q.get();
     if (rows.isEmpty) return 0;
@@ -1763,10 +1768,22 @@ WHERE pending_id IS NOT NULL
   ///
   /// Cascades only to children that were soft-deleted together with this
   /// parent (same [deletedAt]); earlier soft-deleted children stay deleted.
+  /// Restoring a child whose parent is still deleted also restores the parent
+  /// (avoids orphan live children).
   Future<void> undeleteTransaction(String id) async {
     final row = await (select(transactions)..where((t) => t.id.equals(id)))
         .getSingleOrNull();
     if (row == null) return;
+    final parentId = row.parentId;
+    if (parentId != null) {
+      final parent = await (select(transactions)
+            ..where((t) => t.id.equals(parentId)))
+          .getSingleOrNull();
+      if (parent != null && parent.deletedAt != null) {
+        await undeleteTransaction(parentId);
+        return;
+      }
+    }
     final ts = nowMs();
     final patch = TransactionsCompanion(
       deletedAt: const Value(null),
@@ -1809,20 +1826,22 @@ WHERE pending_id IS NOT NULL
       return;
     }
     final ts = nowMs();
-    for (var i = 0; i < kDefaultSubTransactionTypes.length; i++) {
-      final (name, sign) = kDefaultSubTransactionTypes[i];
-      await into(subTransactionTypes).insert(
-        SubTransactionTypesCompanion.insert(
-          id: newId(),
-          name: name,
-          sign: sign,
-          sortOrder: Value(i),
-          createdAt: ts,
-          updatedAt: ts,
-        ),
-      );
-    }
-    await setSetting(kSubTypesSeededKey, '1');
+    await transaction(() async {
+      for (var i = 0; i < kDefaultSubTransactionTypes.length; i++) {
+        final (name, sign) = kDefaultSubTransactionTypes[i];
+        await into(subTransactionTypes).insert(
+          SubTransactionTypesCompanion.insert(
+            id: newId(),
+            name: name,
+            sign: sign,
+            sortOrder: Value(i),
+            createdAt: ts,
+            updatedAt: ts,
+          ),
+        );
+      }
+      await setSetting(kSubTypesSeededKey, '1');
+    });
   }
 
   Stream<List<SubTransactionType>> watchSubTransactionTypes() {
@@ -1999,6 +2018,27 @@ WHERE pending_id IS NOT NULL
         await (select(transactions)..where((t) => t.id.isIn(list))).get();
     final extra = <String>{};
     for (final row in rows) {
+      // If restoring a child whose parent is still deleted, bring parent too.
+      final parentId = row.parentId;
+      if (parentId != null) {
+        final parent = await (select(transactions)
+              ..where((t) => t.id.equals(parentId)))
+            .getSingleOrNull();
+        if (parent != null && parent.deletedAt != null) {
+          extra.add(parent.id);
+          final pDeleted = parent.deletedAt!;
+          final siblings = await (select(transactions)
+                ..where(
+                  (t) =>
+                      t.parentId.equals(parent.id) &
+                      t.deletedAt.equals(pDeleted),
+                ))
+              .get();
+          for (final c in siblings) {
+            extra.add(c.id);
+          }
+        }
+      }
       final deletedAt = row.deletedAt;
       if (deletedAt == null) continue;
       final children = await (select(transactions)
@@ -2939,7 +2979,6 @@ WHERE pending_id IS NOT NULL
     final where = <String>[
       'ledger_id = ?',
       'deleted_at IS NULL',
-      'parent_id IS NULL',
       'currency = ?',
     ];
     final vars = <Variable<Object>>[
@@ -2987,7 +3026,6 @@ WHERE pending_id IS NOT NULL
     final where = <String>[
       'ledger_id = ?',
       'deleted_at IS NULL',
-      'parent_id IS NULL',
       'currency != ?',
     ];
     final vars = <Variable<Object>>[
@@ -3073,7 +3111,7 @@ WHERE pending_id IS NOT NULL
       '''
       SELECT COALESCE(category_id, '_none') AS cid, SUM(amount_minor) AS total
       FROM transactions
-      WHERE ledger_id = ? AND deleted_at IS NULL AND parent_id IS NULL
+      WHERE ledger_id = ? AND deleted_at IS NULL
         AND include_in_stat = 1
         AND currency = ? AND type = ?
         AND happen_at >= ? AND happen_at < ?
@@ -3104,7 +3142,7 @@ WHERE pending_id IS NOT NULL
       SELECT CAST((happen_at + ?) / 86400000 AS INTEGER) AS bucket,
              SUM(amount_minor) AS total
       FROM transactions
-      WHERE ledger_id = ? AND deleted_at IS NULL AND parent_id IS NULL
+      WHERE ledger_id = ? AND deleted_at IS NULL
         AND include_in_stat = 1
         AND currency = ? AND type = ?
         AND happen_at >= ? AND happen_at < ?
@@ -3163,7 +3201,7 @@ WHERE pending_id IS NOT NULL
       final baseCount = await customSelect(
         '''
         SELECT COUNT(*) AS c FROM transactions
-        WHERE ledger_id = ? AND deleted_at IS NULL AND parent_id IS NULL
+        WHERE ledger_id = ? AND deleted_at IS NULL
           AND include_in_stat = 1
           AND currency = ? AND type IN ('in','out')
           AND happen_at >= ? AND happen_at < ?
@@ -3349,7 +3387,7 @@ WHERE pending_id IS NOT NULL
       '''
       SELECT account_id, type, SUM(amount_minor) AS total
       FROM transactions
-      WHERE ledger_id = ? AND deleted_at IS NULL AND parent_id IS NULL
+      WHERE ledger_id = ? AND deleted_at IS NULL
         AND include_in_stat = 1
         AND currency = ? AND type != 'transfer'
         AND happen_at >= ? AND happen_at < ?
@@ -3585,7 +3623,6 @@ WHERE pending_id IS NOT NULL
           ..where((t) {
             final base = t.ledgerId.equals(ledgerId) &
                 t.deletedAt.isNull() &
-                t.parentId.isNull() &
                 t.includeInStat.equals(1) &
                 t.type.equals(kind) &
                 t.happenAt.isBiggerOrEqualValue(startMs) &
@@ -3733,7 +3770,7 @@ WHERE pending_id IS NOT NULL
       '''
       SELECT COALESCE(category_id, '') AS cid, type, SUM(amount_minor) AS total
       FROM transactions
-      WHERE ledger_id = ? AND deleted_at IS NULL AND parent_id IS NULL
+      WHERE ledger_id = ? AND deleted_at IS NULL
         AND include_in_budget = 1
         AND currency = ? AND type = 'out'
         AND happen_at >= ? AND happen_at < ?
