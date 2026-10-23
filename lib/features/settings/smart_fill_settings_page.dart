@@ -288,7 +288,7 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
                             await Clipboard.setData(
                               ClipboardData(text: _testResult!),
                             );
-                            if (!mounted) return;
+                            if (!context.mounted) return;
                             showGlassSnackBar(context, '已复制');
                           },
                           child: Text(

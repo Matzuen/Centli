@@ -348,7 +348,6 @@ class _DeletedTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final when = DateFormat('yyyy-MM-dd HH:mm').format(
       DateTime.fromMillisecondsSinceEpoch(txn.happenAt, isUtc: true).toLocal(),
     );

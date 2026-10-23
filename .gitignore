@@ -102,3 +102,6 @@ test/failures/
 
 # Kotlin Gradle 插件的会话/错误日志目录（构建产物）
 android/.kotlin/
+
+# Local export dumps (user data; never commit)
+tools/exports/

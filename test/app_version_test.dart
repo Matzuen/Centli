@@ -12,7 +12,7 @@ void main() {
   });
 
   test('displayAppVersion hides build number', () {
-    expect(displayAppVersion('2.1.2+44'), '2.1.2');
+    expect(displayAppVersion('2.1.2+45'), '2.1.2');
     expect(displayAppVersion('2.1.2'), '2.1.2');
     expect(displayAppVersion(kAppVersionFallback), '2.1.2');
   });

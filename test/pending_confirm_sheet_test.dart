@@ -180,5 +180,7 @@ void main() {
     await tester.pump();
     final rows = await db.loadTransactionsForExport(ledgerId);
     expect(rows, isEmpty);
+    // Drain glass SnackBar auto-dismiss timer.
+    await tester.pump(const Duration(seconds: 2));
   });
 }
