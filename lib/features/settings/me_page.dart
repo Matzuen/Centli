@@ -95,12 +95,14 @@ class MePage extends ConsumerWidget {
             CentliSoftCard(
               child: Column(
                 children: [
-                  _tile(
-                    context,
-                    icon: Icons.palette_outlined,
-                    title: '主题',
-                    subtitle: _themeLabel(ref),
-                    onTap: () => _pickTheme(context, ref),
+                  Builder(
+                    builder: (tileCtx) => _tile(
+                      tileCtx,
+                      icon: Icons.palette_outlined,
+                      title: '主题',
+                      subtitle: _themeLabel(ref),
+                      onTap: () => _pickTheme(tileCtx, ref),
+                    ),
                   ),
                   const Divider(height: 1),
                   _tile(
@@ -132,7 +134,7 @@ class MePage extends ConsumerWidget {
                     context,
                     icon: Icons.category_outlined,
                     title: '分类管理',
-                    subtitle: '支出 / 收入分类',
+                    subtitle: '支出 / 收入 / 转账分类',
                     onTap: () => context.push('/me/categories'),
                   ),
                   const Divider(height: 1),
@@ -224,9 +226,7 @@ class MePage extends ConsumerWidget {
                     onTap: () async {
                       if (!CentliHomeWidgetSync.supported) {
                         if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('桌面小组件仅 Android 可用')),
-                          );
+                          showGlassSnackBar(context, '桌面小组件仅 Android 可用');
                         }
                         return;
                       }
@@ -235,15 +235,9 @@ class MePage extends ConsumerWidget {
                       );
                       final pinned = await CentliHomeWidgetSync.requestPin();
                       if (!context.mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            pinned
+                      showGlassSnackBar(context, pinned
                                 ? '已请求添加到桌面，请在系统弹窗中确认'
-                                : '请长按桌面空白处 → 小组件 → 选择 Centli',
-                          ),
-                        ),
-                      );
+                                : '请长按桌面空白处 → 小组件 → 选择 Centli',);
                     },
                   ),
                   const Divider(height: 1),
@@ -404,31 +398,27 @@ String _themeLabel(WidgetRef ref) {
 
 Future<void> _pickTheme(BuildContext context, WidgetRef ref) async {
   final cur = ref.read(themeModeProvider).valueOrNull ?? ThemeMode.system;
-  final picked = await showGlassSheet<ThemeMode>(
+  final picked = await showGlassMenu<ThemeMode>(
     context: context,
-    showDragHandle: true,
-    builder: (ctx) => SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ListTile(
-            title: const Text('跟随系统'),
-            trailing: cur == ThemeMode.system ? const Icon(Icons.check) : null,
-            onTap: () => Navigator.pop(ctx, ThemeMode.system),
-          ),
-          ListTile(
-            title: const Text('浅色'),
-            trailing: cur == ThemeMode.light ? const Icon(Icons.check) : null,
-            onTap: () => Navigator.pop(ctx, ThemeMode.light),
-          ),
-          ListTile(
-            title: const Text('深色'),
-            trailing: cur == ThemeMode.dark ? const Icon(Icons.check) : null,
-            onTap: () => Navigator.pop(ctx, ThemeMode.dark),
-          ),
-        ],
+    anchorContext: context,
+    alignEnd: true,
+    items: [
+      CentliMenuItem(
+        value: ThemeMode.system,
+        label: '跟随系统',
+        selected: cur == ThemeMode.system,
       ),
-    ),
+      CentliMenuItem(
+        value: ThemeMode.light,
+        label: '浅色',
+        selected: cur == ThemeMode.light,
+      ),
+      CentliMenuItem(
+        value: ThemeMode.dark,
+        label: '深色',
+        selected: cur == ThemeMode.dark,
+      ),
+    ],
   );
   if (picked == null) return;
   final key = switch (picked) {
@@ -519,8 +509,7 @@ Future<void> showLedgerEditor(
   nameCtrl.dispose();
   if (name.isEmpty) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('请输入记账本名称')));
+      showGlassSnackBar(context, '请输入记账本名称');
     }
     return;
   }

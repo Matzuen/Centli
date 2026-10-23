@@ -7,8 +7,9 @@ import '../../platform/notifications/notification_parse.dart';
 import '../../platform/notifications/noti_template_store.dart';
 import '../../platform/notifications/watched_package_resolve.dart';
 import '../../app/theme.dart';
+import '../../core/widgets/glass.dart';
 
-/// Add / edit a user recognition rule.
+/// 添加 / 编辑「我的规则」；也可编辑内置规则（写入本地覆盖，可一键恢复）。
 class RecognitionRuleEditPage extends StatefulWidget {
   const RecognitionRuleEditPage({super.key, this.ruleId});
 
@@ -40,6 +41,8 @@ class _RecognitionRuleEditPageState extends State<RecognitionRuleEditPage> {
   bool _loading = true;
   bool _saving = false;
   String? _editingId;
+  /// 正在编辑内置规则（保存走 [NotiTemplateStore.upsertOfficialTemplate]）。
+  bool _editingOfficial = false;
 
   @override
   void initState() {
@@ -59,43 +62,58 @@ class _RecognitionRuleEditPageState extends State<RecognitionRuleEditPage> {
     super.dispose();
   }
 
+  void _applyTemplate(NotiTemplate found, {required bool official}) {
+    _editingId = found.id;
+    _editingOfficial = official;
+    _nameCtrl.text = found.displayName;
+    final pkgs = found.packages;
+    final pkg = pkgs.isNotEmpty ? pkgs.first : '';
+    if (pkg == 'com.eg.android.AlipayGphone') {
+      _appChoice = 'alipay';
+    } else if (pkg == 'com.tencent.mm') {
+      _appChoice = 'wechat';
+    } else {
+      _appChoice = 'other';
+      _pkgOtherCtrl.text = pkg;
+    }
+    _extraPackages = pkgs.length > 1 ? pkgs.sublist(1) : const [];
+    _titleCtrl.text = found.titleRegex ?? '';
+    _mustCtrl.text = found.mustContainRegex ?? '';
+    _excludeCtrl.text = found.excludeTextRegex ?? '';
+    _amountCtrl.text = found.amountRegex;
+    _merchantCtrl.text = found.merchantRegex ?? '';
+    _merchantFromTitle = found.merchantFromTitle;
+    _accountHint = found.defaultAccountHint;
+    _direction = NotiTemplate.normalizeDirection(found.direction);
+    _matchOn = found.matchOn == 'title' ? 'title' : 'body';
+    _defaultCurrency = found.defaultCurrency.trim().isEmpty
+        ? 'CNY'
+        : found.defaultCurrency.trim().toUpperCase();
+  }
+
   Future<void> _bootstrap() async {
     await NotiTemplateStore.load();
     final id = widget.ruleId;
     if (id != null && id.isNotEmpty) {
       NotiTemplate? found;
+      var official = false;
       for (final t in NotiTemplateStore.peekUser()) {
         if (t.id == id) {
           found = t;
           break;
         }
       }
-      if (found != null) {
-        _editingId = found.id;
-        _nameCtrl.text = found.displayName;
-        final pkgs = found.packages;
-        final pkg = pkgs.isNotEmpty ? pkgs.first : '';
-        if (pkg == 'com.eg.android.AlipayGphone') {
-          _appChoice = 'alipay';
-        } else if (pkg == 'com.tencent.mm') {
-          _appChoice = 'wechat';
-        } else {
-          _appChoice = 'other';
-          _pkgOtherCtrl.text = pkg;
+      if (found == null) {
+        for (final t in NotiTemplateStore.peekOfficial()) {
+          if (t.id == id) {
+            found = t;
+            official = true;
+            break;
+          }
         }
-        _extraPackages = pkgs.length > 1 ? pkgs.sublist(1) : const [];
-        _titleCtrl.text = found.titleRegex ?? '';
-        _mustCtrl.text = found.mustContainRegex ?? '';
-        _excludeCtrl.text = found.excludeTextRegex ?? '';
-        _amountCtrl.text = found.amountRegex;
-        _merchantCtrl.text = found.merchantRegex ?? '';
-        _merchantFromTitle = found.merchantFromTitle;
-        _accountHint = found.defaultAccountHint;
-        _direction = NotiTemplate.normalizeDirection(found.direction);
-        _matchOn = found.matchOn == 'title' ? 'title' : 'body';
-        _defaultCurrency = found.defaultCurrency.trim().isEmpty
-            ? 'CNY'
-            : found.defaultCurrency.trim().toUpperCase();
+      }
+      if (found != null) {
+        _applyTemplate(found, official: official);
       }
     }
     if (!mounted) return;
@@ -132,14 +150,14 @@ class _RecognitionRuleEditPageState extends State<RecognitionRuleEditPage> {
     final apps = await NotificationCaptureStub.listLaunchableApps();
     if (!mounted) return;
     if (apps.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('未能读取已安装应用，请手动填写包名')),
-      );
+      showGlassSnackBar(context, '未能读取已安装应用，请手动填写包名');
       return;
     }
-    final selected = await showModalBottomSheet<LaunchableAppInfo>(
+    final selected = await showGlassSheet<LaunchableAppInfo>(
       context: context,
       isScrollControlled: true,
+      showDragHandle: true,
+      useSafeArea: true,
       builder: (ctx) {
         var filter = '';
         return StatefulBuilder(
@@ -154,42 +172,40 @@ class _RecognitionRuleEditPageState extends State<RecognitionRuleEditPage> {
                           a.packageName.toLowerCase().contains(q),
                     )
                     .toList();
-            return SafeArea(
-              child: SizedBox(
-                height: MediaQuery.of(ctx).size.height * 0.72,
-                child: Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                      child: TextField(
-                        decoration: const InputDecoration(
-                          prefixIcon: Icon(Icons.search),
-                          hintText: '搜索应用名或包名',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.all(Radius.circular(14)),
-                          ),
+            return SizedBox(
+              height: MediaQuery.sizeOf(ctx).height * 0.72,
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                    child: TextField(
+                      decoration: const InputDecoration(
+                        prefixIcon: Icon(Icons.search),
+                        hintText: '搜索应用名或包名',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.all(Radius.circular(14)),
                         ),
-                        onChanged: (v) => setModal(() => filter = v),
                       ),
+                      onChanged: (v) => setModal(() => filter = v),
                     ),
-                    Expanded(
-                      child: ListView.builder(
-                        itemCount: filtered.length,
-                        itemBuilder: (_, i) {
-                          final a = filtered[i];
-                          return ListTile(
-                            title: Text(a.label),
-                            subtitle: Text(
-                              a.packageName,
-                              style: Theme.of(ctx).textTheme.bodySmall,
-                            ),
-                            onTap: () => Navigator.pop(ctx, a),
-                          );
-                        },
-                      ),
+                  ),
+                  Expanded(
+                    child: ListView.builder(
+                      itemCount: filtered.length,
+                      itemBuilder: (_, i) {
+                        final a = filtered[i];
+                        return ListTile(
+                          title: Text(a.label),
+                          subtitle: Text(
+                            a.packageName,
+                            style: Theme.of(ctx).textTheme.bodySmall,
+                          ),
+                          onTap: () => Navigator.pop(ctx, a),
+                        );
+                      },
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             );
           },
@@ -222,15 +238,13 @@ class _RecognitionRuleEditPageState extends State<RecognitionRuleEditPage> {
     if (_appChoice == 'other') {
       final err = packageInputError(_pkgOtherCtrl.text);
       if (err != null) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+        showGlassSnackBar(context, err);
         return;
       }
     }
     final packages = _packagesForChoice();
     if (packages.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请填写包名或从已安装应用选择')),
-      );
+      showGlassSnackBar(context, '请填写包名或从已安装应用选择');
       return;
     }
 
@@ -247,9 +261,7 @@ class _RecognitionRuleEditPageState extends State<RecognitionRuleEditPage> {
       try {
         RegExp(raw);
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${entry.$1}正则无效: $e')),
-        );
+        showGlassSnackBar(context, '${entry.$1}正则无效: $e');
         return;
       }
     }
@@ -275,17 +287,22 @@ class _RecognitionRuleEditPageState extends State<RecognitionRuleEditPage> {
         direction: _direction,
         matchOn: _matchOn,
       );
-      await NotiTemplateStore.upsertUserTemplate(template);
+      if (_editingOfficial) {
+        await NotiTemplateStore.upsertOfficialTemplate(template);
+      } else {
+        await NotiTemplateStore.upsertUserTemplate(template);
+      }
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已保存')),
+      showGlassSnackBar(
+        context,
+        _editingOfficial
+            ? '已保存内置规则（可用「恢复内置规则」还原）'
+            : '已保存',
       );
       context.pop(true);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('保存失败: $e')),
-      );
+      showGlassSnackBar(context, '保存失败: $e');
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -301,7 +318,11 @@ class _RecognitionRuleEditPageState extends State<RecognitionRuleEditPage> {
     final isEdit = _editingId != null;
     return CentliGradientScaffold(
       appBar: AppBar(
-        title: Text(isEdit ? '编辑规则' : '添加规则'),
+        title: Text(
+          isEdit
+              ? (_editingOfficial ? '编辑内置规则' : '编辑规则')
+              : '添加规则',
+        ),
         actions: [
           TextButton(
             onPressed: _saving ? null : _save,

@@ -3,12 +3,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/theme.dart';
 import '../../core/utils/money.dart';
+import '../../core/widgets/centli_icon.dart';
+import '../../core/widgets/glass.dart';
+import '../../core/widgets/picker_form_field.dart';
 import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
 import '../../platform/notifications/notification_listener_stub.dart';
 import '../../platform/notifications/notification_parse.dart';
 import '../../platform/notifications/noti_template_store.dart';
-import '../../core/widgets/glass.dart';
+import '../ledger/account_picker_sheet.dart';
+import '../ledger/category_picker_sheet.dart';
 
 /// 一条待确认通知里，「方向」的显示名（仅支出 / 收入）。
 String pendingDirectionLabel(String? direction) {
@@ -155,6 +159,46 @@ class _ConfirmPendingSheetState extends ConsumerState<_ConfirmPendingSheet> {
     super.dispose();
   }
 
+  Category? _categoryById(String? id) {
+    if (id == null) return null;
+    for (final c in _catsForDirection) {
+      if (c.id == id) return c;
+    }
+    return null;
+  }
+
+  Account? _accountById(String? id) {
+    if (id == null) return null;
+    for (final a in widget.accounts) {
+      if (a.id == id) return a;
+    }
+    return null;
+  }
+
+  Future<void> _pickCategory() async {
+    final id = await showCategoryPickerSheet(
+      context,
+      categories: _catsForDirection,
+      selectedId: _categoryId,
+    );
+    if (id == null || !mounted) return;
+    setState(() => _categoryId = id);
+  }
+
+  Future<void> _pickAccount() async {
+    final db = ref.read(databaseProvider);
+    final types = await db.loadAssetTypes(c.ledgerId);
+    if (!mounted) return;
+    final id = await showAccountPickerSheet(
+      context,
+      accounts: widget.accounts,
+      assetTypes: types,
+      selectedId: _accountId,
+    );
+    if (id == null || !mounted) return;
+    setState(() => _accountId = id);
+  }
+
   Future<void> _confirm() async {
     final ccy = c.currency ?? 'CNY';
     final major = double.tryParse(_amountCtrl.text.trim().replaceAll(',', ''));
@@ -239,7 +283,7 @@ class _ConfirmPendingSheetState extends ConsumerState<_ConfirmPendingSheet> {
 
   void _toast(String msg) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    showGlassSnackBar(context, msg);
   }
 
   @override
@@ -247,7 +291,6 @@ class _ConfirmPendingSheetState extends ConsumerState<_ConfirmPendingSheet> {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final ccy = c.currency ?? 'CNY';
-    final cats = _catsForDirection;
     final bottom = MediaQuery.viewInsetsOf(context).bottom;
 
     return Padding(
@@ -268,24 +311,30 @@ class _ConfirmPendingSheetState extends ConsumerState<_ConfirmPendingSheet> {
                     ),
                   ),
                 ),
-                PopupMenuButton<String>(
+                CentliGlassPopupButton<String>(
                   key: const Key('confirm_pending_type'),
-                  initialValue: _direction,
-                  onSelected: _busy
-                      ? null
-                      : (dir) {
-                          setState(() {
-                            _directionOverride = dir;
-                            final cats = _catsForDirection;
-                            if (!cats.any((x) => x.id == _categoryId)) {
-                              _categoryId =
-                                  cats.isEmpty ? null : cats.first.id;
-                            }
-                          });
-                        },
-                  itemBuilder: (context) => const [
-                    PopupMenuItem(value: 'out', child: Text('支出')),
-                    PopupMenuItem(value: 'in', child: Text('收入')),
+                  enabled: !_busy,
+                  alignEnd: true,
+                  onSelected: (dir) {
+                    setState(() {
+                      _directionOverride = dir;
+                      final cats = _catsForDirection;
+                      if (!cats.any((x) => x.id == _categoryId)) {
+                        _categoryId = cats.isEmpty ? null : cats.first.id;
+                      }
+                    });
+                  },
+                  items: [
+                    CentliMenuItem(
+                      value: 'out',
+                      label: '支出',
+                      selected: _direction == 'out',
+                    ),
+                    CentliMenuItem(
+                      value: 'in',
+                      label: '收入',
+                      selected: _direction == 'in',
+                    ),
                   ],
                   child: Chip(
                     label: Text(pendingDirectionLabel(_direction)),
@@ -306,73 +355,99 @@ class _ConfirmPendingSheetState extends ConsumerState<_ConfirmPendingSheet> {
             ),
             const SizedBox(height: CentliSpacing.section),
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
-                  flex: 3,
                   child: TextField(
                     key: const Key('confirm_pending_amount'),
                     controller: _amountCtrl,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
                     decoration: InputDecoration(
                       labelText: '金额 ($ccy)',
-                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 18,
+                      ),
                     ),
                   ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  flex: 4,
-                  child: DropdownButtonFormField<String>(
-                    key: ValueKey('acc_${_accountId ?? ''}'),
-                    initialValue: _accountId,
-                    isExpanded: true,
-                    items: [
-                      for (final a in widget.accounts)
-                        DropdownMenuItem(
-                          value: a.id,
-                          child: Text(
-                            '${a.name} · ${a.currency}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                    ],
-                    onChanged: _busy
-                        ? null
-                        : (v) => setState(() => _accountId = v),
+                  child: TextField(
+                    controller: _noteCtrl,
                     decoration: const InputDecoration(
-                      labelText: '资产账户',
-                      isDense: true,
+                      labelText: '备注',
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 18,
+                      ),
                     ),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: CentliSpacing.item),
-            DropdownButtonFormField<String>(
-              key: ValueKey('cat_${_categoryId ?? ''}_$_direction'),
-              initialValue: _categoryId,
-              isExpanded: true,
-              items: [
-                for (final cat in cats)
-                  DropdownMenuItem(value: cat.id, child: Text(cat.name)),
+            const SizedBox(height: CentliSpacing.item + 2),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Builder(
+                    builder: (context) {
+                      final cat = _categoryById(_categoryId);
+                      return CentliPickerFormField(
+                        key: ValueKey('cat_${_categoryId ?? ''}_$_direction'),
+                        label: '分类',
+                        value: cat?.name ?? '选择分类',
+                        enabled: !_busy,
+                        isDense: false,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 18,
+                        ),
+                        leading: cat == null
+                            ? null
+                            : CentliIconChip(
+                                name: cat.name,
+                                kind: cat.kind,
+                                iconKey: cat.icon,
+                                size: 22,
+                              ),
+                        onTap: _pickCategory,
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Builder(
+                    builder: (context) {
+                      final acc = _accountById(_accountId);
+                      return CentliPickerFormField(
+                        key: ValueKey('acc_${_accountId ?? ''}'),
+                        label: '资产账户',
+                        value: acc?.name ?? '选择资产账户',
+                        enabled: !_busy,
+                        isDense: false,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 18,
+                        ),
+                        leading: acc == null
+                            ? null
+                            : CentliIconChip(
+                                name: acc.name,
+                                kind: 'account',
+                                iconKey: acc.icon,
+                                size: 22,
+                              ),
+                        onTap: _pickAccount,
+                      );
+                    },
+                  ),
+                ),
               ],
-              onChanged:
-                  _busy ? null : (v) => setState(() => _categoryId = v),
-              decoration: const InputDecoration(
-                labelText: '分类',
-                isDense: true,
-              ),
-            ),
-            const SizedBox(height: CentliSpacing.item),
-            TextField(
-              controller: _noteCtrl,
-              decoration: const InputDecoration(
-                labelText: '备注',
-                hintText: '退款可写在备注，或入账后打「退款」标签',
-                isDense: true,
-              ),
             ),
             const SizedBox(height: CentliSpacing.item),
             Row(

@@ -5,14 +5,17 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../app/theme.dart';
-
 import '../../core/utils/id_gen.dart';
 import '../../core/utils/money.dart';
 import '../../core/utils/recurring_calendar.dart';
+import '../../core/widgets/centli_icon.dart';
+import '../../core/widgets/glass.dart';
+import '../../core/widgets/picker_form_field.dart';
 import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
+import '../ledger/account_picker_sheet.dart';
+import '../ledger/category_picker_sheet.dart';
 import 'recurring_runner.dart';
-import '../../core/widgets/glass.dart';
 
 class RecurringWizardArgs {
   const RecurringWizardArgs({
@@ -56,6 +59,7 @@ class _RecurringWizardPageState extends ConsumerState<RecurringWizardPage> {
   DateTime _startAt = DateTime.now();
   List<Account> _accounts = [];
   List<Category> _categories = [];
+  List<AssetType> _assetTypes = [];
   String? _ledgerId;
   bool _loading = true;
   bool _saving = false;
@@ -95,14 +99,53 @@ class _RecurringWizardPageState extends ConsumerState<RecurringWizardPage> {
     }
     final accounts = await db.loadActiveAccounts(ledger.id);
     final cats = await db.loadCategories(ledger.id, _type == 'in' ? 'in' : 'out');
+    final assetTypes = await db.loadAssetTypes(ledger.id);
     setState(() {
       _ledgerId = ledger.id;
       _accounts = accounts;
       _categories = cats;
+      _assetTypes = assetTypes;
       _accountId ??= accounts.isNotEmpty ? accounts.first.id : null;
       _categoryId ??= cats.isNotEmpty ? cats.first.id : null;
       _loading = false;
     });
+  }
+
+  Category? _categoryById(String? id) {
+    if (id == null) return null;
+    for (final c in _categories) {
+      if (c.id == id) return c;
+    }
+    return null;
+  }
+
+  Account? _accountById(String? id) {
+    if (id == null) return null;
+    for (final a in _accounts) {
+      if (a.id == id) return a;
+    }
+    return null;
+  }
+
+  Future<void> _pickCategory() async {
+    final id = await showCategoryPickerSheet(
+      context,
+      categories: _categories,
+      selectedId: _categoryId,
+    );
+    if (id == null || !mounted) return;
+    setState(() => _categoryId = id);
+  }
+
+  Future<void> _pickAccount() async {
+    final id = await showAccountPickerSheet(
+      context,
+      accounts: _accounts,
+      assetTypes: _assetTypes,
+      selectedId: _accountId,
+    );
+    if (id == null || !mounted) return;
+    setState(() => _accountId = id);
   }
 
   Future<void> _reloadCats() async {
@@ -142,13 +185,11 @@ class _RecurringWizardPageState extends ConsumerState<RecurringWizardPage> {
   Future<void> _save() async {
     final major = double.tryParse(_amountCtrl.text.trim());
     if (major == null || major <= 0) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('请输入金额')));
+      showGlassSnackBar(context, '请输入金额');
       return;
     }
     if (_accountId == null || _categoryId == null || _ledgerId == null) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('请选择资产账户和分类')));
+      showGlassSnackBar(context, '请选择资产账户和分类');
       return;
     }
     final n = _catchUpCount;
@@ -207,9 +248,7 @@ class _RecurringWizardPageState extends ConsumerState<RecurringWizardPage> {
       await runDueRecurring(db);
       if (!mounted) return;
       context.pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已创建；下次启动将自动补记到期项')),
-      );
+      showGlassSnackBar(context, '已创建；下次启动将自动补记到期项');
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -332,32 +371,48 @@ class _RecurringWizardPageState extends ConsumerState<RecurringWizardPage> {
           ),
         ),
         const SizedBox(height: CentliSpacing.section),
-        DropdownButtonFormField<String>(
-          key: ValueKey('acc-$_accountId'),
-          initialValue: _accountId,
-          decoration: const InputDecoration(
-            labelText: '资产账户',
-            border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
-          ),
-          items: [
-            for (final a in _accounts)
-              DropdownMenuItem(value: a.id, child: Text(a.name)),
-          ],
-          onChanged: (v) => setState(() => _accountId = v),
+        Builder(
+          builder: (context) {
+            final acc = _accountById(_accountId);
+            return CentliPickerFormField(
+              key: ValueKey('acc-$_accountId'),
+              label: '资产账户',
+              value: acc?.name ?? '选择资产账户',
+              outlined: true,
+              isDense: false,
+              leading: acc == null
+                  ? null
+                  : CentliIconChip(
+                      name: acc.name,
+                      kind: 'account',
+                      iconKey: acc.icon,
+                      size: 22,
+                    ),
+              onTap: _pickAccount,
+            );
+          },
         ),
         const SizedBox(height: CentliSpacing.section),
-        DropdownButtonFormField<String>(
-          key: ValueKey('cat-$_categoryId'),
-          initialValue: _categoryId,
-          decoration: const InputDecoration(
-            labelText: '分类',
-            border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
-          ),
-          items: [
-            for (final c in _categories)
-              DropdownMenuItem(value: c.id, child: Text(c.name)),
-          ],
-          onChanged: (v) => setState(() => _categoryId = v),
+        Builder(
+          builder: (context) {
+            final cat = _categoryById(_categoryId);
+            return CentliPickerFormField(
+              key: ValueKey('cat-$_categoryId'),
+              label: '分类',
+              value: cat?.name ?? '选择分类',
+              outlined: true,
+              isDense: false,
+              leading: cat == null
+                  ? null
+                  : CentliIconChip(
+                      name: cat.name,
+                      kind: cat.kind,
+                      iconKey: cat.icon,
+                      size: 22,
+                    ),
+              onTap: _pickCategory,
+            );
+          },
         ),
         const SizedBox(height: CentliSpacing.section),
         TextField(

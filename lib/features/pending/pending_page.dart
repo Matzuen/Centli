@@ -6,16 +6,20 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../app/theme.dart';
 import '../../core/utils/money.dart';
+import '../../core/widgets/centli_icon.dart';
+import '../../core/widgets/glass.dart';
+import '../../core/widgets/picker_form_field.dart';
 import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
 import '../../platform/notifications/notification_parse.dart';
 import '../../platform/notifications/notification_listener_stub.dart';
 import '../../platform/notifications/noti_template_store.dart';
 import '../capture/capture_intake_actions.dart';
+import '../ledger/account_picker_sheet.dart';
+import '../ledger/category_picker_sheet.dart';
 import 'pending_confirm_sheet.dart';
-import '../../app/theme.dart';
-import '../../core/widgets/glass.dart';
 
 
 /// Badge label for pending capture cards. Status takes priority over parseOk.
@@ -133,9 +137,7 @@ class _PendingPageBodyState extends ConsumerState<PendingPage> {
     }
     if (!mounted) return;
     if (capture == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('未找到这条待确认，请下拉刷新或稍后再试')),
-      );
+      showGlassSnackBar(context, '未找到这条待确认，请下拉刷新或稍后再试');
       return;
     }
     final tab = capture.status == 'ignored'
@@ -158,57 +160,46 @@ class _PendingPageBodyState extends ConsumerState<PendingPage> {
         title: const Text('待确认'),
         actions: [
           // 6 个动作收进「更多」，顶栏只留一个入口。
-          PopupMenuButton<String>(
+          CentliGlassPopupButton<String>(
             key: const Key('pending_more_menu'),
             tooltip: '更多',
+            maxWidth: 220,
             onSelected: (v) => _onPendingAction(context, v),
-            itemBuilder: (ctx) => [
+            items: [
               if (filter == 'pending' || filter == 'parse_failed')
-                const PopupMenuItem(
+                const CentliMenuItem(
                   value: 'ignore_all',
-                  child: ListTile(
-                    leading: Icon(Icons.playlist_remove_outlined),
-                    title: Text('全部忽略'),
-                  ),
+                  label: '全部忽略',
+                  icon: Icons.playlist_remove_outlined,
                 ),
               if (filter == 'ignored')
-                const PopupMenuItem(
+                const CentliMenuItem(
                   value: 'clear_ignored',
-                  child: ListTile(
-                    leading: Icon(Icons.delete_sweep_outlined),
-                    title: Text('清空已忽略'),
-                  ),
+                  label: '清空已忽略',
+                  icon: Icons.delete_sweep_outlined,
                 ),
               if (filter != 'ignored')
-                const PopupMenuItem(
+                const CentliMenuItem(
                   value: 'screenshot',
-                  child: ListTile(
-                    leading: Icon(Icons.document_scanner_outlined),
-                    title: Text('截图识别'),
-                  ),
+                  label: '截图识别',
+                  icon: Icons.document_scanner_outlined,
                 ),
               if (filter != 'ignored')
-                const PopupMenuItem(
+                const CentliMenuItem(
                   value: 'clipboard',
-                  child: ListTile(
-                    leading: Icon(Icons.content_paste_go_outlined),
-                    title: Text('从剪贴板导入'),
-                  ),
+                  label: '从剪贴板导入',
+                  icon: Icons.content_paste_go_outlined,
                 ),
-              const PopupMenuItem(
+              const CentliMenuItem(
                 value: 'help',
-                child: ListTile(
-                  leading: Icon(Icons.help_outline),
-                  title: Text('发出去没通知？'),
-                ),
+                label: '发出去没通知？',
+                icon: Icons.help_outline,
               ),
               if (kDebugMode)
-                const PopupMenuItem(
+                const CentliMenuItem(
                   value: 'sample',
-                  child: ListTile(
-                    leading: Icon(Icons.science_outlined),
-                    title: Text('添加示例通知'),
-                  ),
+                  label: '添加示例通知',
+                  icon: Icons.science_outlined,
                 ),
             ],
           ),
@@ -381,9 +372,7 @@ class _PendingPageBodyState extends ConsumerState<PendingPage> {
           templates: templates,
         );
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(n == 0 ? '示例已存在（去重）' : '已加入 $n 条示例')),
-          );
+          showGlassSnackBar(context, n == 0 ? '示例已存在（去重）' : '已加入 $n 条示例');
         }
     }
   }
@@ -395,9 +384,7 @@ class _PendingPageBodyState extends ConsumerState<PendingPage> {
         await ref.read(databaseProvider).countPendingCaptures(ledger.id);
     if (count == 0) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('暂无待确认账单')),
-        );
+        showGlassSnackBar(context, '暂无待确认账单');
       }
       return;
     }
@@ -424,9 +411,7 @@ class _PendingPageBodyState extends ConsumerState<PendingPage> {
         await ref.read(databaseProvider).ignoreAllPendingCaptures(ledger.id);
     await NotificationCaptureStub.cancelAllPendingConfirm();
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(n == 0 ? '没有可忽略的记录' : '已忽略 $n 条')),
-      );
+      showGlassSnackBar(context, n == 0 ? '没有可忽略的记录' : '已忽略 $n 条');
     }
   }
 
@@ -440,9 +425,7 @@ class _PendingPageBodyState extends ConsumerState<PendingPage> {
     final count = ignored.length;
     if (count == 0) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('暂无已忽略记录')),
-        );
+        showGlassSnackBar(context, '暂无已忽略记录');
       }
       return;
     }
@@ -468,9 +451,7 @@ class _PendingPageBodyState extends ConsumerState<PendingPage> {
     final n =
         await ref.read(databaseProvider).clearIgnoredCaptures(ledger.id);
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(n == 0 ? '无记录' : '已清空 $n 条')),
-      );
+      showGlassSnackBar(context, n == 0 ? '无记录' : '已清空 $n 条');
     }
   }
 
@@ -592,6 +573,63 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
       if (a.id == id) return a.name;
     }
     return '未选资产账户';
+  }
+
+  Category? get _selectedCategory {
+    final id = _categoryId;
+    if (id == null) return null;
+    for (final cat in widget.categories) {
+      if (cat.id == id) return cat;
+    }
+    return null;
+  }
+
+  Account? get _selectedAccount {
+    final id = _accountId;
+    if (id == null) return null;
+    for (final a in widget.accounts) {
+      if (a.id == id) return a;
+    }
+    return null;
+  }
+
+  List<Category> get _catsForDirection {
+    final preferredKind = _direction == 'in' ? 'in' : 'out';
+    final preferred = [
+      for (final x in widget.categories)
+        if (x.kind == preferredKind) x,
+    ];
+    return preferred.isNotEmpty ? preferred : widget.categories;
+  }
+
+  Future<void> _pickCategory() async {
+    final id = await showCategoryPickerSheet(
+      context,
+      categories: _catsForDirection,
+      selectedId: _categoryId,
+    );
+    if (id == null || !mounted) return;
+    setState(() {
+      _categoryId = id;
+      _categoryFallback = false;
+    });
+  }
+
+  Future<void> _pickAccount() async {
+    final types =
+        await ref.read(databaseProvider).loadAssetTypes(widget.ledgerId);
+    if (!mounted) return;
+    final id = await showAccountPickerSheet(
+      context,
+      accounts: widget.accounts,
+      assetTypes: types,
+      selectedId: _accountId,
+    );
+    if (id == null || !mounted) return;
+    setState(() {
+      _accountId = id;
+      _accountFallback = false;
+    });
   }
 
   /// Prefer persisted direction; fall back to re-parse.
@@ -718,16 +756,13 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
                       onPressed: _busy
                           ? null
                           : () async {
-                              final messenger = ScaffoldMessenger.of(context);
                               final ok = await showPendingConfirmDialog(
                                 context,
                                 ref,
                                 capture: c,
                               );
-                              if (ok) {
-                                messenger.showSnackBar(
-                                  const SnackBar(content: Text('已入账')),
-                                );
+                              if (ok && context.mounted) {
+                                showGlassSnackBar(context, '已入账');
                               }
                             },
                       child: const Text('调整'),
@@ -764,63 +799,48 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
                   onChanged: (_) => setState(() {}),
                 ),
                 const SizedBox(height: CentliSpacing.item),
-                DropdownButtonFormField<String>(
-                  initialValue: _categoryId != null &&
-                          widget.categories.any((x) => x.id == _categoryId)
-                      ? _categoryId
-                      : null,
-                  items: [
-                    for (final cat in widget.categories)
-                      DropdownMenuItem(value: cat.id, child: Text(cat.name)),
-                  ],
-                  onChanged: (v) => setState(() {
-                    _categoryId = v;
-                    _categoryFallback = false;
-                  }),
-                  decoration: InputDecoration(
-                    labelText: '分类',
-                    border: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
-                    isDense: true,
-                    enabledBorder: _categoryFallback
-                        ? OutlineInputBorder(
-                            borderSide: BorderSide(
-                              color: scheme.error,
-                              width: 1.2,
+                Builder(
+                  builder: (context) {
+                    final cat = _selectedCategory;
+                    return CentliPickerFormField(
+                      label: '分类',
+                      value: cat?.name ?? '选择分类',
+                      outlined: true,
+                      error: _categoryFallback,
+                      leading: cat == null
+                          ? null
+                          : CentliIconChip(
+                              name: cat.name,
+                              kind: cat.kind,
+                              iconKey: cat.icon,
+                              size: 22,
                             ),
-                          )
-                        : null,
-                  ),
+                      onTap: _pickCategory,
+                    );
+                  },
                 ),
                 const SizedBox(height: CentliSpacing.item),
-                DropdownButtonFormField<String>(
-                  initialValue: _accountId != null &&
-                          widget.accounts.any((x) => x.id == _accountId)
-                      ? _accountId
-                      : null,
-                  items: [
-                    for (final a in widget.accounts)
-                      DropdownMenuItem(
-                        value: a.id,
-                        child: Text('${a.name} · ${a.currency}'),
-                      ),
-                  ],
-                  onChanged: (v) => setState(() {
-                    _accountId = v;
-                    _accountFallback = false;
-                  }),
-                  decoration: InputDecoration(
-                    labelText: '资产账户',
-                    border: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
-                    isDense: true,
-                    enabledBorder: _accountFallback
-                        ? OutlineInputBorder(
-                            borderSide: BorderSide(
-                              color: scheme.error,
-                              width: 1.2,
+                Builder(
+                  builder: (context) {
+                    final acc = _selectedAccount;
+                    return CentliPickerFormField(
+                      label: '资产账户',
+                      value: acc == null
+                          ? '选择资产账户'
+                          : '${acc.name} · ${acc.currency}',
+                      outlined: true,
+                      error: _accountFallback,
+                      leading: acc == null
+                          ? null
+                          : CentliIconChip(
+                              name: acc.name,
+                              kind: 'account',
+                              iconKey: acc.icon,
+                              size: 22,
                             ),
-                          )
-                        : null,
-                  ),
+                      onTap: _pickAccount,
+                    );
+                  },
                 ),
                 const SizedBox(height: CentliSpacing.dense),
                 Theme(
@@ -907,21 +927,15 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
     final ccy = c.currency ?? 'CNY';
     final major = double.tryParse(_amountCtrl.text.trim().replaceAll(',', ''));
     if (major == null || major <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请输入有效金额')),
-      );
+      showGlassSnackBar(context, '请输入有效金额');
       return;
     }
     if (_accountId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请选择资产账户')),
-      );
+      showGlassSnackBar(context, '请选择资产账户');
       return;
     }
     if (_categoryId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请选择分类')),
-      );
+      showGlassSnackBar(context, '请选择分类');
       return;
     }
     setState(() => _busy = true);
@@ -984,15 +998,11 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
           );
       await NotificationCaptureStub.cancelPendingConfirm(c.id);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('已入账')),
-        );
+        showGlassSnackBar(context, '已入账');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('入账失败: $e')),
-        );
+        showGlassSnackBar(context, '入账失败: $e');
       }
     } finally {
       if (mounted) setState(() => _busy = false);
