@@ -63,6 +63,15 @@ object PaymentOverlayManager {
     private val mainHandler = Handler(Looper.getMainLooper())
     private var windowManager: WindowManager? = null
     private var overlayView: View? = null
+    /**
+     * 所有曾 [WindowManager.addView] 成功的实例。息屏时 remove 常失败但仍会把
+     * [overlayView] 置空，解锁后旧窗变僵尸、新窗再叠一层——所以必须靠这份名单强拆。
+     */
+    /** Cap zombie pile-up if remove keeps failing (GONE leftovers). */
+    private const val MAX_TRACKED_WM_VIEWS = 4
+
+    private val trackedWmViews = mutableListOf<View>()
+    private var deferredShowRunnable: Runnable? = null
     private var autoDismiss: Runnable? = null
     private var selectedCategoryId: String? = null
     private var selectedCategoryName: String? = null
@@ -103,25 +112,17 @@ object PaymentOverlayManager {
             val app = context.applicationContext
             when (action) {
                 Intent.ACTION_SCREEN_OFF -> mainHandler.post {
-                    // 亮屏弹出 → 息屏锁屏：必须先拆窗。否则解锁后 OEM 上常见「看得见关不掉」。
+                    // 亮屏弹出 → 息屏锁屏：先记下并尽力拆窗（息屏时 OEM 常 remove 失败）。
                     parkOverlayForLock(app, reason = "screen_off")
                 }
                 Intent.ACTION_USER_PRESENT -> mainHandler.post {
-                    // SCREEN_OFF 在部分机型上可能收不到；解锁时若窗还在，同样 park。
+                    // SCREEN_OFF 可能没收齐；解锁后再 park，并强拆名单里所有旧 WM 窗。
                     parkOverlayForLock(app, reason = "user_present")
+                    purgeAllTrackedWmViews(app, reason = "user_present")
                     forceRemoveOrphanOverlay(app)
                     val pending = deferredShow ?: return@post
-                    deferredShow = null
-                    Log.i(TAG, "user present → show deferred overlay id=${pending.pendingId}")
-                    showPending(
-                        app,
-                        pendingId = pending.pendingId,
-                        amountMinor = pending.amountMinor,
-                        currency = pending.currency,
-                        sourcePkg = pending.sourcePkg,
-                        merchant = pending.merchant,
-                        direction = pending.direction,
-                    )
+                    // 等锁屏动画 / WM 稳定后再弹，否则 remove 与 add 抢同一帧，旧窗仍在。
+                    scheduleDeferredShow(app, pending, delayMs = 280L)
                 }
             }
         }
@@ -445,7 +446,9 @@ object PaymentOverlayManager {
      * 解锁后再 [showPending] 建新窗，避免僵尸悬浮窗关不掉。
      */
     private fun parkOverlayForLock(context: Context, reason: String) {
-        val showing = overlayView != null || hostActivity?.get() != null
+        val showing = overlayView != null ||
+            hostActivity?.get() != null ||
+            trackedWmViews.isNotEmpty()
         if (!showing) return
         val snap = activeShow
         if (snap != null) {
@@ -456,6 +459,30 @@ object PaymentOverlayManager {
         }
         ensureUnlockReceiver(context)
         dismissInternal()
+        // 息屏阶段 remove 常失败：名单保留未拆掉的 view，解锁后再 purge。
+        purgeAllTrackedWmViews(context, reason = reason)
+    }
+
+    /** 解锁后延迟弹出，先再清一次旧窗。 */
+    private fun scheduleDeferredShow(app: Context, pending: DeferredShow, delayMs: Long) {
+        deferredShowRunnable?.let { mainHandler.removeCallbacks(it) }
+        deferredShow = null
+        val r = Runnable {
+            deferredShowRunnable = null
+            purgeAllTrackedWmViews(app, reason = "before_deferred_show")
+            Log.i(TAG, "deferred show overlay id=${pending.pendingId}")
+            showPending(
+                app,
+                pendingId = pending.pendingId,
+                amountMinor = pending.amountMinor,
+                currency = pending.currency,
+                sourcePkg = pending.sourcePkg,
+                merchant = pending.merchant,
+                direction = pending.direction,
+            )
+        }
+        deferredShowRunnable = r
+        mainHandler.postDelayed(r, delayMs.coerceAtLeast(0L))
     }
 
     private fun ensureUnlockReceiver(context: Context) {
@@ -506,8 +533,11 @@ object PaymentOverlayManager {
                 merchant = merchant,
                 categoryKind = dirOrOut(categoryKind),
             )
+            // 弹新窗前再清一遍，防止名单里还有息屏残留。
+            purgeAllTrackedWmViews(app, reason = "before_add")
             windowManager?.addView(view, layoutParams())
             overlayView = view
+            trackWmView(view)
             hostActivity = null
             scheduleAutoDismiss()
             Log.i(TAG, "overlay WM shown pending=$pendingId amount=$amountMajor")
@@ -593,7 +623,12 @@ object PaymentOverlayManager {
     }
 
     fun dismiss() {
-        mainHandler.post { dismissInternal() }
+        mainHandler.post {
+            deferredShowRunnable?.let { mainHandler.removeCallbacks(it) }
+            deferredShowRunnable = null
+            deferredShow = null
+            dismissInternal()
+        }
     }
 
     /** [PaymentOverlayActivity] 销毁时清弱引用，避免 finish 已死 Activity。 */
@@ -1397,7 +1432,26 @@ object PaymentOverlayManager {
         val view = overlayView
         overlayView = null
         if (view != null) {
-            removeOverlayViewSafely(view)
+            if (!removeOverlayViewSafely(view)) {
+                // 拆失败仍留在名单，解锁后再 purge。
+                trackWmView(view)
+            } else {
+                trackedWmViews.remove(view)
+            }
+        }
+        // 把当前指针以外、历史上 add 过的窗一并拆。
+        val appCtx = view?.context?.applicationContext
+        if (appCtx != null) {
+            purgeAllTrackedWmViews(appCtx, reason = "dismiss")
+        } else if (trackedWmViews.isNotEmpty()) {
+            // 无 context 时也尽量用缓存的 WM 拆。
+            val left = trackedWmViews.toList()
+            trackedWmViews.clear()
+            for (v in left) {
+                if (!removeOverlayViewSafely(v)) {
+                    trackedWmViews.add(v)
+                }
+            }
         }
 
         selectedCategoryId = null
@@ -1420,33 +1474,96 @@ object PaymentOverlayManager {
         finishHostActivity(act)
     }
 
-    /** 多路径拆除 WM 窗，避免 unlock 后 removeView 抛错导致「关不掉」。 */
-    private fun removeOverlayViewSafely(view: View) {
-        val app = view.context.applicationContext
+
+    private fun trackWmView(view: View) {
+        if (trackedWmViews.contains(view)) return
+        trackedWmViews.add(view)
+        while (trackedWmViews.size > MAX_TRACKED_WM_VIEWS) {
+            val oldest = trackedWmViews.removeAt(0)
+            if (oldest !== view) {
+                // Best-effort detach; GONE if remove fails.
+                removeOverlayViewSafely(oldest)
+            }
+        }
+    }
+
+    /** 强拆 [trackedWmViews] 里所有尚未成功 remove 的窗。 */
+    private fun purgeAllTrackedWmViews(context: Context, reason: String) {
+        if (trackedWmViews.isEmpty()) {
+            overlayView = null
+            return
+        }
         val wm = windowManager
-            ?: app.getSystemService(Context.WINDOW_SERVICE) as? WindowManager
+            ?: context.applicationContext.getSystemService(Context.WINDOW_SERVICE) as? WindowManager
         windowManager = wm
-        // 锁屏后再解锁：isAttachedToWindow 有时已是 false，但仍要强拆。
+        val left = ArrayList<View>()
+        val snapshot = trackedWmViews.toList()
+        trackedWmViews.clear()
+        for (v in snapshot) {
+            if (!removeOverlayViewSafely(v)) {
+                left.add(v)
+            }
+        }
+        if (left.isNotEmpty()) {
+            // Cap: drop oldest stuck views after force-GONE so list cannot grow forever.
+            val capped = if (left.size > MAX_TRACKED_WM_VIEWS) {
+                left.takeLast(MAX_TRACKED_WM_VIEWS)
+            } else {
+                left
+            }
+            trackedWmViews.addAll(capped)
+            Log.w(
+                TAG,
+                "$reason purge: ${left.size} overlay(s) still stuck (kept ${capped.size})",
+            )
+        } else {
+            Log.i(TAG, "$reason purge: all tracked overlays removed")
+        }
+        if (overlayView != null && !trackedWmViews.contains(overlayView)) {
+            overlayView = null
+        }
+    }
+
+    /** 多路径拆除 WM 窗；成功返回 true。 */
+    private fun removeOverlayViewSafely(view: View): Boolean {
+        val app = try {
+            view.context.applicationContext
+        } catch (_: Exception) {
+            null
+        }
+        val wm = windowManager
+            ?: app?.getSystemService(Context.WINDOW_SERVICE) as? WindowManager
+        windowManager = wm
         try {
             wm?.removeViewImmediate(view)
             Log.i(TAG, "overlay removed via removeViewImmediate")
-            return
+            return true
         } catch (e: Exception) {
             Log.w(TAG, "removeViewImmediate failed: ${e.message}")
         }
         try {
             wm?.removeView(view)
             Log.i(TAG, "overlay removed via removeView")
-            return
+            return true
         } catch (e: Exception) {
             Log.w(TAG, "removeView failed: ${e.message}")
         }
         try {
             (view.parent as? ViewGroup)?.removeView(view)
             Log.i(TAG, "overlay removed via parent.removeView")
+            return true
         } catch (e: Exception) {
-            Log.e(TAG, "all remove paths failed — view may stick until process death", e)
+            Log.e(TAG, "all remove paths failed — view may stick", e)
         }
+        // 最后手段：GONE + 透明，减轻「看得见」的残留感（仍占一层，但尽量不可点）。
+        try {
+            view.visibility = View.GONE
+            view.alpha = 0f
+            view.isClickable = false
+            view.isFocusable = false
+        } catch (_: Exception) {
+        }
+        return false
     }
 
     private fun finishHostActivity(act: Activity?) {
@@ -1469,13 +1586,14 @@ object PaymentOverlayManager {
      * 这里再扫一次；若进程里还有 [overlayView] 就强拆。
      */
     private fun forceRemoveOrphanOverlay(context: Context) {
+        purgeAllTrackedWmViews(context, reason = "force_orphan")
         val view = overlayView
         if (view != null) {
             Log.w(TAG, "force-remove orphan overlay still referenced")
-            dismissInternal()
-            return
+            overlayView = null
+            removeOverlayViewSafely(view)
         }
-        // 引用已丢：无法再 remove；至少确保 Activity 宿主关掉。
+        // Activity 宿主一并关掉。
         finishHostActivity(hostActivity?.get())
         hostActivity = null
     }
