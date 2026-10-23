@@ -47,7 +47,6 @@ Future<bool?> showBookkeepingSheet(
     isScrollControlled: true,
     useSafeArea: true,
     showDragHandle: true,
-    backgroundColor: Theme.of(context).colorScheme.surface,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
     ),
@@ -85,6 +84,13 @@ class BookkeepingSheet extends ConsumerStatefulWidget {
 
 class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
   String _type = 'out';
+
+  /// 分类 kind：与交易类型对齐（含 transfer）。
+  String get _categoryKind => switch (_type) {
+        'in' => 'in',
+        'transfer' => 'transfer',
+        _ => 'out',
+      };
   String _amountText = '0';
   String _toAmountText = '0';
   String? _fxRateText;
@@ -170,10 +176,10 @@ List<Account> _accounts = [];
     if (last != null && _type == 'out') {
       _type = last.type;
     }
-    var cats = await db.loadCategories(
-      ledgerId,
-      _type == 'in' ? 'in' : 'out',
-    );
+    if (_type == 'transfer') {
+      await db.ensureDefaultTransferCategory(ledgerId);
+    }
+    var cats = await db.loadCategories(ledgerId, _categoryKind);
     // 备注 → 上次分类（手动记账同样生效）。
     String? recalledCategory;
     if (existing == null && template == null) {
@@ -247,7 +253,7 @@ List<Account> _accounts = [];
             rememberedAcc ?? (accounts.isNotEmpty ? accounts.first.id : null);
         _toAccountId = accounts.length > 1 ? accounts[1].id : null;
         final preferredCat = recalledCategory ??
-            last?.categoryByType[_type == 'in' ? 'in' : 'out'] ??
+            last?.categoryByType[_categoryKind] ??
             last?.categoryId;
         _categoryId = preferredCat != null &&
                 cats.any((c) => c.id == preferredCat)
@@ -264,12 +270,18 @@ List<Account> _accounts = [];
       if (existing.categoryId != null) {
         setState(() => _categoryId = existing.categoryId);
       }
-    } else if (template != null && template.type != 'out' &&
-        template.type != 'transfer') {
-      // 模板是收入时，分类列表要换成对应方向。
+    } else if (template != null && template.type != 'out') {
+      // 模板是收入 / 转账时，分类列表要换成对应方向。
+      if (template.type == 'transfer') {
+        await db.ensureDefaultTransferCategory(ledgerId);
+      }
       cats = await db.loadCategories(
         ledgerId,
-        template.type == 'in' ? 'in' : 'out',
+        template.type == 'in'
+            ? 'in'
+            : template.type == 'transfer'
+                ? 'transfer'
+                : 'out',
       );
       if (mounted) {
         setState(() {
@@ -290,12 +302,12 @@ List<Account> _accounts = [];
   }
 
   Future<void> _reloadCategories({bool resetSelection = false}) async {
-    if (_ledgerId == null || _type == 'transfer') return;
+    if (_ledgerId == null) return;
     final db = ref.read(databaseProvider);
-    final cats = await db.loadCategories(
-      _ledgerId!,
-      _type == 'in' ? 'in' : 'out',
-    );
+    if (_type == 'transfer') {
+      await db.ensureDefaultTransferCategory(_ledgerId!);
+    }
+    final cats = await db.loadCategories(_ledgerId!, _categoryKind);
     setState(() {
       _categories = cats;
       if (resetSelection ||
@@ -304,7 +316,7 @@ List<Account> _accounts = [];
         _categoryId = cats.isNotEmpty ? cats.first.id : null;
       }
     });
-    if (resetSelection && _categoryId != null) {
+    if (resetSelection && _categoryId != null && _type != 'transfer') {
       await _applyCategoryMemory(_categoryId!);
     }
   }
@@ -470,9 +482,7 @@ List<Account> _accounts = [];
   }) async {
     final major = _evalAmount(_amountText);
     if (major == null || major <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('\u8bf7\u8f93\u5165\u91d1\u989d')),
-      );
+      showGlassSnackBar(context, '\u8bf7\u8f93\u5165\u91d1\u989d');
       return;
     }
     // Collapse expression to evaluated major so subsequent FX math uses a plain number.
@@ -489,21 +499,11 @@ List<Account> _accounts = [];
 
     if (_type == 'transfer') {
       if (_toAccountId == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('\u8bf7\u9009\u62e9\u8f6c\u5165\u8d44\u4ea7\u8d26\u6237'),
-          ),
-        );
+        showGlassSnackBar(context, '\u8bf7\u9009\u62e9\u8f6c\u5165\u8d44\u4ea7\u8d26\u6237');
         return;
       }
       if (_toAccountId == _accountId) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              '\u8f6c\u51fa\u4e0e\u8f6c\u5165\u8d44\u4ea7\u8d26\u6237\u4e0d\u80fd\u76f8\u540c',
-            ),
-          ),
-        );
+        showGlassSnackBar(context, '\u8f6c\u51fa\u4e0e\u8f6c\u5165\u8d44\u4ea7\u8d26\u6237\u4e0d\u80fd\u76f8\u540c',);
         return;
       }
       if (_isCrossCurrency && !skipCrossPrompt) {
@@ -514,10 +514,9 @@ List<Account> _accounts = [];
           return;
         }
       }
-    } else if (_categoryId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('\u8bf7\u9009\u62e9\u5206\u7c7b')),
-      );
+    }
+    if (_categoryId == null) {
+      showGlassSnackBar(context, '\u8bf7\u9009\u62e9\u5206\u7c7b');
       return;
     }
 
@@ -532,11 +531,7 @@ List<Account> _accounts = [];
         if (_useToAmount || (double.tryParse(_toAmountText) ?? 0) > 0) {
           final toMajor = double.tryParse(_toAmountText) ?? 0;
           if (toMajor <= 0) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('\u8bf7\u8f93\u5165\u5bf9\u65b9\u91d1\u989d'),
-              ),
-            );
+            showGlassSnackBar(context, '\u8bf7\u8f93\u5165\u5bf9\u65b9\u91d1\u989d');
             return;
           }
           toAmountMinor = toMinor(_toCurrency, toMajor);
@@ -544,11 +539,7 @@ List<Account> _accounts = [];
         } else {
           fxRate = double.tryParse(_fxRateText ?? '');
           if (fxRate == null || fxRate <= 0) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('\u8bf7\u8f93\u5165\u6709\u6548\u6c47\u7387'),
-              ),
-            );
+            showGlassSnackBar(context, '\u8bf7\u8f93\u5165\u6709\u6548\u6c47\u7387');
             return;
           }
           toAmountMinor = toMinor(_toCurrency, major * fxRate);
@@ -559,7 +550,10 @@ List<Account> _accounts = [];
 
       final note = _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim();
       final toAcc = _type == 'transfer' ? _toAccountId : null;
-      final cat = _type == 'transfer' ? null : _categoryId;
+      var cat = _categoryId;
+      if (_type == 'transfer' && cat == null && _ledgerId != null) {
+        cat = (await db.ensureDefaultTransferCategory(_ledgerId!)).id;
+      }
       if (widget.existing != null) {
         await db.updateManualTransaction(
           id: widget.existing!.id,
@@ -593,9 +587,9 @@ List<Account> _accounts = [];
       }
       // 记住这次的选择：下次「记一笔」直接沿用资产账户 / 分类。
       if (!mounted) return;
-      if (_type != 'transfer' && _accountId != null && _categoryId != null) {
+      if (_accountId != null && _categoryId != null) {
         final byType = Map<String, String>.from(_lastChoice?.categoryByType ?? {});
-        byType[_type == 'in' ? 'in' : 'out'] = _categoryId!;
+        byType[_categoryKind] = _categoryId!;
         final choice = LastBookkeepingChoice(
           type: _type,
           accountId: _accountId,
@@ -621,8 +615,7 @@ List<Account> _accounts = [];
           _tags = [];
           _happenAt = DateTime.now();
         });
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('已保存，可继续记账')));
+        showGlassSnackBar(context, '已保存，可继续记账');
       } else {
         Navigator.of(context).pop(true);
       }
@@ -871,13 +864,9 @@ List<Account> _accounts = [];
                                           key: Key('bk_type_seg_${entry.$1}'),
                                           onTap: () async {
                                             setState(() => _type = entry.$1);
-                                            if (entry.$1 == 'transfer') {
-                                              setState(() => _categoryId = null);
-                                            } else {
-                                              await _reloadCategories(
-                                                resetSelection: true,
-                                              );
-                                            }
+                                            await _reloadCategories(
+                                              resetSelection: true,
+                                            );
                                           },
                                           child: Column(
                                             children: [
@@ -986,27 +975,26 @@ List<Account> _accounts = [];
                                   label: hide ? '**:**' : _happenAtLabel,
                                   onTap: _pickHappenAt,
                                 ),
-                                if (_type != 'transfer')
-                                  Builder(
-                                    builder: (context) {
-                                      final cat = _categoryById(_categoryId);
-                                      return _MetaChip(
-                                        leading: cat == null
-                                            ? null
-                                            : CentliIconChip(
-                                                name: cat.name,
-                                                kind: cat.kind,
-                                                iconKey: cat.icon,
-                                                size: 16,
-                                              ),
-                                        icon: cat == null
-                                            ? Icons.category_outlined
-                                            : null,
-                                        label: cat?.name ?? '分类',
-                                        onTap: _pickCategory,
-                                      );
-                                    },
-                                  ),
+                                Builder(
+                                  builder: (context) {
+                                    final cat = _categoryById(_categoryId);
+                                    return _MetaChip(
+                                      leading: cat == null
+                                          ? null
+                                          : CentliIconChip(
+                                              name: cat.name,
+                                              kind: cat.kind,
+                                              iconKey: cat.icon,
+                                              size: 16,
+                                            ),
+                                      icon: cat == null
+                                          ? Icons.category_outlined
+                                          : null,
+                                      label: cat?.name ?? '分类',
+                                      onTap: _pickCategory,
+                                    );
+                                  },
+                                ),
                                 if (_type != 'transfer')
                                   Builder(
                                     builder: (context) {

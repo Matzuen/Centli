@@ -42,6 +42,7 @@ Future<SmartBookkeepingOutcome> submitSmartBookkeepingText({
 
   final outCats = await db.loadCategories(ledgerId, 'out');
   final inCats = await db.loadCategories(ledgerId, 'in');
+  final transferCats = await db.loadCategories(ledgerId, 'transfer');
   final catRefs = <CategoryRef>[
     for (final c in outCats)
       CategoryRef(
@@ -51,6 +52,13 @@ Future<SmartBookkeepingOutcome> submitSmartBookkeepingText({
         kind: c.kind,
       ),
     for (final c in inCats)
+      CategoryRef(
+        name: c.name,
+        id: c.id,
+        parentId: c.parentId,
+        kind: c.kind,
+      ),
+    for (final c in transferCats)
       CategoryRef(
         name: c.name,
         id: c.id,
@@ -100,8 +108,8 @@ Future<SmartBookkeepingOutcome> submitSmartBookkeepingText({
   List<Category> cats = outCats;
   if (type == 'in') {
     cats = inCats;
-  } else if (type != 'transfer') {
-    cats = outCats;
+  } else if (type == 'transfer') {
+    cats = transferCats;
   }
 
   String? categoryId;
@@ -184,6 +192,8 @@ Future<SmartBookkeepingOutcome> submitSmartBookkeepingText({
     if (toAccountId == accountId) {
       return SmartBookkeepingOutcome.fail('转出与转入资产账户不能相同');
     }
+    categoryId ??= (await db.ensureDefaultTransferCategory(ledgerId)).id;
+    categoryResolved = true;
   } else if (!categoryResolved || categoryId == null) {
     return SmartBookkeepingOutcome.fail('未能识别分类，请换种说法或用手动记账');
   }
@@ -225,7 +235,7 @@ Future<SmartBookkeepingOutcome> submitSmartBookkeepingText({
     currency: currency,
     accountId: accountId!,
     toAccountId: type == 'transfer' ? toAccountId : null,
-    categoryId: type == 'transfer' ? null : categoryId,
+    categoryId: categoryId,
     note: note,
     happenAt: parsed.happenAt,
     toAmountMinor: toAmountMinor,

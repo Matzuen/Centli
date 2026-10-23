@@ -38,7 +38,7 @@ class _CategoriesPageState extends ConsumerState<CategoriesPage>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 2, vsync: this);
+    _tabs = TabController(length: 3, vsync: this);
     _tabs.addListener(() {
       if (!_tabs.indexIsChanging) setState(() {});
     });
@@ -50,7 +50,11 @@ class _CategoriesPageState extends ConsumerState<CategoriesPage>
     super.dispose();
   }
 
-  String get _kind => _tabs.index == 0 ? 'out' : 'in';
+  String get _kind => switch (_tabs.index) {
+        1 => 'in',
+        2 => 'transfer',
+        _ => 'out',
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -68,6 +72,7 @@ class _CategoriesPageState extends ConsumerState<CategoriesPage>
                 tabs: const [
                   Tab(text: '支出'),
                   Tab(text: '收入'),
+                  Tab(text: '转账'),
                 ],
               ),
               Padding(
@@ -125,6 +130,11 @@ class _CategoriesPageState extends ConsumerState<CategoriesPage>
               _CategoryKindList(
                 ledgerId: ledgerId,
                 kind: 'in',
+                showArchived: _showArchived,
+              ),
+              _CategoryKindList(
+                ledgerId: ledgerId,
+                kind: 'transfer',
                 showArchived: _showArchived,
               ),
             ],
@@ -267,16 +277,16 @@ class _CategoryKindList extends ConsumerWidget {
                       leading: CentliIconChip(name: child.name, kind: child.kind, iconKey: child.icon, size: 40),
                       title: Text(child.name),
                       subtitle: const Text('二级'),
-                      trailing: PopupMenuButton<String>(
+                      trailing: CentliGlassPopupButton<String>(
                         onSelected: (v) {
                           if (v == 'unarchive') {
                             promptUnarchiveCategory(context, ref, child);
                           }
                         },
-                        itemBuilder: (ctx) => const [
-                          PopupMenuItem(
+                        items: const [
+                          CentliMenuItem(
                             value: 'unarchive',
-                            child: Text('取消归档'),
+                            label: '取消归档',
                           ),
                         ],
                       ),
@@ -332,16 +342,16 @@ class _CategoryKindList extends ConsumerWidget {
                         leading: CentliIconChip(name: child.name, kind: child.kind, iconKey: child.icon, size: 40),
                         title: Text(child.name),
                         subtitle: const Text('二级'),
-                        trailing: PopupMenuButton<String>(
+                        trailing: CentliGlassPopupButton<String>(
                           onSelected: (v) {
                             if (v == 'unarchive') {
                               promptUnarchiveCategory(context, ref, child);
                             }
                           },
-                          itemBuilder: (ctx) => const [
-                            PopupMenuItem(
+                          items: const [
+                            CentliMenuItem(
                               value: 'unarchive',
-                              child: Text('取消归档'),
+                              label: '取消归档',
                             ),
                           ],
                         ),
@@ -391,13 +401,13 @@ class _CategoryTreeNode extends StatelessWidget {
   final ValueChanged<Category>? onUnarchiveChild;
 
 
-  PopupMenuButton<String> _menu({
+  Widget _menu({
     VoidCallback? onRename,
     VoidCallback? onArchive,
     VoidCallback? onUnarchive,
     VoidCallback? onAddChild,
   }) {
-    return PopupMenuButton<String>(
+    return CentliGlassPopupButton<String>(
       onSelected: (v) {
         switch (v) {
           case 'rename':
@@ -410,22 +420,16 @@ class _CategoryTreeNode extends StatelessWidget {
             onUnarchive?.call();
         }
       },
-      itemBuilder: (ctx) {
-        if (showArchived) {
-          return const [
-            PopupMenuItem(value: 'unarchive', child: Text('取消归档')),
-          ];
-        }
-        return [
-          const PopupMenuItem(value: 'rename', child: Text('重命名')),
+      items: [
+        if (showArchived)
+          const CentliMenuItem(value: 'unarchive', label: '取消归档')
+        else ...[
+          const CentliMenuItem(value: 'rename', label: '重命名'),
           if (onAddChild != null)
-            const PopupMenuItem(
-              value: 'child',
-              child: Text('添加子分类'),
-            ),
-          const PopupMenuItem(value: 'archive', child: Text('归档')),
-        ];
-      },
+            const CentliMenuItem(value: 'child', label: '添加子分类'),
+          const CentliMenuItem(value: 'archive', label: '归档'),
+        ],
+      ],
     );
   }
 
@@ -639,9 +643,7 @@ Future<void> promptArchiveCategory(
   if (ok != true) return;
   await db.archiveCategory(cat.id);
   if (context.mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('已归档 ${cat.name}')),
-    );
+    showGlassSnackBar(context, '已归档 ${cat.name}');
   }
 }
 
@@ -673,9 +675,7 @@ Future<void> promptUnarchiveCategory(
   if (ok != true) return;
   await ref.read(databaseProvider).unarchiveCategory(cat.id);
   if (context.mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('已取消归档 ${cat.name}')),
-    );
+    showGlassSnackBar(context, '已取消归档 ${cat.name}');
   }
 }
 

@@ -18,9 +18,10 @@ import 'glass.dart';
 /// Highlight colour for search keywords on transaction rows.
 const Color kKeywordHighlight = CentliTheme.brandPrimary;
 
-/// Expense / income accent colors (reference screenshot).
+/// Expense / income / transfer accent colors.
 const Color kTxnExpenseRed = Color(0xFFE53935);
 const Color kTxnIncomeGreen = Color(0xFF43A047);
+const Color kTxnTransferBlue = Color(0xFF1E88E5);
 
 /// Shared transaction row: category icon · name / 资产账户·备注 · amount+time.
 /// Used by home, search, stats drill-down (and mirrored on account detail).
@@ -57,7 +58,7 @@ class TxnListTile extends ConsumerWidget {
     final amountColor = isBalanceAdjust
         ? Theme.of(context).colorScheme.onSurfaceVariant
         : isTransfer
-        ? Theme.of(context).colorScheme.onSurface
+        ? kTxnTransferBlue
         : (isOut ? kTxnExpenseRed : kTxnIncomeGreen);
     final time = DateTime.fromMillisecondsSinceEpoch(
       txn.happenAt,
@@ -212,11 +213,10 @@ class TxnListTile extends ConsumerWidget {
   }
 
   String _categoryTitle(Category? cat) {
-    if (txn.type == 'transfer') return '\u8f6c\u8d26';
-    var base = '\u672a\u5206\u7c7b';
     final name = (cat?.name ?? '').trim();
-    if (name.isNotEmpty) base = name;
-    return base;
+    if (name.isNotEmpty) return name;
+    if (txn.type == 'transfer') return '\u8f6c\u8d26';
+    return '\u672a\u5206\u7c7b';
   }
 
   /// 资产账户、备注、标签同一行，样式一致，用「 · 」隔开。
@@ -320,9 +320,7 @@ class TxnListTile extends ConsumerWidget {
     }
     await db.softDeleteTransaction(txn.id);
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('已删除，可在回收站恢复')),
-    );
+    showGlassSnackBar(context, '已删除，可在回收站恢复');
   }
 }
 

@@ -4,6 +4,7 @@ import 'package:centli/data/db/database_provider.dart';
 import 'package:centli/features/ledger/bookkeeping_sheet.dart';
 import 'package:centli/features/ledger/ledger_detail_page.dart';
 import 'package:centli/features/security/app_lock_controller.dart';
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -265,13 +266,15 @@ class _FakeDb implements CentliDatabase {
     String? type,
     int? amountMinor,
     String? accountId,
-    String? toAccountId,
+    Value<String?>? toAccountId,
     String? categoryId,
     DateTime? happenAt,
     List<String>? tags,
     String? note,
     int? includeInStat,
     int? includeInBudget,
+    Value<int?>? toAmountMinor,
+    Value<double?>? fxRate,
   }) async {
     updates.add(<String, Object?>{
       'id': id,

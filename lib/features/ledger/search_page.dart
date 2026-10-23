@@ -54,6 +54,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   List<Account> _accounts = const [];
   List<Category> _outCats = const [];
   List<Category> _inCats = const [];
+  List<Category> _transferCats = const [];
 
   List<String> get _keywords => searchKeywords(
         _query.isEmpty ? _controller.text : _query,
@@ -91,11 +92,13 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     final accounts = await db.loadAccountsIncludingArchived(ledger.id);
     final outCats = await db.loadCategories(ledger.id, 'out');
     final inCats = await db.loadCategories(ledger.id, 'in');
+    final transferCats = await db.loadCategories(ledger.id, 'transfer');
     if (!mounted) return;
     setState(() {
       _accounts = accounts;
       _outCats = outCats;
       _inCats = inCats;
+      _transferCats = transferCats;
     });
   }
 
@@ -197,7 +200,8 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   List<Category> _catsForType(String? type) {
     if (type == 'in') return _inCats;
     if (type == 'out') return _outCats;
-    return [..._outCats, ..._inCats];
+    if (type == 'transfer') return _transferCats;
+    return [..._outCats, ..._inCats, ..._transferCats];
   }
 
   Future<void> _pickCategory() async {
@@ -426,7 +430,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
 
   String? _categoryName(String? id) {
     if (id == null) return null;
-    for (final c in [..._outCats, ..._inCats]) {
+    for (final c in [..._outCats, ..._inCats, ..._transferCats]) {
       if (c.id == id) return c.name;
     }
     return id;
@@ -458,6 +462,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
         accounts: _accounts,
         outCats: _outCats,
         inCats: _inCats,
+        transferCats: _transferCats,
       ),
     );
     if (result == null || !mounted) return;
@@ -857,12 +862,14 @@ class _SearchFilterSheet extends StatefulWidget {
     required this.accounts,
     required this.outCats,
     required this.inCats,
+    required this.transferCats,
   });
 
   final _SearchFilters initial;
   final List<Account> accounts;
   final List<Category> outCats;
   final List<Category> inCats;
+  final List<Category> transferCats;
 
   @override
   State<_SearchFilterSheet> createState() => _SearchFilterSheetState();
@@ -877,7 +884,8 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
   List<Category> get _catsForType {
     if (_type == 'in') return widget.inCats;
     if (_type == 'out') return widget.outCats;
-    return [...widget.outCats, ...widget.inCats];
+    if (_type == 'transfer') return widget.transferCats;
+    return [...widget.outCats, ...widget.inCats, ...widget.transferCats];
   }
 
   @override
@@ -913,11 +921,11 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
                       onSelected: (_) {
                         setState(() {
                           _type = opt.$1;
-                          if (_categoryId != null && _type != null && _type != 'transfer') {
-                            final ok = _catsForType.any((c) => c.id == _categoryId);
+                          if (_categoryId != null && _type != null) {
+                            final ok =
+                                _catsForType.any((c) => c.id == _categoryId);
                             if (!ok) _categoryId = null;
                           }
-                          if (_type == 'transfer') _categoryId = null;
                         });
                       },
                     ),
@@ -945,9 +953,7 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
                       child: Text(c.name),
                     ),
                 ],
-                onChanged: _type == 'transfer'
-                    ? null
-                    : (v) => setState(() => _categoryId = v),
+                onChanged: (v) => setState(() => _categoryId = v),
               ),
               const SizedBox(height: CentliSpacing.sectionLoose),
               Text('资产账户', style: Theme.of(context).textTheme.labelLarge),

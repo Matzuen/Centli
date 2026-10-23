@@ -1,3 +1,4 @@
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -184,7 +185,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     final isTransfer = txn.type == 'transfer';
     final prefix = isTransfer ? '' : (isOut ? '-' : '+');
     final amountColor = isTransfer
-        ? scheme.onSurface
+        ? CentliTheme.transferBlue
         : (isOut ? scheme.error : scheme.primary);
 
     return CentliGradientScaffold(
@@ -530,9 +531,10 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       final assetTypes = await db.loadAssetTypes(txn.ledgerId);
       final outCats = await db.loadCategories(txn.ledgerId, 'out');
       final inCats = await db.loadCategories(txn.ledgerId, 'in');
+      final transferCats = await db.loadCategories(txn.ledgerId, 'transfer');
       final tags = await db.listDistinctTags(txn.ledgerId);
       // Keep archived current category selectable / displayable.
-      var cats = [...outCats, ...inCats];
+      var cats = [...outCats, ...inCats, ...transferCats];
       final cur = _categoryId;
       if (cur != null && !cats.any((c) => c.id == cur)) {
         final c = await db.getCategory(cur);
@@ -543,6 +545,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
         assetTypes: assetTypes,
         outCats: outCats,
         inCats: inCats,
+        transferCats: transferCats,
         categories: cats,
         tagSuggestions: tags,
       );
@@ -559,9 +562,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       return s;
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('加载选项失败: $e')),
-        );
+        showGlassSnackBar(context, '加载选项失败: $e');
       }
       return null;
     }
@@ -595,26 +596,67 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       final String direction = type ?? _type;
       if (category != null) {
         final s = await _loadSources();
-        final pool = direction == 'in' ? s.inCats : s.outCats;
+        final pool = switch (direction) {
+          'in' => s.inCats,
+          'transfer' => s.transferCats,
+          _ => s.outCats,
+        };
         if (pool.isNotEmpty && !pool.any((c) => c.id == category)) {
           category = pool.first.id;
         }
+      } else if (direction == 'transfer') {
+        final s = await _loadSources();
+        if (s.transferCats.isNotEmpty) {
+          category = s.transferCats.first.id;
+        } else {
+          category = (await ref
+                  .read(databaseProvider)
+                  .ensureDefaultTransferCategory(txn.ledgerId))
+              .id;
+        }
       }
-      final toAccount = direction == 'transfer'
-          ? snapshot.toAccount
-          : (snapshot.toAccount ?? txn.toAccountId);
+      final fromAccount = snapshot.account ?? _accountId;
+      Value<String?>? toAccountValue;
+      Value<int?>? toAmountValue;
+      Value<double?>? fxRateValue;
+      if (direction == 'transfer') {
+        final to = snapshot.toAccount ?? _toAccountId;
+        if (to == null || to.isEmpty || to == fromAccount) {
+          if (mounted) {
+            showGlassSnackBar(context, '转账请选择不同的转入资产账户');
+            setState(() => _saving = false);
+          }
+          return false;
+        }
+        toAccountValue = Value(to);
+        // 同币种：对方金额跟转出对齐；跨币种保留已有 to_amount / fx。
+        final fromCcy = _currencyOfAccount(fromAccount) ?? txn.currency;
+        final toCcy = _currencyOfAccount(to) ?? fromCcy;
+        if (fromCcy == toCcy) {
+          final amt = amount ?? _amountMinor;
+          toAmountValue = Value(amt);
+          fxRateValue = const Value(null);
+        }
+      } else if (type != null && type != 'transfer') {
+        // 从转账改回收支：清掉转入相关字段，避免错挂余额。
+        toAccountValue = const Value(null);
+        toAmountValue = const Value(null);
+        fxRateValue = const Value(null);
+      }
       await ref.read(databaseProvider).updateTransactionFields(
             id: txn.id,
             type: type,
             amountMinor: amount,
             accountId: snapshot.account,
-            toAccountId: toAccount,
+            toAccountId: toAccountValue,
             categoryId: category,
             happenAt: snapshot.happen,
             tags: snapshot.tags,
             note: snapshot.note,
             includeInStat: snapshot.stat,
             includeInBudget: snapshot.budget,
+            toAmountMinor: toAmountValue,
+            fxRate: fxRateValue,
           );
       if (!mounted) return true;
       setState(() {
@@ -632,9 +674,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       return true;
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('保存失败: $e。可再点「保存」重试')),
-        );
+        showGlassSnackBar(context, '保存失败: $e。可再点「保存」重试');
         setState(() {});
       }
       return false;
@@ -646,9 +686,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
   Future<void> _save() async {
     final ok = await _commit();
     if (ok && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已保存')),
-      );
+      showGlassSnackBar(context, '已保存');
     }
   }
 
@@ -692,7 +730,6 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     setState(() {
       _pendingType = picked;
       if (picked == 'transfer') {
-        _pendingCategoryId = null;
         var to = _toAccountId;
         if (to == null || to == _accountId) {
           final others = _sourceCache?.accounts
@@ -706,19 +743,31 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
         _pendingToAccountId = null;
       }
     });
-    if (picked != 'transfer') {
-      // New direction: keep the category only when it belongs to that side,
-      // otherwise fall back to the first category of the new direction.
-      final s = await _ensureSources();
-      final pool = picked == 'in' ? s?.inCats ?? const [] : s?.outCats ?? const [];
-      if (mounted) {
-        setState(() {
-          _pendingCategoryId =
-              _categoryId ?? (pool.isEmpty ? null : pool.first.id);
-        });
-      }
+    // New direction: keep the category only when it belongs to that side,
+    // otherwise fall back to the first category of the new direction.
+    final s = await _ensureSources();
+    var pool = switch (picked) {
+      'in' => s?.inCats ?? const <Category>[],
+      'transfer' => s?.transferCats ?? const <Category>[],
+      _ => s?.outCats ?? const <Category>[],
+    };
+    if (picked == 'transfer' && pool.isEmpty) {
+      final ensured = await ref
+          .read(databaseProvider)
+          .ensureDefaultTransferCategory(txn.ledgerId);
+      _sources = null;
+      _sourceCache = null;
+      final refreshed = await _ensureSources();
+      pool = refreshed?.transferCats ?? [ensured];
     }
-    if (mounted) setState(() {});
+    if (mounted) {
+      setState(() {
+        final keep = _categoryId;
+        _pendingCategoryId = keep != null && pool.any((c) => c.id == keep)
+            ? keep
+            : (pool.isEmpty ? null : pool.first.id);
+      });
+    }
   }
 
   Future<void> _editAccount(BuildContext context) async {
@@ -775,7 +824,11 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
   Future<void> _editCategory(BuildContext context) async {
     final s = await _ensureSources();
     if (s == null || !context.mounted) return;
-    final pool = _type == 'in' ? s.inCats : s.outCats;
+    final pool = switch (_type) {
+      'in' => s.inCats,
+      'transfer' => s.transferCats,
+      _ => s.outCats,
+    };
     final categories = pool.isEmpty ? s.categories : pool;
     final id = await showCategoryPickerSheet(
       context,
@@ -862,6 +915,17 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
   }
 
   Future<void> _editAmount(BuildContext context) async {
+    if (_isTransfer) {
+      final fromCcy = _currencyOfAccount(_accountId) ?? txn.currency;
+      final toId = _toAccountId;
+      final toCcy =
+          toId == null ? fromCcy : (_currencyOfAccount(toId) ?? fromCcy);
+      if (fromCcy != toCcy) {
+        if (!context.mounted) return;
+        showGlassSnackBar(context, '跨币种转账请用「记一笔」修改金额与汇率');
+        return;
+      }
+    }
     final ccy = _currencyOfAccount(_accountId) ?? txn.currency;
     // Amt is stored in txn.currency (same ccy the amount row renders with).
     var text = fromMinor(txn.currency, _amountMinor)
@@ -873,9 +937,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     if (newText == null || !context.mounted) return;
     final major = evalAmountExpr(newText);
     if (major == null || major <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请输入有效金额')),
-      );
+      showGlassSnackBar(context, '请输入有效金额');
       return;
     }
     final minor = toMinor(ccy, major);
@@ -905,9 +967,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     if (ok != true || !context.mounted) return;
     await ref.read(databaseProvider).softDeleteTransaction(txn.id);
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已删除')),
-      );
+      showGlassSnackBar(context, '已删除');
       context.pop();
     }
   }
@@ -1193,6 +1253,7 @@ class _EditSources {
     required this.assetTypes,
     required this.outCats,
     required this.inCats,
+    required this.transferCats,
     required this.categories,
     required this.tagSuggestions,
   });
@@ -1201,6 +1262,7 @@ class _EditSources {
   final List<AssetType> assetTypes;
   final List<Category> outCats;
   final List<Category> inCats;
+  final List<Category> transferCats;
   final List<Category> categories;
   final List<String> tagSuggestions;
 }

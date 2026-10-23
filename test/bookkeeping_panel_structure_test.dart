@@ -148,14 +148,15 @@ void main() {
       await tester.pump(const Duration(milliseconds: 50));
     });
 
-    testWidgets('transfer hides category chip', (tester) async {
+    testWidgets('transfer shows category and account chips', (tester) async {
       await pumpPanel(tester);
 
       await tester.tap(find.byKey(const Key('bk_type_seg_transfer')));
       await tester.pumpAndSettle();
 
-      expect(find.text('分类'), findsNothing);
+      // 转账也有分类（默认「转账」），并显示转出 / 转入账户。
       expect(find.textContaining('转出'), findsWidgets);
+      expect(find.textContaining('转入'), findsWidgets);
 
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump(const Duration(milliseconds: 50));
