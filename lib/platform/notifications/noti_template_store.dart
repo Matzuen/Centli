@@ -16,7 +16,8 @@ import 'watched_package_resolve.dart';
 
 /// Hot-reloadable notification templates.
 ///
-/// Official (builtin / assets / documents override) stay read-only in UI.
+/// Official (builtin / assets / documents) 可在 UI 编辑，写入 documents 覆盖；
+/// 「恢复内置规则」仍可一键回落到 App 打包模板。
 /// User rules live in a separate documents file and are merged at load:
 /// `user ∪ (official − disabled)`.
 ///
@@ -520,6 +521,45 @@ abstract final class NotiTemplateStore {
     _ensureDistillMetaLocked(id);
     await _persistUserFile();
     _rebuildMerged();
+    await syncWatchedPackagesToNative();
+  }
+
+  /// 是否为当前已加载的内置规则 id（含 documents 覆盖包）。
+  static bool isOfficialTemplateId(String id) {
+    if (id.isEmpty) return false;
+    return _official.any((t) => t.id == id);
+  }
+
+  /// 编辑一条内置规则并写入 documents 覆盖包（不影响「我的规则」）。
+  ///
+  /// 仅允许改已有 id；新增内置规则请走导入规则包。可用
+  /// [rollbackOfficialToAsset] 恢复 App 打包模板。
+  static Future<void> upsertOfficialTemplate(NotiTemplate template) async {
+    await load();
+    final id = template.id.trim();
+    if (id.isEmpty) {
+      throw ArgumentError('内置规则 id 不能为空');
+    }
+    final idx = _official.indexWhere((t) => t.id == id);
+    if (idx < 0) {
+      throw StateError('找不到内置规则 $id（不能用此接口新建内置规则）');
+    }
+    final next = List<NotiTemplate>.from(_official);
+    next[idx] = template;
+    _official = next;
+    final map = <String, dynamic>{
+      'version': _version,
+      'updated_at': DateTime.now().toIso8601String().split('T').first,
+      'templates': [for (final t in _official) t.toJson()],
+    };
+    const encoder = JsonEncoder.withIndent('  ');
+    final raw = encoder.convert(map);
+    final parsed = _parseOfficialJson(raw);
+    if (parsed == null || parsed.templates.isEmpty) {
+      throw const FormatException('内置规则校验失败，未写入');
+    }
+    await _persistOfficialAtomic(raw, parsed);
+    await load(force: true);
     await syncWatchedPackagesToNative();
   }
 

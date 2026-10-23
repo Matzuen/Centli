@@ -224,7 +224,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
         ),
-        trailing: PopupMenuButton<String>(
+        trailing: CentliGlassPopupButton<String>(
           onSelected: (v) async {
             if (v == 'edit') {
               final changed = await context.push<bool>(
@@ -235,9 +235,9 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
               await _deleteUser(t);
             }
           },
-          itemBuilder: (_) => const [
-            PopupMenuItem(value: 'edit', child: Text('编辑')),
-            PopupMenuItem(value: 'delete', child: Text('删除')),
+          items: const [
+            CentliMenuItem(value: 'edit', label: '编辑'),
+            CentliMenuItem(value: 'delete', label: '删除', destructive: true),
           ],
         ),
         onTap: () async {
@@ -280,9 +280,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
       }
       await _reload();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已清理过期 AI 规则')),
-      );
+      showGlassSnackBar(context, '已清理过期 AI 规则');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -347,8 +345,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
       await NotiTemplateStore.deleteUserTemplate(t.id);
       await _reload();
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('已删除')));
+      showGlassSnackBar(context, '已删除');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -368,9 +365,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
       final explained = explainNotificationParse(raw, NotiTemplateStore.peek());
       setState(() => _tryResult = explained);
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('试跑失败: $e')),
-      );
+      showGlassSnackBar(context, '试跑失败: $e');
     }
   }
 
@@ -380,12 +375,10 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
       final json = await NotiTemplateStore.exportUserRulesJson();
       await Clipboard.setData(ClipboardData(text: json));
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('已复制我的规则 JSON 到剪贴板')));
+      showGlassSnackBar(context, '已复制我的规则 JSON 到剪贴板');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('导出失败: $e')));
+      showGlassSnackBar(context, '导出失败: $e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -402,20 +395,17 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
       final bytes = await files.first.readAsBytes();
       if (bytes.isEmpty) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('无法读取文件内容，请重试')),
-        );
+        showGlassSnackBar(context, '无法读取文件内容，请重试');
         return;
       }
       setState(() => _busy = true);
       final r = await NotiTemplateStore.importOfficialRulesJson(utf8.decode(bytes));
       await _reload();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(r.message)));
+      showGlassSnackBar(context, r.message);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('导入内置规则失败: $e')));
+      showGlassSnackBar(context, '导入内置规则失败: $e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -469,11 +459,10 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
       final r = await NotiTemplateStore.importOfficialRulesFromUrl(url);
       await _reload();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(r.message)));
+      showGlassSnackBar(context, r.message);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('网络导入失败: $e')));
+      showGlassSnackBar(context, '网络导入失败: $e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -484,7 +473,9 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
       context: context,
       builder: (ctx) => CentliGlassDialog(
         title: const Text('恢复内置规则'),
-        content: const Text('将用 App 打包的内置模板覆盖本地规则包（不影响「我的规则」）。确定？'),
+        content: const Text(
+          '将用 App 打包的内置模板覆盖本地规则包，包括你改过的内置规则（不影响「我的规则」）。确定？',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -503,11 +494,10 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
       final r = await NotiTemplateStore.rollbackOfficialToAsset();
       await _reload();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(r.message)));
+      showGlassSnackBar(context, r.message);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('恢复失败: $e')));
+      showGlassSnackBar(context, '恢复失败: $e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -524,8 +514,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
       final bytes = await f.readAsBytes();
       if (bytes.isEmpty) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('无法读取文件内容，请重试')));
+        showGlassSnackBar(context, '无法读取文件内容，请重试');
         return;
       }
       final fileText = utf8.decode(bytes);
@@ -561,12 +550,10 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
       );
       await _reload();
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('已导入 $n 条规则')));
+      showGlassSnackBar(context, '已导入 $n 条规则');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('导入失败: $e')));
+      showGlassSnackBar(context, '导入失败: $e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -647,13 +634,11 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
       );
       await _reload();
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('已从网络导入 $n 条规则')));
+      showGlassSnackBar(context, '已从网络导入 $n 条规则');
     } catch (e) {
       if (!mounted) return;
       final msg = e is FormatException ? (e.message) : '$e';
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('网络导入失败: $msg')));
+      showGlassSnackBar(context, '网络导入失败: $msg');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -680,8 +665,15 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
                 Text(t.displayName, style: Theme.of(ctx).textTheme.titleLarge),
                 const SizedBox(height: CentliSpacing.dense),
                 Text(
-                  disabled ? '已禁用 · 内置规则 · 只读' : '内置规则 · 只读',
+                  disabled ? '已禁用 · 内置规则' : '内置规则 · 可编辑',
                   style: Theme.of(ctx).textTheme.bodySmall,
+                ),
+                const SizedBox(height: CentliSpacing.dense),
+                Text(
+                  '修改会写入本机覆盖；右上角「恢复内置规则」可一键还原。',
+                  style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                      ),
                 ),
                 const SizedBox(height: CentliSpacing.section),
                 _kv('ID', t.id),
@@ -716,6 +708,20 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
                           Navigator.pop(ctx);
                           await _toggleOfficial(t, v);
                         },
+                ),
+                const SizedBox(height: CentliSpacing.item),
+                FilledButton.icon(
+                  onPressed: _busy
+                      ? null
+                      : () async {
+                          Navigator.pop(ctx);
+                          final changed = await context.push<bool>(
+                            '/me/auto/rules/edit?id=${Uri.encodeComponent(t.id)}',
+                          );
+                          if (changed == true) await _reload();
+                        },
+                  icon: const Icon(Icons.edit_outlined),
+                  label: const Text('编辑此规则'),
                 ),
               ],
             ),
@@ -754,7 +760,9 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
       appBar: AppBar(
         title: const Text('识别规则'),
         actions: [
-          PopupMenuButton<String>(
+          CentliGlassPopupButton<String>(
+            tooltip: '更多',
+            maxWidth: 260,
             onSelected: (v) {
               if (v == 'export') _exportUser();
               if (v == 'import') _importUser();
@@ -763,13 +771,16 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
               if (v == 'import_official_url') _importOfficialFromUrl();
               if (v == 'rollback_official') _rollbackOfficial();
             },
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'export', child: Text('导出我的规则')),
-              PopupMenuItem(value: 'import', child: Text('从文件导入我的规则')),
-              PopupMenuItem(value: 'import_url', child: Text('从网络导入我的规则')),
-              PopupMenuItem(value: 'import_official', child: Text('从文件导入内置规则')),
-              PopupMenuItem(value: 'import_official_url', child: Text('从网络导入内置规则')),
-              PopupMenuItem(value: 'rollback_official', child: Text('恢复内置规则')),
+            items: const [
+              CentliMenuItem(value: 'export', label: '导出我的规则'),
+              CentliMenuItem(value: 'import', label: '从文件导入我的规则'),
+              CentliMenuItem(value: 'import_url', label: '从网络导入我的规则'),
+              CentliMenuItem(value: 'import_official', label: '从文件导入内置规则'),
+              CentliMenuItem(
+                value: 'import_official_url',
+                label: '从网络导入内置规则',
+              ),
+              CentliMenuItem(value: 'rollback_official', label: '恢复内置规则'),
             ],
           ),
         ],
@@ -843,7 +854,8 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
                 const SizedBox(height: CentliSpacing.sectionLoose),
                 _collapsibleRuleSection(
                   title: '内置规则',
-                  subtitle: 'v$_version · $_source · ${_official.length} 条 · 只读可启停',
+                  subtitle:
+                      'v$_version · $_source · ${_official.length} 条 · 可编辑 / 启停 / 一键恢复',
                   expanded: _officialExpanded,
                   onExpanded: (v) => setState(() => _officialExpanded = v),
                   children: [
