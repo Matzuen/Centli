@@ -9,7 +9,7 @@ void main() {
     await db.seedDefaults();
 
     final ver = await db.customSelect('PRAGMA user_version').getSingle();
-    expect(ver.read<int>('user_version'), 12);
+    expect(ver.read<int>('user_version'), 13);
 
     final tables = {
       for (final r in await db

@@ -6,7 +6,7 @@ class Categories extends Table {
   TextColumn get ledgerId => text().named('ledger_id').references(Ledgers, #id)();
   TextColumn get name => text()();
   TextColumn get parentId => text().named('parent_id').nullable()();
-  TextColumn get kind => text()(); // out / in
+  TextColumn get kind => text()(); // out / in / transfer
   TextColumn get icon => text().nullable()();
   IntColumn get sortOrder =>
       integer().named('sort_order').withDefault(const Constant(0))();

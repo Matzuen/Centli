@@ -63,7 +63,7 @@ class CentliDatabase extends _$CentliDatabase {
   }
 
   @override
-  int get schemaVersion => 12;
+  int get schemaVersion => 13;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -200,6 +200,9 @@ WHERE pending_id IS NOT NULL
     GROUP BY pending_id
   )
 ''');
+          }
+          if (from < 13) {
+            await ensureTransferCategoriesForAllLedgers();
           }
           await _ensureQueryIndexes();
         },
@@ -556,6 +559,8 @@ WHERE pending_id IS NOT NULL
       );
     }
 
+    await seedDefaultTransferCategory(ledgerId, createdAt: ts);
+
     await into(appSettings).insert(
       AppSettingsCompanion.insert(
         key: 'current_ledger_id',
@@ -723,6 +728,69 @@ WHERE pending_id IS NOT NULL
     await setSetting('current_ledger_id', ledgerId);
   }
 
+  /// 每个账本默认一条 `kind=transfer`、名为「转账」的一级分类。
+  Future<Category> seedDefaultTransferCategory(
+    String ledgerId, {
+    int? createdAt,
+  }) async {
+    final ts = createdAt ?? nowMs();
+    final id = newId();
+    await into(categories).insert(
+      CategoriesCompanion.insert(
+        id: id,
+        ledgerId: ledgerId,
+        name: '转账',
+        icon: Value(defaultIconKeyForCategoryName('转账')),
+        kind: 'transfer',
+        sortOrder: const Value(0),
+        createdAt: ts,
+      ),
+    );
+    final row = await getCategory(id);
+    return row!;
+  }
+
+  /// 若账本尚无可用转账分类，则补一条「转账」并返回。
+  Future<Category> ensureDefaultTransferCategory(String ledgerId) async {
+    final existing = await (select(categories)
+          ..where(
+            (t) =>
+                t.ledgerId.equals(ledgerId) &
+                t.kind.equals('transfer') &
+                t.archived.equals(0),
+          )
+          ..orderBy([(t) => OrderingTerm.asc(t.sortOrder)]))
+        .get();
+    Category? named;
+    for (final c in existing) {
+      if (c.parentId == null && c.name == '转账') {
+        named = c;
+        break;
+      }
+    }
+    if (named != null) return named;
+    if (existing.isNotEmpty) {
+      for (final c in existing) {
+        if (c.parentId == null) return c;
+      }
+      return existing.first;
+    }
+    return seedDefaultTransferCategory(ledgerId);
+  }
+
+  /// v13：给已有账本补转账分类，并回填历史转账流水的 category_id。
+  Future<void> ensureTransferCategoriesForAllLedgers() async {
+    final all = await select(ledgers).get();
+    for (final ledger in all) {
+      final cat = await ensureDefaultTransferCategory(ledger.id);
+      await customStatement(
+        'UPDATE transactions SET category_id = ? '
+        "WHERE ledger_id = ? AND type = 'transfer' AND category_id IS NULL",
+        [cat.id, ledger.id],
+      );
+    }
+  }
+
   /// Create a new ledger with default accounts + categories (mirrors seedDefaults).
   Future<Ledger> createLedgerWithDefaults({
     required String name,
@@ -805,6 +873,8 @@ WHERE pending_id IS NOT NULL
         ),
       );
     }
+
+    await seedDefaultTransferCategory(ledgerId, createdAt: ts);
 
     if (switchTo) {
       await setCurrentLedgerId(ledgerId);
@@ -1772,22 +1842,24 @@ WHERE pending_id IS NOT NULL
     );
   }
 
-  /// Field-level update for bill-detail row edits. Only non-null arguments
-  /// change; source / occurrence / fx columns are preserved, so a row edit can
-  /// never reset the notification provenance. Category is re-derived from
-  /// [type] when the type changes.
+  /// Field-level update for bill-detail row edits. Only provided arguments
+  /// change; source / occurrence columns are preserved.
+  ///
+  /// 可空字段用 [Value] 包裹：`Value(null)` 表示清空，省略表示不改。
   Future<void> updateTransactionFields({
     required String id,
     String? type,
     int? amountMinor,
     String? accountId,
-    String? toAccountId,
+    Value<String?>? toAccountId,
     String? categoryId,
     DateTime? happenAt,
     List<String>? tags,
     String? note,
     int? includeInStat,
     int? includeInBudget,
+    Value<int?>? toAmountMinor,
+    Value<double?>? fxRate,
   }) async {
     await (update(transactions)..where((t) => t.id.equals(id))).write(
       TransactionsCompanion(
@@ -1795,9 +1867,7 @@ WHERE pending_id IS NOT NULL
         amountMinor:
             amountMinor != null ? Value(amountMinor) : const Value.absent(),
         accountId: accountId != null ? Value(accountId) : const Value.absent(),
-        toAccountId: toAccountId != null
-            ? Value(toAccountId)
-            : const Value.absent(),
+        toAccountId: toAccountId ?? const Value.absent(),
         categoryId: categoryId != null
             ? Value(categoryId)
             : const Value.absent(),
@@ -1811,6 +1881,8 @@ WHERE pending_id IS NOT NULL
         includeInBudget: includeInBudget != null
             ? Value(includeInBudget)
             : const Value.absent(),
+        toAmountMinor: toAmountMinor ?? const Value.absent(),
+        fxRate: fxRate ?? const Value.absent(),
         updatedAt: Value(nowMs()),
       ),
     );

@@ -27,6 +27,8 @@ String? defaultIconKeyForCategoryName(String name) {
       return 'red_packet';
     case '理财':
       return 'trending_up';
+    case '转账':
+      return 'transfer';
     default:
       return null;
   }
