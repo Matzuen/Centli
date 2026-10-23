@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -205,56 +203,6 @@ final homeDailyExpenseProvider = _dailyExpenseProvider;
 @visibleForTesting
 final homeDailyIncomeProvider = _dailyIncomeProvider;
 
-class _LedgerMenuTile extends StatelessWidget {
-  const _LedgerMenuTile({
-    required this.name,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String name;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 22,
-              child: selected
-                  ? Icon(
-                      Icons.check_rounded,
-                      size: 18,
-                      color: scheme.primary,
-                    )
-                  : null,
-            ),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Text(
-                name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                  color: selected ? scheme.primary : scheme.onSurface,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
 
@@ -270,97 +218,26 @@ class _HomePageState extends ConsumerState<HomePage> {
   /// Local month for calendar grid; independent of [homeRangeProvider].
   DateTime? _calendarMonth;
 
-  /// 锚点旁弹出毛玻璃账本菜单。
-  ///
-  /// 必须用 [Overlay] 插入（不能用新 Dialog 路由）：否则 [BackdropFilter]
-  /// 采不到首页内容，看起来就像实心白底。
   Future<void> _pickLedger({
     required BuildContext anchorContext,
     required String currentId,
     required List<Ledger> ledgers,
   }) async {
-    final overlayState = Overlay.of(anchorContext, rootOverlay: true);
-    final box = anchorContext.findRenderObject() as RenderBox?;
-    final overlayBox =
-        overlayState.context.findRenderObject() as RenderBox?;
-    if (box == null || overlayBox == null) return;
-
-    final origin = box.localToGlobal(Offset.zero, ancestor: overlayBox);
-    final size = box.size;
-    final scheme = Theme.of(context).colorScheme;
-    final maxMenuW = MediaQuery.sizeOf(context).width - origin.dx - 16;
-    final dark = Theme.of(context).brightness == Brightness.dark;
-
-    final completer = Completer<String?>();
-    late OverlayEntry entry;
-
-    void close([String? id]) {
-      if (entry.mounted) entry.remove();
-      if (!completer.isCompleted) completer.complete(id);
-    }
-
-    entry = OverlayEntry(
-      builder: (ctx) {
-        return Stack(
-          children: [
-            Positioned.fill(
-              child: GestureDetector(
-                behavior: HitTestBehavior.translucent,
-                onTap: close,
-                child: const SizedBox.expand(),
-              ),
-            ),
-            Positioned(
-              left: origin.dx.clamp(8.0, double.infinity),
-              top: origin.dy + size.height + 4,
-              child: Material(
-                type: MaterialType.transparency,
-                child: CentliGlass(
-                  borderRadius: BorderRadius.circular(14),
-                  blur: true,
-                  sigma: CentliTheme.glassDialogSigma,
-                  // 略透一点，磨砂才看得出来。
-                  tint: dark
-                      ? const Color(0xFF1B1F24).withValues(alpha: 0.55)
-                      : Colors.white.withValues(alpha: 0.55),
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      minWidth: 148,
-                      maxWidth: maxMenuW.clamp(148.0, 260.0),
-                    ),
-                    child: IntrinsicWidth(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          for (var i = 0; i < ledgers.length; i++) ...[
-                            if (i > 0)
-                              Divider(
-                                height: 1,
-                                thickness: 1,
-                                color: scheme.outlineVariant
-                                    .withValues(alpha: 0.55),
-                              ),
-                            _LedgerMenuTile(
-                              name: ledgers[i].name,
-                              selected: ledgers[i].id == currentId,
-                              onTap: () => close(ledgers[i].id),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        );
-      },
+    if (ledgers.isEmpty) return;
+    final id = await showGlassMenu<String>(
+      context: context,
+      anchorContext: anchorContext,
+      alignEnd: false,
+      maxWidth: 260,
+      items: [
+        for (final ledger in ledgers)
+          CentliMenuItem(
+            value: ledger.id,
+            label: ledger.name,
+            selected: ledger.id == currentId,
+          ),
+      ],
     );
-
-    overlayState.insert(entry);
-    final id = await completer.future;
     if (id == null || id == currentId || !mounted) return;
     await ref.read(databaseProvider).setCurrentLedgerId(id);
     ref.invalidate(currentLedgerProvider);
@@ -1145,6 +1022,7 @@ class _LedgerSummaryCard extends StatelessWidget {
       required String amount,
       required String monthLine,
       required String lifeLine,
+      Color? amountColor,
     }) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1155,7 +1033,9 @@ class _LedgerSummaryCard extends StatelessWidget {
             amount,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: colAmount,
+            style: amountColor == null
+                ? colAmount
+                : colAmount?.copyWith(color: amountColor),
           ),
           const SizedBox(height: CentliSpacing.item),
           Text(
@@ -1260,6 +1140,7 @@ class _LedgerSummaryCard extends StatelessWidget {
                   child: column(
                     title: '资产',
                     amount: _money(asset),
+                    amountColor: CentliTheme.incomeGreen,
                     monthLine:
                         '月收入：${month == null ? '—' : _money(month.incomeMinor)}',
                     lifeLine:
@@ -1278,6 +1159,7 @@ class _LedgerSummaryCard extends StatelessWidget {
                   child: column(
                     title: '负债',
                     amount: _money(liability),
+                    amountColor: CentliTheme.expenseRed,
                     monthLine:
                         '月支出：${month == null ? '—' : _money(month.expenseMinor)}',
                     lifeLine:
@@ -2095,8 +1977,7 @@ class _HomePendingSectionState extends ConsumerState<_HomePendingSection> {
     if (_busyId != null) return;
     final ok = await showPendingConfirmDialog(context, ref, capture: c);
     if (!ok || !mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('已入账')));
+    showGlassSnackBar(context, '已入账');
     final remaining = widget.okItems.length - 1;
     if (remaining > 0) {
       final next = _index.clamp(0, remaining - 1);
