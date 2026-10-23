@@ -48,6 +48,13 @@ class CentliNotificationListener : NotificationListenerService() {
         } catch (e: Exception) {
             Log.w(TAG, "flush queue on connect failed", e)
         }
+        // 刚退出 App / 断绑窗口内来的支付通知可能已错过 onNotificationPosted；
+        // 重连后扫一遍状态栏里最近的监听包通知做补漏（入库侧有 dedupe）。
+        try {
+            catchUpRecentNotifications()
+        } catch (e: Exception) {
+            Log.w(TAG, "catch-up failed", e)
+        }
     }
 
     override fun onListenerDisconnected() {
@@ -61,9 +68,9 @@ class CentliNotificationListener : NotificationListenerService() {
                 Log.e(TAG, "requestRebind failed", e)
             }
         }
-        // 尽快补绑，不要干等到 15 分钟 Job；断开后软绑常不够，升级硬重绑。
+        // 退出 App 后立刻来通知：补绑要快，不要干等 8s / 15min Job。
         if (isAutoCaptureEnabled(this)) {
-            CentliResurrect.scheduleRetry(this, delayMs = 8_000L)
+            CentliResurrect.scheduleRetry(this, delayMs = 2_000L)
             CentliResurrect.ensureAlive(this)
             recoverBinding(applicationContext)
         }
@@ -75,11 +82,46 @@ class CentliNotificationListener : NotificationListenerService() {
             instance = null
             connected = false
         }
+        // 服务被拆时再排一次短补救（划掉后台常见）。
+        if (isAutoCaptureEnabled(applicationContext)) {
+            CentliResurrect.scheduleRetry(applicationContext, delayMs = 2_000L)
+        }
         super.onDestroy()
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         if (sbn == null) return
+        handlePosted(sbn, fromCatchUp = false)
+    }
+
+    /**
+     * 重连后补漏：状态栏里仍在的、近 [CATCH_UP_WINDOW_MS] 内、属于监听包的通知。
+     * 断绑窗口内来的支付通知往往只存在于 active 列表，不会再走 posted 回调。
+     */
+    private fun catchUpRecentNotifications() {
+        if (!isAutoCaptureEnabled(this)) return
+        val cutoff = System.currentTimeMillis() - CATCH_UP_WINDOW_MS
+        val active = try {
+            activeNotifications ?: return
+        } catch (e: Exception) {
+            Log.w(TAG, "activeNotifications unavailable", e)
+            return
+        }
+        var n = 0
+        for (sbn in active) {
+            val pkg = sbn.packageName ?: continue
+            if (!isWatchedPackage(this, pkg)) continue
+            val whenMs = sbn.notification?.`when`?.takeIf { it > 0 }
+                ?: sbn.postTime.takeIf { it > 0 }
+                ?: 0L
+            if (whenMs > 0 && whenMs < cutoff) continue
+            handlePosted(sbn, fromCatchUp = true)
+            n++
+        }
+        if (n > 0) Log.i(TAG, "catch-up processed $n active notification(s)")
+    }
+
+    private fun handlePosted(sbn: StatusBarNotification, fromCatchUp: Boolean) {
         val pkg = sbn.packageName ?: return
         // 对齐 LiteNote / AutoBookKeeping：尽量抽全通知字段，避免金额只在
         // bigText / textLines / ticker 里时漏抓。
@@ -91,11 +133,11 @@ class CentliNotificationListener : NotificationListenerService() {
         ).firstOrNull { it.isNotBlank() } ?: ""
 
         if (!isAutoCaptureEnabled(this)) {
-            recordDrop(this, pkg, title, "disabled")
+            if (!fromCatchUp) recordDrop(this, pkg, title, "disabled")
             return
         }
         if (!isWatchedPackage(this, pkg)) {
-            recordDrop(this, pkg, title, "not_watched")
+            if (!fromCatchUp) recordDrop(this, pkg, title, "not_watched")
             return
         }
 
@@ -119,13 +161,14 @@ class CentliNotificationListener : NotificationListenerService() {
         val text = textParts.distinct().joinToString("\n")
 
         if (title.isBlank() && text.isBlank()) {
-            recordDrop(this, pkg, title, "blank")
+            if (!fromCatchUp) recordDrop(this, pkg, title, "blank")
             return
         }
 
         // 对齐 AutoBookKeeping：短时内容去重，避免同一支付刷多次 posted。
+        // 补漏路径也走同一套，防止重连重复入库。
         if (isRecentContentDuplicate(pkg, title, text)) {
-            recordDrop(this, pkg, title, "dup_content")
+            if (!fromCatchUp) recordDrop(this, pkg, title, "dup_content")
             return
         }
 
@@ -141,6 +184,7 @@ class CentliNotificationListener : NotificationListenerService() {
             "when" to whenMs,
             "key" to sbn.key,
             "channelId" to channelId,
+            "catchUp" to fromCatchUp,
         )
 
         // Do NOT call ensureAlive/ensureRebind here — thrashing requestRebind
@@ -170,6 +214,8 @@ class CentliNotificationListener : NotificationListenerService() {
 
         /** 内容去重窗口（对齐 AutoBookKeeping 5 分钟）。 */
         private const val CONTENT_DEDUP_WINDOW_MS = 5 * 60 * 1000L
+        /** 重连补漏：只扫近 3 分钟内仍挂在状态栏的支付通知。 */
+        private const val CATCH_UP_WINDOW_MS = 3 * 60 * 1000L
         private val recentContentDedup = LinkedHashMap<String, Long>()
 
         /** Builtin packages mirrored from assets/noti_templates.json */
@@ -502,7 +548,7 @@ class CentliNotificationListener : NotificationListenerService() {
             if (isConnectedNow()) return
             requestSoftRebind(app)
             scheduleRebindRetries(app, escalateToForce = true)
-            CentliResurrect.scheduleRetry(app, delayMs = 8_000L)
+            CentliResurrect.scheduleRetry(app, delayMs = 2_000L)
         }
 
         private fun requestSoftRebind(context: Context) {
@@ -534,10 +580,10 @@ class CentliNotificationListener : NotificationListenerService() {
         ) {
             cancelRebindRetries()
             val app = context.applicationContext
-            // 冷启动 / OEM 慢绑：多试几次；后半段升级硬重绑（划掉后台后软绑常无效）。
-            val delays = longArrayOf(500L, 1500L, 3000L, 6000L)
+            // 冷启动 / 刚退出 App：尽快软绑；约 2s 起升级硬重绑（划掉后台后软绑常无效）。
+            val delays = longArrayOf(300L, 1_000L, 2_000L, 4_000L, 8_000L)
             for (delay in delays) {
-                val useForce = escalateToForce && delay >= 3000L
+                val useForce = escalateToForce && delay >= 2_000L
                 val r = Runnable {
                     if (isConnectedNow()) return@Runnable
                     if (!isNotificationAccessGranted(app)) return@Runnable

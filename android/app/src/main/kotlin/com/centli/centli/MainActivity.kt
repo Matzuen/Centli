@@ -240,6 +240,17 @@ class MainActivity : FlutterFragmentActivity() {
         super.onPause()
     }
 
+    override fun onStop() {
+        super.onStop()
+        // 刚退出 / 划到后台后立刻来支付通知：提前排短补救，缩短断绑空窗。
+        if (isNotificationAccessGranted() &&
+            CentliNotificationListener.isAutoCaptureEnabled(this)
+        ) {
+            CentliResurrect.scheduleRetry(this, delayMs = 2_000L)
+            CentliNotificationListener.ensureRebind(this)
+        }
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
