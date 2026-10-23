@@ -419,7 +419,7 @@ Future<void> _showAmountEditor(
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('\u4fdd\u5b58'),
+            child: const Text('\u786e\u5b9a'),
           ),
         ],
       );
@@ -540,7 +540,7 @@ Future<void> _showCategoryBudgetEditor(
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('\u4fdd\u5b58'),
+                child: const Text('\u786e\u5b9a'),
               ),
             ],
           );

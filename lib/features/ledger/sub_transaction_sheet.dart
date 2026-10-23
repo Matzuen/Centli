@@ -285,15 +285,17 @@ class _SubTxnBodyState extends ConsumerState<_SubTxnBody> {
             onChanged: (v) => setState(() => _includeInBudget = v),
           ),
           const SizedBox(height: 12),
-          FilledButton(
-            onPressed: _saving ? null : _confirm,
-            child: _saving
+          CentliFormActionBar(
+            onCancel: _saving ? null : () => Navigator.pop(context),
+            onConfirm: _confirm,
+            confirmEnabled: !_saving,
+            confirmChild: _saving
                 ? const SizedBox(
                     width: 20,
                     height: 20,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Text('确定'),
+                : null,
           ),
         ],
       ),

@@ -30,7 +30,7 @@ class RecurringListPage extends ConsumerWidget {
         title: const Text('周期记账'),
         actions: [
           IconButton(
-            tooltip: '新建',
+            tooltip: '添加',
             icon: const Icon(Icons.add),
             onPressed: () => context.push('/me/recurring/new'),
           ),

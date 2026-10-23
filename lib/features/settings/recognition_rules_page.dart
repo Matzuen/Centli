@@ -785,17 +785,18 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
               CentliMenuItem(value: 'rollback_official', label: '恢复内置规则'),
             ],
           ),
+          IconButton(
+            tooltip: '添加规则',
+            icon: const Icon(Icons.add),
+            onPressed: _busy
+                ? null
+                : () async {
+                    final changed =
+                        await context.push<bool>('/me/auto/rules/edit');
+                    if (changed == true) await _reload();
+                  },
+          ),
         ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        tooltip: '添加规则',
-        onPressed: _busy
-            ? null
-            : () async {
-                final changed = await context.push<bool>('/me/auto/rules/edit');
-                if (changed == true) await _reload();
-              },
-        child: const Icon(Icons.add),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -804,7 +805,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
                 CentliSpacing.pageH,
                 CentliSpacing.pageTop,
                 CentliSpacing.pageH,
-                96,
+                CentliSpacing.pageBottom,
               ),
               children: [
                 if (!_loadWarnDismissed &&
@@ -849,7 +850,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
                 ],
                 Text(
                   '内置 / AI / 我的规则可点标题展开或收起。'
-                  '右上角导入导出；右下角添加手写规则；底部「试一试」验证样例。',
+                  '右上角导入导出；右上角添加手写规则；底部「试一试」验证样例。',
                   style: Theme.of(context).textTheme.bodyMedium
                       ?.copyWith(color: scheme.onSurfaceVariant, height: 1.4),
                 ),
@@ -1089,7 +1090,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
                       CentliEmptyState(
                         icon: Icons.playlist_add,
                         title: '还没有手写规则',
-                        message: '点右下角 + 添加，或右上角从文件/网络导入。',
+                        message: '点右上角 + 添加，或从「更多」导入文件/网络规则。',
                         padding: EdgeInsets.zero,
                       )
                     else

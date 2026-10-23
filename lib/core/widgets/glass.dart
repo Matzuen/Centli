@@ -427,6 +427,48 @@ Future<bool?> showGlassConfirmDialog({
   );
 }
 
+
+/// 表单底栏：左「取消」次要、右「确定」实心；危险确认用 [destructive]。
+class CentliFormActionBar extends StatelessWidget {
+  const CentliFormActionBar({
+    super.key,
+    required this.onCancel,
+    required this.onConfirm,
+    this.cancelLabel = '取消',
+    this.confirmLabel = '确定',
+    this.confirmChild,
+    this.destructive = false,
+    this.confirmEnabled = true,
+  });
+
+  final VoidCallback? onCancel;
+  final VoidCallback? onConfirm;
+  final String cancelLabel;
+  final String confirmLabel;
+  /// 若提供则替代 [confirmLabel]（例如加载中转圈）。
+  final Widget? confirmChild;
+  final bool destructive;
+  final bool confirmEnabled;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        TextButton(
+          onPressed: onCancel,
+          child: Text(cancelLabel),
+        ),
+        const Spacer(),
+        FilledButton(
+          style: destructive ? centliDangerFilledStyle(context) : null,
+          onPressed: confirmEnabled ? onConfirm : null,
+          child: confirmChild ?? Text(confirmLabel),
+        ),
+      ],
+    );
+  }
+}
+
 class CentliMenuItem<T> {
   const CentliMenuItem({
     required this.value,

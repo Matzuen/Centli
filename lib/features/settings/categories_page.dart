@@ -63,6 +63,19 @@ class _CategoriesPageState extends ConsumerState<CategoriesPage>
     return CentliGradientScaffold(
       appBar: AppBar(
         title: const Text('分类管理'),
+        actions: [
+          if (!_showArchived && ledgerAsync.valueOrNull != null)
+            IconButton(
+              tooltip: '添加分类',
+              icon: const Icon(Icons.add),
+              onPressed: () => promptCreateCategory(
+                context,
+                ref,
+                ledgerId: ledgerAsync.valueOrNull!,
+                kind: _kind,
+              ),
+            ),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(96),
           child: Column(
@@ -100,18 +113,6 @@ class _CategoriesPageState extends ConsumerState<CategoriesPage>
           ),
         ),
       ),
-      floatingActionButton: (!_showArchived && ledgerAsync.valueOrNull != null)
-          ? FloatingActionButton(
-              tooltip: '新建分类',
-              onPressed: () => promptCreateCategory(
-                context,
-                ref,
-                ledgerId: ledgerAsync.valueOrNull!,
-                kind: _kind,
-              ),
-              child: const Icon(Icons.add),
-            )
-          : null,
       body: ledgerAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('$e')),
@@ -191,7 +192,7 @@ class _CategoryKindList extends ConsumerWidget {
             title: showArchived ? '暂无已归档分类' : '暂无分类',
             message: showArchived
                 ? '归档的分类会出现在这里，可随时恢复使用。'
-                : '点右下角 + 添加支出/收入分类；可建父子层级并拖拽排序。',
+                : '点右上角 + 添加支出/收入分类；可建父子层级并拖拽排序。',
           );
         }
 
@@ -769,7 +770,7 @@ Future<_CategoryEditorResult?> _promptCategoryEditor(
                     _CategoryEditorResult(name: name, iconKey: iconKey),
                   );
                 },
-                child: const Text('保存'),
+                child: const Text('确定'),
               ),
             ],
           );

@@ -25,6 +25,13 @@ class LedgersPage extends ConsumerWidget {
     return CentliGradientScaffold(
       appBar: AppBar(
         title: const Text('记账本管理'),
+        actions: [
+          IconButton(
+            tooltip: '添加账本',
+            icon: const Icon(Icons.add),
+            onPressed: () => _create(context, ref),
+          ),
+        ],
       ),
       body: listAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -34,7 +41,7 @@ class LedgersPage extends ConsumerWidget {
             return CentliEmptyState(
               icon: Icons.menu_book_outlined,
               title: '暂无记账本',
-              message: '创建第一个记账本开始记账。点右下角 + 即可。',
+              message: '创建第一个记账本开始记账。点右上角 + 即可。',
               action: FilledButton.tonalIcon(
                 onPressed: () => _create(context, ref),
                 icon: const Icon(Icons.add),
@@ -95,11 +102,6 @@ class LedgersPage extends ConsumerWidget {
             ],
           );
         },
-      ),
-      floatingActionButton: FloatingActionButton(
-        tooltip: '新建记账本',
-        onPressed: () => _create(context, ref),
-        child: const Icon(Icons.add),
       ),
     );
   }
@@ -181,7 +183,7 @@ class LedgersPage extends ConsumerWidget {
                 ),
                 FilledButton(
                   onPressed: () => Navigator.pop(ctx, true),
-                  child: const Text('创建'),
+                  child: const Text('确定'),
                 ),
               ],
             );

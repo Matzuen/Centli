@@ -31,7 +31,7 @@ class SubTransactionsPage extends ConsumerWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 IconButton(
-                  tooltip: '新建',
+                  tooltip: '添加',
                   icon: const Icon(Icons.add),
                   onPressed: () => _promptCreate(context, ref),
                 ),
@@ -326,21 +326,21 @@ class _TypeEditBodyState extends State<_TypeEditBody> {
             onSelectionChanged: (s) => setState(() => _sign = s.first),
           ),
           const SizedBox(height: 20),
-          FilledButton(
-            onPressed: _submit,
-            child: const Text('确定'),
+          CentliFormActionBar(
+            onCancel: () => Navigator.pop(context),
+            onConfirm: _submit,
           ),
           if (widget.allowDelete) ...[
             const SizedBox(height: 8),
             TextButton(
+              style: TextButton.styleFrom(
+                foregroundColor: Theme.of(context).colorScheme.error,
+              ),
               onPressed: () => Navigator.pop(
                 context,
                 const _TypeEditResult(name: '', sign: 1, delete: true),
               ),
-              child: Text(
-                '删除',
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
+              child: const Text('删除'),
             ),
           ],
         ],

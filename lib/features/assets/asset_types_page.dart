@@ -24,14 +24,18 @@ class AssetTypesPage extends ConsumerWidget {
     final ledgerAsync = ref.watch(currentLedgerIdProvider);
 
     return CentliGradientScaffold(
-      appBar: AppBar(title: const Text('资产分类')),
-      floatingActionButton: ledgerAsync.valueOrNull == null
-          ? null
-          : FloatingActionButton(
-              tooltip: '新增分类',
-              onPressed: () => _promptCreate(context, ref, ledgerAsync.valueOrNull!),
-              child: const Icon(Icons.add_rounded),
+      appBar: AppBar(
+        title: const Text('资产分类'),
+        actions: [
+          if (ledgerAsync.valueOrNull != null)
+            IconButton(
+              tooltip: '添加分类',
+              icon: const Icon(Icons.add),
+              onPressed: () =>
+                  _promptCreate(context, ref, ledgerAsync.valueOrNull!),
             ),
+        ],
+      ),
       body: ledgerAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('$e')),
@@ -48,7 +52,7 @@ class AssetTypesPage extends ConsumerWidget {
                 return const Center(child: Text('暂无分类'));
               }
               return ListView.separated(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 88),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
                 itemCount: types.length,
                 separatorBuilder: (_, _) => const SizedBox(height: CentliSpacing.item),
                 itemBuilder: (context, index) {
@@ -194,7 +198,7 @@ Future<void> _promptCreate(
         ),
         FilledButton(
           onPressed: () => Navigator.pop(ctx, true),
-          child: const Text('保存'),
+          child: const Text('确定'),
         ),
       ],
     ),
@@ -237,7 +241,7 @@ Future<void> _promptRename(
         ),
         FilledButton(
           onPressed: () => Navigator.pop(ctx, true),
-          child: const Text('保存'),
+          child: const Text('确定'),
         ),
       ],
     ),

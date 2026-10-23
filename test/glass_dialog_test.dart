@@ -53,7 +53,7 @@ void main() {
     for (var i = 0; i < 12; i++) {
       await tester.pump(const Duration(milliseconds: 60));
     }
-    await tester.tap(find.byType(FloatingActionButton));
+    await tester.tap(find.widgetWithIcon(IconButton, Icons.add));
     for (var i = 0; i < 20; i++) {
       await tester.pump(const Duration(milliseconds: 80));
     }
