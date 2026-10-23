@@ -130,6 +130,7 @@ class _IconLibraryPageState extends State<IconLibraryPage> {
                 children: [
                   IconButton(
                     onPressed: () => Navigator.pop(context),
+                    tooltip: '关闭',
                     icon: const Icon(Icons.close_rounded),
                   ),
                   Expanded(

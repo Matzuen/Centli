@@ -148,6 +148,7 @@ class _RuleTile extends ConsumerWidget {
                     child: const Text('取消'),
                   ),
                   FilledButton(
+                    style: centliDangerFilledStyle(ctx),
                     onPressed: () => Navigator.pop(ctx, true),
                     child: const Text('删除'),
                   ),
@@ -201,6 +202,7 @@ class _RuleTile extends ConsumerWidget {
                                 child: const Text('取消'),
                               ),
                               FilledButton(
+                                style: centliDangerFilledStyle(ctx),
                                 onPressed: () => Navigator.pop(dCtx, true),
                                 child: const Text('删除'),
                               ),

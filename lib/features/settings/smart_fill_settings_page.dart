@@ -131,6 +131,7 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
             child: const Text('取消'),
           ),
           FilledButton(
+            style: centliDangerFilledStyle(ctx),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('清除'),
           ),
@@ -472,9 +473,7 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
                 ),
                 const SizedBox(height: CentliSpacing.section),
                 CentliSoftCard(
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
+                  child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
@@ -490,7 +489,6 @@ class _SmartFillSettingsPageState extends ConsumerState<SmartFillSettingsPage> {
                         ),
                       ],
                     ),
-                  ),
                 ),
               ],
             ),

@@ -161,7 +161,7 @@ class _QuickBookkeepingSheetState extends ConsumerState<QuickBookkeepingSheet> {
                     alpha: 0.55,
                   ),
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(14),
                     borderSide: BorderSide.none,
                   ),
                 ),

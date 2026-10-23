@@ -176,7 +176,7 @@ class _FxRatesPageState extends ConsumerState<FxRatesPage> {
           const SizedBox(height: CentliSpacing.section),
           ratesAsync.when(
             loading: () => const Padding(
-              padding: EdgeInsets.all(24),
+              padding: EdgeInsets.all(CentliSpacing.cardPad),
               child: Center(child: CircularProgressIndicator()),
             ),
             error: (e, _) => Text('$e'),
@@ -184,7 +184,7 @@ class _FxRatesPageState extends ConsumerState<FxRatesPage> {
               if (rows.isEmpty) {
                 return CentliSoftCard(
                   child: Padding(
-                    padding: const EdgeInsets.all(24),
+                    padding: const EdgeInsets.all(CentliSpacing.cardPad),
                     child: Column(
                       children: [
                         Icon(Icons.currency_exchange,

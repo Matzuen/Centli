@@ -197,7 +197,7 @@ class _AssetsPageState extends ConsumerState<AssetsPage> {
                     const SizedBox(height: CentliSpacing.section),
                     netWorthAsync.when(
                       loading: () => const CentliSoftCard(
-                        padding: EdgeInsets.all(24),
+                        padding: EdgeInsets.all(CentliSpacing.cardPad),
                         child: Center(child: CircularProgressIndicator()),
                       ),
                       error: (e, _) =>

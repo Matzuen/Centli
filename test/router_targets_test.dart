@@ -57,7 +57,7 @@ void main() {
     final noQuery = target.split('?').first;
     final segs = noQuery.split('/');
     return segs
-        .map((s) => s.contains(r'${') ? ':id' : s)
+        .map((s) => s.startsWith(r'$') ? ':id' : s)
         .join('/');
   }
 

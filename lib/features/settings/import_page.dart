@@ -138,6 +138,7 @@ class _ImportPageState extends ConsumerState<ImportPage> {
             child: const Text('取消'),
           ),
           FilledButton(
+            style: mergeMode ? null : centliDangerFilledStyle(ctx),
             onPressed: () => Navigator.pop(ctx, true),
             child: Text(mergeMode ? '合并追加' : '清空并还原'),
           ),

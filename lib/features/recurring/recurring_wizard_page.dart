@@ -206,7 +206,7 @@ class _RecurringWizardPageState extends ConsumerState<RecurringWizardPage> {
             ),
             FilledButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('确认'),
+              child: const Text('确定'),
             ),
           ],
         ),

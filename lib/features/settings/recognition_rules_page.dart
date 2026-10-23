@@ -266,6 +266,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
             child: const Text('取消'),
           ),
           FilledButton(
+            style: centliDangerFilledStyle(ctx),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('删除'),
           ),
@@ -333,6 +334,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
             child: const Text('取消'),
           ),
           FilledButton(
+            style: centliDangerFilledStyle(ctx),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('删除'),
           ),
@@ -1107,9 +1109,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
                 ),
                 const SizedBox(height: CentliSpacing.item),
                 CentliSoftCard(
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
+                  child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         DropdownButtonFormField<String>(
@@ -1186,7 +1186,6 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
                           _TryResultCard(result: _tryResult!),
                         ],
                       ],
-                    ),
                   ),
                 ),
               ],

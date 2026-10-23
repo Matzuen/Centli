@@ -384,6 +384,49 @@ class CentliGlassDialog extends StatelessWidget {
 const double _kDefaultScrollControlDisabledMaxHeightRatio = 9.0 / 16.0;
 
 /// 毛玻璃浮动菜单的一项（与首页账本下拉同款：勾选 / 分隔 / 文案）。
+
+/// 危险主按钮样式（删除 / 清空 / 永久操作）：error 底 + onError 字。
+ButtonStyle centliDangerFilledStyle(BuildContext context) {
+  final scheme = Theme.of(context).colorScheme;
+  return FilledButton.styleFrom(
+    backgroundColor: scheme.error,
+    foregroundColor: scheme.onError,
+  );
+}
+
+/// 统一确认对话框：左「取消」右主操作；[destructive] 时主操作用危险色。
+///
+/// 返回 `true` 表示确认，`false`/`null` 表示取消或关闭。
+Future<bool?> showGlassConfirmDialog({
+  required BuildContext context,
+  required String title,
+  required String content,
+  String cancelLabel = '取消',
+  String confirmLabel = '确定',
+  bool destructive = false,
+  bool barrierDismissible = true,
+}) {
+  return showGlassDialog<bool>(
+    context: context,
+    barrierDismissible: barrierDismissible,
+    builder: (ctx) => CentliGlassDialog(
+      title: Text(title),
+      content: Text(content),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: Text(cancelLabel),
+        ),
+        FilledButton(
+          style: destructive ? centliDangerFilledStyle(ctx) : null,
+          onPressed: () => Navigator.pop(ctx, true),
+          child: Text(confirmLabel),
+        ),
+      ],
+    ),
+  );
+}
+
 class CentliMenuItem<T> {
   const CentliMenuItem({
     required this.value,

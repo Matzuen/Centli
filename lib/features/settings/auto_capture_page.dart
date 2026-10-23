@@ -372,6 +372,7 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
             child: const Text('取消'),
           ),
           FilledButton(
+            style: centliDangerFilledStyle(ctx),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('清空'),
           ),

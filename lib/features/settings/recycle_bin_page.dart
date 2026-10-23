@@ -230,6 +230,7 @@ class _RecycleBinPageState extends ConsumerState<RecycleBinPage> {
             child: const Text('取消'),
           ),
           FilledButton(
+            style: centliDangerFilledStyle(ctx),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('删除'),
           ),
@@ -276,6 +277,7 @@ class _RecycleBinPageState extends ConsumerState<RecycleBinPage> {
               child: const Text('取消'),
             ),
             FilledButton(
+              style: centliDangerFilledStyle(ctx),
               onPressed: () => Navigator.pop(ctx, true),
               child: const Text('删除'),
             ),
@@ -313,6 +315,7 @@ class _RecycleBinPageState extends ConsumerState<RecycleBinPage> {
             child: const Text('取消'),
           ),
           FilledButton(
+            style: centliDangerFilledStyle(ctx),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('清空'),
           ),

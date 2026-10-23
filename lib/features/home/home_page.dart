@@ -381,8 +381,9 @@ class _HomePageState extends ConsumerState<HomePage> {
                   padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
                   child: Row(
                     children: [
-                      Builder(
-                        builder: (anchorCtx) => Tooltip(
+                      Flexible(
+                        child: Builder(
+                          builder: (anchorCtx) => Tooltip(
                           message: '切换记账本',
                           child: InkWell(
                             borderRadius: BorderRadius.circular(8),
@@ -397,13 +398,16 @@ class _HomePageState extends ConsumerState<HomePage> {
                                 horizontal: 2,
                               ),
                               child: Row(
-                                mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Text(
-                                    ledger.name,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleLarge,
+                                  Flexible(
+                                    child: Text(
+                                      ledger.name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleLarge,
+                                    ),
                                   ),
                                   const SizedBox(width: 2),
                                   Icon(
@@ -416,6 +420,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                             ),
                           ),
                         ),
+                      ),
                       ),
                       const Spacer(),
                       IconButton(
@@ -590,7 +595,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                                 ),
                                 recent.when(
                                   loading: () => const Padding(
-                                    padding: EdgeInsets.all(24),
+                                    padding: EdgeInsets.all(CentliSpacing.cardPad),
                                     child: Center(
                                       child: CircularProgressIndicator(),
                                     ),
@@ -600,7 +605,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                                   data: (txns) {
                                     if (txns.isEmpty) {
                                       return Padding(
-                                        padding: const EdgeInsets.all(24),
+                                        padding: const EdgeInsets.all(CentliSpacing.cardPad),
                                         child: Column(
                                           children: [
                                             Icon(
@@ -1110,13 +1115,16 @@ class _LedgerSummaryCard extends StatelessWidget {
               ),
               if (monthBalance != null) ...[
                 const SizedBox(width: 8),
-                Text(
-                  '${balancePositive ? '▴' : '▾'} ${_money(monthBalance.abs())}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    color: balanceColor,
-                    fontWeight: FontWeight.w700,
+                Flexible(
+                  child: Text(
+                    '${balancePositive ? '▴' : '▾'} ${_money(monthBalance.abs())}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.end,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      color: balanceColor,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ],
@@ -2102,7 +2110,7 @@ class _HomePendingSlide extends StatelessWidget {
                     child: const Text('忽略'),
                   ),
                   const SizedBox(width: 4),
-                  FilledButton.tonal(
+                  FilledButton(
                     style: FilledButton.styleFrom(
                       visualDensity: VisualDensity.compact,
                       padding: const EdgeInsets.symmetric(horizontal: 14),

@@ -863,6 +863,7 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
                     ),
                   ),
                   trailing: IconButton(
+                    tooltip: '删除',
                     icon: const Icon(Icons.delete_outline),
                     onPressed: () => Navigator.pop(
                       ctx,

@@ -400,6 +400,7 @@ class _PendingPageBodyState extends ConsumerState<PendingPage> {
             child: const Text('取消'),
           ),
           FilledButton(
+            style: centliDangerFilledStyle(ctx),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('全部忽略'),
           ),
@@ -441,6 +442,7 @@ class _PendingPageBodyState extends ConsumerState<PendingPage> {
             child: const Text('取消'),
           ),
           FilledButton(
+            style: centliDangerFilledStyle(ctx),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('清空'),
           ),
@@ -748,6 +750,9 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
                 Row(
                   children: [
                     TextButton(
+                      style: TextButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                      ),
                       onPressed: _busy ? null : _ignore,
                       child: const Text('忽略'),
                     ),
@@ -769,6 +774,9 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
                     ),
                     const SizedBox(width: 8),
                     FilledButton(
+                      style: FilledButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                      ),
                       onPressed: _busy ? null : _confirm,
                       child: const Text('入账'),
                     ),
@@ -871,6 +879,9 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
                 Row(
                   children: [
                     TextButton(
+                      style: TextButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                      ),
                       onPressed: _busy ? null : _ignore,
                       child: const Text('忽略'),
                     ),
@@ -882,6 +893,9 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
                     ),
                     const Spacer(),
                     FilledButton(
+                      style: FilledButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                      ),
                       onPressed: _busy ? null : _confirm,
                       child: const Text('入账'),
                     ),

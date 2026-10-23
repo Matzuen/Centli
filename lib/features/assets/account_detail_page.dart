@@ -237,7 +237,7 @@ class _AccountDetailBody extends ConsumerWidget {
           const SizedBox(height: CentliSpacing.item),
           txAsync.when(
             loading: () => const Padding(
-              padding: EdgeInsets.all(24),
+              padding: EdgeInsets.all(CentliSpacing.cardPad),
               child: Center(child: CircularProgressIndicator()),
             ),
             error: (e, _) => Text('$e'),
@@ -245,7 +245,7 @@ class _AccountDetailBody extends ConsumerWidget {
               if (txns.isEmpty) {
                 return CentliSoftCard(
                   child: Padding(
-                    padding: const EdgeInsets.all(24),
+                    padding: const EdgeInsets.all(CentliSpacing.cardPad),
                     child: Column(
                       children: [
                         Icon(Icons.receipt_long_outlined,

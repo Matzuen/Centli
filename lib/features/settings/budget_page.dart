@@ -155,7 +155,7 @@ class BudgetPage extends ConsumerWidget {
                       if (p.categories.isEmpty)
                         CentliSoftCard(
                           child: Padding(
-                            padding: const EdgeInsets.all(24),
+                            padding: const EdgeInsets.all(CentliSpacing.cardPad),
                             child: Column(
                               children: [
                                 Icon(Icons.pie_chart_outline,

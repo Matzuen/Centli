@@ -155,6 +155,7 @@ class _AccountPickerBodyState extends State<_AccountPickerBody> {
                   child: const Text('管理'),
                 ),
                 IconButton(
+                  tooltip: '关闭',
                   onPressed: () => Navigator.pop(context),
                   icon: const Icon(Icons.close),
                 ),
