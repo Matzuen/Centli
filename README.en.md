@@ -5,7 +5,7 @@ Local-first personal bookkeeping (**Chinese UI only**): **clear every bill**.
 > Canonical docs are in Chinese: see [`README.md`](README.md) and [`docs/RELEASE_NOTES.md`](docs/RELEASE_NOTES.md).
 
 - Flutter · Drift (SQLite) · Riverpod · go_router
-- Version: `2.1.2+44` (UI shows `2.1.2` only; see Chinese [`README.md`](README.md) changelog)
+- Version: `2.1.2+45` (UI shows `2.1.2` only; see Chinese [`README.md`](README.md) changelog)
 - Currency display: `CNY · 人民币`
 - Bottom nav (5 tabs): 首页 / 统计 / 记账 / 资产 / 我的
 
@@ -18,6 +18,7 @@ Local-first personal bookkeeping (**Chinese UI only**): **clear every bill**.
 - Multi-ledger, accounts, category tree; icons from assets or 1–2 hanzi fallback
 - Stats: range (month / year / custom), category donut + legend (name + amount; hold a slice to see the percentage), summary and per-account tables; category drill-down; monthly budgets
 - Bill detail: **保存** (save) + delete in the app bar; amount, account, category, type, time, tags, note and the include-in-stats/budget switches are each **tap-to-edit** (picks persist immediately, amount waits for 保存); only the edited columns are written, provenance is preserved
+- Sub-transactions (附加): global types under 我的 → 子交易管理 (AA / refund / fee …); attach from bill detail or the bookkeeping 「附加」 chip; lists show top-level only; children follow their own include-in-stat/budget flags and still move account balances (schema v14)
 - Android pending auto-capture from WeChat/Alipay **transaction** notifications (payment, debit, income, refund, repayment); **no ongoing notification**: after the UI is swiped away (or the process is killed) the listener is restored by system rebinding plus a 15-minute periodic job; capture-first design — false positives are filtered in 待确认
 - Recognition rules v8: loose "must contain" (any transaction word), trimmed exclusions (chat / OTP / login / reminders / you-initiated transfers stay out); `assets/noti_templates.json` mirrors the builtins and is covered by tests
 - Recognition rules: official read-only + user CRUD + try-parse (step-by-step reason) + import/export

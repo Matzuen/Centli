@@ -89,11 +89,25 @@ assets/sql/                 # 若用手写迁移备查
 | to_amount_minor | INTEGER | NULL | 跨币种时转入腿金额 |
 | source | TEXT | NOT NULL DEFAULT manual | `manual` / `notification` |
 | pending_id | TEXT | NULL | 来自哪条待确认 |
+| parent_id | TEXT | NULL | 子交易指向父流水；顶层为 NULL（schema v14） |
+| sub_type_id | TEXT | NULL | 子交易类型 → `sub_transaction_types`（schema v14） |
 | created_at | INTEGER | NOT NULL | |
 | updated_at | INTEGER | NOT NULL | |
 | deleted_at | INTEGER | NULL | 软删可选；首版可硬删不设 |
 
-索引：`(ledger_id, happen_at)`、`(account_id, happen_at)`、`(category_id)`、`(transfer_group_id)`。
+索引：`(ledger_id, happen_at)`、`(account_id, happen_at)`、`(category_id)`、`(transfer_group_id)`、`(parent_id)`。
+
+### 2.4b sub_transaction_types — 子交易类型（schema v14）
+
+| 列 | 类型 | 约束 | 说明 |
+|---|---|---|---|
+| id | TEXT | PK | |
+| name | TEXT | NOT NULL | 如 AA、手续费 |
+| sign | INTEGER | NOT NULL | `1` 增加 / `-1` 减少 |
+| icon_key | TEXT | NULL | |
+| sort_order | INTEGER | NOT NULL DEFAULT 0 | |
+| created_at / updated_at | INTEGER | NOT NULL | |
+| deleted_at | INTEGER | NULL | 软删 |
 
 **余额计算（应用层）：**  
 `balance = opening_balance_minor + Σ(in) − Σ(out) − Σ(transfer 转出) + Σ(transfer 转入 to_amount 或 amount)`。
