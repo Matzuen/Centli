@@ -19,6 +19,7 @@ import '../features/settings/recognition_rule_edit_page.dart';
 import '../features/settings/smart_fill_settings_page.dart';
 import '../features/settings/permission_explain_page.dart';
 import '../features/settings/categories_page.dart';
+import '../features/settings/sub_transactions_page.dart';
 import '../features/settings/me_page.dart';
 import '../features/settings/export_page.dart';
 import '../features/settings/import_page.dart';
@@ -144,6 +145,11 @@ GoRouter createRouter({
                     path: 'categories',
                     parentNavigatorKey: rootNavigatorKey,
                     builder: (context, state) => const CategoriesPage(),
+                  ),
+                  GoRoute(
+                    path: 'sub-transactions',
+                    parentNavigatorKey: rootNavigatorKey,
+                    builder: (context, state) => const SubTransactionsPage(),
                   ),
                   GoRoute(
                     path: 'budget',

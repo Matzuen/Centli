@@ -16,12 +16,22 @@ import '../../data/db/database_provider.dart';
 import '../security/app_lock_controller.dart';
 import 'account_picker_sheet.dart';
 import 'category_picker_sheet.dart';
+import 'sub_transaction_sheet.dart';
 import '../../app/theme.dart';
 import '../../core/widgets/glass.dart';
 
 final _txnProvider =
     StreamProvider.family<Transaction?, String>((ref, id) {
   return ref.watch(databaseProvider).watchTransaction(id);
+});
+
+final _childTxnsProvider =
+    StreamProvider.family<List<Transaction>, String>((ref, parentId) {
+  return ref.watch(databaseProvider).watchChildTransactions(parentId);
+});
+
+final _subTypesProvider = StreamProvider<List<SubTransactionType>>((ref) {
+  return ref.watch(databaseProvider).watchSubTransactionTypes();
 });
 
 /// P0 bill detail: view fields, soft-delete, edit, toggle include-in-stat.
@@ -360,10 +370,177 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
               ],
             ),
           ),
+          if (txn.parentId == null && !isTransfer)
+            ..._subTransactionSections(context, hide),
         ],
         ),
       ),
     );
+  }
+
+  List<Widget> _subTransactionSections(BuildContext context, bool hide) {
+    final childrenAsync = ref.watch(_childTxnsProvider(txn.id));
+    final typesAsync = ref.watch(_subTypesProvider);
+    final children = childrenAsync.valueOrNull ?? const <Transaction>[];
+    final types = typesAsync.valueOrNull ?? const <SubTransactionType>[];
+    final scheme = Theme.of(context).colorScheme;
+    final accNameById = {
+      for (final a in _sourceCache?.accounts ?? const <Account>[]) a.id: a.name,
+    };
+    final typeNameById = {for (final t in types) t.id: t.name};
+
+    return [
+      if (children.isNotEmpty) ...[
+        const SizedBox(height: CentliSpacing.section),
+        _sectionHeader(context, '子交易'),
+        CentliSoftCard(
+          padding: EdgeInsets.zero,
+          child: Column(
+            children: [
+              for (var i = 0; i < children.length; i++) ...[
+                if (i > 0) const Divider(height: 1, indent: 16, endIndent: 16),
+                _childRow(
+                  context,
+                  children[i],
+                  hide: hide,
+                  typeName: typeNameById[children[i].subTypeId ?? ''] ??
+                      (children[i].note ?? '子交易'),
+                  accountName: accNameById[children[i].accountId] ?? '—',
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+      if (types.isNotEmpty) ...[
+        const SizedBox(height: CentliSpacing.section),
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 8),
+          child: Text(
+            '可选操作',
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: scheme.onSurfaceVariant,
+                ),
+          ),
+        ),
+        CentliSoftCard(
+          padding: EdgeInsets.zero,
+          child: Column(
+            children: [
+              for (var i = 0; i < types.length; i++) ...[
+                if (i > 0) const Divider(height: 1, indent: 16, endIndent: 16),
+                ListTile(
+                  title: Text(types[i].name),
+                  trailing: Icon(
+                    Icons.chevron_right,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                  onTap: _saving
+                      ? null
+                      : () => _addSubTransaction(context, types[i]),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    ];
+  }
+
+  Widget _childRow(
+    BuildContext context,
+    Transaction child, {
+    required bool hide,
+    required String typeName,
+    required String accountName,
+  }) {
+    final isOut = child.type == 'out';
+    final prefix = isOut ? '-' : '+';
+    final color = isOut ? CentliTheme.expenseRed : CentliTheme.incomeGreen;
+    return ListTile(
+      title: Text(typeName),
+      subtitle: Text(accountName),
+      trailing: Text(
+        '$prefix${formatMinor(child.currency, child.amountMinor, hide: hide)}',
+        style: TextStyle(
+          color: color,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      onTap: _saving ? null : () => _editSubTransaction(context, child),
+      onLongPress: _saving ? null : () => _deleteSubTransaction(context, child),
+    );
+  }
+
+  Future<void> _addSubTransaction(
+    BuildContext context,
+    SubTransactionType type,
+  ) async {
+    await showSubTransactionSheet(
+      context,
+      subType: type,
+      parentId: txn.id,
+      ledgerId: txn.ledgerId,
+      initialAccountId: _accountId,
+    );
+  }
+
+  Future<void> _editSubTransaction(
+    BuildContext context,
+    Transaction child,
+  ) async {
+    final types = ref.read(_subTypesProvider).valueOrNull ?? const [];
+    SubTransactionType? type;
+    for (final t in types) {
+      if (t.id == child.subTypeId) {
+        type = t;
+        break;
+      }
+    }
+    type ??= SubTransactionType(
+      id: child.subTypeId ?? child.id,
+      name: child.note ?? '子交易',
+      sign: child.type == 'out' ? -1 : 1,
+      iconKey: null,
+      sortOrder: 0,
+      createdAt: child.createdAt,
+      updatedAt: child.updatedAt,
+      deletedAt: null,
+    );
+    await showSubTransactionSheet(
+      context,
+      subType: type,
+      parentId: txn.id,
+      ledgerId: txn.ledgerId,
+      existing: child,
+    );
+  }
+
+  Future<void> _deleteSubTransaction(
+    BuildContext context,
+    Transaction child,
+  ) async {
+    final ok = await showGlassDialog<bool>(
+      context: context,
+      builder: (ctx) => CentliGlassDialog(
+        title: const Text('删除子交易？'),
+        content: const Text('确定删除这条附加子交易？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) {
+      await ref.read(databaseProvider).softDeleteTransaction(child.id);
+    }
   }
 
   Widget _sectionHeader(BuildContext context, String title) {

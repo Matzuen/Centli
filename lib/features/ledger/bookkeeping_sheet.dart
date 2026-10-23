@@ -17,6 +17,7 @@ import '../security/app_lock_controller.dart';
 import 'account_picker_sheet.dart';
 import 'category_picker_sheet.dart';
 import 'ledger_detail_page.dart' show showTagEditorDialog;
+import 'sub_transaction_sheet.dart';
 import '../../core/widgets/glass.dart';
 
 /// Set by the bill-detail page when 金额 was edited but not yet saved through
@@ -102,7 +103,9 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
   String? _categoryId;
   final _noteCtrl = TextEditingController();
   List<String> _tags = [];
-List<Account> _accounts = [];
+  /// Sub-transactions queued while composing a new bill (「附加」).
+  List<DraftSubTxn> _draftSubs = [];
+  List<Account> _accounts = [];
   List<AssetType> _assetTypes = [];
   List<Category> _categories = [];
   String? _ledgerId;
@@ -570,7 +573,7 @@ List<Account> _accounts = [];
           toAmountMinor: toAmountMinor,
         );
       } else {
-        await db.insertManualTransaction(
+        final parentId = await db.insertManualTransaction(
           ledgerId: _ledgerId!,
           type: _type,
           amountMinor: amountMinor,
@@ -584,6 +587,21 @@ List<Account> _accounts = [];
           fxRate: fxRate,
           toAmountMinor: toAmountMinor,
         );
+        for (final sub in _draftSubs) {
+          await db.insertManualTransaction(
+            ledgerId: _ledgerId!,
+            type: sub.type,
+            amountMinor: sub.amountMinor,
+            currency: sub.currency,
+            accountId: sub.accountId,
+            note: sub.subTypeName,
+            happenAt: _happenAt,
+            includeInStat: sub.includeInStat,
+            includeInBudget: sub.includeInBudget,
+            parentId: parentId,
+            subTypeId: sub.subTypeId,
+          );
+        }
       }
       // 记住这次的选择：下次「记一笔」直接沿用资产账户 / 分类。
       if (!mounted) return;
@@ -606,13 +624,14 @@ List<Account> _accounts = [];
       }
       if (!mounted) return;
       if (keepOpen && widget.existing == null) {
-        // 再记一笔：保留分类+账户，清空金额/备注/标签，时间刷新为现在。
+        // 再记一笔：保留分类+账户，清空金额/备注/标签/附加，时间刷新为现在。
         setState(() {
           _amountText = '0';
           _toAmountText = '0';
           _fxRateText = null;
           _noteCtrl.clear();
           _tags = [];
+          _draftSubs = [];
           _happenAt = DateTime.now();
         });
         showGlassSnackBar(context, '已保存，可继续记账');
@@ -765,7 +784,10 @@ List<Account> _accounts = [];
 
   bool get _isDirty {
     final amt = _evalAmount(_amountText) ?? 0;
-    return amt > 0 || _noteCtrl.text.trim().isNotEmpty || _tags.isNotEmpty;
+    return amt > 0 ||
+        _noteCtrl.text.trim().isNotEmpty ||
+        _tags.isNotEmpty ||
+        _draftSubs.isNotEmpty;
   }
 
   Future<bool> _confirmDiscardIfNeeded() async {
@@ -806,6 +828,114 @@ List<Account> _accounts = [];
       title: '标签',
     );
     if (result != null && mounted) setState(() => _tags = result);
+  }
+
+  Future<void> _editDraftSubs() async {
+    if (_draftSubs.isNotEmpty) {
+      final action = await showGlassSheet<_DraftSubAction>(
+        context: context,
+        builder: (ctx) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                child: Text(
+                  '附加子交易',
+                  style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+              ),
+              for (var i = 0; i < _draftSubs.length; i++)
+                ListTile(
+                  title: Text(_draftSubs[i].subTypeName),
+                  subtitle: Text(
+                    formatMinor(
+                      _draftSubs[i].currency,
+                      _draftSubs[i].amountMinor,
+                    ),
+                  ),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete_outline),
+                    onPressed: () => Navigator.pop(
+                      ctx,
+                      _DraftSubAction.remove(i),
+                    ),
+                  ),
+                  onTap: () => Navigator.pop(ctx, _DraftSubAction.edit(i)),
+                ),
+              ListTile(
+                leading: const Icon(Icons.add),
+                title: const Text('再加一条'),
+                onTap: () => Navigator.pop(ctx, const _DraftSubAction.add()),
+              ),
+              const SizedBox(height: 12),
+            ],
+          ),
+        ),
+      );
+      if (!mounted || action == null) return;
+      if (action.kind == _DraftSubKind.remove) {
+        setState(() => _draftSubs = [
+              for (var i = 0; i < _draftSubs.length; i++)
+                if (i != action.index) _draftSubs[i],
+            ]);
+        return;
+      }
+      if (action.kind == _DraftSubKind.edit) {
+        final current = _draftSubs[action.index!];
+        final types =
+            await ref.read(databaseProvider).loadSubTransactionTypes();
+        if (!mounted) return;
+        SubTransactionType? type;
+        for (final t in types) {
+          if (t.id == current.subTypeId) {
+            type = t;
+            break;
+          }
+        }
+        type ??= SubTransactionType(
+          id: current.subTypeId,
+          name: current.subTypeName,
+          sign: current.sign,
+          sortOrder: 0,
+          createdAt: 0,
+          updatedAt: 0,
+        );
+        final draft = await showSubTransactionSheet(
+          context,
+          subType: type,
+          ledgerId: _ledgerId,
+          initialAccountId: _accountId,
+          initialDraft: current,
+        );
+        if (draft != null && mounted) {
+          setState(() {
+            _draftSubs = [
+              for (var i = 0; i < _draftSubs.length; i++)
+                if (i == action.index) draft else _draftSubs[i],
+            ];
+          });
+        }
+        return;
+      }
+    }
+    await _addDraftSub();
+  }
+
+  Future<void> _addDraftSub() async {
+    final type = await showSubTransactionTypePicker(context, ref);
+    if (type == null || !mounted) return;
+    final draft = await showSubTransactionSheet(
+      context,
+      subType: type,
+      ledgerId: _ledgerId,
+      initialAccountId: _accountId,
+    );
+    if (draft != null && mounted) {
+      setState(() => _draftSubs = [..._draftSubs, draft]);
+    }
   }
 
 
@@ -863,7 +993,12 @@ List<Account> _accounts = [];
                                         child: InkWell(
                                           key: Key('bk_type_seg_${entry.$1}'),
                                           onTap: () async {
-                                            setState(() => _type = entry.$1);
+                                            setState(() {
+                                              _type = entry.$1;
+                                              if (entry.$1 == 'transfer') {
+                                                _draftSubs = [];
+                                              }
+                                            });
                                             await _reloadCategories(
                                               resetSelection: true,
                                             );
@@ -1071,6 +1206,15 @@ List<Account> _accounts = [];
                                           : _tags.take(2).join(' · ')),
                                   onTap: _editSheetTags,
                                 ),
+                                if (widget.existing == null &&
+                                    _type != 'transfer')
+                                  _MetaChip(
+                                    icon: Icons.account_tree_outlined,
+                                    label: _draftSubs.isEmpty
+                                        ? '附加'
+                                        : '附加 · ${_draftSubs.length}',
+                                    onTap: _editDraftSubs,
+                                  ),
                               ],
                             ),
                           ),
@@ -1181,7 +1325,6 @@ class _ChipScrollRow extends StatelessWidget {
 
 class _MetaChip extends StatelessWidget {
   const _MetaChip({
-    super.key,
     required this.label,
     required this.onTap,
     this.icon,
@@ -1380,4 +1523,16 @@ class _Keypad extends StatelessWidget {
       ),
     );
   }
+}
+
+enum _DraftSubKind { add, edit, remove }
+
+class _DraftSubAction {
+  const _DraftSubAction._(this.kind, this.index);
+  const _DraftSubAction.add() : this._(_DraftSubKind.add, null);
+  const _DraftSubAction.edit(int index) : this._(_DraftSubKind.edit, index);
+  const _DraftSubAction.remove(int index) : this._(_DraftSubKind.remove, index);
+
+  final _DraftSubKind kind;
+  final int? index;
 }

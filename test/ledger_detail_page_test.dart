@@ -42,6 +42,8 @@ void main() {
         source: 'manual',
         pendingId: null,
         occurrenceKey: null,
+        parentId: null,
+        subTypeId: null,
         createdAt: now,
         updatedAt: now,
         deletedAt: null,
@@ -135,6 +137,8 @@ void main() {
     expect(db.updates.single['includeInStat'], 0);
     expect(saveButton(tester).onPressed, isNull,
         reason: 'clean again after saving');
+    // Drain glass SnackBar auto-dismiss timer from 「已保存」.
+    await tester.pump(const Duration(seconds: 2));
   });
 
   testWidgets('再记一笔 button is offered next to 删除', (tester) async {
@@ -260,11 +264,28 @@ class _FakeDb implements CentliDatabase {
   @override
   Future<List<String>> listDistinctTags(String ledgerId) async => const ['工作'];
 
+
+  @override
+  Future<List<AssetType>> loadAssetTypes(
+    String ledgerId, {
+    bool includeArchived = false,
+  }) async =>
+      const [];
+
+  @override
+  Stream<List<Transaction>> watchChildTransactions(String parentId) =>
+      Stream.value(const []);
+
+  @override
+  Stream<List<SubTransactionType>> watchSubTransactionTypes() =>
+      Stream.value(const []);
+
   @override
   Future<void> updateTransactionFields({
     required String id,
     String? type,
     int? amountMinor,
+    String? currency,
     String? accountId,
     Value<String?>? toAccountId,
     String? categoryId,
@@ -275,6 +296,8 @@ class _FakeDb implements CentliDatabase {
     int? includeInBudget,
     Value<int?>? toAmountMinor,
     Value<double?>? fxRate,
+    String? parentId,
+    String? subTypeId,
   }) async {
     updates.add(<String, Object?>{
       'id': id,

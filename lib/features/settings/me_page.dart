@@ -140,6 +140,14 @@ class MePage extends ConsumerWidget {
                   const Divider(height: 1),
                   _tile(
                     context,
+                    icon: Icons.account_tree_outlined,
+                    title: '子交易管理',
+                    subtitle: 'AA / 退款 / 手续费等附加类型',
+                    onTap: () => context.push('/me/sub-transactions'),
+                  ),
+                  const Divider(height: 1),
+                  _tile(
+                    context,
                     icon: Icons.repeat,
                     title: '周期记账',
                     subtitle: '工资 / 房租等到点补记',

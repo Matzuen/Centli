@@ -42,3 +42,17 @@ String currencyLabel(String code) {
   if (name == null || name.isEmpty) return code;
   return '$code（$name）';
 }
+
+/// Flag emoji for supported currencies (picker / chip leading).
+const Map<String, String> currencyFlags = {
+  'CNY': '🇨🇳',
+  'USD': '🇺🇸',
+  'JPY': '🇯🇵',
+  'TWD': '🇹🇼',
+  'HKD': '🇭🇰',
+  'EUR': '🇪🇺',
+};
+
+/// Flag emoji for [code], or a generic banknote if unknown.
+String currencyFlag(String code) => currencyFlags[code] ?? '💰';
+
