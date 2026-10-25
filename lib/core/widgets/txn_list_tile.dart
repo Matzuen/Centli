@@ -36,6 +36,10 @@ class TxnListTile extends ConsumerWidget {
     this.showSeparator = false,
     this.lookups = TxnListLookups.empty,
     this.highlight = const [],
+    this.selecting = false,
+    this.selected = false,
+    this.onToggleSelect,
+    this.onEnterSelect,
   });
 
   final Transaction txn;
@@ -49,6 +53,12 @@ class TxnListTile extends ConsumerWidget {
 
   /// Search keywords to mark in the title / subtitle (empty = no highlight).
   final List<String> highlight;
+
+  /// Multi-select mode (home / similar lists).
+  final bool selecting;
+  final bool selected;
+  final VoidCallback? onToggleSelect;
+  final VoidCallback? onEnterSelect;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -85,8 +95,24 @@ class TxnListTile extends ConsumerWidget {
             color: Theme.of(context).colorScheme.outlineVariant,
           ),
         InkWell(
-          onTap: () => context.push('/ledger/${txn.id}'),
-          onLongPress: () => _showTxnContextMenu(context, ref),
+          onTap: () {
+            if (selecting) {
+              onToggleSelect?.call();
+              return;
+            }
+            context.push('/ledger/${txn.id}');
+          },
+          onLongPress: () {
+            if (selecting) {
+              onToggleSelect?.call();
+              return;
+            }
+            if (onEnterSelect != null) {
+              onEnterSelect!();
+              return;
+            }
+            _showTxnContextMenu(context, ref);
+          },
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
             // 金额列按内容宽度贴右，但最多占 55%：大字号/大金额时省略，
@@ -95,6 +121,15 @@ class TxnListTile extends ConsumerWidget {
               builder: (context, constraints) => Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
+                  if (selecting) ...[
+                    Checkbox(
+                      value: selected,
+                      onChanged: (_) => onToggleSelect?.call(),
+                      visualDensity: VisualDensity.compact,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    const SizedBox(width: 4),
+                  ],
                   CentliIconChip(
                     name: (cat?.name ?? '').trim(),
                     kind: isTransfer ? 'transfer' : txn.type,

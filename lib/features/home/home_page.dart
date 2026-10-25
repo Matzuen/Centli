@@ -218,6 +218,61 @@ class _HomePageState extends ConsumerState<HomePage> {
   /// Local month for calendar grid; independent of [homeRangeProvider].
   DateTime? _calendarMonth;
 
+  final _selectedTxnIds = <String>{};
+  var _selectingTxns = false;
+
+  void _exitTxnSelect() {
+    setState(() {
+      _selectingTxns = false;
+      _selectedTxnIds.clear();
+    });
+  }
+
+  void _toggleTxnSelect(String id) {
+    setState(() {
+      if (_selectedTxnIds.contains(id)) {
+        _selectedTxnIds.remove(id);
+        if (_selectedTxnIds.isEmpty) _selectingTxns = false;
+      } else {
+        _selectedTxnIds.add(id);
+        _selectingTxns = true;
+      }
+    });
+  }
+
+  void _enterTxnSelect(String id) {
+    setState(() {
+      _selectingTxns = true;
+      _selectedTxnIds.add(id);
+    });
+  }
+
+  void _selectAllTxns(List<Transaction> items) {
+    setState(() {
+      _selectingTxns = true;
+      _selectedTxnIds
+        ..clear()
+        ..addAll(items.map((t) => t.id));
+    });
+  }
+
+  Future<void> _batchSoftDeleteTxns() async {
+    final ids = _selectedTxnIds.toList();
+    if (ids.isEmpty) return;
+    final ok = await showGlassConfirmDialog(
+      context: context,
+      title: '删除账单',
+      content: '确定删除选中的 ${ids.length} 笔账单？可在「回收站」恢复。',
+      confirmLabel: '删除',
+      destructive: true,
+    );
+    if (ok != true || !mounted) return;
+    final n = await ref.read(databaseProvider).softDeleteTransactions(ids);
+    if (!mounted) return;
+    _exitTxnSelect();
+    showGlassSnackBar(context, '已删除 $n 笔，可在回收站恢复');
+  }
+
   Future<void> _pickLedger({
     required BuildContext anchorContext,
     required String currentId,
@@ -476,6 +531,8 @@ class _HomePageState extends ConsumerState<HomePage> {
                             selected: _mode == 0,
                             onTap: () => setState(() {
                               _mode = 0;
+                              _selectingTxns = false;
+                              _selectedTxnIds.clear();
                             }),
                           ),
                         ),
@@ -492,6 +549,8 @@ class _HomePageState extends ConsumerState<HomePage> {
                                   now.year,
                                   now.month,
                                 );
+                                _selectingTxns = false;
+                                _selectedTxnIds.clear();
                               });
                             },
                           ),
@@ -586,6 +645,59 @@ class _HomePageState extends ConsumerState<HomePage> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
+                                if (_selectingTxns)
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: 8),
+                                    child: Row(
+                                      children: [
+                                        IconButton(
+                                          tooltip: '取消选择',
+                                          icon: const Icon(Icons.close),
+                                          onPressed: _exitTxnSelect,
+                                        ),
+                                        Expanded(
+                                          child: Text(
+                                            '已选 ${_selectedTxnIds.length}',
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .titleSmall
+                                                ?.copyWith(
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                          ),
+                                        ),
+                                        TextButton(
+                                          onPressed: () {
+                                            final list =
+                                                recent.valueOrNull ?? const [];
+                                            _selectAllTxns(list);
+                                          },
+                                          child: const Text('全选'),
+                                        ),
+                                        IconButton(
+                                          tooltip: '批量删除',
+                                          icon: Icon(
+                                            Icons.delete_outline,
+                                            color: scheme.error,
+                                          ),
+                                          onPressed: _selectedTxnIds.isEmpty
+                                              ? null
+                                              : _batchSoftDeleteTxns,
+                                        ),
+                                      ],
+                                    ),
+                                  )
+                                else
+                                  Align(
+                                    alignment: Alignment.centerRight,
+                                    child: IconButton(
+                                      tooltip: '多选删除',
+                                      icon: const Icon(Icons.checklist),
+                                      onPressed: () => setState(
+                                        () => _selectingTxns = true,
+                                      ),
+                                    ),
+                                  ),
                                 DateRangeControl(
                                   range: range,
                                   onChanged: (next) {
@@ -666,6 +778,10 @@ class _HomePageState extends ConsumerState<HomePage> {
                                     return TxnGroupedSection(
                                       txns: txns,
                                       hide: hide,
+                                      selecting: _selectingTxns,
+                                      selectedIds: _selectedTxnIds,
+                                      onToggleSelect: _toggleTxnSelect,
+                                      onEnterSelect: _enterTxnSelect,
                                     );
                                   },
                                 ),

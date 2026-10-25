@@ -65,6 +65,10 @@ class TxnGroupedList extends ConsumerWidget {
     this.shrinkWrap = false,
     this.physics,
     this.highlight = const [],
+    this.selecting = false,
+    this.selectedIds = const {},
+    this.onToggleSelect,
+    this.onEnterSelect,
   });
 
   final List<Transaction> txns;
@@ -75,6 +79,10 @@ class TxnGroupedList extends ConsumerWidget {
   final EdgeInsetsGeometry padding;
   final bool shrinkWrap;
   final ScrollPhysics? physics;
+  final bool selecting;
+  final Set<String> selectedIds;
+  final void Function(String id)? onToggleSelect;
+  final void Function(String id)? onEnterSelect;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -98,6 +106,10 @@ class TxnGroupedList extends ConsumerWidget {
           isFirst: gi == 0,
           lookups: lookups,
           highlight: highlight,
+          selecting: selecting,
+          selectedIds: selectedIds,
+          onToggleSelect: onToggleSelect,
+          onEnterSelect: onEnterSelect,
         );
       },
     );
@@ -110,10 +122,18 @@ class TxnGroupedSection extends ConsumerWidget {
     super.key,
     required this.txns,
     required this.hide,
+    this.selecting = false,
+    this.selectedIds = const {},
+    this.onToggleSelect,
+    this.onEnterSelect,
   });
 
   final List<Transaction> txns;
   final bool hide;
+  final bool selecting;
+  final Set<String> selectedIds;
+  final void Function(String id)? onToggleSelect;
+  final void Function(String id)? onEnterSelect;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -133,6 +153,10 @@ class TxnGroupedSection extends ConsumerWidget {
             hide: hide,
             isFirst: i == 0,
             lookups: lookups,
+            selecting: selecting,
+            selectedIds: selectedIds,
+            onToggleSelect: onToggleSelect,
+            onEnterSelect: onEnterSelect,
           ),
       ],
     );
@@ -147,6 +171,10 @@ class _TxnDateGroup extends StatelessWidget {
     required this.isFirst,
     required this.lookups,
     this.highlight = const [],
+    this.selecting = false,
+    this.selectedIds = const {},
+    this.onToggleSelect,
+    this.onEnterSelect,
   });
 
   final String label;
@@ -155,6 +183,10 @@ class _TxnDateGroup extends StatelessWidget {
   final bool isFirst;
   final TxnListLookups lookups;
   final List<String> highlight;
+  final bool selecting;
+  final Set<String> selectedIds;
+  final void Function(String id)? onToggleSelect;
+  final void Function(String id)? onEnterSelect;
 
   @override
   Widget build(BuildContext context) {
@@ -185,6 +217,14 @@ class _TxnDateGroup extends StatelessWidget {
                   showSeparator: i > 0,
                   lookups: lookups,
                   highlight: highlight,
+                  selecting: selecting,
+                  selected: selectedIds.contains(items[i].id),
+                  onToggleSelect: onToggleSelect == null
+                      ? null
+                      : () => onToggleSelect!(items[i].id),
+                  onEnterSelect: onEnterSelect == null
+                      ? null
+                      : () => onEnterSelect!(items[i].id),
                 ),
             ],
           ),
