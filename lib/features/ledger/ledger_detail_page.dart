@@ -695,7 +695,17 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     return null;
   }
 
-  /// 「账本名-账户名」；解析失败时退回 id（避免空白，便于发现脏数据）。
+  /// Whether current transfer spans two ledgers (needs「账本-账户」labels).
+  bool get _isCrossLedgerTransfer {
+    if (!_isTransfer) return false;
+    final from = _accountOf(_accountId);
+    final to = _accountOf(_toAccountId);
+    if (from == null || to == null) return false;
+    return from.ledgerId != to.ledgerId;
+  }
+
+  /// Account label: bare name for same-ledger;「账本-账户」only when cross-ledger.
+  /// Falls back to account id (never blank) if lookup fails.
   String? _accountNameOf(String? id) {
     if (id == null) return null;
     final a = _accountOf(id);
@@ -704,6 +714,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     return formatLedgerAccountLabel(
       accountName: a.name,
       ledgerName: ledger,
+      includeLedger: _isCrossLedgerTransfer,
     );
   }
 

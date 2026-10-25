@@ -275,13 +275,30 @@ class TxnListTile extends ConsumerWidget {
 
   String _accountPart() {
     final from = lookups.accountsById[txn.accountId];
-    final fromLabel = _accountLabel(from, fallbackId: txn.accountId);
+    Account? to;
+    final toId = txn.toAccountId;
+    if (txn.type == 'transfer' && toId != null && toId.isNotEmpty) {
+      to = lookups.accountsById[toId];
+    }
+    // Only cross-ledger transfers show「账本-账户」; same-ledger keeps bare names.
+    final crossLedger = txn.type == 'transfer' &&
+        from != null &&
+        to != null &&
+        from.ledgerId != to.ledgerId;
+
+    final fromLabel = _accountLabel(
+      from,
+      fallbackId: txn.accountId,
+      includeLedger: crossLedger,
+    );
 
     if (txn.type == 'transfer') {
-      final toId = txn.toAccountId;
       if (toId != null && toId.isNotEmpty) {
-        final to = lookups.accountsById[toId];
-        final toLabel = _accountLabel(to, fallbackId: toId);
+        final toLabel = _accountLabel(
+          to,
+          fallbackId: toId,
+          includeLedger: crossLedger,
+        );
         if (fromLabel.isNotEmpty && toLabel.isNotEmpty) {
           return '$fromLabel → $toLabel';
         }
@@ -291,7 +308,11 @@ class TxnListTile extends ConsumerWidget {
     return fromLabel;
   }
 
-  String _accountLabel(Account? account, {String? fallbackId}) {
+  String _accountLabel(
+    Account? account, {
+    String? fallbackId,
+    bool includeLedger = false,
+  }) {
     if (account == null) {
       final id = (fallbackId ?? '').trim();
       return id;
@@ -300,6 +321,7 @@ class TxnListTile extends ConsumerWidget {
     return formatLedgerAccountLabel(
       accountName: account.name,
       ledgerName: ledger,
+      includeLedger: includeLedger,
     );
   }
 
