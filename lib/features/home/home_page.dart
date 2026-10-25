@@ -432,81 +432,123 @@ class _HomePageState extends ConsumerState<HomePage> {
 
             return Column(
               children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
-                  child: Row(
-                    children: [
-                      Flexible(
-                        child: Builder(
-                          builder: (anchorCtx) => Tooltip(
-                          message: '切换记账本',
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(8),
-                            onTap: () => _pickLedger(
-                              anchorContext: anchorCtx,
-                              currentId: ledgerId,
-                              ledgers: ledgers,
+                if (_selectingTxns)
+                  Material(
+                    color: scheme.surface.withValues(alpha: 0.92),
+                    elevation: 1,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(4, 4, 8, 4),
+                      child: Row(
+                        children: [
+                          TextButton(
+                            onPressed: _exitTxnSelect,
+                            child: const Text('取消'),
+                          ),
+                          Expanded(
+                            child: Text(
+                              '已选 ${_selectedTxnIds.length} 项',
+                              textAlign: TextAlign.center,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleSmall
+                                  ?.copyWith(fontWeight: FontWeight.w700),
                             ),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                vertical: 4,
-                                horizontal: 2,
-                              ),
-                              child: Row(
-                                children: [
-                                  Flexible(
-                                    child: Text(
-                                      ledger.name,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleLarge,
-                                    ),
+                          ),
+                          TextButton(
+                            onPressed: () {
+                              final list =
+                                  recent.valueOrNull ?? const <Transaction>[];
+                              _selectAllTxns(list);
+                            },
+                            child: const Text('全选'),
+                          ),
+                          FilledButton(
+                            style: centliDangerFilledStyle(context),
+                            onPressed: _selectedTxnIds.isEmpty
+                                ? null
+                                : _batchSoftDeleteTxns,
+                            child: const Text('删除'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                else
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
+                    child: Row(
+                      children: [
+                        Flexible(
+                          child: Builder(
+                            builder: (anchorCtx) => Tooltip(
+                              message: '切换记账本',
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(8),
+                                onTap: () => _pickLedger(
+                                  anchorContext: anchorCtx,
+                                  currentId: ledgerId,
+                                  ledgers: ledgers,
+                                ),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 4,
+                                    horizontal: 2,
                                   ),
-                                  const SizedBox(width: 2),
-                                  Icon(
-                                    Icons.keyboard_arrow_down_rounded,
-                                    size: 22,
-                                    color: scheme.onSurfaceVariant,
+                                  child: Row(
+                                    children: [
+                                      Flexible(
+                                        child: Text(
+                                          ledger.name,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleLarge,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 2),
+                                      Icon(
+                                        Icons.keyboard_arrow_down_rounded,
+                                        size: 22,
+                                        color: scheme.onSurfaceVariant,
+                                      ),
+                                    ],
                                   ),
-                                ],
+                                ),
                               ),
                             ),
                           ),
                         ),
-                      ),
-                      ),
-                      const Spacer(),
-                      IconButton(
-                        key: const Key('home_pending_entry'),
-                        tooltip: pendingCount > 0
-                            ? '待确认 ($pendingCount)'
-                            : '待确认',
-                        onPressed: () =>
-                            context.push('/home/pending?tab=pending'),
-                        icon: Badge(
-                          isLabelVisible: pendingCount > 0,
-                          label: Text(
-                            pendingCount > 99 ? '99+' : '$pendingCount',
+                        const Spacer(),
+                        IconButton(
+                          key: const Key('home_pending_entry'),
+                          tooltip: pendingCount > 0
+                              ? '待确认 ($pendingCount)'
+                              : '待确认',
+                          onPressed: () =>
+                              context.push('/home/pending?tab=pending'),
+                          icon: Badge(
+                            isLabelVisible: pendingCount > 0,
+                            label: Text(
+                              pendingCount > 99 ? '99+' : '$pendingCount',
+                            ),
+                            child: const Icon(Icons.pending_actions_outlined),
                           ),
-                          child: const Icon(Icons.pending_actions_outlined),
                         ),
-                      ),
-                      IconButton(
-                        tooltip: '截图记账',
-                        onPressed: () =>
-                            importCaptureFromScreenshot(context, ref),
-                        icon: const Icon(Icons.document_scanner_outlined),
-                      ),
-                      IconButton(
-                        tooltip: '搜索账单',
-                        onPressed: () => context.push('/home/search'),
-                        icon: const Icon(Icons.search_rounded),
-                      ),
-                    ],
+                        IconButton(
+                          tooltip: '截图记账',
+                          onPressed: () =>
+                              importCaptureFromScreenshot(context, ref),
+                          icon: const Icon(Icons.document_scanner_outlined),
+                        ),
+                        IconButton(
+                          tooltip: '搜索账单',
+                          onPressed: () => context.push('/home/search'),
+                          icon: const Icon(Icons.search_rounded),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
                 Padding(
                   // 底部留白收窄：净资产卡片稍微上移。
                   padding: const EdgeInsets.fromLTRB(
@@ -645,59 +687,6 @@ class _HomePageState extends ConsumerState<HomePage> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                if (_selectingTxns)
-                                  Padding(
-                                    padding: const EdgeInsets.only(bottom: 8),
-                                    child: Row(
-                                      children: [
-                                        IconButton(
-                                          tooltip: '取消选择',
-                                          icon: const Icon(Icons.close),
-                                          onPressed: _exitTxnSelect,
-                                        ),
-                                        Expanded(
-                                          child: Text(
-                                            '已选 ${_selectedTxnIds.length}',
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .titleSmall
-                                                ?.copyWith(
-                                                  fontWeight: FontWeight.w700,
-                                                ),
-                                          ),
-                                        ),
-                                        TextButton(
-                                          onPressed: () {
-                                            final list =
-                                                recent.valueOrNull ?? const [];
-                                            _selectAllTxns(list);
-                                          },
-                                          child: const Text('全选'),
-                                        ),
-                                        IconButton(
-                                          tooltip: '批量删除',
-                                          icon: Icon(
-                                            Icons.delete_outline,
-                                            color: scheme.error,
-                                          ),
-                                          onPressed: _selectedTxnIds.isEmpty
-                                              ? null
-                                              : _batchSoftDeleteTxns,
-                                        ),
-                                      ],
-                                    ),
-                                  )
-                                else
-                                  Align(
-                                    alignment: Alignment.centerRight,
-                                    child: IconButton(
-                                      tooltip: '多选删除',
-                                      icon: const Icon(Icons.checklist),
-                                      onPressed: () => setState(
-                                        () => _selectingTxns = true,
-                                      ),
-                                    ),
-                                  ),
                                 DateRangeControl(
                                   range: range,
                                   onChanged: (next) {
