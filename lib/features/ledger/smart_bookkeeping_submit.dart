@@ -228,18 +228,30 @@ Future<SmartBookkeepingOutcome> submitSmartBookkeepingText({
     }
   }
 
-  await db.insertManualTransaction(
-    ledgerId: ledgerId,
-    type: type,
-    amountMinor: amountMinor,
-    currency: currency,
-    accountId: accountId!,
-    toAccountId: type == 'transfer' ? toAccountId : null,
-    categoryId: categoryId,
-    note: note,
-    happenAt: parsed.happenAt,
-    toAmountMinor: toAmountMinor,
-  );
+  if (type == 'transfer') {
+    await db.createTransferTransaction(
+      accountId: accountId!,
+      toAccountId: toAccountId!,
+      amountMinor: amountMinor,
+      currency: currency,
+      categoryId: categoryId,
+      note: note,
+      happenAt: parsed.happenAt,
+      toAmountMinor: toAmountMinor,
+      ledgerId: ledgerId,
+    );
+  } else {
+    await db.insertManualTransaction(
+      ledgerId: ledgerId,
+      type: type,
+      amountMinor: amountMinor,
+      currency: currency,
+      accountId: accountId!,
+      categoryId: categoryId,
+      note: note,
+      happenAt: parsed.happenAt,
+    );
+  }
 
   final summary = parsed.hits.isEmpty
       ? '已记账'

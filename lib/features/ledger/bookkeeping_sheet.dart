@@ -19,7 +19,6 @@ import 'category_picker_sheet.dart';
 import 'ledger_detail_page.dart' show showTagEditorDialog;
 import 'sub_transaction_sheet.dart';
 import '../../core/widgets/glass.dart';
-import '../../core/utils/id_gen.dart';
 
 /// Set by the bill-detail page when 金额 was edited but not yet saved through
 /// 保存. The bookkeeping sheet applies it on next open (it only shows on
@@ -603,29 +602,38 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
         );
       } else {
         await db.transaction(() async {
-          // Cross-ledger transfer: row lives in from-account's ledger.
-          var insertLedgerId = _ledgerId!;
+          final String parentId;
           if (_type == 'transfer') {
-            final fromAcc = _accountById(_accountId);
-            if (fromAcc != null && fromAcc.ledgerId.isNotEmpty) {
-              insertLedgerId = fromAcc.ledgerId;
-            }
+            // Same-ledger: one row; cross-ledger: canonical + to-ledger mirror.
+            parentId = await db.createTransferTransaction(
+              accountId: _accountId!,
+              toAccountId: toAcc!,
+              amountMinor: amountMinor,
+              currency: _currency,
+              categoryId: cat,
+              note: note,
+              tags: _tags,
+              happenAt: _happenAt,
+              fxRate: fxRate,
+              toAmountMinor: toAmountMinor,
+              ledgerId: _ledgerId,
+            );
+          } else {
+            parentId = await db.insertManualTransaction(
+              ledgerId: _ledgerId!,
+              type: _type,
+              amountMinor: amountMinor,
+              currency: _currency,
+              accountId: _accountId!,
+              toAccountId: toAcc,
+              categoryId: cat,
+              note: note,
+              tags: _tags,
+              happenAt: _happenAt,
+              fxRate: fxRate,
+              toAmountMinor: toAmountMinor,
+            );
           }
-          final parentId = await db.insertManualTransaction(
-            ledgerId: insertLedgerId,
-            type: _type,
-            amountMinor: amountMinor,
-            currency: _currency,
-            accountId: _accountId!,
-            toAccountId: toAcc,
-            categoryId: cat,
-            note: note,
-            tags: _tags,
-            happenAt: _happenAt,
-            fxRate: fxRate,
-            toAmountMinor: toAmountMinor,
-            transferGroupId: _type == 'transfer' ? newId() : null,
-          );
           for (final sub in _draftSubs) {
             await db.insertManualTransaction(
               ledgerId: _ledgerId!,

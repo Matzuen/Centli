@@ -65,7 +65,7 @@ class CentliDatabase extends _$CentliDatabase {
   }
 
   @override
-  int get schemaVersion => 14;
+  int get schemaVersion => 15;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -215,6 +215,12 @@ WHERE pending_id IS NOT NULL
               await m.addColumn(transactions, transactions.subTypeId);
             }
             await seedDefaultSubTransactionTypes();
+          }
+          if (from < 15) {
+            // Cross-ledger transfers used to live as a single row in the
+            // from-ledger; destination balances moved but that ledger's
+            //流水列表 was empty. Backfill display mirrors.
+            await backfillCrossLedgerTransferMirrors();
           }
           await _ensureQueryIndexes();
         },
@@ -1231,11 +1237,13 @@ WHERE pending_id IS NOT NULL
     final balances = {for (final a in accs) a.id: a.openingBalanceMinor};
     if (balances.isEmpty) return balances;
 
-    // Aggregate by account id (not txn.ledger_id) so cross-ledger transfers
-    // update both sides' balances when the single row lives in one ledger.
+    // Aggregate by account id (not txn.ledger_id) so the canonical
+    // cross-ledger transfer row (in the from-ledger) updates both sides.
+    // Rows with source=transfer_mirror are display-only in the to-ledger.
     final ids = balances.keys.toList();
     final ph = List.filled(ids.length, '?').join(',');
     final vars = [for (final id in ids) Variable<String>(id)];
+    final mirror = kTransferMirrorSource;
     final sql = '''
       SELECT id, SUM(delta) AS delta FROM (
         SELECT account_id AS id,
@@ -1245,13 +1253,16 @@ WHERE pending_id IS NOT NULL
                  ELSE 0
                END) AS delta
         FROM transactions
-        WHERE deleted_at IS NULL AND account_id IN (__IN__)
+        WHERE deleted_at IS NULL
+          AND IFNULL(source, '') != ?
+          AND account_id IN (__IN__)
         GROUP BY account_id
         UNION ALL
         SELECT to_account_id AS id,
                SUM(COALESCE(to_amount_minor, amount_minor)) AS delta
         FROM transactions
         WHERE deleted_at IS NULL
+          AND IFNULL(source, '') != ?
           AND type = 'transfer' AND to_account_id IN (__IN__)
         GROUP BY to_account_id
       )
@@ -1260,7 +1271,12 @@ WHERE pending_id IS NOT NULL
 
     final deltas = await customSelect(
       sql,
-      variables: [...vars, ...vars],
+      variables: [
+        Variable<String>(mirror),
+        ...vars,
+        Variable<String>(mirror),
+        ...vars,
+      ],
       readsFrom: {transactions},
     ).get();
     for (final r in deltas) {
@@ -1302,6 +1318,7 @@ WHERE pending_id IS NOT NULL
     String? parentId,
     String? subTypeId,
     String? transferGroupId,
+    String source = 'manual',
   }) async {
     final ts = nowMs();
     final happen = happenAt?.toUtc().millisecondsSinceEpoch ?? ts;
@@ -1327,6 +1344,7 @@ WHERE pending_id IS NOT NULL
         parentId: Value(parentId),
         subTypeId: Value(subTypeId),
         transferGroupId: Value(transferGroupId),
+        source: Value(source),
         createdAt: ts,
         updatedAt: ts,
       ),
@@ -1334,9 +1352,340 @@ WHERE pending_id IS NOT NULL
     return id;
   }
 
+  /// Insert a transfer. Same-ledger: one row. Cross-ledger: canonical row in
+  /// the from-account ledger plus a [kTransferMirrorSource] row in the
+  /// to-account ledger so both流水列表 show the move; balances only count
+  /// the canonical row.
+  ///
+  /// Returns the canonical (from-ledger) row id.
+  Future<String> createTransferTransaction({
+    required String accountId,
+    required String toAccountId,
+    required int amountMinor,
+    required String currency,
+    String? categoryId,
+    String? merchant,
+    String? note,
+    List<String>? tags,
+    DateTime? happenAt,
+    double? fxRate,
+    int? toAmountMinor,
+    int includeInStat = 1,
+    int includeInBudget = 1,
+    /// Fallback ledger when from-account lookup fails.
+    String? ledgerId,
+  }) async {
+    if (accountId == toAccountId) {
+      throw StateError('转出与转入资产账户不能相同');
+    }
+    final fromAcc = await getAccount(accountId);
+    final toAcc = await getAccount(toAccountId);
+    final fromLedgerId = (fromAcc?.ledgerId.isNotEmpty == true)
+        ? fromAcc!.ledgerId
+        : ledgerId;
+    if (fromLedgerId == null || fromLedgerId.isEmpty) {
+      throw StateError('无法确定转出账本');
+    }
+    final toLedgerId = toAcc?.ledgerId ?? '';
+    final groupId = newId();
+    final resolvedToAmount = toAmountMinor ?? amountMinor;
+    var catId = categoryId;
+    if (catId == null) {
+      catId = (await ensureDefaultTransferCategory(fromLedgerId)).id;
+    }
+
+    return transaction(() async {
+      final canonicalId = await insertManualTransaction(
+        ledgerId: fromLedgerId,
+        type: 'transfer',
+        amountMinor: amountMinor,
+        currency: currency,
+        accountId: accountId,
+        toAccountId: toAccountId,
+        categoryId: catId,
+        merchant: merchant,
+        note: note,
+        tags: tags,
+        happenAt: happenAt,
+        fxRate: fxRate,
+        toAmountMinor: resolvedToAmount,
+        includeInStat: includeInStat,
+        includeInBudget: includeInBudget,
+        transferGroupId: groupId,
+      );
+
+      if (toLedgerId.isNotEmpty && toLedgerId != fromLedgerId) {
+        final toCat =
+            (await ensureDefaultTransferCategory(toLedgerId)).id;
+        await insertManualTransaction(
+          ledgerId: toLedgerId,
+          type: 'transfer',
+          amountMinor: amountMinor,
+          currency: currency,
+          accountId: accountId,
+          toAccountId: toAccountId,
+          categoryId: toCat,
+          merchant: merchant,
+          note: note,
+          tags: tags,
+          happenAt: happenAt,
+          fxRate: fxRate,
+          toAmountMinor: resolvedToAmount,
+          includeInStat: includeInStat,
+          includeInBudget: includeInBudget,
+          transferGroupId: groupId,
+          source: kTransferMirrorSource,
+        );
+      }
+      return canonicalId;
+    });
+  }
+
+  /// Backfill destination-ledger mirrors for historical single-row
+  /// cross-ledger transfers (schema v15). Idempotent.
+  Future<int> backfillCrossLedgerTransferMirrors() async {
+    final rows = await customSelect(
+      '''
+      SELECT t.id AS id,
+             t.ledger_id AS ledger_id,
+             t.account_id AS account_id,
+             t.to_account_id AS to_account_id,
+             t.amount_minor AS amount_minor,
+             t.currency AS currency,
+             t.note AS note,
+             t.tags AS tags,
+             t.happen_at AS happen_at,
+             t.fx_rate AS fx_rate,
+             t.to_amount_minor AS to_amount_minor,
+             t.include_in_stat AS include_in_stat,
+             t.include_in_budget AS include_in_budget,
+             t.transfer_group_id AS transfer_group_id
+      FROM transactions t
+      INNER JOIN accounts fa ON fa.id = t.account_id
+      INNER JOIN accounts ta ON ta.id = t.to_account_id
+      WHERE t.deleted_at IS NULL
+        AND t.type = 'transfer'
+        AND t.to_account_id IS NOT NULL
+        AND IFNULL(t.source, '') != ?
+        AND ta.ledger_id != fa.ledger_id
+        AND t.ledger_id = fa.ledger_id
+      ''',
+      variables: [Variable<String>(kTransferMirrorSource)],
+      readsFrom: {transactions, accounts},
+    ).get();
+
+    var created = 0;
+    for (final r in rows) {
+      final toAccountId = r.read<String>('to_account_id');
+      final toAcc = await getAccount(toAccountId);
+      if (toAcc == null) continue;
+      final toLedgerId = toAcc.ledgerId;
+      if (toLedgerId.isEmpty) continue;
+
+      final rawGroup = r.read<String?>('transfer_group_id');
+      late final String groupId;
+      if (rawGroup == null || rawGroup.isEmpty) {
+        groupId = newId();
+        final id = r.read<String>('id');
+        await (update(transactions)..where((t) => t.id.equals(id))).write(
+          TransactionsCompanion(
+            transferGroupId: Value(groupId),
+            updatedAt: Value(nowMs()),
+          ),
+        );
+      } else {
+        groupId = rawGroup;
+        final existingMirror = await (select(transactions)
+              ..where(
+                (t) =>
+                    t.transferGroupId.equals(groupId) &
+                    t.source.equals(kTransferMirrorSource) &
+                    t.deletedAt.isNull(),
+              ))
+            .get();
+        if (existingMirror.isNotEmpty) continue;
+        // Another live row in the to-ledger with same group (rare) — skip.
+        final siblings = await (select(transactions)
+              ..where(
+                (t) =>
+                    t.transferGroupId.equals(groupId) &
+                    t.ledgerId.equals(toLedgerId) &
+                    t.deletedAt.isNull(),
+              ))
+            .get();
+        if (siblings.isNotEmpty) continue;
+      }
+
+      final toCat = (await ensureDefaultTransferCategory(toLedgerId)).id;
+      final happenAtMs = _sqlInt(r, 'happen_at');
+      await insertManualTransaction(
+        ledgerId: toLedgerId,
+        type: 'transfer',
+        amountMinor: _sqlInt(r, 'amount_minor'),
+        currency: r.read<String>('currency'),
+        accountId: r.read<String>('account_id'),
+        toAccountId: toAccountId,
+        categoryId: toCat,
+        note: r.read<String?>('note'),
+        tags: decodeTxnTags(r.read<String?>('tags')),
+        happenAt: DateTime.fromMillisecondsSinceEpoch(happenAtMs, isUtc: true),
+        fxRate: () {
+          final v = r.data['fx_rate'];
+          if (v is double) return v;
+          if (v is num) return v.toDouble();
+          return null;
+        }(),
+        toAmountMinor: r.data['to_amount_minor'] == null
+            ? null
+            : _sqlInt(r, 'to_amount_minor'),
+        includeInStat: _sqlInt(r, 'include_in_stat'),
+        includeInBudget: _sqlInt(r, 'include_in_budget'),
+        transferGroupId: groupId,
+        source: kTransferMirrorSource,
+      );
+      created++;
+    }
+    return created;
+  }
+
+  /// Soft-delete / restore every live row that shares [transferGroupId].
+  Future<List<Transaction>> _transferGroupSiblings(String? groupId) async {
+    if (groupId == null || groupId.isEmpty) return const [];
+    return (select(transactions)
+          ..where((t) => t.transferGroupId.equals(groupId)))
+        .get();
+  }
+
+  /// Keep the destination-ledger mirror in sync after editing a transfer.
+  /// No-op when not a transfer or same-ledger.
+  Future<void> syncTransferMirrorFor(String txnId) async {
+    final row = await (select(transactions)..where((t) => t.id.equals(txnId)))
+        .getSingleOrNull();
+    if (row == null || row.deletedAt != null) return;
+    if (row.type != 'transfer') {
+      // Cleared transfer fields — drop any mirrors in the old group.
+      final gid = row.transferGroupId;
+      if (gid != null && gid.isNotEmpty) {
+        final sibs = await _transferGroupSiblings(gid);
+        for (final s in sibs) {
+          if (s.id == row.id) continue;
+          if (s.source == kTransferMirrorSource && s.deletedAt == null) {
+            await softDeleteTransaction(s.id, cascadeTransferGroup: false);
+          }
+        }
+      }
+      return;
+    }
+    final toId = row.toAccountId;
+    if (toId == null || toId.isEmpty) return;
+
+    // Always edit via the canonical (non-mirror) row.
+    final canonical = row.source == kTransferMirrorSource
+        ? await _canonicalOfGroup(row.transferGroupId) ?? row
+        : row;
+
+    final fromAcc = await getAccount(canonical.accountId);
+    final toAcc = await getAccount(toId);
+    final fromLedger = fromAcc?.ledgerId ?? canonical.ledgerId;
+    final toLedger = toAcc?.ledgerId ?? '';
+    var groupId = canonical.transferGroupId;
+    if (groupId == null || groupId.isEmpty) {
+      groupId = newId();
+      await (update(transactions)..where((t) => t.id.equals(canonical.id)))
+          .write(
+        TransactionsCompanion(
+          transferGroupId: Value(groupId),
+          updatedAt: Value(nowMs()),
+        ),
+      );
+    }
+
+    final mirrors = (await _transferGroupSiblings(groupId))
+        .where((s) => s.source == kTransferMirrorSource)
+        .toList();
+
+    if (toLedger.isEmpty || toLedger == fromLedger) {
+      // Same-ledger (or missing to-account): mirrors should not exist.
+      for (final m in mirrors) {
+        if (m.deletedAt == null) {
+          await softDeleteTransaction(m.id, cascadeTransferGroup: false);
+        }
+      }
+      return;
+    }
+
+    final toCat = (await ensureDefaultTransferCategory(toLedger)).id;
+    final liveMirrors = mirrors.where((m) => m.deletedAt == null).toList();
+    if (liveMirrors.isEmpty) {
+      await insertManualTransaction(
+        ledgerId: toLedger,
+        type: 'transfer',
+        amountMinor: canonical.amountMinor,
+        currency: canonical.currency,
+        accountId: canonical.accountId,
+        toAccountId: canonical.toAccountId,
+        categoryId: toCat,
+        note: canonical.note,
+        tags: decodeTxnTags(canonical.tags),
+        happenAt: DateTime.fromMillisecondsSinceEpoch(
+          canonical.happenAt,
+          isUtc: true,
+        ),
+        fxRate: canonical.fxRate,
+        toAmountMinor: canonical.toAmountMinor,
+        includeInStat: canonical.includeInStat,
+        includeInBudget: canonical.includeInBudget,
+        transferGroupId: groupId,
+        source: kTransferMirrorSource,
+      );
+      return;
+    }
+
+    final ts = nowMs();
+    for (final m in liveMirrors) {
+      await (update(transactions)..where((t) => t.id.equals(m.id))).write(
+        TransactionsCompanion(
+          ledgerId: Value(toLedger),
+          type: const Value('transfer'),
+          amountMinor: Value(canonical.amountMinor),
+          currency: Value(canonical.currency),
+          accountId: Value(canonical.accountId),
+          toAccountId: Value(canonical.toAccountId),
+          categoryId: Value(toCat),
+          note: Value(canonical.note),
+          tags: Value(canonical.tags),
+          happenAt: Value(canonical.happenAt),
+          fxRate: Value(canonical.fxRate),
+          toAmountMinor: Value(canonical.toAmountMinor),
+          includeInStat: Value(canonical.includeInStat),
+          includeInBudget: Value(canonical.includeInBudget),
+          transferGroupId: Value(groupId),
+          source: const Value(kTransferMirrorSource),
+          updatedAt: Value(ts),
+        ),
+      );
+    }
+  }
+
+  Future<Transaction?> _canonicalOfGroup(String? groupId) async {
+    if (groupId == null || groupId.isEmpty) return null;
+    final sibs = await _transferGroupSiblings(groupId);
+    for (final s in sibs) {
+      if (s.deletedAt == null && s.source != kTransferMirrorSource) {
+        return s;
+      }
+    }
+    return null;
+  }
+
   // --- Last-used / note-level quick bookkeeping memory (settings JSON) ---
 
   static const lastBookkeepingKey = 'last_bookkeeping';
+
+  /// Destination-ledger display row for a cross-ledger transfer.
+  /// Excluded from [accountBalances] so dual entry does not double-count.
+  static const kTransferMirrorSource = 'transfer_mirror';
+
 
   /// Last type/account/category used in the manual panel, so the next 记一笔
   /// starts from the same place. Null when nothing was saved yet.
@@ -1754,17 +2103,39 @@ WHERE pending_id IS NOT NULL
     );
   }
 
-  Future<void> softDeleteTransaction(String id) async {
+  Future<void> softDeleteTransaction(
+    String id, {
+    bool cascadeTransferGroup = true,
+  }) async {
     final ts = nowMs();
     final patch = TransactionsCompanion(
       deletedAt: Value(ts),
       updatedAt: Value(ts),
     );
+    final row = await (select(transactions)..where((t) => t.id.equals(id)))
+        .getSingleOrNull();
     await (update(transactions)..where((t) => t.id.equals(id))).write(patch);
     // Cascade soft-delete child sub-transactions.
     await (update(transactions)
           ..where((t) => t.parentId.equals(id) & t.deletedAt.isNull()))
         .write(patch);
+    // Cross-ledger transfer mirrors share transfer_group_id.
+    if (cascadeTransferGroup &&
+        row != null &&
+        row.transferGroupId != null &&
+        row.transferGroupId!.isNotEmpty) {
+      final sibs = await (select(transactions)
+            ..where(
+              (t) =>
+                  t.transferGroupId.equals(row.transferGroupId!) &
+                  t.deletedAt.isNull() &
+                  t.id.equals(id).not(),
+            ))
+          .get();
+      for (final s in sibs) {
+        await softDeleteTransaction(s.id, cascadeTransferGroup: false);
+      }
+    }
   }
 
   /// Soft-delete many top-level bills (and their live children). Returns count.
@@ -1844,6 +2215,22 @@ WHERE pending_id IS NOT NULL
                   t.parentId.equals(id) & t.deletedAt.equals(deletedAt),
             ))
           .write(patch);
+      // Restore transfer-group siblings deleted in the same batch.
+      final gid = row.transferGroupId;
+      if (gid != null && gid.isNotEmpty) {
+        final sibs = await (select(transactions)
+              ..where(
+                (t) =>
+                    t.transferGroupId.equals(gid) &
+                    t.deletedAt.equals(deletedAt) &
+                    t.id.equals(id).not(),
+              ))
+            .get();
+        for (final s in sibs) {
+          await (update(transactions)..where((t) => t.id.equals(s.id)))
+              .write(patch);
+        }
+      }
     }
   }
 
@@ -2200,9 +2587,19 @@ WHERE pending_id IS NOT NULL
     double? fxRate,
     int? toAmountMinor,
   }) async {
+    final existing = await (select(transactions)..where((t) => t.id.equals(id)))
+        .getSingleOrNull();
+    // Prefer writing the canonical row when the user opened a mirror.
+    var targetId = id;
+    if (existing != null &&
+        existing.source == kTransferMirrorSource &&
+        existing.transferGroupId != null) {
+      final canonical = await _canonicalOfGroup(existing.transferGroupId);
+      if (canonical != null) targetId = canonical.id;
+    }
     final ts = nowMs();
     final happen = happenAt?.toUtc().millisecondsSinceEpoch;
-    await (update(transactions)..where((t) => t.id.equals(id))).write(
+    await (update(transactions)..where((t) => t.id.equals(targetId))).write(
       TransactionsCompanion(
         type: Value(type),
         amountMinor: Value(amountMinor),
@@ -2218,6 +2615,7 @@ WHERE pending_id IS NOT NULL
         updatedAt: Value(ts),
       ),
     );
+    await syncTransferMirrorFor(targetId);
   }
 
   /// Field-level update for bill-detail row edits. Only provided arguments
@@ -2270,6 +2668,51 @@ WHERE pending_id IS NOT NULL
         updatedAt: Value(nowMs()),
       ),
     );
+    // If this id is a mirror, redirect sync through the canonical row.
+    final just = await (select(transactions)..where((t) => t.id.equals(id)))
+        .getSingleOrNull();
+    if (just != null && just.source == kTransferMirrorSource) {
+      final canonical = await _canonicalOfGroup(just.transferGroupId);
+      if (canonical != null) {
+        // Copy edits onto canonical then sync mirror from it.
+        await (update(transactions)..where((t) => t.id.equals(canonical.id)))
+            .write(
+          TransactionsCompanion(
+            type: type != null ? Value(type) : const Value.absent(),
+            amountMinor: amountMinor != null
+                ? Value(amountMinor)
+                : const Value.absent(),
+            currency:
+                currency != null ? Value(currency) : const Value.absent(),
+            accountId:
+                accountId != null ? Value(accountId) : const Value.absent(),
+            toAccountId: toAccountId ?? const Value.absent(),
+            categoryId: categoryId != null
+                ? Value(categoryId)
+                : const Value.absent(),
+            happenAt: happenAt != null
+                ? Value(happenAt.toUtc().millisecondsSinceEpoch)
+                : const Value.absent(),
+            tags: tags != null
+                ? Value(encodeTxnTags(tags))
+                : const Value.absent(),
+            note: note != null ? Value(note) : const Value.absent(),
+            includeInStat: includeInStat != null
+                ? Value(includeInStat)
+                : const Value.absent(),
+            includeInBudget: includeInBudget != null
+                ? Value(includeInBudget)
+                : const Value.absent(),
+            toAmountMinor: toAmountMinor ?? const Value.absent(),
+            fxRate: fxRate ?? const Value.absent(),
+            updatedAt: Value(nowMs()),
+          ),
+        );
+        await syncTransferMirrorFor(canonical.id);
+        return;
+      }
+    }
+    await syncTransferMirrorFor(id);
   }
 
   Future<Account?> getAccount(String id) {
@@ -2291,6 +2734,7 @@ WHERE pending_id IS NOT NULL
           ..where(
             (t) =>
                 t.deletedAt.isNull() &
+                t.source.equals(kTransferMirrorSource).not() &
                 t.happenAt.isBiggerOrEqualValue(startMs) &
                 t.happenAt.isSmallerThanValue(endMs) &
                 (t.accountId.equals(accountId) |
@@ -2343,6 +2787,7 @@ WHERE pending_id IS NOT NULL
       ..addColumns([transactions.id.count()])
       ..where(
         transactions.deletedAt.isNull() &
+            transactions.source.equals(kTransferMirrorSource).not() &
             (transactions.accountId.equals(accountId) |
                 transactions.toAccountId.equals(accountId)),
       );

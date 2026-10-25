@@ -1175,11 +1175,16 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
   }
 
   Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
+    final isXfer = txn.type == 'transfer';
+    final hasGroup = (txn.transferGroupId ?? '').isNotEmpty;
+    final body = (isXfer && hasGroup)
+        ? '确定删除这笔转账？若为跨账本转账，转出/转入两侧流水会一起移入「回收站」。'
+        : '确定删除这笔账单？可在「回收站」恢复。';
     final ok = await showGlassDialog<bool>(
       context: context,
       builder: (ctx) => CentliGlassDialog(
         title: const Text('删除账单'),
-        content: const Text('确定删除这笔账单？可在「回收站」恢复。'),
+        content: Text(body),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -1215,6 +1220,8 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
         return '分享图片';
       case 'url':
         return '链接导入';
+      case 'transfer_mirror':
+        return '跨账本转入';
       case 'manual':
         return '手动';
       default:

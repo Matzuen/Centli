@@ -250,9 +250,16 @@ class TxnListTile extends ConsumerWidget {
 
   String _categoryTitle(Category? cat) {
     final name = (cat?.name ?? '').trim();
-    if (name.isNotEmpty) return name;
-    if (txn.type == 'transfer') return '\u8f6c\u8d26';
-    return '\u672a\u5206\u7c7b';
+    if (name.isNotEmpty) {
+      if (txn.source == 'transfer_mirror') {
+        return '跨账本·' + name;
+      }
+      return name;
+    }
+    if (txn.type == 'transfer') {
+      return txn.source == 'transfer_mirror' ? '跨账本转入' : '转账';
+    }
+    return '未分类';
   }
 
   /// 资产账户、备注、标签同一行，样式一致，用「 · 」隔开。
