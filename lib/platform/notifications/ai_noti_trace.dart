@@ -14,7 +14,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../core/utils/money.dart';
 import 'notification_parse.dart';
 
-const int kAiNotiTraceMax = 30;
+const int kAiNotiTraceMax = 50;
 
 /// One decision/event while processing a captured notification.
 class AiNotiTraceEvent {
@@ -27,6 +27,7 @@ class AiNotiTraceEvent {
     this.ruleName,
     this.body,
     this.recognition,
+    this.matchedKeywords,
   });
 
   final int atMs;
@@ -43,6 +44,9 @@ class AiNotiTraceEvent {
 
   /// How local / AI recognized this notice (金额、方向、模型原文等).
   final String? recognition;
+
+  /// Matched keyword / regex snippet from local or AI rules.
+  final String? matchedKeywords;
 
   String get titleShort {
     final t = title.trim();
@@ -69,6 +73,7 @@ class AiNotiTraceEvent {
         if (ruleName != null) 'ruleName': ruleName,
         if (body != null) 'body': body,
         if (recognition != null) 'recognition': recognition,
+        if (matchedKeywords != null) 'matchedKeywords': matchedKeywords,
       };
 
   factory AiNotiTraceEvent.fromJson(Map<String, dynamic> j) {
@@ -81,6 +86,7 @@ class AiNotiTraceEvent {
       ruleName: j['ruleName']?.toString(),
       body: j['body']?.toString(),
       recognition: j['recognition']?.toString(),
+      matchedKeywords: j['matchedKeywords']?.toString(),
     );
   }
 
@@ -115,6 +121,33 @@ class AiNotiTraceEvent {
         return 'AI 判排除但本地支付模板兜底';
       default:
         return kind;
+    }
+  }
+
+  /// Where this notice went: pending / excluded / etc.
+  String get destinationLabel {
+    switch (kind) {
+      case AiNotiTraceKinds.localFastPath:
+      case AiNotiTraceKinds.reuseCapture:
+      case AiNotiTraceKinds.localOverrideAi:
+      case AiNotiTraceKinds.aiCalledPayment:
+        return '进入待确认';
+      case AiNotiTraceKinds.reuseExclude:
+      case AiNotiTraceKinds.aiCalledExclude:
+        return '被排除';
+      case AiNotiTraceKinds.ingestDeduped:
+        return '去重未新建（待确认已有或刚处理过）';
+      case AiNotiTraceKinds.distillCapture:
+      case AiNotiTraceKinds.distillExclude:
+      case AiNotiTraceKinds.distillSkipped:
+        return '规则反写';
+      case AiNotiTraceKinds.aiOff:
+        return '仅本地（未开 AI）';
+      case AiNotiTraceKinds.aiFailed:
+      case AiNotiTraceKinds.aiRateLimited:
+        return 'AI 未成功 · 回落本地';
+      default:
+        return '已处理';
     }
   }
 }
@@ -190,6 +223,7 @@ abstract final class AiNotiTrace {
     String? ruleName,
     String? body,
     String? recognition,
+    String? matchedKeywords,
   }) async {
     await load();
     final ev = AiNotiTraceEvent(
@@ -202,6 +236,9 @@ abstract final class AiNotiTrace {
       body: body == null ? null : _clip(body, _kBodyMax),
       recognition:
           recognition == null ? null : _clip(recognition, _kRecognitionMax),
+      matchedKeywords: matchedKeywords == null || matchedKeywords.trim().isEmpty
+          ? null
+          : _clip(matchedKeywords.trim(), 200),
     );
     _events = [ev, ..._events];
     if (_events.length > kAiNotiTraceMax) {
@@ -220,6 +257,7 @@ abstract final class AiNotiTrace {
     String? detail,
     String? ruleName,
     String? recognition,
+    String? matchedKeywords,
   }) {
     return record(
       pkg: raw.pkg,
@@ -229,6 +267,7 @@ abstract final class AiNotiTrace {
       detail: detail,
       ruleName: ruleName,
       recognition: recognition,
+      matchedKeywords: matchedKeywords,
     );
   }
 

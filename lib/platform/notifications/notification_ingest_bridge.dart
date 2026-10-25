@@ -91,6 +91,7 @@ abstract final class NotificationIngestBridge {
             kind: AiNotiTraceKinds.reuseExclude,
             ruleName: excl.displayName,
             detail: excl.mustContainRegex,
+            matchedKeywords: excl.mustContainRegex,
             recognition: '命中排除规则 · ${excl.mustContainRegex ?? ''}',
           ),
         );
@@ -124,6 +125,7 @@ abstract final class NotificationIngestBridge {
               ? AiNotiTraceKinds.reuseCapture
               : AiNotiTraceKinds.ingestDeduped,
           ruleName: reused.templateId,
+          matchedKeywords: reused.templateId,
           detail: nativeIngested
               ? '金额 ${reused.amountMinor} · native 已入待确认'
               : (id != null
@@ -454,6 +456,7 @@ abstract final class NotificationIngestBridge {
           raw: notification,
           kind: AiNotiTraceKinds.localFastPath,
           detail: '模板 ${local.templateId}',
+          matchedKeywords: local.templateId,
           recognition: formatLocalRecognition(local),
         ),
       );
@@ -513,6 +516,7 @@ abstract final class NotificationIngestBridge {
               raw: notification,
               kind: AiNotiTraceKinds.aiCalledExclude,
               ruleName: llm.mustHint,
+              matchedKeywords: llm.mustHint,
               recognition: llm.recognitionSummary(),
             ),
           );
@@ -536,6 +540,7 @@ abstract final class NotificationIngestBridge {
               raw: notification,
               kind: AiNotiTraceKinds.aiCalledPayment,
               ruleName: llm.mustHint,
+              matchedKeywords: llm.mustHint,
               detail: llm.parse!.amountMinor != null
                   ? '金额 ${llm.parse!.amountMinor}'
                   : '无金额',

@@ -175,6 +175,10 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
               '应用: ${_pkgLabel(e.pkg)}',
               if (e.ruleName != null && e.ruleName!.isNotEmpty)
                 '规则: ${e.ruleName}',
+              if (e.matchedKeywords != null &&
+                  e.matchedKeywords!.trim().isNotEmpty)
+                '匹配关键词: ${e.matchedKeywords}',
+              '去向: ${e.destinationLabel}',
               if (e.detail != null && e.detail!.isNotEmpty) '备注: ${e.detail}',
               if (_relTrace(e.atMs).isNotEmpty) _relTrace(e.atMs),
               '',
@@ -896,13 +900,13 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
                 ),
                 const SizedBox(height: CentliSpacing.section),
                 Text(
-                  '最近 AI 处理',
+                  '最近处理',
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 const SizedBox(height: CentliSpacing.dense),
                 Text(
-                  '打开「我的 → AI 增强 → AI 识别通知」后，每条监听通知会记一条决策。'
-                  '点某条可看原通知正文，以及 AI/本地识别出的金额、方向与模型原文。',
+                  '本地规则与 AI 识别的最近最多 50 条决策。'
+                  '点某条可看匹配关键词、去向（待确认 / 排除等），以及原通知与识别详情。',
                   style: Theme.of(context).textTheme.bodySmall
                       ?.copyWith(color: scheme.onSurfaceVariant),
                 ),
@@ -936,49 +940,65 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
                           ),
                         )
                       else
-                        for (final e in _aiTrace.take(12))
-                          ListTile(
-                            dense: true,
-                            leading: Icon(
-                              e.kind.contains('distill')
-                                  ? Icons.auto_awesome
-                                  : e.kind.contains('exclude')
-                                      ? Icons.block_outlined
-                                      : Icons.smart_toy_outlined,
-                              size: 20,
-                              color: scheme.primary,
-                            ),
-                            title: Text(
-                              e.kindLabel,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            subtitle: Text(
-                              [
-                                _pkgLabel(e.pkg),
-                                e.titleShort,
-                                if (e.recognition != null &&
-                                    e.recognition!.contains('金额:'))
-                                  e.recognition!
-                                      .split('\n')
-                                      .firstWhere(
-                                        (l) => l.startsWith('金额:'),
-                                        orElse: () => '',
-                                      ),
-                                if (e.ruleName != null &&
-                                    e.ruleName!.isNotEmpty)
-                                  e.ruleName!,
-                                _relTrace(e.atMs),
-                              ].where((s) => s.isNotEmpty).join(' · '),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            trailing: Icon(
-                              Icons.chevron_right,
-                              color: scheme.onSurfaceVariant,
-                            ),
-                            onTap: () => _showAiTraceDetail(e),
+                        SizedBox(
+                          height: 168,
+                          child: ListView.builder(
+                            padding: EdgeInsets.zero,
+                            itemCount: _aiTrace.take(50).length,
+                            itemBuilder: (context, i) {
+                              final e = _aiTrace[i];
+                              return ListTile(
+                                dense: true,
+                                leading: Icon(
+                                  e.kind.contains('distill')
+                                      ? Icons.auto_awesome
+                                      : e.kind.contains('exclude')
+                                          ? Icons.block_outlined
+                                          : e.kind.contains('local') ||
+                                                  e.kind.contains('reuse')
+                                              ? Icons.rule_outlined
+                                              : Icons.smart_toy_outlined,
+                                  size: 20,
+                                  color: scheme.primary,
+                                ),
+                                title: Text(
+                                  e.kindLabel,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                subtitle: Text(
+                                  [
+                                    e.destinationLabel,
+                                    _pkgLabel(e.pkg),
+                                    e.titleShort,
+                                    if (e.matchedKeywords != null &&
+                                        e.matchedKeywords!.trim().isNotEmpty)
+                                      '关键词 ${e.matchedKeywords}',
+                                    if (e.recognition != null &&
+                                        e.recognition!.contains('金额:'))
+                                      e.recognition!
+                                          .split('\n')
+                                          .firstWhere(
+                                            (l) => l.startsWith('金额:'),
+                                            orElse: () => '',
+                                          ),
+                                    if (e.ruleName != null &&
+                                        e.ruleName!.isNotEmpty)
+                                      e.ruleName!,
+                                    _relTrace(e.atMs),
+                                  ].where((s) => s.isNotEmpty).join(' · '),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                trailing: Icon(
+                                  Icons.chevron_right,
+                                  color: scheme.onSurfaceVariant,
+                                ),
+                                onTap: () => _showAiTraceDetail(e),
+                              );
+                            },
                           ),
+                        ),
                     ],
                   ),
                 ),
@@ -1068,7 +1088,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
                         icon: Icons.auto_awesome_outlined,
                         title: '还没有 AI 反写规则',
                         message:
-                            '看上方「最近 AI 处理」：若只有「本地模板已识别」而没有「已反写」，'
+                            '看上方「最近处理」：若只有「本地模板已识别」而没有「已反写」，'
                             '多半是未开「AI 识别通知」或后台调用失败；若有「已反写」却列表为空，点刷新。',
                         padding: EdgeInsets.zero,
                       )
