@@ -84,6 +84,7 @@ object PaymentOverlayManager {
     private var overlayCurrency: String = "CNY"
     private var allCategories: List<Category> = emptyList()
     private var allAccounts: List<Account> = emptyList()
+    private var overlayPendingLedgerId: String? = null
     /** null = showing root (L1); non-null = showing children of this parent (L2). */
     private var browsingParentId: String? = null
     private val categoryViews = mutableListOf<Pair<TextView, Category>>()
@@ -138,7 +139,15 @@ object PaymentOverlayManager {
         val id: String,
         val name: String,
         val currency: String,
-    )
+        val ledgerId: String = "",
+        val ledgerName: String = "",
+    ) {
+        fun displayLabel(currentLedgerId: String?): String {
+            if (ledgerName.isBlank()) return name
+            if (currentLedgerId != null && ledgerId == currentLedgerId) return name
+            return "$name · $ledgerName"
+        }
+    }
 
     fun isEnabled(context: Context): Boolean =
         prefs(context).getBoolean(KEY_ENABLED, true)
@@ -921,10 +930,16 @@ object PaymentOverlayManager {
         scroll.visibility = View.GONE
         Thread {
             val suggested = queryPendingSuggestedAccount(context, pendingId)
-            val accounts = queryAccounts(context)
+            val pendingLedger = queryPendingLedgerId(context, pendingId)
+            val accounts = queryAccounts(
+                context,
+                ledgerId = pendingLedger,
+                allLedgers = true,
+            )
             mainHandler.post {
                 suggestedAccountId = suggested
                 allAccounts = accounts
+                overlayPendingLedgerId = pendingLedger
                 renderAccounts(context, view, confirmBtn)
             }
         }.start()
@@ -1053,7 +1068,7 @@ object PaymentOverlayManager {
             }
             for (acc in row) {
                 val chip = TextView(context).apply {
-                    text = acc.name
+                    text = acc.displayLabel(overlayPendingLedgerId)
                     textSize = 13f
                     gravity = android.view.Gravity.CENTER
                     setPadding(
@@ -1158,7 +1173,15 @@ object PaymentOverlayManager {
         scroll.visibility = View.GONE
 
         Thread {
-            val cats = queryCategories(context, selectedDirection)
+            val lid = overlayPendingLedgerId ?: run {
+                val db = openDb(context)
+                try {
+                    db?.let { querySetting(it, "current_ledger_id") }
+                } finally {
+                    db?.close()
+                }
+            }
+            val cats = queryCategories(context, selectedDirection, lid)
             mainHandler.post {
                 allCategories = cats
                 browsingParentId = null
@@ -1628,10 +1651,16 @@ object PaymentOverlayManager {
         }
     }
 
-    private fun queryCategories(context: Context, kind: String): List<Category> {
+    private fun queryCategories(
+        context: Context,
+        kind: String,
+        ledgerIdOverride: String? = null,
+    ): List<Category> {
         val db = openDb(context) ?: return emptyList()
         try {
-            val ledgerId = querySetting(db, "current_ledger_id") ?: return emptyList()
+            val ledgerId = ledgerIdOverride
+                ?: querySetting(db, "current_ledger_id")
+                ?: return emptyList()
             if (kind == "transfer") {
                 ensureTransferCategory(db, ledgerId)
             }
@@ -1659,34 +1688,84 @@ object PaymentOverlayManager {
         }
     }
 
-    private fun queryAccounts(context: Context): List<Account> {
+    private fun queryAccounts(
+        context: Context,
+        ledgerId: String? = null,
+        allLedgers: Boolean = false,
+    ): List<Account> {
         val db = openDb(context) ?: return emptyList()
         try {
-            val ledgerId = querySetting(db, "current_ledger_id") ?: return emptyList()
-            val out = ArrayList<Account>()
+            val nameByLedger = HashMap<String, String>()
             db.rawQuery(
-                """
-                SELECT id, name, currency FROM accounts
-                WHERE ledger_id=? AND archived=0
-                ORDER BY sort_order ASC
-                LIMIT 60
-                """.trimIndent(),
-                arrayOf(ledgerId),
+                "SELECT id, name FROM ledgers WHERE archived=0",
+                null,
             ).use { c ->
                 while (c.moveToNext()) {
-                    out.add(
-                        Account(
-                            id = c.getString(0),
-                            name = c.getString(1) ?: "",
-                            currency = c.getString(2) ?: "CNY",
-                        ),
-                    )
+                    nameByLedger[c.getString(0)] = c.getString(1) ?: ""
+                }
+            }
+            val out = ArrayList<Account>()
+            if (allLedgers) {
+                db.rawQuery(
+                    "SELECT id, name, currency, ledger_id FROM accounts WHERE archived=0 ORDER BY sort_order ASC LIMIT 200",
+                    null,
+                ).use { c ->
+                    while (c.moveToNext()) {
+                        val lid = c.getString(3) ?: ""
+                        out.add(
+                            Account(
+                                id = c.getString(0),
+                                name = c.getString(1) ?: "",
+                                currency = c.getString(2) ?: "CNY",
+                                ledgerId = lid,
+                                ledgerName = nameByLedger[lid] ?: "",
+                            ),
+                        )
+                    }
+                }
+            } else {
+                val lid = ledgerId ?: querySetting(db, "current_ledger_id")
+                    ?: return emptyList()
+                db.rawQuery(
+                    "SELECT id, name, currency, ledger_id FROM accounts WHERE ledger_id=? AND archived=0 ORDER BY sort_order ASC LIMIT 60",
+                    arrayOf(lid),
+                ).use { c ->
+                    while (c.moveToNext()) {
+                        val alid = c.getString(3) ?: lid
+                        out.add(
+                            Account(
+                                id = c.getString(0),
+                                name = c.getString(1) ?: "",
+                                currency = c.getString(2) ?: "CNY",
+                                ledgerId = alid,
+                                ledgerName = nameByLedger[alid] ?: "",
+                            ),
+                        )
+                    }
                 }
             }
             return out
         } catch (e: Exception) {
             Log.e(TAG, "queryAccounts", e)
             return emptyList()
+        } finally {
+            db.close()
+        }
+    }
+
+    private fun queryPendingLedgerId(context: Context, pendingId: String): String? {
+        val db = openDb(context) ?: return null
+        try {
+            db.rawQuery(
+                "SELECT ledger_id FROM pending_captures WHERE id=? LIMIT 1",
+                arrayOf(pendingId),
+            ).use { c ->
+                if (!c.moveToFirst()) return null
+                return c.getString(0)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "queryPendingLedgerId", e)
+            return null
         } finally {
             db.close()
         }
@@ -1828,14 +1907,17 @@ object PaymentOverlayManager {
                 )
             }
             if (accountId.isNullOrBlank()) return false
-            // 校验用户所选账户仍存在；币种跟转出账户走。
+            // 校验账户存在；入账账本跟随转出账户（避免切账本后记错本）。
             var accountCurrency = currency
+            var insertLedgerId = ledgerId
             db.rawQuery(
-                "SELECT currency FROM accounts WHERE id=? AND ledger_id=? AND archived=0 LIMIT 1",
-                arrayOf(accountId, ledgerId),
+                "SELECT currency, ledger_id FROM accounts WHERE id=? AND archived=0 LIMIT 1",
+                arrayOf(accountId),
             ).use { c ->
                 if (!c.moveToFirst()) return false
                 accountCurrency = c.getString(0) ?: currency
+                val accLedger = c.getString(1)
+                if (!accLedger.isNullOrBlank()) insertLedgerId = accLedger
             }
 
             val rawDirection = directionOverride ?: dbDirection
@@ -1851,8 +1933,8 @@ object PaymentOverlayManager {
                 if (toAccountId.isNullOrBlank() || toAccountId == accountId) return false
                 var toCurrency = accountCurrency
                 db.rawQuery(
-                    "SELECT currency FROM accounts WHERE id=? AND ledger_id=? AND archived=0 LIMIT 1",
-                    arrayOf(toAccountId, ledgerId),
+                    "SELECT currency FROM accounts WHERE id=? AND archived=0 LIMIT 1",
+                    arrayOf(toAccountId),
                 ).use { c ->
                     if (!c.moveToFirst()) return false
                     toCurrency = c.getString(0) ?: accountCurrency
@@ -1901,7 +1983,7 @@ object PaymentOverlayManager {
                     ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                     """.trimIndent(),
                     arrayOf<Any?>(
-                        txnId, ledgerId, type, amountMinor, txnCurrency, accountId,
+                        txnId, insertLedgerId, type, amountMinor, txnCurrency, accountId,
                         toAccountId, toAmountMinor, categoryId, note, happenAt,
                         "notification", tagsJson, pendingId, 1, 1,
                         now, now,

@@ -40,10 +40,16 @@ Future<bool> showPendingConfirmDialog(
   required PendingCapture capture,
 }) async {
   final db = ref.read(databaseProvider);
-  // 分类 / 资产账户选项：只加载一次，交给弹窗同步渲染。
+  // 分类按 pending 账本；账户可跨账本（标明所属），默认当前/pending 账本。
   final out = await db.loadCategories(capture.ledgerId, 'out');
   final inn = await db.loadCategories(capture.ledgerId, 'in');
-  final accounts = await db.loadActiveAccounts(capture.ledgerId);
+  final accounts = await db.loadAllActiveAccounts();
+  final ledgers = await db.loadAllLedgers();
+  final ledgerNameMap = {for (final l in ledgers) l.id: l.name};
+  final ledgerNamesByAccountId = {
+    for (final a in accounts)
+      if (ledgerNameMap[a.ledgerId] != null) a.id: ledgerNameMap[a.ledgerId]!,
+  };
   if (!context.mounted) return false;
   final saved = await showGlassSheet<bool>(
     context: context,
@@ -54,6 +60,8 @@ Future<bool> showPendingConfirmDialog(
       capture: capture,
       categories: [...out, ...inn],
       accounts: accounts,
+      ledgers: ledgers.where((l) => l.archived == 0).toList(),
+      ledgerNamesByAccountId: ledgerNamesByAccountId,
     ),
   );
   return saved == true;
@@ -64,11 +72,15 @@ class _ConfirmPendingSheet extends ConsumerStatefulWidget {
     required this.capture,
     required this.categories,
     required this.accounts,
+    required this.ledgers,
+    required this.ledgerNamesByAccountId,
   });
 
   final PendingCapture capture;
   final List<Category> categories;
   final List<Account> accounts;
+  final List<Ledger> ledgers;
+  final Map<String, String> ledgerNamesByAccountId;
 
   @override
   ConsumerState<_ConfirmPendingSheet> createState() =>
@@ -80,6 +92,8 @@ class _ConfirmPendingSheetState extends ConsumerState<_ConfirmPendingSheet> {
   late final TextEditingController _noteCtrl;
   String? _categoryId;
   String? _accountId;
+  late String _ledgerId;
+  List<Category> _categories = const [];
   String? _directionOverride;
   var _busy = false;
 
@@ -112,10 +126,17 @@ class _ConfirmPendingSheetState extends ConsumerState<_ConfirmPendingSheet> {
   List<Category> get _catsForDirection {
     final wantIn = _direction == 'in';
     final wanted = [
-      for (final x in widget.categories)
+      for (final x in _categories)
         if (x.kind == (wantIn ? 'in' : 'out')) x,
     ];
-    return wanted.isNotEmpty ? wanted : widget.categories;
+    return wanted.isNotEmpty ? wanted : _categories;
+  }
+
+  String get _ledgerLabel {
+    for (final l in widget.ledgers) {
+      if (l.id == _ledgerId) return l.name;
+    }
+    return '选择账本';
   }
 
   @override
@@ -140,12 +161,19 @@ class _ConfirmPendingSheetState extends ConsumerState<_ConfirmPendingSheet> {
       return base;
     }();
     _noteCtrl = TextEditingController(text: seedNote);
+    _ledgerId = c.ledgerId;
+    _categories = List<Category>.from(widget.categories);
     final cats = _catsForDirection;
     final suggested = c.suggestedCategoryId;
     _categoryId = cats.any((x) => x.id == suggested)
         ? suggested
         : (cats.isNotEmpty ? cats.first.id : null);
-    final accounts = widget.accounts;
+    // Prefer accounts in pending/current ledger; fall back to any.
+    final inLedger = [
+      for (final a in widget.accounts)
+        if (a.ledgerId == _ledgerId) a,
+    ];
+    final accounts = inLedger.isNotEmpty ? inLedger : widget.accounts;
     final acc = c.suggestedAccountId;
     _accountId = accounts.any((x) => x.id == acc)
         ? acc
@@ -185,18 +213,113 @@ class _ConfirmPendingSheetState extends ConsumerState<_ConfirmPendingSheet> {
     setState(() => _categoryId = id);
   }
 
+  Future<void> _reloadCategoriesForLedger(String ledgerId) async {
+    final db = ref.read(databaseProvider);
+    final out = await db.loadCategories(ledgerId, 'out');
+    final inn = await db.loadCategories(ledgerId, 'in');
+    if (!mounted) return;
+    setState(() {
+      _ledgerId = ledgerId;
+      _categories = [...out, ...inn];
+      final cats = _catsForDirection;
+      if (!cats.any((x) => x.id == _categoryId)) {
+        _categoryId = cats.isEmpty ? null : cats.first.id;
+      }
+      // Keep account if still valid; else prefer one in this ledger.
+      final stillOk = widget.accounts.any((a) => a.id == _accountId);
+      if (!stillOk) {
+        final inLedger = [
+          for (final a in widget.accounts)
+            if (a.ledgerId == ledgerId) a,
+        ];
+        _accountId = inLedger.isNotEmpty
+            ? inLedger.first.id
+            : (widget.accounts.isNotEmpty ? widget.accounts.first.id : null);
+      } else {
+        final acc = _accountById(_accountId);
+        if (acc != null &&
+            acc.ledgerId.isNotEmpty &&
+            acc.ledgerId != ledgerId) {
+          // Account binds ledger — follow account (caller may have set both).
+        }
+      }
+    });
+  }
+
+  Future<void> _pickLedger() async {
+    if (widget.ledgers.isEmpty) return;
+    final chosen = await showGlassSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (ctx) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+                child: Text(
+                  '选择账本',
+                  style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+              ),
+              for (final l in widget.ledgers)
+                ListTile(
+                  title: Text(l.name),
+                  trailing: l.id == _ledgerId
+                      ? Icon(
+                          Icons.check,
+                          color: Theme.of(ctx).colorScheme.primary,
+                        )
+                      : null,
+                  onTap: () => Navigator.pop(ctx, l.id),
+                ),
+              const SizedBox(height: 12),
+            ],
+          ),
+        );
+      },
+    );
+    if (chosen == null || !mounted || chosen == _ledgerId) return;
+    await _reloadCategoriesForLedger(chosen);
+    // Prefer an account in the newly selected ledger.
+    final inLedger = [
+      for (final a in widget.accounts)
+        if (a.ledgerId == chosen) a,
+    ];
+    if (inLedger.isNotEmpty && mounted) {
+      setState(() {
+        if (!inLedger.any((a) => a.id == _accountId)) {
+          _accountId = inLedger.first.id;
+        }
+      });
+    }
+  }
+
   Future<void> _pickAccount() async {
     final db = ref.read(databaseProvider);
-    final types = await db.loadAssetTypes(c.ledgerId);
+    final types = await db.loadAssetTypes(_ledgerId);
     if (!mounted) return;
     final id = await showAccountPickerSheet(
       context,
       accounts: widget.accounts,
       assetTypes: types,
       selectedId: _accountId,
+      ledgerNamesByAccountId: widget.ledgerNamesByAccountId,
     );
     if (id == null || !mounted) return;
+    final acc = _accountById(id);
     setState(() => _accountId = id);
+    // Follow account's ledger so confirm never mis-attributes.
+    if (acc != null &&
+        acc.ledgerId.isNotEmpty &&
+        acc.ledgerId != _ledgerId) {
+      await _reloadCategoriesForLedger(acc.ledgerId);
+    }
   }
 
   Future<void> _confirm() async {
@@ -216,8 +339,8 @@ class _ConfirmPendingSheetState extends ConsumerState<_ConfirmPendingSheet> {
     }
     setState(() => _busy = true);
     try {
-      final inCats = widget.categories.where((x) => x.kind == 'in');
-      final outCats = widget.categories.where((x) => x.kind == 'out');
+      final inCats = _categories.where((x) => x.kind == 'in');
+      final outCats = _categories.where((x) => x.kind == 'out');
       final known = outCats.any((x) => x.id == _categoryId) ||
           inCats.any((x) => x.id == _categoryId);
       // 仅支出 / 收入；退款走收入 + 标签「退款」。
@@ -259,6 +382,11 @@ class _ConfirmPendingSheetState extends ConsumerState<_ConfirmPendingSheet> {
       } else if (refund && note.isEmpty) {
         note = '退款';
       }
+      // Account's ledger wins when set (confirmPendingCapture also enforces).
+      final acc = _accountById(_accountId);
+      final targetLedger = (acc != null && acc.ledgerId.isNotEmpty)
+          ? acc.ledgerId
+          : _ledgerId;
       await ref.read(databaseProvider).confirmPendingCapture(
             pendingId: c.id,
             amountMinor: toMinor(ccy, major),
@@ -271,6 +399,7 @@ class _ConfirmPendingSheetState extends ConsumerState<_ConfirmPendingSheet> {
             tags: tags.isEmpty ? null : tags,
             includeInStat: 1,
             includeInBudget: 1,
+            ledgerId: targetLedger,
           );
       await NotificationCaptureStub.cancelPendingConfirm(c.id);
       if (!mounted) return;
@@ -354,6 +483,19 @@ class _ConfirmPendingSheetState extends ConsumerState<_ConfirmPendingSheet> {
               ),
             ),
             const SizedBox(height: CentliSpacing.section),
+            CentliPickerFormField(
+              key: ValueKey('ledger_$_ledgerId'),
+              label: '入账账本',
+              value: _ledgerLabel,
+              enabled: !_busy && widget.ledgers.length > 1,
+              isDense: false,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 18,
+              ),
+              onTap: _pickLedger,
+            ),
+            const SizedBox(height: CentliSpacing.item + 2),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
