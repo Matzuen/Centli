@@ -19,6 +19,7 @@ import 'category_picker_sheet.dart';
 import 'ledger_detail_page.dart' show showTagEditorDialog;
 import 'sub_transaction_sheet.dart';
 import '../../core/widgets/glass.dart';
+import '../../core/utils/id_gen.dart';
 
 /// Set by the bill-detail page when 金额 was edited but not yet saved through
 /// 保存. The bookkeeping sheet applies it on next open (it only shows on
@@ -106,6 +107,8 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
   /// Sub-transactions queued while composing a new bill (「附加」).
   List<DraftSubTxn> _draftSubs = [];
   List<Account> _accounts = [];
+  List<Account> _allAccounts = [];
+  Map<String, String> _ledgerNamesByAccountId = {};
   List<AssetType> _assetTypes = [];
   List<Category> _categories = [];
   String? _ledgerId;
@@ -154,6 +157,9 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
       return;
     }
     var accounts = await db.loadActiveAccounts(ledgerId);
+    // Cross-ledger transfer: pool includes other ledgers' accounts.
+    final allAccounts = await db.loadAllActiveAccounts();
+    final ledgerNameMap = await db.loadLedgerNameMap();
     final assetTypes = await db.loadAssetTypes(ledgerId);
     final rememberAccRaw = await db.getSetting(PrefKeys.rememberCategoryAccount);
     final rememberNoteRaw = await db.getSetting(PrefKeys.rememberCategoryNote);
@@ -189,9 +195,16 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
       recalledCategory = await db.recallCategoryForNote(widget.initialNote);
     }
     if (!mounted) return;
+    final ledgerNamesByAcc = <String, String>{
+      for (final a in allAccounts)
+        if (ledgerNameMap[a.ledgerId] != null)
+          a.id: ledgerNameMap[a.ledgerId]!,
+    };
     setState(() {
       _ledgerId = ledgerId;
       _accounts = accounts;
+      _allAccounts = allAccounts;
+      _ledgerNamesByAccountId = ledgerNamesByAcc;
       _assetTypes = assetTypes;
       _rememberCategoryAccount = prefBool(rememberAccRaw);
       _rememberCategoryNote = prefBool(rememberNoteRaw);
@@ -325,8 +338,8 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
   }
 
   Account? _accountById(String? id) {
-    if (id == null || _accounts.isEmpty) return null;
-    for (final a in _accounts) {
+    if (id == null) return null;
+    for (final a in [..._accounts, ..._allAccounts]) {
       if (a.id == id) return a;
     }
     return null;
@@ -554,8 +567,13 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
       final note = _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim();
       final toAcc = _type == 'transfer' ? _toAccountId : null;
       var cat = _categoryId;
-      if (_type == 'transfer' && cat == null && _ledgerId != null) {
-        cat = (await db.ensureDefaultTransferCategory(_ledgerId!)).id;
+      // Prefer from-account ledger for transfer category (cross-ledger safe).
+      final fromAccForCat = _accountById(_accountId);
+      final catLedgerId = (fromAccForCat?.ledgerId.isNotEmpty == true)
+          ? fromAccForCat!.ledgerId
+          : _ledgerId;
+      if (_type == 'transfer' && cat == null && catLedgerId != null) {
+        cat = (await db.ensureDefaultTransferCategory(catLedgerId)).id;
       }
       if (widget.existing != null) {
         await db.updateManualTransaction(
@@ -574,8 +592,16 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
         );
       } else {
         await db.transaction(() async {
+          // Cross-ledger transfer: row lives in from-account's ledger.
+          var insertLedgerId = _ledgerId!;
+          if (_type == 'transfer') {
+            final fromAcc = _accountById(_accountId);
+            if (fromAcc != null && fromAcc.ledgerId.isNotEmpty) {
+              insertLedgerId = fromAcc.ledgerId;
+            }
+          }
           final parentId = await db.insertManualTransaction(
-            ledgerId: _ledgerId!,
+            ledgerId: insertLedgerId,
             type: _type,
             amountMinor: amountMinor,
             currency: _currency,
@@ -587,6 +613,7 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
             happenAt: _happenAt,
             fxRate: fxRate,
             toAmountMinor: toAmountMinor,
+            transferGroupId: _type == 'transfer' ? newId() : null,
           );
           for (final sub in _draftSubs) {
             await db.insertManualTransaction(
@@ -764,15 +791,21 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
 
   Future<void> _pickAccount({required bool toAccount}) async {
     final current = toAccount ? _toAccountId : _accountId;
-    final pool = toAccount
-        ? _accounts.where((a) => a.id != _accountId).toList()
+    // Transfer: allow other ledgers' accounts (labeled in picker).
+    final basePool = _type == 'transfer' && _allAccounts.isNotEmpty
+        ? _allAccounts
         : _accounts;
+    final pool = toAccount
+        ? basePool.where((a) => a.id != _accountId).toList()
+        : basePool;
     final id = await showAccountPickerSheet(
       context,
       accounts: pool,
       assetTypes: _assetTypes,
       selectedId: current,
       title: toAccount ? '选择转入资产账户' : '选择资产账户',
+      ledgerNamesByAccountId:
+          _type == 'transfer' ? _ledgerNamesByAccountId : const {},
     );
     if (id == null || !mounted) return;
     setState(() {
@@ -780,6 +813,8 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
         _toAccountId = id;
       } else {
         _accountId = id;
+        // Keep currency in sync when picking from another ledger.
+        // currency follows account via _currency getter
       }
     });
   }

@@ -17,6 +17,8 @@ Future<String?> showAccountPickerSheet(
   List<AssetType> assetTypes = const [],
   String? selectedId,
   String title = '选择资产账户',
+  /// accountId -> ledger display name (cross-ledger transfer / pending).
+  Map<String, String> ledgerNamesByAccountId = const {},
 }) {
   return showGlassSheet<String>(
     context: context,
@@ -30,6 +32,7 @@ Future<String?> showAccountPickerSheet(
       assetTypes: assetTypes,
       selectedId: selectedId,
       title: title,
+      ledgerNamesByAccountId: ledgerNamesByAccountId,
     ),
   );
 }
@@ -40,12 +43,14 @@ class _AccountPickerBody extends StatefulWidget {
     required this.assetTypes,
     required this.title,
     this.selectedId,
+    this.ledgerNamesByAccountId = const {},
   });
 
   final List<Account> accounts;
   final List<AssetType> assetTypes;
   final String title;
   final String? selectedId;
+  final Map<String, String> ledgerNamesByAccountId;
 
   @override
   State<_AccountPickerBody> createState() => _AccountPickerBodyState();
@@ -321,7 +326,7 @@ class _AccountPickerBodyState extends State<_AccountPickerBody> {
                                                       scheme.onSurfaceVariant,
                                                 ),
                                               )
-                                            else
+                                            else ...[
                                               Text(
                                                 currencyLabel(a.currency),
                                                 maxLines: 1,
@@ -332,6 +337,23 @@ class _AccountPickerBodyState extends State<_AccountPickerBody> {
                                                       scheme.onSurfaceVariant,
                                                 ),
                                               ),
+                                              if (widget
+                                                      .ledgerNamesByAccountId[
+                                                          a.id] !=
+                                                  null)
+                                                Text(
+                                                  widget.ledgerNamesByAccountId[
+                                                      a.id]!,
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: TextStyle(
+                                                    fontSize: 10,
+                                                    color: scheme
+                                                        .onSurfaceVariant,
+                                                  ),
+                                                ),
+                                            ],
                                           ],
                                         ),
                                       ),
