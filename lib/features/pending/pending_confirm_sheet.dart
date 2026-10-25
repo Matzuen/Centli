@@ -310,6 +310,7 @@ class _ConfirmPendingSheetState extends ConsumerState<_ConfirmPendingSheet> {
       assetTypes: types,
       selectedId: _accountId,
       ledgerNamesByAccountId: widget.ledgerNamesByAccountId,
+      preferredLedgerId: _ledgerId,
     );
     if (id == null || !mounted) return;
     final acc = _accountById(id);

@@ -11,6 +11,9 @@ import '../../data/db/centli_database.dart';
 const kAccountPickerAllTab = '__all__';
 
 /// Finch 式资产账户选择：左侧「全部」+ 资产类型，右侧图标网格（对齐分类选择）。
+///
+/// 当 [accounts] 跨多个账本时，标题下展示横向账本页签；切换后只显示该账本账户，
+/// 左侧分类栏保留。默认选中 [preferredLedgerId] 或已选账户所属账本。
 Future<String?> showAccountPickerSheet(
   BuildContext context, {
   required List<Account> accounts,
@@ -19,6 +22,8 @@ Future<String?> showAccountPickerSheet(
   String title = '选择资产账户',
   /// accountId -> ledger display name (cross-ledger transfer / pending).
   Map<String, String> ledgerNamesByAccountId = const {},
+  /// Prefer this ledger tab when no [selectedId] (usually current ledger).
+  String? preferredLedgerId,
 }) {
   return showGlassSheet<String>(
     context: context,
@@ -33,6 +38,7 @@ Future<String?> showAccountPickerSheet(
       selectedId: selectedId,
       title: title,
       ledgerNamesByAccountId: ledgerNamesByAccountId,
+      preferredLedgerId: preferredLedgerId,
     ),
   );
 }
@@ -44,6 +50,7 @@ class _AccountPickerBody extends StatefulWidget {
     required this.title,
     this.selectedId,
     this.ledgerNamesByAccountId = const {},
+    this.preferredLedgerId,
   });
 
   final List<Account> accounts;
@@ -51,6 +58,7 @@ class _AccountPickerBody extends StatefulWidget {
   final String title;
   final String? selectedId;
   final Map<String, String> ledgerNamesByAccountId;
+  final String? preferredLedgerId;
 
   @override
   State<_AccountPickerBody> createState() => _AccountPickerBodyState();
@@ -60,11 +68,14 @@ class _AccountPickerBodyState extends State<_AccountPickerBody> {
   /// [kAccountPickerAllTab] or an [AssetType.id] / orphan type key.
   late String _tabId;
   late String? _selectedId;
+  /// Active ledger filter when cross-ledger; null means no filter UI.
+  String? _ledgerId;
 
   @override
   void initState() {
     super.initState();
     _selectedId = widget.selectedId;
+    _ledgerId = _initialLedgerId();
     _tabId = _initialTabId();
   }
 
@@ -75,11 +86,36 @@ class _AccountPickerBodyState extends State<_AccountPickerBody> {
     return map;
   }
 
+  /// Distinct ledgers present in [accounts], preserving first-seen order.
+  List<({String id, String name})> get _ledgerTabs {
+    final seen = <String>{};
+    final tabs = <({String id, String name})>[];
+    for (final a in widget.accounts) {
+      final lid = a.ledgerId.trim();
+      if (lid.isEmpty || !seen.add(lid)) continue;
+      final name = widget.ledgerNamesByAccountId[a.id]?.trim();
+      tabs.add((
+        id: lid,
+        name: (name != null && name.isNotEmpty) ? name : '账本',
+      ));
+    }
+    return tabs;
+  }
+
+  bool get _showLedgerTabs => _ledgerTabs.length > 1;
+
+  List<Account> get _ledgerAccounts {
+    final lid = _ledgerId;
+    if (!_showLedgerTabs || lid == null) return widget.accounts;
+    return widget.accounts.where((a) => a.ledgerId == lid).toList();
+  }
+
   /// 左侧栏：全部 + 有账户的类型（按 assetTypes 排序，孤儿类型垫后）。
   List<({String id, String name})> get _tabs {
     final names = _typeNames;
+    final pool = _ledgerAccounts;
     final used = <String>{};
-    for (final a in widget.accounts) {
+    for (final a in pool) {
       final t = a.type.trim();
       if (t.isNotEmpty) used.add(t);
     }
@@ -99,12 +135,34 @@ class _AccountPickerBodyState extends State<_AccountPickerBody> {
     return tabs;
   }
 
+  String? _initialLedgerId() {
+    final tabs = _ledgerTabs;
+    if (tabs.length <= 1) {
+      return tabs.isEmpty ? null : tabs.first.id;
+    }
+    final sel = widget.selectedId;
+    if (sel != null) {
+      for (final a in widget.accounts) {
+        if (a.id == sel && a.ledgerId.trim().isNotEmpty) {
+          return a.ledgerId;
+        }
+      }
+    }
+    final pref = widget.preferredLedgerId?.trim();
+    if (pref != null &&
+        pref.isNotEmpty &&
+        tabs.any((t) => t.id == pref)) {
+      return pref;
+    }
+    return tabs.first.id;
+  }
+
   String _initialTabId() {
     final tabs = _tabs;
     if (tabs.isEmpty) return kAccountPickerAllTab;
     final sel = widget.selectedId;
     if (sel != null) {
-      for (final a in widget.accounts) {
+      for (final a in _ledgerAccounts) {
         if (a.id != sel) continue;
         final typeId = a.type.trim();
         if (typeId.isNotEmpty && tabs.any((t) => t.id == typeId)) {
@@ -116,9 +174,30 @@ class _AccountPickerBodyState extends State<_AccountPickerBody> {
     return kAccountPickerAllTab;
   }
 
+  void _selectLedger(String ledgerId) {
+    if (_ledgerId == ledgerId) return;
+    setState(() {
+      _ledgerId = ledgerId;
+      _tabId = kAccountPickerAllTab;
+      final tabs = _tabs;
+      final sel = _selectedId;
+      if (sel != null) {
+        for (final a in _ledgerAccounts) {
+          if (a.id != sel) continue;
+          final typeId = a.type.trim();
+          if (typeId.isNotEmpty && tabs.any((t) => t.id == typeId)) {
+            _tabId = typeId;
+          }
+          break;
+        }
+      }
+    });
+  }
+
   List<Account> get _gridItems {
-    if (_tabId == kAccountPickerAllTab) return widget.accounts;
-    return widget.accounts.where((a) => a.type.trim() == _tabId).toList();
+    final pool = _ledgerAccounts;
+    if (_tabId == kAccountPickerAllTab) return pool;
+    return pool.where((a) => a.type.trim() == _tabId).toList();
   }
 
   @override
@@ -126,6 +205,7 @@ class _AccountPickerBodyState extends State<_AccountPickerBody> {
     final scheme = Theme.of(context).colorScheme;
     final height = MediaQuery.sizeOf(context).height * 0.72;
     final tabs = _tabs;
+    final ledgerTabs = _ledgerTabs;
 
     return SizedBox(
       height: height,
@@ -167,6 +247,41 @@ class _AccountPickerBodyState extends State<_AccountPickerBody> {
               ],
             ),
           ),
+          if (_showLedgerTabs) ...[
+            SizedBox(
+              key: const Key('account_picker_ledger_tabs'),
+              height: 44,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                itemCount: ledgerTabs.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 8),
+                itemBuilder: (context, i) {
+                  final tab = ledgerTabs[i];
+                  final selected = tab.id == _ledgerId;
+                  return ChoiceChip(
+                    key: Key('account_picker_ledger_${tab.id}'),
+                    label: Text(tab.name),
+                    selected: selected,
+                    showCheckmark: false,
+                    selectedColor: CentliTheme.softBlue.withValues(alpha: 0.18),
+                    labelStyle: TextStyle(
+                      fontWeight:
+                          selected ? FontWeight.w700 : FontWeight.w500,
+                      color:
+                          selected ? CentliTheme.softBlue : scheme.onSurface,
+                    ),
+                    side: BorderSide(
+                      color: selected
+                          ? CentliTheme.softBlue.withValues(alpha: 0.45)
+                          : scheme.outlineVariant,
+                    ),
+                    onSelected: (_) => _selectLedger(tab.id),
+                  );
+                },
+              ),
+            ),
+          ],
           const Divider(height: 1),
           Expanded(
             child: widget.accounts.isEmpty
@@ -251,7 +366,8 @@ class _AccountPickerBodyState extends State<_AccountPickerBody> {
                                   padding:
                                       const EdgeInsets.fromLTRB(12, 12, 12, 24),
                                   gridDelegate:
-                                      const SliverGridDelegateWithFixedCrossAxisCount(
+                                      const
+                                          SliverGridDelegateWithFixedCrossAxisCount(
                                     crossAxisCount: 3,
                                     mainAxisSpacing: 10,
                                     crossAxisSpacing: 8,
@@ -262,6 +378,10 @@ class _AccountPickerBodyState extends State<_AccountPickerBody> {
                                     final a = _gridItems[i];
                                     final selected = a.id == _selectedId;
                                     final archived = a.archived == 1;
+                                    // When ledger tabs are shown, name is redundant.
+                                    final ledgerLabel = _showLedgerTabs
+                                        ? null
+                                        : widget.ledgerNamesByAccountId[a.id];
                                     return InkWell(
                                       borderRadius: BorderRadius.circular(16),
                                       onTap: () =>
@@ -337,13 +457,9 @@ class _AccountPickerBodyState extends State<_AccountPickerBody> {
                                                       scheme.onSurfaceVariant,
                                                 ),
                                               ),
-                                              if (widget
-                                                      .ledgerNamesByAccountId[
-                                                          a.id] !=
-                                                  null)
+                                              if (ledgerLabel != null)
                                                 Text(
-                                                  widget.ledgerNamesByAccountId[
-                                                      a.id]!,
+                                                  ledgerLabel,
                                                   maxLines: 1,
                                                   overflow:
                                                       TextOverflow.ellipsis,

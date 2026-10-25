@@ -160,7 +160,18 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
     // Cross-ledger transfer: pool includes other ledgers' accounts.
     final allAccounts = await db.loadAllActiveAccounts();
     final ledgerNameMap = await db.loadLedgerNameMap();
-    final assetTypes = await db.loadAssetTypes(ledgerId);
+    // Merge asset types across ledgers so cross-ledger transfer picker
+    // keeps left-rail category labels for every ledger tab.
+    final typeById = <String, AssetType>{
+      for (final t in await db.loadAssetTypes(ledgerId)) t.id: t,
+    };
+    for (final lid in {for (final a in allAccounts) a.ledgerId}) {
+      if (lid == ledgerId) continue;
+      for (final t in await db.loadAssetTypes(lid)) {
+        typeById.putIfAbsent(t.id, () => t);
+      }
+    }
+    final assetTypes = typeById.values.toList();
     final rememberAccRaw = await db.getSetting(PrefKeys.rememberCategoryAccount);
     final rememberNoteRaw = await db.getSetting(PrefKeys.rememberCategoryNote);
     final existing = widget.existing;
@@ -803,9 +814,12 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
       accounts: pool,
       assetTypes: _assetTypes,
       selectedId: current,
-      title: toAccount ? '选择转入资产账户' : '选择资产账户',
+      title: _type == 'transfer'
+          ? (toAccount ? '选择转入资产账户' : '选择转出资产账户')
+          : '选择资产账户',
       ledgerNamesByAccountId:
           _type == 'transfer' ? _ledgerNamesByAccountId : const {},
+      preferredLedgerId: _ledgerId,
     );
     if (id == null || !mounted) return;
     setState(() {
