@@ -71,6 +71,7 @@ class LedgersPage extends ConsumerWidget {
                     onSwitch: () => _switchTo(context, ref, l),
                     onEdit: () => showLedgerEditor(context, ref, ledger: l),
                     onArchive: () => _archive(context, ref, l, archive: true),
+                    onDelete: () => _delete(context, ref, l),
                   ),
                 ),
               ],
@@ -94,6 +95,7 @@ class LedgersPage extends ConsumerWidget {
                       onSwitch: null,
                       onEdit: () => showLedgerEditor(context, ref, ledger: l),
                       onArchive: () => _archive(context, ref, l, archive: false),
+                      onDelete: () => _delete(context, ref, l),
                     ),
                   ),
                 ],
@@ -135,6 +137,37 @@ class LedgersPage extends ConsumerWidget {
     ref.invalidate(currentLedgerProvider);
     if (context.mounted) {
       showGlassSnackBar(context, archive ? '已归档' : '已恢复归档');
+    }
+  }
+
+  Future<void> _delete(
+    BuildContext context,
+    WidgetRef ref,
+    Ledger l,
+  ) async {
+    final ok = await showGlassConfirmDialog(
+      context: context,
+      title: '删除记账本',
+      content:
+          '确定永久删除「${l.name}」？仅当该记账本没有未删除流水时可删；删除后账户与分类也会一并清除，且无法恢复。',
+      confirmLabel: '删除',
+      destructive: true,
+    );
+    if (ok != true || !context.mounted) return;
+    try {
+      await ref.read(databaseProvider).deleteLedger(l.id);
+      ref.invalidate(currentLedgerIdProvider);
+      ref.invalidate(currentLedgerProvider);
+      if (context.mounted) {
+        showGlassSnackBar(context, '已删除记账本「${l.name}」');
+      }
+    } catch (e) {
+      if (context.mounted) {
+        showGlassSnackBar(
+          context,
+          e is StateError ? e.message : '删除失败：$e',
+        );
+      }
     }
   }
 
@@ -219,6 +252,7 @@ class _LedgerTile extends StatelessWidget {
     required this.isCurrent,
     required this.onEdit,
     required this.onArchive,
+    required this.onDelete,
     this.onSwitch,
     this.archived = false,
   });
@@ -229,6 +263,7 @@ class _LedgerTile extends StatelessWidget {
   final VoidCallback? onSwitch;
   final VoidCallback onEdit;
   final VoidCallback onArchive;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -251,6 +286,8 @@ class _LedgerTile extends StatelessWidget {
               onEdit();
             case 'archive':
               onArchive();
+            case 'delete':
+              onDelete();
           }
         },
         items: [
@@ -261,6 +298,7 @@ class _LedgerTile extends StatelessWidget {
             value: 'archive',
             label: archived ? '取消归档' : '归档',
           ),
+          const CentliMenuItem(value: 'delete', label: '删除'),
         ],
       ),
       onTap: archived

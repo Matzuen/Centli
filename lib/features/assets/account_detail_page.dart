@@ -150,11 +150,14 @@ class _AccountDetailBody extends ConsumerWidget {
                   await _showAdjustBalance(context, ref, account, bal);
                 } else if (v == 'archive') {
                   await _confirmArchive(context, ref, account);
+                } else if (v == 'delete') {
+                  await _confirmDeleteAccount(context, ref, account);
                 }
               },
               items: const [
                 CentliMenuItem(value: 'adjust', label: '调整余额'),
                 CentliMenuItem(value: 'archive', label: '归档资产账户'),
+                CentliMenuItem(value: 'delete', label: '删除资产账户'),
               ],
             ),
           ],
@@ -595,6 +598,36 @@ Future<void> _showAdjustBalance(
       );
   if (context.mounted) {
     showGlassSnackBar(context, '\u5df2\u8bb0\u5165\u4f59\u989d\u6821\u6b63');
+  }
+}
+
+Future<void> _confirmDeleteAccount(
+  BuildContext context,
+  WidgetRef ref,
+  Account account,
+) async {
+  final ok = await showGlassConfirmDialog(
+    context: context,
+    title: '删除资产账户',
+    content:
+        '确定永久删除「${account.name}」？仅当该账户没有未删除流水时可删；回收站中相关流水也会一并清除。',
+    confirmLabel: '删除',
+    destructive: true,
+  );
+  if (ok != true || !context.mounted) return;
+  try {
+    await ref.read(databaseProvider).deleteAccount(account.id);
+    if (context.mounted) {
+      showGlassSnackBar(context, '已删除资产账户');
+      context.pop();
+    }
+  } catch (e) {
+    if (context.mounted) {
+      showGlassSnackBar(
+        context,
+        e is StateError ? e.message : '删除失败：$e',
+      );
+    }
   }
 }
 
