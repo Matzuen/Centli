@@ -1229,9 +1229,14 @@ WHERE pending_id IS NOT NULL
   Future<Map<String, int>> accountBalances(String ledgerId) async {
     final accs = await loadActiveAccounts(ledgerId);
     final balances = {for (final a in accs) a.id: a.openingBalanceMinor};
+    if (balances.isEmpty) return balances;
 
-    final deltas = await customSelect(
-      '''
+    // Aggregate by account id (not txn.ledger_id) so cross-ledger transfers
+    // update both sides' balances when the single row lives in one ledger.
+    final ids = balances.keys.toList();
+    final ph = List.filled(ids.length, '?').join(',');
+    final vars = [for (final id in ids) Variable<String>(id)];
+    final sql = '''
       SELECT id, SUM(delta) AS delta FROM (
         SELECT account_id AS id,
                SUM(CASE
@@ -1240,36 +1245,40 @@ WHERE pending_id IS NOT NULL
                  ELSE 0
                END) AS delta
         FROM transactions
-        WHERE ledger_id = ? AND deleted_at IS NULL
+        WHERE deleted_at IS NULL AND account_id IN (__IN__)
         GROUP BY account_id
         UNION ALL
         SELECT to_account_id AS id,
                SUM(COALESCE(to_amount_minor, amount_minor)) AS delta
         FROM transactions
-        WHERE ledger_id = ? AND deleted_at IS NULL
-          AND type = 'transfer' AND to_account_id IS NOT NULL
+        WHERE deleted_at IS NULL
+          AND type = 'transfer' AND to_account_id IN (__IN__)
         GROUP BY to_account_id
       )
       GROUP BY id
-      ''',
-      variables: [
-        Variable<String>(ledgerId),
-        Variable<String>(ledgerId),
-      ],
+      '''.replaceAll('__IN__', ph);
+
+    final deltas = await customSelect(
+      sql,
+      variables: [...vars, ...vars],
       readsFrom: {transactions},
     ).get();
     for (final r in deltas) {
       final id = r.read<String>('id');
-      balances[id] = (balances[id] ?? 0) + _sqlInt(r, 'delta');
+      if (!balances.containsKey(id)) continue;
+      balances[id] = balances[id]! + _sqlInt(r, 'delta');
     }
     return balances;
   }
 
   Stream<Map<String, int>> watchAccountBalances(String ledgerId) {
-    // Latest row is only a change signal. Do not materialize the ledger.
-    return watchRecentTransactions(ledgerId, limit: 1).asyncMap((_) {
-      return accountBalances(ledgerId);
-    });
+    // Latest row anywhere is only a change signal — cross-ledger transfers
+    // live in the from-account's ledger but must refresh the to-ledger too.
+    return (select(transactions)
+          ..orderBy([(t) => OrderingTerm.desc(t.updatedAt)])
+          ..limit(1))
+        .watch()
+        .asyncMap((_) => accountBalances(ledgerId));
   }
 
   /// Returns the new row id (parent or child).
@@ -1292,6 +1301,7 @@ WHERE pending_id IS NOT NULL
     String? occurrenceKey,
     String? parentId,
     String? subTypeId,
+    String? transferGroupId,
   }) async {
     final ts = nowMs();
     final happen = happenAt?.toUtc().millisecondsSinceEpoch ?? ts;
@@ -1316,6 +1326,7 @@ WHERE pending_id IS NOT NULL
         occurrenceKey: Value(occurrenceKey),
         parentId: Value(parentId),
         subTypeId: Value(subTypeId),
+        transferGroupId: Value(transferGroupId),
         createdAt: ts,
         updatedAt: ts,
       ),
@@ -1486,6 +1497,23 @@ WHERE pending_id IS NOT NULL
         .get();
   }
 
+  /// All non-archived accounts across ledgers (cross-ledger transfer picker).
+  Future<List<Account>> loadAllActiveAccounts() {
+    return (select(accounts)
+          ..where((t) => t.archived.equals(0))
+          ..orderBy([
+            (t) => OrderingTerm.asc(t.ledgerId),
+            (t) => OrderingTerm.asc(t.sortOrder),
+          ]))
+        .get();
+  }
+
+  /// ledgerId → name for picker labels.
+  Future<Map<String, String>> loadLedgerNameMap({bool includeArchived = false}) async {
+    final rows = await loadAllLedgers(includeArchived: includeArchived);
+    return {for (final l in rows) l.id: l.name};
+  }
+
   /// Active + archived accounts (search filters / historical txns).
   Future<List<Account>> loadAccountsIncludingArchived(String ledgerId) {
     return (select(accounts)
@@ -1503,9 +1531,8 @@ WHERE pending_id IS NOT NULL
     final cats = await (select(categories)
           ..where((t) => t.ledgerId.equals(ledgerId)))
         .get();
-    final accs = await (select(accounts)
-          ..where((t) => t.ledgerId.equals(ledgerId)))
-        .get();
+    // All accounts so cross-ledger transfer counterpart names resolve.
+    final accs = await select(accounts).get();
     return TxnListLookups(
       categoriesById: {for (final c in cats) c.id: c},
       accountsById: {for (final a in accs) a.id: a},
@@ -1736,6 +1763,23 @@ WHERE pending_id IS NOT NULL
     await (update(transactions)
           ..where((t) => t.parentId.equals(id) & t.deletedAt.isNull()))
         .write(patch);
+  }
+
+  /// Soft-delete many top-level bills (and their live children). Returns count.
+  Future<int> softDeleteTransactions(Iterable<String> ids) async {
+    final list = ids.where((id) => id.isNotEmpty).toSet().toList();
+    if (list.isEmpty) return 0;
+    var n = 0;
+    await transaction(() async {
+      for (final id in list) {
+        final row = await (select(transactions)..where((t) => t.id.equals(id)))
+            .getSingleOrNull();
+        if (row == null || row.deletedAt != null) continue;
+        await softDeleteTransaction(id);
+        n++;
+      }
+    });
+    return n;
   }
 
   /// Soft-deleted top-level bills only (children restored with their parent).
@@ -2291,6 +2335,85 @@ WHERE pending_id IS NOT NULL
     );
   }
 
+  /// Live (non-deleted) transactions that debit/credit this account.
+  Future<int> countLiveTransactionsForAccount(String accountId) async {
+    final q = selectOnly(transactions)
+      ..addColumns([transactions.id.count()])
+      ..where(
+        transactions.deletedAt.isNull() &
+            (transactions.accountId.equals(accountId) |
+                transactions.toAccountId.equals(accountId)),
+      );
+    final rows = await q.get();
+    if (rows.isEmpty) return 0;
+    return rows.first.read(transactions.id.count()) ?? 0;
+  }
+
+  /// Hard-delete an account when it has no live transactions.
+  ///
+  /// Throws [StateError] with a Chinese message when blocked.
+  Future<void> deleteAccount(String id) async {
+    final live = await countLiveTransactionsForAccount(id);
+    if (live > 0) {
+      throw StateError('该资产账户仍有 $live 笔流水，请先删除流水或先归档');
+    }
+    // Purge soft-deleted history that still references the account, then drop.
+    await (delete(transactions)
+          ..where(
+            (t) =>
+                t.deletedAt.isNotNull() &
+                (t.accountId.equals(id) | t.toAccountId.equals(id)),
+          ))
+        .go();
+    await (delete(accounts)..where((t) => t.id.equals(id))).go();
+  }
+
+  Future<int> countLiveTransactionsForLedger(String ledgerId) async {
+    final q = selectOnly(transactions)
+      ..addColumns([transactions.id.count()])
+      ..where(
+        transactions.ledgerId.equals(ledgerId) & transactions.deletedAt.isNull(),
+      );
+    final rows = await q.get();
+    if (rows.isEmpty) return 0;
+    return rows.first.read(transactions.id.count()) ?? 0;
+  }
+
+  /// Hard-delete a ledger when it is not the sole active one and has no live txns.
+  ///
+  /// Cascades empty accounts / categories / pending for that ledger.
+  /// Throws [StateError] with a Chinese message when blocked.
+  Future<void> deleteLedger(String id) async {
+    final active = await (select(ledgers)..where((t) => t.archived.equals(0))).get();
+    final isActive = active.any((l) => l.id == id);
+    if (isActive && active.length <= 1) {
+      throw StateError('至少保留一个未归档记账本，无法删除');
+    }
+    final live = await countLiveTransactionsForLedger(id);
+    if (live > 0) {
+      throw StateError('该记账本仍有 $live 笔流水，请先删除流水或先归档');
+    }
+    await transaction(() async {
+      await (delete(transactions)..where((t) => t.ledgerId.equals(id))).go();
+      await (delete(pendingCaptures)..where((t) => t.ledgerId.equals(id))).go();
+      await (delete(accounts)..where((t) => t.ledgerId.equals(id))).go();
+      await (delete(categories)..where((t) => t.ledgerId.equals(id))).go();
+      try {
+        await (delete(budgets)..where((t) => t.ledgerId.equals(id))).go();
+      } catch (_) {}
+      await (delete(ledgers)..where((t) => t.id.equals(id))).go();
+      final current = await currentLedgerId();
+      if (current == id) {
+        final others = await (select(ledgers)
+              ..where((t) => t.archived.equals(0)))
+            .get();
+        if (others.isNotEmpty) {
+          await setCurrentLedgerId(others.first.id);
+        }
+      }
+    });
+  }
+
   /// Adjust balance by posting an in/out balance-correction txn (excluded from stats).
   /// Policy: do not rewrite opening_balance; correction is auditable in the ledger.
   Future<void> adjustAccountBalance({
@@ -2632,6 +2755,9 @@ WHERE pending_id IS NOT NULL
     List<String>? tags,
     int includeInStat = 1,
     int includeInBudget = 1,
+    /// Target ledger; defaults to pending.ledgerId. If [accountId] belongs to
+    /// another ledger, that account's ledger wins (avoids mis-attribution).
+    String? ledgerId,
   }) async {
     final pending = await (select(pendingCaptures)
           ..where((t) => t.id.equals(pendingId)))
@@ -2658,10 +2784,18 @@ WHERE pending_id IS NOT NULL
           .get();
       if (already.isEmpty) {
         try {
+          // Prefer account's own ledger when it differs from pending / override.
+          var targetLedgerId = ledgerId ?? pending.ledgerId;
+          final accRow = await (select(accounts)
+                ..where((t) => t.id.equals(accountId)))
+              .getSingleOrNull();
+          if (accRow != null && accRow.ledgerId.isNotEmpty) {
+            targetLedgerId = accRow.ledgerId;
+          }
           await into(transactions).insert(
             TransactionsCompanion.insert(
               id: newId(),
-              ledgerId: pending.ledgerId,
+              ledgerId: targetLedgerId,
               type: type,
               amountMinor: amountMinor,
               currency: currency,
