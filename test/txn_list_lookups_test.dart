@@ -11,6 +11,8 @@ void main() {
     final lookups = await db.loadTxnListLookups(ledger.id);
     expect(lookups.accountsById, isNotEmpty);
     expect(lookups.categoriesById, isNotEmpty);
+    expect(lookups.ledgerNamesById, isNotEmpty);
+    expect(lookups.ledgerNamesById[ledger.id], ledger.name);
     final acc = lookups.accountsById.values.first;
     expect(lookups.accountsById[acc.id]?.name, acc.name);
     final cat = lookups.categoriesById.values.first;

@@ -1533,9 +1533,11 @@ WHERE pending_id IS NOT NULL
         .get();
     // All accounts so cross-ledger transfer counterpart names resolve.
     final accs = await select(accounts).get();
+    final ledgerNames = await loadLedgerNameMap(includeArchived: true);
     return TxnListLookups(
       categoriesById: {for (final c in cats) c.id: c},
       accountsById: {for (final a in accs) a.id: a},
+      ledgerNamesById: ledgerNames,
     );
   }
 
@@ -4450,14 +4452,18 @@ class TxnListLookups {
   const TxnListLookups({
     required this.categoriesById,
     required this.accountsById,
+    this.ledgerNamesById = const {},
   });
 
   final Map<String, Category> categoriesById;
   final Map<String, Account> accountsById;
+  /// ledgerId → display name (for 「账本-账户」 labels).
+  final Map<String, String> ledgerNamesById;
 
   static const empty = TxnListLookups(
     categoriesById: {},
     accountsById: {},
+    ledgerNamesById: {},
   );
 }
 

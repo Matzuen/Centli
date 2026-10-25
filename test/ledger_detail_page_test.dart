@@ -265,6 +265,17 @@ class _FakeDb implements CentliDatabase {
   Future<List<String>> listDistinctTags(String ledgerId) async => const ['工作'];
 
 
+
+  @override
+  Future<List<Account>> loadAllActiveAccounts() async =>
+      loadAccountsIncludingArchived('L');
+
+  @override
+  Future<Map<String, String>> loadLedgerNameMap({
+    bool includeArchived = false,
+  }) async =>
+      const {'L': '测试账本'};
+
   @override
   Future<List<AssetType>> loadAssetTypes(
     String ledgerId, {

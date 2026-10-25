@@ -9,6 +9,7 @@ void main() {
     late String pickerSrc;
     late String bookkeepingSrc;
     late String homeSrc;
+    late String detailSrc;
 
     setUpAll(() {
       pickerSrc =
@@ -16,6 +17,8 @@ void main() {
       bookkeepingSrc =
           File('lib/features/ledger/bookkeeping_sheet.dart').readAsStringSync();
       homeSrc = File('lib/features/home/home_page.dart').readAsStringSync();
+      detailSrc =
+          File('lib/features/ledger/ledger_detail_page.dart').readAsStringSync();
     });
 
     test('picker exposes preferredLedgerId and ledger tab key', () {
@@ -33,6 +36,19 @@ void main() {
       expect(bookkeepingSrc.contains('preferredLedgerId: _ledgerId'), isTrue);
       expect(bookkeepingSrc.contains('选择转入资产账户'), isTrue);
       expect(bookkeepingSrc.contains('选择转出资产账户'), isTrue);
+    });
+
+
+    test('detail transfer pickers pass preferredLedgerId + allAccounts', () {
+      expect(detailSrc.contains('preferredLedgerId: txn.ledgerId'), isTrue);
+      expect(detailSrc.contains('allAccounts'), isTrue);
+      expect(detailSrc.contains('loadAllActiveAccounts'), isTrue);
+      expect(detailSrc.contains('_switchToTransferOrCategory'), isFalse);
+      expect(
+        detailSrc.contains("onTap: () => _editCategory(context)"),
+        isTrue,
+      );
+      expect(detailSrc.contains('formatLedgerAccountLabel'), isTrue);
     });
 
     test('home multi-select: long-press entry, no checklist, fixed bar', () {

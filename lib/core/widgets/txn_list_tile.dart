@@ -11,6 +11,7 @@ import '../../features/ledger/bookkeeping_sheet.dart';
 import '../constants/currencies.dart';
 import '../constants/pref_keys.dart';
 import '../utils/fx.dart';
+import '../utils/account_label.dart';
 import '../utils/money.dart';
 import 'centli_icon.dart';
 import 'glass.dart';
@@ -267,20 +268,32 @@ class TxnListTile extends ConsumerWidget {
 
   String _accountPart() {
     final from = lookups.accountsById[txn.accountId];
-    final fromName = (from?.name ?? '').trim();
+    final fromLabel = _accountLabel(from, fallbackId: txn.accountId);
 
     if (txn.type == 'transfer') {
       final toId = txn.toAccountId;
       if (toId != null && toId.isNotEmpty) {
         final to = lookups.accountsById[toId];
-        final toName = (to?.name ?? '').trim();
-        if (fromName.isNotEmpty && toName.isNotEmpty) {
-          return '$fromName → $toName';
+        final toLabel = _accountLabel(to, fallbackId: toId);
+        if (fromLabel.isNotEmpty && toLabel.isNotEmpty) {
+          return '$fromLabel → $toLabel';
         }
-        if (toName.isNotEmpty) return toName;
+        if (toLabel.isNotEmpty) return toLabel;
       }
     }
-    return fromName;
+    return fromLabel;
+  }
+
+  String _accountLabel(Account? account, {String? fallbackId}) {
+    if (account == null) {
+      final id = (fallbackId ?? '').trim();
+      return id;
+    }
+    final ledger = lookups.ledgerNamesById[account.ledgerId];
+    return formatLedgerAccountLabel(
+      accountName: account.name,
+      ledgerName: ledger,
+    );
   }
 
   Future<void> _showTxnContextMenu(BuildContext context, WidgetRef ref) async {

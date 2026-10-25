@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import 'bookkeeping_sheet.dart' deferred as bookkeeping;
 
 import '../../core/constants/currencies.dart';
+import '../../core/utils/account_label.dart';
 import '../../core/utils/amount_expr.dart';
 import '../../core/utils/money.dart';
 import '../../data/db/centli_database.dart';
@@ -627,7 +628,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
           title: '分类',
           value: _categoryNameOf(_categoryId),
           emptyText: '—',
-          onTap: () => _switchToTransferOrCategory(context),
+          onTap: () => _editCategory(context),
         ),
       ],
     );
@@ -681,26 +682,34 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
 
   // ------------------------------------------------------- name lookups
 
-  String? _accountNameOf(String? id) {
+  Account? _accountOf(String? id) {
     if (id == null) return null;
     final s = _sourceCache;
-    if (s != null) {
-      for (final a in s.accounts) {
-        if (a.id == id) return a.name;
-      }
+    if (s == null) return null;
+    for (final a in s.accounts) {
+      if (a.id == id) return a;
     }
-    return id;
+    for (final a in s.allAccounts) {
+      if (a.id == id) return a;
+    }
+    return null;
+  }
+
+  /// 「账本名-账户名」；解析失败时退回 id（避免空白，便于发现脏数据）。
+  String? _accountNameOf(String? id) {
+    if (id == null) return null;
+    final a = _accountOf(id);
+    if (a == null) return id;
+    final ledger = _sourceCache?.ledgerNamesByAccountId[a.id];
+    return formatLedgerAccountLabel(
+      accountName: a.name,
+      ledgerName: ledger,
+    );
   }
 
   String? _currencyOfAccount(String? id) {
     if (id == null) return null;
-    final s = _sourceCache;
-    if (s != null) {
-      for (final a in s.accounts) {
-        if (a.id == id) return a.currency;
-      }
-    }
-    return null;
+    return _accountOf(id)?.currency;
   }
 
   String? _categoryNameOf(String? id) {
@@ -717,8 +726,40 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
   Future<_EditSources> _loadSources() {
     return _sources ??= () async {
       final db = ref.read(databaseProvider);
-      final accounts = await db.loadAccountsIncludingArchived(txn.ledgerId);
-      final assetTypes = await db.loadAssetTypes(txn.ledgerId);
+      var accounts = await db.loadAccountsIncludingArchived(txn.ledgerId);
+      final allAccounts = await db.loadAllActiveAccounts();
+      final ledgerNameMap = await db.loadLedgerNameMap(includeArchived: true);
+      // Resolve current txn counterparts even if archived / other ledger.
+      final need = <String>{
+        if (txn.accountId.isNotEmpty) txn.accountId,
+        if (txn.toAccountId != null && txn.toAccountId!.isNotEmpty)
+          txn.toAccountId!,
+      };
+      final have = {for (final a in accounts) a.id};
+      for (final id in need) {
+        if (!have.contains(id)) {
+          final a = await db.getAccount(id);
+          if (a != null) {
+            accounts = [...accounts, a];
+            have.add(id);
+          }
+        }
+      }
+      // Merge asset types across ledgers (left-rail labels on every tab).
+      final typeById = <String, AssetType>{
+        for (final t in await db.loadAssetTypes(txn.ledgerId)) t.id: t,
+      };
+      for (final lid in {for (final a in allAccounts) a.ledgerId}) {
+        if (lid == txn.ledgerId) continue;
+        for (final t in await db.loadAssetTypes(lid)) {
+          typeById.putIfAbsent(t.id, () => t);
+        }
+      }
+      final ledgerNamesByAcc = <String, String>{
+        for (final a in [...allAccounts, ...accounts])
+          if (ledgerNameMap[a.ledgerId] != null)
+            a.id: ledgerNameMap[a.ledgerId]!,
+      };
       final outCats = await db.loadCategories(txn.ledgerId, 'out');
       final inCats = await db.loadCategories(txn.ledgerId, 'in');
       final transferCats = await db.loadCategories(txn.ledgerId, 'transfer');
@@ -732,7 +773,9 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       }
       return _EditSources(
         accounts: accounts,
-        assetTypes: assetTypes,
+        allAccounts: allAccounts,
+        assetTypes: typeById.values.toList(),
+        ledgerNamesByAccountId: ledgerNamesByAcc,
         outCats: outCats,
         inCats: inCats,
         transferCats: transferCats,
@@ -922,10 +965,10 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       if (picked == 'transfer') {
         var to = _toAccountId;
         if (to == null || to == _accountId) {
-          final others = _sourceCache?.accounts
-                  .where((a) => a.id != _accountId)
-                  .toList() ??
-              const <Account>[];
+          final pool = (_sourceCache?.allAccounts.isNotEmpty ?? false)
+              ? _sourceCache!.allAccounts
+              : (_sourceCache?.accounts ?? const <Account>[]);
+          final others = pool.where((a) => a.id != _accountId).toList();
           to = others.isEmpty ? null : others.first.id;
         }
         _pendingToAccountId = to;
@@ -963,19 +1006,25 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
   Future<void> _editAccount(BuildContext context) async {
     final s = await _ensureSources();
     if (s == null || !context.mounted) return;
+    final basePool = _isTransfer && s.allAccounts.isNotEmpty
+        ? s.allAccounts
+        : s.accounts;
     final id = await showAccountPickerSheet(
       context,
-      accounts: s.accounts,
+      accounts: basePool,
       assetTypes: s.assetTypes,
       selectedId: _accountId,
       title: _isTransfer ? '选择转出资产账户' : '选择资产账户',
+      ledgerNamesByAccountId:
+          _isTransfer ? s.ledgerNamesByAccountId : const {},
+      preferredLedgerId: txn.ledgerId,
     );
     if (id == null || id == _accountId) return;
     setState(() {
       _pendingCategoryId = _categoryId; // re-validate category direction
       _pendingAccountId = id;
       if (_isTransfer && _toAccountId == id) {
-        final others = s.accounts.where((a) => a.id != id);
+        final others = basePool.where((a) => a.id != id);
         _pendingToAccountId = others.isEmpty ? null : others.first.id;
       }
     });
@@ -985,30 +1034,19 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
   Future<void> _editToAccount(BuildContext context) async {
     final s = await _ensureSources();
     if (s == null || !context.mounted) return;
+    final basePool = s.allAccounts.isNotEmpty ? s.allAccounts : s.accounts;
     final id = await showAccountPickerSheet(
       context,
-      accounts: s.accounts.where((a) => a.id != _accountId).toList(),
+      accounts: basePool.where((a) => a.id != _accountId).toList(),
       assetTypes: s.assetTypes,
       selectedId: _toAccountId,
       title: '选择转入资产账户',
+      ledgerNamesByAccountId: s.ledgerNamesByAccountId,
+      preferredLedgerId: txn.ledgerId,
     );
     if (id == null || id == _toAccountId) return;
     setState(() => _pendingToAccountId = id);
     if (mounted) setState(() {});
-  }
-
-  Future<void> _switchToTransferOrCategory(BuildContext context) async {
-    if (_isTransfer) {
-      final picked = await _pickTransactionType(context, initial: 'transfer');
-      if (picked == null || picked == 'transfer') return;
-      setState(() {
-        _pendingType = picked;
-        _pendingToAccountId = null;
-      });
-      if (mounted) setState(() {});
-      return;
-    }
-    await _editCategory(context);
   }
 
   Future<void> _editCategory(BuildContext context) async {
@@ -1441,7 +1479,9 @@ Future<List<String>?> showTagEditorDialog(
 class _EditSources {
   const _EditSources({
     required this.accounts,
+    required this.allAccounts,
     required this.assetTypes,
+    required this.ledgerNamesByAccountId,
     required this.outCats,
     required this.inCats,
     required this.transferCats,
@@ -1449,8 +1489,13 @@ class _EditSources {
     required this.tagSuggestions,
   });
 
+  /// Current-ledger accounts (incl. archived) for non-transfer picks / labels.
   final List<Account> accounts;
+  /// Active accounts across all ledgers (cross-ledger transfer picker).
+  final List<Account> allAccounts;
   final List<AssetType> assetTypes;
+  /// accountId → ledger display name.
+  final Map<String, String> ledgerNamesByAccountId;
   final List<Category> outCats;
   final List<Category> inCats;
   final List<Category> transferCats;
@@ -1513,7 +1558,7 @@ class _EditRow extends StatelessWidget {
   }
 }
 
-/// Title line under the amount: "支出 · 午餐" / "转账 · 支付宝 → 余额宝".
+/// Title line under the amount: "支出 · 午餐" / "转账 · 账本-支付宝 → 账本-余额宝".
 class _Subtitle extends ConsumerWidget {
   const _Subtitle({
     required this.type,
