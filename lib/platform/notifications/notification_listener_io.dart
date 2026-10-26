@@ -431,6 +431,26 @@ abstract final class NotificationCaptureStub {
     }
   }
 
+  /// 预算约 80% 本地预警（设置可关；去重由 Dart 侧 sent-key 负责）。
+  static Future<void> showBudgetWarn({
+    required int notifId,
+    required String title,
+    required String body,
+  }) async {
+    if (!supported) return;
+    try {
+      await _channel.invokeMethod<void>('showBudgetWarn', {
+        'notifId': notifId,
+        'title': title,
+        'body': body,
+      });
+    } on MissingPluginException {
+      // no-op
+    } on PlatformException {
+      // no-op
+    }
+  }
+
   static Future<void> cancelPendingConfirm(String pendingId) async {
     if (!supported) return;
     try {

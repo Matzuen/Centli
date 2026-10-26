@@ -180,6 +180,14 @@ class MePage extends ConsumerWidget {
                   _prefSwitch(
                     context,
                     ref,
+                    key: PrefKeys.budgetWarnNotify,
+                    title: '预算进度预警',
+                    subtitle: '用到约 80% 时本地提醒一次（可关闭）',
+                  ),
+                  const Divider(height: 1),
+                  _prefSwitch(
+                    context,
+                    ref,
                     key: PrefKeys.rememberCategoryAccount,
                     title: '记忆分类对应账户',
                     subtitle: '选分类时回填该分类上次资产账户',

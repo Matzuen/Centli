@@ -109,6 +109,25 @@ class MainActivity : FlutterFragmentActivity() {
                     PaymentOverlayManager.showFromPendingId(this, pendingId)
                     result.success(null)
                 }
+                "showBudgetWarn" -> {
+                    @Suppress("UNCHECKED_CAST")
+                    val args = call.arguments as? Map<String, Any?> ?: emptyMap()
+                    val title = args["title"] as? String
+                    val body = args["body"] as? String
+                    val notifId = when (val raw = args["notifId"]) {
+                        is Int -> raw
+                        is Long -> raw.toInt()
+                        is Number -> raw.toInt()
+                        else -> null
+                    }
+                    if (title.isNullOrBlank() || body.isNullOrBlank() || notifId == null) {
+                        result.error("bad_args", "notifId, title and body required", null)
+                        return@setMethodCallHandler
+                    }
+                    ensurePostNotificationsPermission()
+                    BudgetWarnNotifier.show(this, notifId, title, body)
+                    result.success(null)
+                }
                 "isOverlayPermissionGranted" -> {
                     result.success(PaymentOverlayManager.hasPermission(this))
                 }

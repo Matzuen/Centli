@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -6,6 +7,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../app/theme.dart';
 import '../../core/constants/pref_keys.dart';
+import '../../core/utils/budget_progress_style.dart';
+import '../settings/budget_warn_service.dart';
 import '../../core/widgets/centli_error_state.dart';
 import '../../core/utils/date_range.dart';
 import '../../core/widgets/date_range_control.dart';
@@ -312,6 +315,27 @@ class _HomePageState extends ConsumerState<HomePage> {
     final lockOn = ref.watch(appLockEnabledProvider).valueOrNull ?? false;
     final range = ref.watch(homeRangeProvider);
     final scheme = Theme.of(context).colorScheme;
+
+    final homeLedger = ledgerAsync.valueOrNull;
+    if (homeLedger != null) {
+      final warnLedgerId = homeLedger.id;
+      final warnBase = homeLedger.baseCurrency;
+      ref.listen<AsyncValue<MonthBudgetProgress>>(
+        _homeBudgetProgressProvider(
+          (ledgerId: warnLedgerId, base: warnBase),
+        ),
+        (prev, next) {
+          final p = next.valueOrNull;
+          if (p == null) return;
+          unawaited(
+            BudgetWarnService(db: ref.read(databaseProvider)).evaluate(
+              ledgerId: warnLedgerId,
+              progress: p,
+            ),
+          );
+        },
+      );
+    }
 
     return CentliGradientScaffold(
       body: SafeArea(
@@ -1337,11 +1361,7 @@ class _HomeBudgetStrip extends StatelessWidget {
     final remain = limit - spent;
     final over = remain < 0;
     final ratio = (spent / limit).clamp(0.0, 1.5);
-    final barColor = over
-        ? scheme.error
-        : ratio >= 0.8
-        ? scheme.tertiary
-        : scheme.primary;
+    final barColor = BudgetProgressStyle.barColor(scheme, ratio);
     final remainLabel = over
         ? '超支 ${formatMinor(base, -remain, hide: hide)}'
         : '剩余 ${formatMinor(base, remain, hide: hide)}';
@@ -1373,7 +1393,11 @@ class _HomeBudgetStrip extends StatelessWidget {
                       remainLabel,
                       style: theme.textTheme.labelLarge?.copyWith(
                         fontWeight: FontWeight.w700,
-                        color: over ? scheme.error : scheme.onSurface,
+                        color: BudgetProgressStyle.labelColor(
+                          scheme,
+                          ratio,
+                          over: over,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 2),

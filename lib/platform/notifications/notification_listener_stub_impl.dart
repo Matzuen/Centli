@@ -76,6 +76,12 @@ abstract final class NotificationCaptureStub {
     String? body,
   }) async {}
 
+  static Future<void> showBudgetWarn({
+    required int notifId,
+    required String title,
+    required String body,
+  }) async {}
+
   static Future<void> cancelPendingConfirm(String pendingId) async {}
 
   static Future<void> cancelAllPendingConfirm() async {}

@@ -5,6 +5,9 @@ abstract final class PrefKeys {
   /// 首页是否展示预算进度条。默认开。
   static const homeShowBudgetCard = 'home_show_budget_card';
 
+  /// 预算进度到约 80% 时发本地通知。默认开。
+  static const budgetWarnNotify = 'budget_warn_notify';
+
   /// 选分类时自动回填该分类上次使用的资产账户。默认开。
   static const rememberCategoryAccount = 'remember_category_account';
 
@@ -31,6 +34,15 @@ abstract final class PrefKeys {
 
   /// 是否已展示过首次备份引导（或已进入过备份设置）。
   static const backupPromptSeen = 'backup_prompt_seen';
+
+  /// 某预算在本周期已发过 80% 预警：`budget_warn_sent:{ledgerId}:{yyyy-MM}:{categoryId}`。
+  /// [categoryId] 为空字符串表示月度总额预算。
+  static String budgetWarnSentKey({
+    required String ledgerId,
+    required String yearMonth,
+    required String categoryId,
+  }) =>
+      'budget_warn_sent:$ledgerId:$yearMonth:$categoryId';
 }
 
 bool prefBool(String? raw, {bool defaultOn = true}) {

@@ -1,8 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/utils/money.dart';
+import '../../core/utils/budget_progress_style.dart';
+import 'budget_warn_service.dart';
 import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
 import '../security/app_lock_controller.dart';
@@ -47,6 +50,27 @@ class BudgetPage extends ConsumerWidget {
     final ym = ref.watch(budgetMonthProvider);
     final hide = ref.watch(hideAmountProvider);
     final scheme = Theme.of(context).colorScheme;
+
+    final budgetLedger = ledgerAsync.valueOrNull;
+    if (budgetLedger != null) {
+      final warnLedgerId = budgetLedger.id;
+      final warnBase = budgetLedger.baseCurrency;
+      ref.listen<AsyncValue<MonthBudgetProgress>>(
+        _budgetProgressProvider(
+          (ledgerId: warnLedgerId, yearMonth: ym, base: warnBase),
+        ),
+        (prev, next) {
+          final p = next.valueOrNull;
+          if (p == null) return;
+          unawaited(
+            BudgetWarnService(db: ref.read(databaseProvider)).evaluate(
+              ledgerId: warnLedgerId,
+              progress: p,
+            ),
+          );
+        },
+      );
+    }
 
     return CentliGradientScaffold(
       appBar: AppBar(
@@ -282,11 +306,7 @@ class _BudgetProgressCard extends StatelessWidget {
     final over = hasLimit && spentMinor > limit;
     final barColor = !hasLimit
         ? scheme.outlineVariant
-        : over
-            ? scheme.error
-            : ratio >= 0.8
-                ? scheme.tertiary
-                : scheme.primary;
+        : BudgetProgressStyle.barColor(scheme, ratio);
     final remain = hasLimit ? limit - spentMinor : null;
 
     return CentliSoftCard(
@@ -333,7 +353,13 @@ class _BudgetProgressCard extends StatelessWidget {
                   ' / ${formatMinor(currency, limit, hide: hide)}',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w600,
-                        color: over ? scheme.error : null,
+                        color: hasLimit
+                            ? BudgetProgressStyle.labelColor(
+                                scheme,
+                                ratio,
+                                over: over,
+                              )
+                            : null,
                       ),
                 ),
                 const SizedBox(height: CentliSpacing.item),
@@ -353,7 +379,11 @@ class _BudgetProgressCard extends StatelessWidget {
                       : '\u5269\u4f59 ${formatMinor(currency, remain!, hide: hide)}'
                           ' \u00b7 ${(ratio * 100).toStringAsFixed(0)}%',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: over ? scheme.error : scheme.onSurfaceVariant,
+                        color: BudgetProgressStyle.labelColor(
+                          scheme,
+                          ratio,
+                          over: over,
+                        ),
                       ),
                 ),
               ],
