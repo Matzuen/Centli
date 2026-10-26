@@ -934,54 +934,63 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
               const SizedBox(height: CentliSpacing.sectionLoose),
               Text('分类', style: Theme.of(context).textTheme.labelLarge),
               const SizedBox(height: CentliSpacing.item),
-              DropdownButtonFormField<String?>(
-                key: ValueKey('cat_${_type}_$_categoryId'),
-                initialValue: _categoryId,
-                isExpanded: true,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
-                  isDense: true,
-                ),
+              CentliGlassDropdownField<String?>(
+                labelText: '分类',
+                valueText: () {
+                  final id = _categoryId;
+                  if (id == null) return '全部分类';
+                  for (final c in _catsForType) {
+                    if (c.id == id) return c.name;
+                  }
+                  return '全部分类';
+                }(),
                 items: [
-                  const DropdownMenuItem<String?>(
+                  CentliMenuItem<String?>(
                     value: null,
-                    child: Text('全部分类'),
+                    label: '全部分类',
+                    selected: _categoryId == null,
                   ),
                   for (final c in _catsForType)
-                    DropdownMenuItem<String?>(
+                    CentliMenuItem<String?>(
                       value: c.id,
-                      child: Text(c.name),
+                      label: c.name,
+                      selected: c.id == _categoryId,
                     ),
                 ],
-                onChanged: (v) => setState(() => _categoryId = v),
+                onSelected: (v) => setState(() => _categoryId = v),
               ),
               const SizedBox(height: CentliSpacing.sectionLoose),
               Text('资产账户', style: Theme.of(context).textTheme.labelLarge),
               const SizedBox(height: CentliSpacing.item),
-              DropdownButtonFormField<String?>(
-                key: ValueKey('acc_$_accountId'),
-                initialValue: _accountId,
-                isExpanded: true,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
-                  isDense: true,
-                ),
+              CentliGlassDropdownField<String?>(
+                labelText: '资产账户',
+                valueText: () {
+                  final id = _accountId;
+                  if (id == null) return '全部资产账户';
+                  for (final a in widget.accounts) {
+                    if (a.id != id) continue;
+                    return a.archived == 1
+                        ? '${a.name} (${a.currency}) · 已归档'
+                        : '${a.name} (${a.currency})';
+                  }
+                  return '全部资产账户';
+                }(),
                 items: [
-                  const DropdownMenuItem<String?>(
+                  CentliMenuItem<String?>(
                     value: null,
-                    child: Text('全部资产账户'),
+                    label: '全部资产账户',
+                    selected: _accountId == null,
                   ),
                   for (final a in widget.accounts)
-                    DropdownMenuItem<String?>(
+                    CentliMenuItem<String?>(
                       value: a.id,
-                      child: Text(
-                        a.archived == 1
-                            ? '${a.name} (${a.currency}) · 已归档'
-                            : '${a.name} (${a.currency})',
-                      ),
+                      label: a.archived == 1
+                          ? '${a.name} (${a.currency}) · 已归档'
+                          : '${a.name} (${a.currency})',
+                      selected: a.id == _accountId,
                     ),
                 ],
-                onChanged: (v) => setState(() => _accountId = v),
+                onSelected: (v) => setState(() => _accountId = v),
               ),
               const SizedBox(height: CentliSpacing.sectionLoose),
               Text('日期范围', style: Theme.of(context).textTheme.labelLarge),

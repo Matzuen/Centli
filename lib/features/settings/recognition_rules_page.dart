@@ -1133,26 +1133,31 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
                   child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        DropdownButtonFormField<String>(
-                          initialValue: _tryAppChoice,
-                          decoration: const InputDecoration(
-                            labelText: '来源应用',
-                            border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
-                            isDense: true,
-                          ),
-                          items: const [
-                            DropdownMenuItem(
+                        CentliGlassDropdownField<String>(
+                          labelText: '来源应用',
+                          valueText: switch (_tryAppChoice) {
+                            'alipay' => '支付宝',
+                            'wechat' => '微信',
+                            _ => '其它',
+                          },
+                          items: [
+                            CentliMenuItem(
                               value: 'alipay',
-                              child: Text('支付宝'),
+                              label: '支付宝',
+                              selected: _tryAppChoice == 'alipay',
                             ),
-                            DropdownMenuItem(
+                            CentliMenuItem(
                               value: 'wechat',
-                              child: Text('微信'),
+                              label: '微信',
+                              selected: _tryAppChoice == 'wechat',
                             ),
-                            DropdownMenuItem(value: 'other', child: Text('其它')),
+                            CentliMenuItem(
+                              value: 'other',
+                              label: '其它',
+                              selected: _tryAppChoice == 'other',
+                            ),
                           ],
-                          onChanged: (v) {
-                            if (v == null) return;
+                          onSelected: (v) {
                             setState(() {
                               _tryAppChoice = v;
                               if (v == 'alipay') {

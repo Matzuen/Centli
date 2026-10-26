@@ -533,19 +533,23 @@ Future<void> _showCategoryBudgetEditor(
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                DropdownButtonFormField<String>(
-                  initialValue: selected,
+                CentliGlassDropdownField<String>(
+                  labelText: '分类',
+                  valueText: () {
+                    for (final c in available) {
+                      if (c.id == selected) return c.name;
+                    }
+                    return available.isEmpty ? '' : available.first.name;
+                  }(),
                   items: [
                     for (final c in available)
-                      DropdownMenuItem(value: c.id, child: Text(c.name)),
+                      CentliMenuItem(
+                        value: c.id,
+                        label: c.name,
+                        selected: c.id == selected,
+                      ),
                   ],
-                  onChanged: (v) {
-                    if (v != null) setLocal(() => selected = v);
-                  },
-                  decoration: const InputDecoration(
-                    labelText: '\u5206\u7c7b',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
-                  ),
+                  onSelected: (v) => setLocal(() => selected = v),
                 ),
                 const SizedBox(height: CentliSpacing.section),
                 TextField(

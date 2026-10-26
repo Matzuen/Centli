@@ -293,27 +293,18 @@ Future<void> _showEditor(
                   Row(
                     children: [
                       Expanded(
-                        child: DropdownButtonFormField<String>(
-                          initialValue: from,
-                          isExpanded: true,
+                        child: CentliGlassDropdownField<String>(
+                          labelText: '原币',
+                          valueText: currencyLabel(from),
                           items: [
                             for (final c in supportedCurrencies)
-                              DropdownMenuItem(
+                              CentliMenuItem(
                                 value: c,
-                                child: Text(
-                                  currencyLabel(c),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
+                                label: currencyLabel(c),
+                                selected: c == from,
                               ),
                           ],
-                          onChanged: (v) {
-                            if (v != null) setLocal(() => from = v);
-                          },
-                          decoration: const InputDecoration(
-                            labelText: '原币',
-                            isDense: true,
-                            border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
-                          ),
+                          onSelected: (v) => setLocal(() => from = v),
                         ),
                       ),
                       const Padding(
@@ -321,27 +312,18 @@ Future<void> _showEditor(
                         child: Icon(Icons.arrow_forward, size: 20),
                       ),
                       Expanded(
-                        child: DropdownButtonFormField<String>(
-                          initialValue: to,
-                          isExpanded: true,
+                        child: CentliGlassDropdownField<String>(
+                          labelText: '目标币',
+                          valueText: currencyLabel(to),
                           items: [
                             for (final c in supportedCurrencies)
-                              DropdownMenuItem(
+                              CentliMenuItem(
                                 value: c,
-                                child: Text(
-                                  currencyLabel(c),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
+                                label: currencyLabel(c),
+                                selected: c == to,
                               ),
                           ],
-                          onChanged: (v) {
-                            if (v != null) setLocal(() => to = v);
-                          },
-                          decoration: const InputDecoration(
-                            labelText: '目标币',
-                            isDense: true,
-                            border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
-                          ),
+                          onSelected: (v) => setLocal(() => to = v),
                         ),
                       ),
                     ],

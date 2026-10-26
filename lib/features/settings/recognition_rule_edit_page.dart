@@ -354,19 +354,31 @@ class _RecognitionRuleEditPageState extends State<RecognitionRuleEditPage> {
                         (v == null || v.trim().isEmpty) ? '请填写名称' : null,
                   ),
                   const SizedBox(height: CentliSpacing.section),
-                  DropdownButtonFormField<String>(
-                    initialValue: _appChoice,
-                    decoration: const InputDecoration(
-                      labelText: '应用',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
-                    ),
-                    items: const [
-                      DropdownMenuItem(value: 'alipay', child: Text('支付宝')),
-                      DropdownMenuItem(value: 'wechat', child: Text('微信')),
-                      DropdownMenuItem(value: 'other', child: Text('其它')),
+                  CentliGlassDropdownField<String>(
+                    labelText: '应用',
+                    valueText: switch (_appChoice) {
+                      'alipay' => '支付宝',
+                      'wechat' => '微信',
+                      _ => '其它',
+                    },
+                    items: [
+                      CentliMenuItem(
+                        value: 'alipay',
+                        label: '支付宝',
+                        selected: _appChoice == 'alipay',
+                      ),
+                      CentliMenuItem(
+                        value: 'wechat',
+                        label: '微信',
+                        selected: _appChoice == 'wechat',
+                      ),
+                      CentliMenuItem(
+                        value: 'other',
+                        label: '其它',
+                        selected: _appChoice == 'other',
+                      ),
                     ],
-                    onChanged: (v) {
-                      if (v == null) return;
+                    onSelected: (v) {
                       setState(() {
                         _appChoice = v;
                         _extraPackages = const [];
@@ -411,39 +423,60 @@ class _RecognitionRuleEditPageState extends State<RecognitionRuleEditPage> {
                     ),
                   ],
                   const SizedBox(height: CentliSpacing.section),
-                  DropdownButtonFormField<String?>(
-                    initialValue: _accountHint,
-                    decoration: const InputDecoration(
-                      labelText: '建议资产账户提示',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
-                      helperText: '用于映射到「应用 → 默认资产账户」',
-                    ),
-                    items: const [
-                      DropdownMenuItem(value: 'alipay', child: Text('支付宝')),
-                      DropdownMenuItem(value: 'wechat', child: Text('微信')),
-                      DropdownMenuItem(value: null, child: Text('无')),
+                  CentliGlassDropdownField<String?>(
+                    labelText: '建议资产账户提示',
+                    helperText: '用于映射到「应用 → 默认资产账户」',
+                    valueText: switch (_accountHint) {
+                      'alipay' => '支付宝',
+                      'wechat' => '微信',
+                      _ => '无',
+                    },
+                    items: [
+                      CentliMenuItem<String?>(
+                        value: 'alipay',
+                        label: '支付宝',
+                        selected: _accountHint == 'alipay',
+                      ),
+                      CentliMenuItem<String?>(
+                        value: 'wechat',
+                        label: '微信',
+                        selected: _accountHint == 'wechat',
+                      ),
+                      CentliMenuItem<String?>(
+                        value: null,
+                        label: '无',
+                        selected: _accountHint == null,
+                      ),
                     ],
-                    onChanged: (v) => setState(() => _accountHint = v),
+                    onSelected: (v) => setState(() => _accountHint = v),
                   ),
                   const SizedBox(height: CentliSpacing.section),
-                  DropdownButtonFormField<String>(
-                    initialValue: _defaultCurrency,
-                    decoration: const InputDecoration(
-                      labelText: '默认币种',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
-                    ),
-                    items: const [
-                      DropdownMenuItem(value: 'CNY', child: Text('CNY 人民币')),
-                      DropdownMenuItem(value: 'USD', child: Text('USD 美元')),
-                      DropdownMenuItem(value: 'EUR', child: Text('EUR 欧元')),
-                      DropdownMenuItem(value: 'HKD', child: Text('HKD 港币')),
-                      DropdownMenuItem(value: 'JPY', child: Text('JPY 日元')),
-                      DropdownMenuItem(value: 'TWD', child: Text('TWD 新台币')),
-                    ],
-                    onChanged: (v) {
-                      if (v == null) return;
-                      setState(() => _defaultCurrency = v);
+                  CentliGlassDropdownField<String>(
+                    labelText: '默认币种',
+                    valueText: switch (_defaultCurrency) {
+                      'USD' => 'USD 美元',
+                      'EUR' => 'EUR 欧元',
+                      'HKD' => 'HKD 港币',
+                      'JPY' => 'JPY 日元',
+                      'TWD' => 'TWD 新台币',
+                      _ => 'CNY 人民币',
                     },
+                    items: [
+                      for (final e in const [
+                        ('CNY', 'CNY 人民币'),
+                        ('USD', 'USD 美元'),
+                        ('EUR', 'EUR 欧元'),
+                        ('HKD', 'HKD 港币'),
+                        ('JPY', 'JPY 日元'),
+                        ('TWD', 'TWD 新台币'),
+                      ])
+                        CentliMenuItem(
+                          value: e.$1,
+                          label: e.$2,
+                          selected: e.$1 == _defaultCurrency,
+                        ),
+                    ],
+                    onSelected: (v) => setState(() => _defaultCurrency = v),
                   ),
                   const SizedBox(height: CentliSpacing.sectionLoose),
                   Text(
@@ -451,42 +484,44 @@ class _RecognitionRuleEditPageState extends State<RecognitionRuleEditPage> {
                     style: Theme.of(context).textTheme.titleSmall,
                   ),
                   const SizedBox(height: CentliSpacing.item),
-                  DropdownButtonFormField<String>(
-                    initialValue: _matchOn,
-                    decoration: const InputDecoration(
-                      labelText: '关键词匹配位置',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
-                      helperText: '「仅标题」= 标题门控是否抓取；收支再由正文判定',
-                    ),
-                    items: const [
-                      DropdownMenuItem(value: 'body', child: Text('标题+正文（传统）')),
-                      DropdownMenuItem(value: 'title', child: Text('仅标题（门控）')),
+                  CentliGlassDropdownField<String>(
+                    labelText: '关键词匹配位置',
+                    helperText: '「仅标题」= 标题门控是否抓取；收支再由正文判定',
+                    valueText: _matchOn == 'title' ? '仅标题（门控）' : '标题+正文（传统）',
+                    items: [
+                      CentliMenuItem(
+                        value: 'body',
+                        label: '标题+正文（传统）',
+                        selected: _matchOn == 'body',
+                      ),
+                      CentliMenuItem(
+                        value: 'title',
+                        label: '仅标题（门控）',
+                        selected: _matchOn == 'title',
+                      ),
                     ],
-                    onChanged: (v) {
-                      if (v == null) return;
-                      setState(() => _matchOn = v);
-                    },
+                    onSelected: (v) => setState(() => _matchOn = v),
                   ),
                   const SizedBox(height: CentliSpacing.section),
-                  DropdownButtonFormField<String>(
-                    initialValue: _direction,
-                    decoration: InputDecoration(
-                      labelText: '默认收支方向',
-                      border: const OutlineInputBorder(
-                        borderRadius: BorderRadius.all(Radius.circular(14)),
+                  CentliGlassDropdownField<String>(
+                    labelText: '默认收支方向',
+                    helperText: _matchOn == 'title'
+                        ? '仅标题门控时：正文有收/支词则覆盖此默认'
+                        : '匹配成功后的记账方向',
+                    valueText: _direction == 'in' ? '收入' : '支出',
+                    items: [
+                      CentliMenuItem(
+                        value: 'out',
+                        label: '支出',
+                        selected: _direction == 'out',
                       ),
-                      helperText: _matchOn == 'title'
-                          ? '仅标题门控时：正文有收/支词则覆盖此默认'
-                          : '匹配成功后的记账方向',
-                    ),
-                    items: const [
-                      DropdownMenuItem(value: 'out', child: Text('支出')),
-                      DropdownMenuItem(value: 'in', child: Text('收入')),
+                      CentliMenuItem(
+                        value: 'in',
+                        label: '收入',
+                        selected: _direction == 'in',
+                      ),
                     ],
-                    onChanged: (v) {
-                      if (v == null) return;
-                      setState(() => _direction = v);
-                    },
+                    onSelected: (v) => setState(() => _direction = v),
                   ),
                   const SizedBox(height: CentliSpacing.sectionLoose),
                   Text(

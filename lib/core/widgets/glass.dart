@@ -474,6 +474,7 @@ class CentliMenuItem<T> {
     this.icon,
     this.selected = false,
     this.destructive = false,
+    this.submenu = false,
   });
 
   final T value;
@@ -481,6 +482,9 @@ class CentliMenuItem<T> {
   final IconData? icon;
   final bool selected;
   final bool destructive;
+
+  /// 有下级菜单时显示右箭头（级联选择用）。
+  final bool submenu;
 }
 
 /// 在锚点旁弹出毛玻璃菜单；样式与首页账本下拉一致。
@@ -622,6 +626,12 @@ class _CentliMenuTile<T> extends StatelessWidget {
                 ),
               ),
             ),
+            if (item.submenu)
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 20,
+                color: scheme.onSurfaceVariant,
+              ),
           ],
         ),
       ),
@@ -958,3 +968,101 @@ class CentliGlassPopupButton<T> extends StatelessWidget {
     );
   }
 }
+
+
+class _GlassDropdownPick<T> {
+  const _GlassDropdownPick(this.value);
+  final T value;
+}
+
+/// 表单里替代 [DropdownButtonFormField] 的毛玻璃下拉：外观像 InputDecorator，点开 [showGlassMenu]。
+class CentliGlassDropdownField<T> extends StatelessWidget {
+  const CentliGlassDropdownField({
+    super.key,
+    required this.items,
+    required this.onSelected,
+    required this.valueText,
+    this.labelText,
+    this.helperText,
+    this.enabled = true,
+    this.alignEnd = false,
+    this.minWidth = 160,
+    this.maxWidth = 280,
+  });
+
+  final List<CentliMenuItem<T>> items;
+  final ValueChanged<T> onSelected;
+  final String valueText;
+  final String? labelText;
+  final String? helperText;
+  final bool enabled;
+  final bool alignEnd;
+  final double minWidth;
+  final double maxWidth;
+
+  Future<void> _open(BuildContext context, BuildContext anchorContext) async {
+    if (!enabled || items.isEmpty) return;
+    // 用包装类型区分「点选了 value==null 的项」与「取消关闭」，
+    // 以便 String? 等可空下拉（如「全部分类」）能正确回写。
+    final wrapped = [
+      for (final it in items)
+        CentliMenuItem<_GlassDropdownPick<T>>(
+          value: _GlassDropdownPick<T>(it.value),
+          label: it.label,
+          icon: it.icon,
+          selected: it.selected,
+          destructive: it.destructive,
+          submenu: it.submenu,
+        ),
+    ];
+    final pick = await showGlassMenu<_GlassDropdownPick<T>>(
+      context: context,
+      anchorContext: anchorContext,
+      items: wrapped,
+      alignEnd: alignEnd,
+      minWidth: minWidth,
+      maxWidth: maxWidth,
+    );
+    if (pick != null) onSelected(pick.value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Builder(
+      builder: (anchorCtx) {
+        return InputDecorator(
+          decoration: InputDecoration(
+            labelText: labelText,
+            helperText: helperText,
+            isDense: true,
+            border: const OutlineInputBorder(
+              borderRadius: BorderRadius.all(Radius.circular(14)),
+            ),
+            suffixIcon: Icon(
+              Icons.arrow_drop_down_rounded,
+              color: enabled ? scheme.onSurfaceVariant : scheme.outline,
+            ),
+          ),
+          child: InkWell(
+            onTap: enabled ? () => _open(context, anchorCtx) : null,
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Text(
+                valueText,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 15,
+                  color: enabled ? scheme.onSurface : scheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+

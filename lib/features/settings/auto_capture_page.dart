@@ -13,6 +13,7 @@ import '../../platform/notifications/notification_parse.dart';
 import '../../platform/notifications/noti_template_store.dart';
 import '../../app/theme.dart';
 import '../../core/widgets/glass.dart';
+import '../../core/widgets/account_cascade_picker.dart';
 
 /// Full auto-capture settings at `/me/auto` (wireframe §8).
 class AutoCapturePage extends ConsumerStatefulWidget {
@@ -41,6 +42,8 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
   bool _overlayGranted = false;
   Map<String, String> _accountMap = {};
   List<Account> _accounts = const [];
+  List<Ledger> _ledgers = const [];
+  List<AssetType> _assetTypes = const [];
   List<DroppedNotification> _dropped = const [];
   String _aiTraceHint = '';
 
@@ -94,12 +97,14 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
     final dropped = await droppedF;
 
     var pending = 0;
-    List<Account> accounts = const [];
     if (ledgerId != null) {
-      final pendingF = db.countPendingCaptures(ledgerId);
-      final accountsF = db.loadActiveAccounts(ledgerId);
-      pending = await pendingF;
-      accounts = await accountsF;
+      pending = await db.countPendingCaptures(ledgerId);
+    }
+    final ledgers = await db.loadAllLedgers();
+    final accounts = await db.loadAllActiveAccounts();
+    final assetTypes = <AssetType>[];
+    for (final l in ledgers) {
+      assetTypes.addAll(await db.loadAssetTypes(l.id));
     }
 
     NotiTemplateStore.bindDatabase(db);
@@ -140,6 +145,8 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
       _pendingCount = pending;
       _accountMap = accountMap;
       _accounts = accounts;
+      _ledgers = ledgers;
+      _assetTypes = assetTypes;
       _dropped = dropped;
       _aiTraceHint = hint;
       _loading = false;
@@ -312,6 +319,57 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+
+  String _cascadeLabelFor(String? accountId) {
+    if (accountId == null) return '自动（按资产账户名）';
+    Account? acc;
+    for (final a in _accounts) {
+      if (a.id == accountId) {
+        acc = a;
+        break;
+      }
+    }
+    if (acc == null) return '自动（按资产账户名）';
+    String? ledgerName;
+    for (final l in _ledgers) {
+      if (l.id == acc.ledgerId) {
+        ledgerName = l.name;
+        break;
+      }
+    }
+    String? typeName;
+    for (final t in _assetTypes) {
+      if (t.id == acc.type) {
+        typeName = t.name;
+        break;
+      }
+    }
+    return [
+      if (ledgerName != null && ledgerName.isNotEmpty) ledgerName,
+      if (typeName != null && typeName.isNotEmpty) typeName,
+      acc.name,
+    ].join(' › ');
+  }
+
+  Future<void> _pickAppAccount(String hint) async {
+    if (_busy) return;
+    final current = _accountMap[hint];
+    final selected = current != null && _accounts.any((a) => a.id == current)
+        ? current
+        : null;
+    final result = await showGlassAccountCascadePicker(
+      context: context,
+      ledgers: _ledgers,
+      assetTypes: _assetTypes,
+      accounts: _accounts,
+      selectedAccountId: selected,
+      includeAuto: true,
+      title: '选择默认资产账户',
+    );
+    if (result == null || !mounted) return;
+    await _setAppAccount(hint, result.accountId);
   }
 
   Future<void> _setAppAccount(String hint, String? accountId) async {
@@ -764,38 +822,45 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
                             ),
                           ),
                           SizedBox(
-                            width: 180,
-                            child: DropdownButtonFormField<String?>(
+                            width: 200,
+                            child: InkWell(
                               key: ValueKey(
                                 'cap-map-${def.hint}-${_accountMap[def.hint]}',
                               ),
-                              initialValue:
-                                  _accountMap[def.hint] != null &&
-                                      _accounts.any(
-                                        (a) => a.id == _accountMap[def.hint],
-                                      )
-                                  ? _accountMap[def.hint]
-                                  : null,
-                              isExpanded: true,
-                              decoration: const InputDecoration(
-                                isDense: true,
-                                border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
-                                labelText: '默认资产账户',
-                              ),
-                              items: [
-                                const DropdownMenuItem<String?>(
-                                  value: null,
-                                  child: Text('自动（按资产账户名）'),
-                                ),
-                                for (final a in _accounts)
-                                  DropdownMenuItem<String?>(
-                                    value: a.id,
-                                    child: Text('${a.name} · ${a.currency}'),
-                                  ),
-                              ],
-                              onChanged: _busy
+                              borderRadius: BorderRadius.circular(14),
+                              onTap: _busy
                                   ? null
-                                  : (v) => _setAppAccount(def.hint, v),
+                                  : () => _pickAppAccount(def.hint),
+                              child: InputDecorator(
+                                decoration: const InputDecoration(
+                                  isDense: true,
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.all(
+                                      Radius.circular(14),
+                                    ),
+                                  ),
+                                  labelText: '默认资产账户',
+                                  suffixIcon: Icon(
+                                    Icons.arrow_drop_down_rounded,
+                                  ),
+                                ),
+                                child: Text(
+                                  _cascadeLabelFor(
+                                    _accountMap[def.hint] != null &&
+                                            _accounts.any(
+                                              (a) =>
+                                                  a.id ==
+                                                  _accountMap[def.hint],
+                                            )
+                                        ? _accountMap[def.hint]
+                                        : null,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style:
+                                      Theme.of(context).textTheme.bodyMedium,
+                                ),
+                              ),
                             ),
                           ),
                         ],

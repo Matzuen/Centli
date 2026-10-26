@@ -193,19 +193,18 @@ class LedgersPage extends ConsumerWidget {
                     ),
                   ),
                   const SizedBox(height: CentliSpacing.section),
-                  DropdownButtonFormField<String>(
-                    initialValue: base,
+                  CentliGlassDropdownField<String>(
+                    labelText: '本位币',
+                    valueText: currencyLabel(base),
                     items: [
                       for (final c in supportedCurrencies)
-                        DropdownMenuItem(value: c, child: Text(currencyLabel(c))),
+                        CentliMenuItem(
+                          value: c,
+                          label: currencyLabel(c),
+                          selected: c == base,
+                        ),
                     ],
-                    onChanged: (v) {
-                      if (v != null) setLocal(() => base = v);
-                    },
-                    decoration: const InputDecoration(
-                      labelText: '本位币',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
-                    ),
+                    onSelected: (v) => setLocal(() => base = v),
                   ),
                 ],
               ),

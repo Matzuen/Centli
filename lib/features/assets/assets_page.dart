@@ -1180,54 +1180,46 @@ Future<void> showAccountEditor(
                     onChanged: (_) => setLocal(() {}),
                   ),
                   const SizedBox(height: CentliSpacing.section),
-                  DropdownButtonFormField<String>(
-                    initialValue: currency,
+                  CentliGlassDropdownField<String>(
+                    labelText: '币种',
+                    helperText: '已有资产账户币种不建议修改',
+                    valueText: currencyLabel(currency),
+                    enabled: existing == null,
                     items: [
                       for (final c in supportedCurrencies)
-                        DropdownMenuItem(
+                        CentliMenuItem(
                           value: c,
-                          child: Text(currencyLabel(c)),
+                          label: currencyLabel(c),
+                          selected: c == currency,
                         ),
                     ],
-                    onChanged: existing == null
-                        ? (v) {
-                            if (v != null) setLocal(() => currency = v);
-                          }
-                        : null,
-                    decoration: const InputDecoration(
-                      labelText: '币种',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.all(Radius.circular(14)),
-                      ),
-                      helperText: '已有资产账户币种不建议修改',
-                    ),
+                    onSelected: (v) => setLocal(() => currency = v),
                   ),
                   const SizedBox(height: CentliSpacing.section),
-                  DropdownButtonFormField<String>(
-                    initialValue: dropdownTypes.any((t) => t.id == type)
-                        ? type
-                        : (dropdownTypes.isNotEmpty
-                              ? dropdownTypes.first.id
-                              : null),
+                  CentliGlassDropdownField<String>(
+                    labelText: '分类',
+                    valueText: () {
+                      final id = dropdownTypes.any((t) => t.id == type)
+                          ? type
+                          : (dropdownTypes.isNotEmpty
+                                ? dropdownTypes.first.id
+                                : type);
+                      for (final t in dropdownTypes) {
+                        if (t.id == id) {
+                          return t.archived != 0 ? '${t.name}（已归档）' : t.name;
+                        }
+                      }
+                      return id;
+                    }(),
                     items: [
                       for (final t in dropdownTypes)
-                        DropdownMenuItem(
+                        CentliMenuItem(
                           value: t.id,
-                          enabled: t.archived == 0 || t.id == type,
-                          child: Text(
-                            t.archived != 0 ? '${t.name}（已归档）' : t.name,
-                          ),
+                          label: t.archived != 0 ? '${t.name}（已归档）' : t.name,
+                          selected: t.id == type,
                         ),
                     ],
-                    onChanged: (v) {
-                      if (v != null) setLocal(() => type = v);
-                    },
-                    decoration: const InputDecoration(
-                      labelText: '分类',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.all(Radius.circular(14)),
-                      ),
-                    ),
+                    onSelected: (v) => setLocal(() => type = v),
                   ),
                   const SizedBox(height: CentliSpacing.section),
                   TextField(
