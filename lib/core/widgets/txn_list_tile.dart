@@ -281,7 +281,8 @@ class TxnListTile extends ConsumerWidget {
       to = lookups.accountsById[toId];
     }
     // Only cross-ledger transfers show「账本-账户」; same-ledger keeps bare names.
-    final crossLedger = txn.type == 'transfer' &&
+    final crossLedger =
+        txn.type == 'transfer' &&
         from != null &&
         to != null &&
         from.ledgerId != to.ledgerId;
@@ -398,7 +399,14 @@ class TxnListTile extends ConsumerWidget {
     }
     await db.softDeleteTransaction(txn.id);
     if (!context.mounted) return;
-    showGlassSnackBar(context, '已删除，可在回收站恢复');
+    final id = txn.id;
+    showGlassUndoSnackBar(
+      context,
+      message: '已删除',
+      onUndo: () {
+        db.undeleteTransaction(id);
+      },
+    );
   }
 }
 

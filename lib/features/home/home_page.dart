@@ -267,10 +267,17 @@ class _HomePageState extends ConsumerState<HomePage> {
       destructive: true,
     );
     if (ok != true || !mounted) return;
-    final n = await ref.read(databaseProvider).softDeleteTransactions(ids);
+    final db = ref.read(databaseProvider);
+    final n = await db.softDeleteTransactions(ids);
     if (!mounted) return;
     _exitTxnSelect();
-    showGlassSnackBar(context, '已删除 $n 笔，可在回收站恢复');
+    showGlassUndoSnackBar(
+      context,
+      message: n == 1 ? '已删除' : '已删除 $n 笔',
+      onUndo: () {
+        db.undeleteTransactions(ids);
+      },
+    );
   }
 
   Future<void> _pickLedger({
@@ -448,9 +455,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                             child: Text(
                               '已选 ${_selectedTxnIds.length} 项',
                               textAlign: TextAlign.center,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleSmall
+                              style: Theme.of(context).textTheme.titleSmall
                                   ?.copyWith(fontWeight: FontWeight.w700),
                             ),
                           ),
@@ -609,12 +614,14 @@ class _HomePageState extends ConsumerState<HomePage> {
                         ref.read(databaseProvider),
                         ref.read(pendingExternalWriteTickProvider.notifier),
                       );
-                      ref.invalidate(_rangeTxProvider((
-                        ledgerId: ledgerId,
-                        key: range.key,
-                        startMs: range.startMs,
-                        endMs: range.endMs,
-                      )));
+                      ref.invalidate(
+                        _rangeTxProvider((
+                          ledgerId: ledgerId,
+                          key: range.key,
+                          startMs: range.startMs,
+                          endMs: range.endMs,
+                        )),
+                      );
                       ref.invalidate(_rangeBaseProvider(baseArgs));
                       ref.invalidate(_dailyExpenseProvider(baseArgs));
                       ref.invalidate(_dailyIncomeProvider(baseArgs));
@@ -623,7 +630,10 @@ class _HomePageState extends ConsumerState<HomePage> {
                         _netWorthHomeProvider((ledgerId: ledgerId, base: base)),
                       );
                       ref.invalidate(
-                        _lifetimeTotalsProvider((ledgerId: ledgerId, base: base)),
+                        _lifetimeTotalsProvider((
+                          ledgerId: ledgerId,
+                          base: base,
+                        )),
                       );
                       ref.invalidate(_homeBalancesProvider(ledgerId));
                       ref.invalidate(_homePendingOkProvider(ledgerId));
@@ -696,7 +706,9 @@ class _HomePageState extends ConsumerState<HomePage> {
                                 ),
                                 recent.when(
                                   loading: () => const Padding(
-                                    padding: EdgeInsets.all(CentliSpacing.cardPad),
+                                    padding: EdgeInsets.all(
+                                      CentliSpacing.cardPad,
+                                    ),
                                     child: Center(
                                       child: CircularProgressIndicator(),
                                     ),
@@ -706,7 +718,9 @@ class _HomePageState extends ConsumerState<HomePage> {
                                   data: (txns) {
                                     if (txns.isEmpty) {
                                       return Padding(
-                                        padding: const EdgeInsets.all(CentliSpacing.cardPad),
+                                        padding: const EdgeInsets.all(
+                                          CentliSpacing.cardPad,
+                                        ),
                                         child: Column(
                                           children: [
                                             Icon(
@@ -734,8 +748,8 @@ class _HomePageState extends ConsumerState<HomePage> {
                                                   .textTheme
                                                   .bodySmall
                                                   ?.copyWith(
-                                                    color: scheme
-                                                        .onSurfaceVariant,
+                                                    color:
+                                                        scheme.onSurfaceVariant,
                                                   ),
                                             ),
                                             const SizedBox(
@@ -747,15 +761,15 @@ class _HomePageState extends ConsumerState<HomePage> {
                                               runSpacing: 8,
                                               children: [
                                                 FilledButton.tonal(
-                                                  onPressed: () => context
-                                                      .push('/me/auto'),
+                                                  onPressed: () =>
+                                                      context.push('/me/auto'),
                                                   child: const Text('开自动记账'),
                                                 ),
                                                 FilledButton(
                                                   onPressed: () =>
                                                       showBookkeepingSheet(
-                                                    context,
-                                                  ),
+                                                        context,
+                                                      ),
                                                   child: const Text('记第一笔'),
                                                 ),
                                               ],
@@ -1243,7 +1257,10 @@ class _LedgerSummaryCard extends StatelessWidget {
             ),
           ],
           const SizedBox(height: CentliSpacing.section),
-          Divider(height: 1, color: scheme.outlineVariant.withValues(alpha: 0.7)),
+          Divider(
+            height: 1,
+            color: scheme.outlineVariant.withValues(alpha: 0.7),
+          ),
           const SizedBox(height: CentliSpacing.section),
           IntrinsicHeight(
             child: Row(

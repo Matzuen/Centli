@@ -21,13 +21,14 @@ import 'sub_transaction_sheet.dart';
 import '../../app/theme.dart';
 import '../../core/widgets/glass.dart';
 
-final _txnProvider =
-    StreamProvider.family<Transaction?, String>((ref, id) {
+final _txnProvider = StreamProvider.family<Transaction?, String>((ref, id) {
   return ref.watch(databaseProvider).watchTransaction(id);
 });
 
-final _childTxnsProvider =
-    StreamProvider.family<List<Transaction>, String>((ref, parentId) {
+final _childTxnsProvider = StreamProvider.family<List<Transaction>, String>((
+  ref,
+  parentId,
+) {
   return ref.watch(databaseProvider).watchChildTransactions(parentId);
 });
 
@@ -133,9 +134,11 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     super.initState();
     // Warm the cache so account / category names (and the subtitle) resolve
     // without a per-build FutureBuilder; rows stay tappable meanwhile.
-    _loadSources().then((s) {
-      if (mounted) setState(() => _sourceCache = s);
-    }).catchError((Object _) {});
+    _loadSources()
+        .then((s) {
+          if (mounted) setState(() => _sourceCache = s);
+        })
+        .catchError((Object _) {});
   }
 
   bool get _isPendingEdit =>
@@ -188,9 +191,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       tileColor: Colors.transparent,
       textColor: scheme.onSurface,
       titleTextStyle: Theme.of(context).textTheme.bodyLarge,
-      subtitleTextStyle: Theme.of(context)
-          .textTheme
-          .bodySmall
+      subtitleTextStyle: Theme.of(context).textTheme.bodySmall
           ?.copyWith(color: scheme.onSurfaceVariant),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       iconColor: scheme.onSurfaceVariant,
@@ -247,144 +248,147 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
           if (ok && context.mounted) Navigator.of(context).pop();
         },
         child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-        children: [
-          const SizedBox(height: CentliSpacing.sectionLoose),
-          Center(
-            child: InkWell(
-              key: const Key('ledger_detail_amount'),
-              borderRadius: BorderRadius.circular(12),
-              onTap: () => _editAmount(context),
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                child: Text(
-                  '$prefix${formatMinor(txn.currency, _amountMinor, hide: hide)}',
-                  style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                        color: amountColor,
-                        fontWeight: FontWeight.w600,
-                      ),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          children: [
+            const SizedBox(height: CentliSpacing.sectionLoose),
+            Center(
+              child: InkWell(
+                key: const Key('ledger_detail_amount'),
+                borderRadius: BorderRadius.circular(12),
+                onTap: () => _editAmount(context),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 4,
+                  ),
+                  child: Text(
+                    '$prefix${formatMinor(txn.currency, _amountMinor, hide: hide)}',
+                    style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                      color: amountColor,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
               ),
             ),
-          ),
-          const SizedBox(height: CentliSpacing.item),
-          Center(
-            child: _Subtitle(
-              type: txn.type,
-              isTransfer: isTransfer,
-              categoryName: _categoryNameOf(_categoryId),
-              fromAccountName: _accountNameOf(_accountId) ?? '?',
-              sourceFuture: _sourceCache == null ? _ensureSources() : null,
-              toAccountName:
-                  isTransfer ? _accountNameOf(_toAccountId) : null,
-              onResolved: (s) {
-                if (!mounted || _sourceCache == s) return;
-                // First paint races initState's load; repaint once.
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (mounted && _sourceCache != s) {
-                    setState(() => _sourceCache = s);
-                  }
-                });
-              },
-            ),
-          ),
-          // Type (支出 / 收入 / 转账)
-          Center(
-            child: TextButton.icon(
-              key: const Key('ledger_detail_type'),
-              icon: const Icon(Icons.swap_horiz, size: 16),
-              label: Text('改类型'),
-              onPressed: () => _editType(context),
-            ),
-          ),
-          if ((txn.note ?? '').trim() == '余额校正') ...[
             const SizedBox(height: CentliSpacing.item),
             Center(
-              child: Chip(
-                avatar: Icon(Icons.tune, size: 16, color: scheme.primary),
-                label: const Text('余额校正（不计入统计）'),
+              child: _Subtitle(
+                type: txn.type,
+                isTransfer: isTransfer,
+                categoryName: _categoryNameOf(_categoryId),
+                fromAccountName: _accountNameOf(_accountId) ?? '?',
+                sourceFuture: _sourceCache == null ? _ensureSources() : null,
+                toAccountName: isTransfer ? _accountNameOf(_toAccountId) : null,
+                onResolved: (s) {
+                  if (!mounted || _sourceCache == s) return;
+                  // First paint races initState's load; repaint once.
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted && _sourceCache != s) {
+                      setState(() => _sourceCache = s);
+                    }
+                  });
+                },
               ),
             ),
-          ],
-          const SizedBox(height: CentliSpacing.sectionLoose + CentliSpacing.item),
-          CentliSoftCard(
-            clipBehavior: Clip.none,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _sectionHeader(context, '基本信息'),
-                _accountRows(context),
-                if (isTransfer) ..._transferAmountRows(context),
-                _sectionHeader(context, '来源与时间'),
-                _EditRow(
-                  key: const Key('ledger_detail_time'),
-                  theme: _rowTheme(context),
-                  icon: Icons.schedule,
-                  title: '时间',
-                  value: DateFormat('yyyy-MM-dd HH:mm').format(_happenAt),
-                  onTap: () => _editHappenAt(context),
-                ),
-                const Divider(height: 1, indent: 16, endIndent: 16),
-                _infoRow(
-                  context,
-                  icon: Icons.input,
-                  title: '来源',
-                  value: _sourceLabel(txn.source),
-                ),
-                _sectionHeader(context, '其它'),
-                _EditRow(
-                  key: const Key('ledger_detail_tags'),
-                  theme: _rowTheme(context),
-                  icon: Icons.sell_outlined,
-                  title: '标签',
-                  value: _tags.isEmpty ? null : _tags.join('  '),
-                  emptyText: '—',
-                  onTap: () => _editTags(context),
-                ),
-                const Divider(height: 1, indent: 16, endIndent: 16),
-                _EditRow(
-                  key: const Key('ledger_detail_note'),
-                  theme: _rowTheme(context),
-                  icon: Icons.edit_note,
-                  title: '备注',
-                  value: _note,
-                  emptyText: '—',
-                  onTap: () => _editNote(context),
-                ),
-                const Divider(height: 1, indent: 16, endIndent: 16),
-                SwitchListTile(
-                  key: const Key('ledger_detail_include_stat'),
-                  contentPadding: const EdgeInsets.only(left: 16, right: 8),
-                  secondary: const Icon(Icons.bar_chart_outlined),
-                  title: const Text('计入统计'),
-                  subtitle: const Text('影响收支统计与趋势'),
-                  value: _includeInStat == 1,
-                  onChanged: isTransfer || _saving
-                      ? null
-                      : (v) {
-                          setState(() => _pendingIncludeInStat = v ? 1 : 0);
-                        },
-                ),
-                SwitchListTile(
-                  key: const Key('ledger_detail_include_budget'),
-                  contentPadding: const EdgeInsets.only(left: 16, right: 8),
-                  secondary: const Icon(Icons.savings_outlined),
-                  title: const Text('计入预算'),
-                  subtitle: const Text('影响月度预算进度'),
-                  value: _includeInBudget == 1,
-                  onChanged: isTransfer || _saving
-                      ? null
-                      : (v) {
-                          setState(() => _pendingIncludeInBudget = v ? 1 : 0);
-                        },
-                ),
-              ],
+            // Type (支出 / 收入 / 转账)
+            Center(
+              child: TextButton.icon(
+                key: const Key('ledger_detail_type'),
+                icon: const Icon(Icons.swap_horiz, size: 16),
+                label: Text('改类型'),
+                onPressed: () => _editType(context),
+              ),
             ),
-          ),
-          if (txn.parentId == null && !isTransfer)
-            ..._subTransactionSections(context, hide),
-        ],
+            if ((txn.note ?? '').trim() == '余额校正') ...[
+              const SizedBox(height: CentliSpacing.item),
+              Center(
+                child: Chip(
+                  avatar: Icon(Icons.tune, size: 16, color: scheme.primary),
+                  label: const Text('余额校正（不计入统计）'),
+                ),
+              ),
+            ],
+            const SizedBox(
+              height: CentliSpacing.sectionLoose + CentliSpacing.item,
+            ),
+            CentliSoftCard(
+              clipBehavior: Clip.none,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _sectionHeader(context, '基本信息'),
+                  _accountRows(context),
+                  if (isTransfer) ..._transferAmountRows(context),
+                  _sectionHeader(context, '来源与时间'),
+                  _EditRow(
+                    key: const Key('ledger_detail_time'),
+                    theme: _rowTheme(context),
+                    icon: Icons.schedule,
+                    title: '时间',
+                    value: DateFormat('yyyy-MM-dd HH:mm').format(_happenAt),
+                    onTap: () => _editHappenAt(context),
+                  ),
+                  const Divider(height: 1, indent: 16, endIndent: 16),
+                  _infoRow(
+                    context,
+                    icon: Icons.input,
+                    title: '来源',
+                    value: _sourceLabel(txn.source),
+                  ),
+                  _sectionHeader(context, '其它'),
+                  _EditRow(
+                    key: const Key('ledger_detail_tags'),
+                    theme: _rowTheme(context),
+                    icon: Icons.sell_outlined,
+                    title: '标签',
+                    value: _tags.isEmpty ? null : _tags.join('  '),
+                    emptyText: '—',
+                    onTap: () => _editTags(context),
+                  ),
+                  const Divider(height: 1, indent: 16, endIndent: 16),
+                  _EditRow(
+                    key: const Key('ledger_detail_note'),
+                    theme: _rowTheme(context),
+                    icon: Icons.edit_note,
+                    title: '备注',
+                    value: _note,
+                    emptyText: '—',
+                    onTap: () => _editNote(context),
+                  ),
+                  const Divider(height: 1, indent: 16, endIndent: 16),
+                  SwitchListTile(
+                    key: const Key('ledger_detail_include_stat'),
+                    contentPadding: const EdgeInsets.only(left: 16, right: 8),
+                    secondary: const Icon(Icons.bar_chart_outlined),
+                    title: const Text('计入统计'),
+                    subtitle: const Text('影响收支统计与趋势'),
+                    value: _includeInStat == 1,
+                    onChanged: isTransfer || _saving
+                        ? null
+                        : (v) {
+                            setState(() => _pendingIncludeInStat = v ? 1 : 0);
+                          },
+                  ),
+                  SwitchListTile(
+                    key: const Key('ledger_detail_include_budget'),
+                    contentPadding: const EdgeInsets.only(left: 16, right: 8),
+                    secondary: const Icon(Icons.savings_outlined),
+                    title: const Text('计入预算'),
+                    subtitle: const Text('影响月度预算进度'),
+                    value: _includeInBudget == 1,
+                    onChanged: isTransfer || _saving
+                        ? null
+                        : (v) {
+                            setState(() => _pendingIncludeInBudget = v ? 1 : 0);
+                          },
+                  ),
+                ],
+              ),
+            ),
+            if (txn.parentId == null && !isTransfer)
+              ..._subTransactionSections(context, hide),
+          ],
         ),
       ),
     );
@@ -415,7 +419,8 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                   context,
                   children[i],
                   hide: hide,
-                  typeName: typeNameById[children[i].subTypeId ?? ''] ??
+                  typeName:
+                      typeNameById[children[i].subTypeId ?? ''] ??
                       (children[i].note ?? '子交易'),
                   accountName: accNameById[children[i].accountId] ?? '—',
                 ),
@@ -431,9 +436,9 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
           child: Text(
             '可选操作',
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: scheme.onSurfaceVariant,
-                ),
+              fontWeight: FontWeight.w700,
+              color: scheme.onSurfaceVariant,
+            ),
           ),
         ),
         CentliSoftCard(
@@ -475,10 +480,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       subtitle: Text(accountName),
       trailing: Text(
         '$prefix${formatMinor(child.currency, child.amountMinor, hide: hide)}',
-        style: TextStyle(
-          color: color,
-          fontWeight: FontWeight.w600,
-        ),
+        style: TextStyle(color: color, fontWeight: FontWeight.w600),
       ),
       onTap: _saving ? null : () => _editSubTransaction(context, child),
       onLongPress: _saving ? null : () => _deleteSubTransaction(context, child),
@@ -553,7 +555,18 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       ),
     );
     if (ok == true) {
-      await ref.read(databaseProvider).softDeleteTransaction(child.id);
+      final db = ref.read(databaseProvider);
+      final id = child.id;
+      await db.softDeleteTransaction(id);
+      if (context.mounted) {
+        showGlassUndoSnackBar(
+          context,
+          message: '已删除',
+          onUndo: () {
+            db.undeleteTransaction(id);
+          },
+        );
+      }
     }
   }
 
@@ -563,9 +576,9 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       child: Text(
         title,
         style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
+          fontWeight: FontWeight.w700,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
       ),
     );
   }
@@ -673,9 +686,8 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       title: Text(title),
       trailing: Text(
         value,
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
+        style: Theme.of(context).textTheme.bodyMedium
+            ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
       ),
     );
   }
@@ -853,10 +865,11 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
         if (s.transferCats.isNotEmpty) {
           category = s.transferCats.first.id;
         } else {
-          category = (await ref
-                  .read(databaseProvider)
-                  .ensureDefaultTransferCategory(txn.ledgerId))
-              .id;
+          category =
+              (await ref
+                      .read(databaseProvider)
+                      .ensureDefaultTransferCategory(txn.ledgerId))
+                  .id;
         }
       }
       final fromAccount = snapshot.account ?? _accountId;
@@ -887,7 +900,9 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
         toAmountValue = const Value(null);
         fxRateValue = const Value(null);
       }
-      await ref.read(databaseProvider).updateTransactionFields(
+      await ref
+          .read(databaseProvider)
+          .updateTransactionFields(
             id: txn.id,
             type: type,
             amountMinor: amount,
@@ -928,8 +943,34 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
   }
 
   Future<void> _save() async {
+    final accountChanged =
+        _pendingAccountId != null || _pendingToAccountId != null;
+    final categoryChanged = _pendingCategoryId != null;
+    final oldAccountId = txn.accountId;
+    final oldToAccountId = txn.toAccountId;
+    final oldCategoryId = txn.categoryId;
+    final oldToAmountMinor = txn.toAmountMinor;
+    final oldFxRate = txn.fxRate;
     final ok = await _commit();
-    if (ok && mounted) {
+    if (!ok || !mounted) return;
+    if (accountChanged || categoryChanged) {
+      final db = ref.read(databaseProvider);
+      final id = txn.id;
+      showGlassUndoSnackBar(
+        context,
+        message: '已修改',
+        onUndo: () {
+          db.updateTransactionFields(
+            id: id,
+            accountId: accountChanged ? oldAccountId : null,
+            toAccountId: accountChanged ? Value(oldToAccountId) : null,
+            categoryId: categoryChanged ? oldCategoryId : null,
+            toAmountMinor: accountChanged ? Value(oldToAmountMinor) : null,
+            fxRate: accountChanged ? Value(oldFxRate) : null,
+          );
+        },
+      );
+    } else {
       showGlassSnackBar(context, '已保存');
     }
   }
@@ -1026,8 +1067,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       assetTypes: s.assetTypes,
       selectedId: _accountId,
       title: _isTransfer ? '选择转出资产账户' : '选择资产账户',
-      ledgerNamesByAccountId:
-          _isTransfer ? s.ledgerNamesByAccountId : const {},
+      ledgerNamesByAccountId: _isTransfer ? s.ledgerNamesByAccountId : const {},
       preferredLedgerId: txn.ledgerId,
     );
     if (id == null || id == _accountId) return;
@@ -1157,8 +1197,9 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     if (_isTransfer) {
       final fromCcy = _currencyOfAccount(_accountId) ?? txn.currency;
       final toId = _toAccountId;
-      final toCcy =
-          toId == null ? fromCcy : (_currencyOfAccount(toId) ?? fromCcy);
+      final toCcy = toId == null
+          ? fromCcy
+          : (_currencyOfAccount(toId) ?? fromCcy);
       if (fromCcy != toCcy) {
         if (!context.mounted) return;
         showGlassSnackBar(context, '跨币种转账请用「记一笔」修改金额与汇率');
@@ -1167,8 +1208,10 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     }
     final ccy = _currencyOfAccount(_accountId) ?? txn.currency;
     // Amt is stored in txn.currency (same ccy the amount row renders with).
-    var text = fromMinor(txn.currency, _amountMinor)
-        .toStringAsFixed(currencyDecimals[txn.currency] ?? 2);
+    var text = fromMinor(
+      txn.currency,
+      _amountMinor,
+    ).toStringAsFixed(currencyDecimals[txn.currency] ?? 2);
     if (text.contains('.')) {
       text = text.replaceFirst(RegExp(r'\.?0+$'), '');
     }
@@ -1210,9 +1253,17 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       ),
     );
     if (ok != true || !context.mounted) return;
-    await ref.read(databaseProvider).softDeleteTransaction(txn.id);
+    final db = ref.read(databaseProvider);
+    final id = txn.id;
+    await db.softDeleteTransaction(id);
     if (context.mounted) {
-      showGlassSnackBar(context, '已删除');
+      showGlassUndoSnackBar(
+        context,
+        message: '已删除',
+        onUndo: () {
+          db.undeleteTransaction(id);
+        },
+      );
       context.pop();
     }
   }
@@ -1240,7 +1291,6 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     }
   }
 }
-
 
 // ---------------------------------------------------------------------------
 // Dialogs / sheets (also used by the bookkeeping sheet for consistent editing)
@@ -1270,9 +1320,7 @@ Future<String?> _pickTransactionType(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
               child: Text(
                 '修改类型',
-                style: Theme.of(ctx)
-                    .textTheme
-                    .titleMedium
+                style: Theme.of(ctx).textTheme.titleMedium
                     ?.copyWith(fontWeight: FontWeight.w700),
               ),
             ),
@@ -1300,10 +1348,7 @@ Future<String?> _promptAmount(
   required String currency,
 }) {
   final ctrl = TextEditingController(text: initial)
-    ..selection = TextSelection(
-      baseOffset: 0,
-      extentOffset: initial.length,
-    );
+    ..selection = TextSelection(baseOffset: 0, extentOffset: initial.length);
   final formKey = GlobalKey<FormState>();
   final done = showGlassDialog<String>(
     context: context,
@@ -1315,15 +1360,16 @@ Future<String?> _promptAmount(
           key: const Key('ledger_detail_amount_field'),
           controller: ctrl,
           autofocus: true,
-          keyboardType:
-              const TextInputType.numberWithOptions(decimal: true),
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
           inputFormatters: [
             FilteringTextInputFormatter.allow(RegExp(r'[0-9.,+\-×÷*/ ]')),
           ],
           decoration: const InputDecoration(
             prefixText: '¥ ',
             helperText: '支持 12+8 之类的算式',
-            border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.all(Radius.circular(14)),
+            ),
           ),
           validator: (v) {
             final major = evalAmountExpr((v ?? '').trim());
@@ -1378,7 +1424,12 @@ Future<bool?> _promptText(
         controller: controller,
         autofocus: true,
         maxLength: maxLength,
-        decoration: InputDecoration(hintText: hint, border: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14)))),
+        decoration: InputDecoration(
+          hintText: hint,
+          border: const OutlineInputBorder(
+            borderRadius: BorderRadius.all(Radius.circular(14)),
+          ),
+        ),
         onSubmitted: (_) => Navigator.pop(ctx, true),
       ),
       actions: [
@@ -1447,7 +1498,9 @@ Future<List<String>?> showTagEditorDialog(
                     decoration: const InputDecoration(
                       labelText: '新标签',
                       hintText: '回车确认，最多 5 个',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.all(Radius.circular(14)),
+                      ),
                     ),
                     onSubmitted: addTag,
                   ),
@@ -1474,8 +1527,7 @@ Future<List<String>?> showTagEditorDialog(
               ),
               FilledButton(
                 key: const Key('ledger_detail_tags_save'),
-                onPressed: () =>
-                    Navigator.pop(ctx, List<String>.from(current)),
+                onPressed: () => Navigator.pop(ctx, List<String>.from(current)),
                 child: const Text('确定'),
               ),
             ],
@@ -1509,9 +1561,11 @@ class _EditSources {
 
   /// Current-ledger accounts (incl. archived) for non-transfer picks / labels.
   final List<Account> accounts;
+
   /// Active accounts across all ledgers (cross-ledger transfer picker).
   final List<Account> allAccounts;
   final List<AssetType> assetTypes;
+
   /// accountId → ledger display name.
   final Map<String, String> ledgerNamesByAccountId;
   final List<Category> outCats;
@@ -1560,9 +1614,7 @@ class _EditRow extends StatelessWidget {
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: hasValue
-                      ? scheme.onSurfaceVariant
-                      : scheme.outline,
+                  color: hasValue ? scheme.onSurfaceVariant : scheme.outline,
                 ),
               ),
             ),
@@ -1611,9 +1663,7 @@ class _Subtitle extends ConsumerWidget {
         : '$typeLabel${categoryName != null ? '  ·  $categoryName' : ''}';
     return Text(
       text,
-      style: Theme.of(context)
-          .textTheme
-          .titleMedium
+      style: Theme.of(context).textTheme.titleMedium
           ?.copyWith(color: scheme.onSurfaceVariant),
     );
   }

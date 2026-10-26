@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
@@ -66,9 +67,11 @@ class CentliGlass extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
-    final radius = borderRadius ?? BorderRadius.circular(CentliTheme.cardRadius);
+    final radius =
+        borderRadius ?? BorderRadius.circular(CentliTheme.cardRadius);
     final fill = tint ?? CentliTheme.glassTint(context, dark: dark);
-    final hairline = borderColor ?? CentliTheme.glassBorder(context, dark: dark);
+    final hairline =
+        borderColor ?? CentliTheme.glassBorder(context, dark: dark);
     final stroke = borderWidth ?? CentliTheme.glassBorderWidth;
     final doBlur = blur && sigma > 0 && CentliGlass.blurEnabled;
 
@@ -86,10 +89,7 @@ class CentliGlass extends StatelessWidget {
         borderRadius: radius,
         border: Border.all(color: hairline, width: stroke),
       ),
-      child: Material(
-        type: MaterialType.transparency,
-        child: content,
-      ),
+      child: Material(type: MaterialType.transparency, child: content),
     );
 
     if (doBlur) {
@@ -137,7 +137,8 @@ Future<T?> showGlassDialog<T>({
 }) {
   assert(debugCheckHasMaterialLocalizations(context));
   final label =
-      barrierLabel ?? MaterialLocalizations.of(context).modalBarrierDismissLabel;
+      barrierLabel ??
+      MaterialLocalizations.of(context).modalBarrierDismissLabel;
   return showGeneralDialog<T>(
     context: context,
     barrierDismissible: barrierDismissible,
@@ -160,9 +161,10 @@ Future<T?> showGlassDialog<T>({
       return FadeTransition(
         opacity: CurvedAnimation(parent: anim, curve: Curves.easeOut),
         child: ScaleTransition(
-          scale: Tween<double>(begin: 0.96, end: 1).animate(
-            CurvedAnimation(parent: anim, curve: Curves.easeOutCubic),
-          ),
+          scale: Tween<double>(
+            begin: 0.96,
+            end: 1,
+          ).animate(CurvedAnimation(parent: anim, curve: Curves.easeOutCubic)),
           child: child,
         ),
       );
@@ -227,13 +229,15 @@ Future<T?> showGlassSheet<T>({
     clipBehavior: clipBehavior,
     // 让 route 的材质透明，玻璃表面由 builder 里的 CentliGlass 自己画。
     backgroundColor: Colors.transparent,
-    shape: shape ??
+    shape:
+        shape ??
         const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
     builder: (ctx) {
       final body = Builder(builder: builder);
-      final effectiveShape = shape ??
+      final effectiveShape =
+          shape ??
           const RoundedRectangleBorder(
             borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
           );
@@ -290,10 +294,7 @@ class _GlassSheetBodyWithHandle extends StatelessWidget {
         }
         return Column(
           mainAxisSize: MainAxisSize.min,
-          children: [
-            handle,
-            child,
-          ],
+          children: [handle, child],
         );
       },
     );
@@ -427,7 +428,6 @@ Future<bool?> showGlassConfirmDialog({
   );
 }
 
-
 /// 表单底栏：左「取消」次要、右「确定」实心；危险确认用 [destructive]。
 class CentliFormActionBar extends StatelessWidget {
   const CentliFormActionBar({
@@ -445,6 +445,7 @@ class CentliFormActionBar extends StatelessWidget {
   final VoidCallback? onConfirm;
   final String cancelLabel;
   final String confirmLabel;
+
   /// 若提供则替代 [confirmLabel]（例如加载中转圈）。
   final Widget? confirmChild;
   final bool destructive;
@@ -454,10 +455,7 @@ class CentliFormActionBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        TextButton(
-          onPressed: onCancel,
-          child: Text(cancelLabel),
-        ),
+        TextButton(onPressed: onCancel, child: Text(cancelLabel)),
         const Spacer(),
         FilledButton(
           style: destructive ? centliDangerFilledStyle(context) : null,
@@ -494,6 +492,7 @@ Future<T?> showGlassMenu<T>({
   required List<CentliMenuItem<T>> items,
   double minWidth = 148,
   double maxWidth = 280,
+
   /// `true` 时菜单右缘对齐锚点右缘（顶栏 / trailing 三点菜单）。
   bool alignEnd = false,
 }) {
@@ -563,8 +562,9 @@ Future<T?> showGlassMenu<T>({
                               Divider(
                                 height: 1,
                                 thickness: 1,
-                                color: scheme.outlineVariant
-                                    .withValues(alpha: 0.45),
+                                color: scheme.outlineVariant.withValues(
+                                  alpha: 0.45,
+                                ),
                               ),
                             _CentliMenuTile<T>(item: items[i]),
                           ],
@@ -593,8 +593,8 @@ class _CentliMenuTile<T> extends StatelessWidget {
     final color = item.destructive
         ? scheme.error
         : item.selected
-            ? scheme.primary
-            : scheme.onSurface;
+        ? scheme.primary
+        : scheme.onSurface;
     return InkWell(
       onTap: () => Navigator.pop(context, item.value),
       child: Padding(
@@ -606,8 +606,8 @@ class _CentliMenuTile<T> extends StatelessWidget {
               child: item.selected
                   ? Icon(Icons.check_rounded, size: 18, color: color)
                   : item.icon != null
-                      ? Icon(item.icon, size: 18, color: color)
-                      : null,
+                  ? Icon(item.icon, size: 18, color: color)
+                  : null,
             ),
             const SizedBox(width: 6),
             Expanded(
@@ -617,8 +617,7 @@ class _CentliMenuTile<T> extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 15,
-                  fontWeight:
-                      item.selected ? FontWeight.w700 : FontWeight.w500,
+                  fontWeight: item.selected ? FontWeight.w700 : FontWeight.w500,
                   color: color,
                 ),
               ),
@@ -639,7 +638,7 @@ GlassSnackTone inferGlassSnackTone(String message) {
   if (RegExp(r'失败|错误|无效|无法|不能|禁止|异常').hasMatch(m)) {
     return GlassSnackTone.error;
   }
-  if (RegExp(r'已入账|已保存|已删除|已恢复|已清空|已忽略|成功|完成|已复制').hasMatch(m)) {
+  if (RegExp(r'已入账|已保存|已删除|已修改|已恢复|已清空|已忽略|成功|完成|已复制').hasMatch(m)) {
     return GlassSnackTone.success;
   }
   if (RegExp(r'^请|注意|将补|未选|缺少|即将').hasMatch(m)) {
@@ -654,21 +653,27 @@ const double _kGlassSnackTintAlpha = 0.72;
 Color _glassSnackTint(bool dark, GlassSnackTone tone) {
   if (dark) {
     return switch (tone) {
-      GlassSnackTone.success =>
-        const Color(0xFF1B3D2A).withValues(alpha: _kGlassSnackTintAlpha),
-      GlassSnackTone.error =>
-        const Color(0xFF4A1F1F).withValues(alpha: _kGlassSnackTintAlpha),
-      GlassSnackTone.warning || GlassSnackTone.info =>
-        const Color(0xFF3D3420).withValues(alpha: _kGlassSnackTintAlpha),
+      GlassSnackTone.success => const Color(
+        0xFF1B3D2A,
+      ).withValues(alpha: _kGlassSnackTintAlpha),
+      GlassSnackTone.error => const Color(
+        0xFF4A1F1F,
+      ).withValues(alpha: _kGlassSnackTintAlpha),
+      GlassSnackTone.warning || GlassSnackTone.info => const Color(
+        0xFF3D3420,
+      ).withValues(alpha: _kGlassSnackTintAlpha),
     };
   }
   return switch (tone) {
-    GlassSnackTone.success =>
-      const Color(0xFFE8F5E9).withValues(alpha: _kGlassSnackTintAlpha),
-    GlassSnackTone.error =>
-      const Color(0xFFFFEBEE).withValues(alpha: _kGlassSnackTintAlpha),
-    GlassSnackTone.warning || GlassSnackTone.info =>
-      const Color(0xFFFFF8E1).withValues(alpha: _kGlassSnackTintAlpha),
+    GlassSnackTone.success => const Color(
+      0xFFE8F5E9,
+    ).withValues(alpha: _kGlassSnackTintAlpha),
+    GlassSnackTone.error => const Color(
+      0xFFFFEBEE,
+    ).withValues(alpha: _kGlassSnackTintAlpha),
+    GlassSnackTone.warning || GlassSnackTone.info => const Color(
+      0xFFFFF8E1,
+    ).withValues(alpha: _kGlassSnackTintAlpha),
   };
 }
 
@@ -678,54 +683,70 @@ Color _glassSnackForeground(bool dark, GlassSnackTone tone) {
     return switch (tone) {
       GlassSnackTone.success => const Color(0xFFA5D6A7),
       GlassSnackTone.error => const Color(0xFFEF9A9A),
-      GlassSnackTone.warning || GlassSnackTone.info =>
-        const Color(0xFFFFE082),
+      GlassSnackTone.warning || GlassSnackTone.info => const Color(0xFFFFE082),
     };
   }
   return switch (tone) {
     GlassSnackTone.success => const Color(0xFF2E7D32),
     GlassSnackTone.error => const Color(0xFFC62828),
-    GlassSnackTone.warning || GlassSnackTone.info =>
-      const Color(0xFF8D6E00),
+    GlassSnackTone.warning || GlassSnackTone.info => const Color(0xFF8D6E00),
   };
 }
 
 Color _glassSnackBorder(bool dark, GlassSnackTone tone) {
   if (dark) {
     return switch (tone) {
-      GlassSnackTone.success =>
-        const Color(0xFF81C784).withValues(alpha: 0.35),
-      GlassSnackTone.error =>
-        const Color(0xFFE57373).withValues(alpha: 0.35),
-      GlassSnackTone.warning || GlassSnackTone.info =>
-        const Color(0xFFFFD54F).withValues(alpha: 0.30),
+      GlassSnackTone.success => const Color(0xFF81C784).withValues(alpha: 0.35),
+      GlassSnackTone.error => const Color(0xFFE57373).withValues(alpha: 0.35),
+      GlassSnackTone.warning ||
+      GlassSnackTone.info => const Color(0xFFFFD54F).withValues(alpha: 0.30),
     };
   }
   return switch (tone) {
-    GlassSnackTone.success =>
-      const Color(0xFF43A047).withValues(alpha: 0.28),
-    GlassSnackTone.error =>
-      const Color(0xFFE53935).withValues(alpha: 0.28),
-    GlassSnackTone.warning || GlassSnackTone.info =>
-      const Color(0xFFF9A825).withValues(alpha: 0.35),
+    GlassSnackTone.success => const Color(0xFF43A047).withValues(alpha: 0.28),
+    GlassSnackTone.error => const Color(0xFFE53935).withValues(alpha: 0.28),
+    GlassSnackTone.warning ||
+    GlassSnackTone.info => const Color(0xFFF9A825).withValues(alpha: 0.35),
   };
+}
+
+/// 当前玻璃轻提示（同一时间只留一条，后发覆盖先前）。
+OverlayEntry? _activeGlassSnackEntry;
+Timer? _activeGlassSnackTimer;
+
+void _dismissActiveGlassSnack() {
+  _activeGlassSnackTimer?.cancel();
+  _activeGlassSnackTimer = null;
+  final entry = _activeGlassSnackEntry;
+  _activeGlassSnackEntry = null;
+  if (entry != null && entry.mounted) {
+    entry.remove();
+  }
 }
 
 /// 毛玻璃轻提示：短时显示在底部，不挡住周围点击。
 ///
 /// 不用系统 [SnackBar]（全宽实心底 + 默认 4 秒 + 命中区域过大）。
+///
+/// [actionLabel] / [onAction] 用于「撤销」等操作；有操作时默认仍可用
+/// [duration]（后悔药请用 [showGlassUndoSnackBar]，约 4 秒）。
 void showGlassSnackBar(
   BuildContext context,
   String message, {
   GlassSnackTone? tone,
   Duration duration = const Duration(milliseconds: 1600),
+  String? actionLabel,
+  VoidCallback? onAction,
 }) {
-  // 清掉可能残留的实心 SnackBar，避免叠两层。
+  // 清掉可能残留的实心 SnackBar / 上一条玻璃条，避免叠两层。
   ScaffoldMessenger.maybeOf(context)?.hideCurrentSnackBar();
+  _dismissActiveGlassSnack();
 
   final resolved = tone ?? inferGlassSnackTone(message);
   final dark = Theme.of(context).brightness == Brightness.dark;
   final fg = _glassSnackForeground(dark, resolved);
+  final hasAction =
+      actionLabel != null && actionLabel.isNotEmpty && onAction != null;
   final overlay = Overlay.maybeOf(context, rootOverlay: true);
   if (overlay == null) {
     ScaffoldMessenger.maybeOf(context)?.showSnackBar(
@@ -734,15 +755,24 @@ void showGlassSnackBar(
         backgroundColor: _glassSnackTint(dark, resolved),
         duration: duration,
         behavior: SnackBarBehavior.floating,
+        action: hasAction
+            ? SnackBarAction(
+                label: actionLabel,
+                textColor: fg,
+                onPressed: onAction,
+              )
+            : null,
       ),
     );
     return;
   }
 
   late OverlayEntry entry;
+  late void Function() closeSnack;
   entry = OverlayEntry(
     builder: (ctx) {
       final isDark = Theme.of(ctx).brightness == Brightness.dark;
+      final color = _glassSnackForeground(isDark, resolved);
       final bottom =
           MediaQuery.paddingOf(ctx).bottom + CentliTheme.glassSnackBottomGap;
       // 只用 Positioned 包住这一条：条外区域不进命中测试，背后可点。
@@ -752,40 +782,120 @@ void showGlassSnackBar(
         bottom: bottom,
         child: Material(
           type: MaterialType.transparency,
-          child: GestureDetector(
-            onTap: () {
-              if (entry.mounted) entry.remove();
-            },
-            child: CentliGlass(
-              borderRadius: BorderRadius.circular(14),
-              blur: true,
-              sigma: CentliTheme.glassSigma,
-              tint: _glassSnackTint(isDark, resolved),
-              borderColor: _glassSnackBorder(isDark, resolved),
-              borderWidth: 1,
-              padding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 12,
-              ),
-              child: Text(
-                message,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: _glassSnackForeground(isDark, resolved),
-                ),
-              ),
-            ),
+          child: CentliGlass(
+            borderRadius: BorderRadius.circular(14),
+            blur: true,
+            sigma: CentliTheme.glassSigma,
+            tint: _glassSnackTint(isDark, resolved),
+            borderColor: _glassSnackBorder(isDark, resolved),
+            borderWidth: 1,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: hasAction
+                ? Row(
+                    children: [
+                      Expanded(
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () {
+                            closeSnack();
+                          },
+                          child: Text(
+                            message,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: color,
+                            ),
+                          ),
+                        ),
+                      ),
+                      Text(
+                        '・',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: color.withValues(alpha: 0.55),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () {
+                          closeSnack();
+                          onAction();
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 2,
+                          ),
+                          child: Text(
+                            actionLabel,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              color: color,
+                              decoration: TextDecoration.underline,
+                              decorationColor: color.withValues(alpha: 0.55),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  )
+                : GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () {
+                      closeSnack();
+                    },
+                    child: Text(
+                      message,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: color,
+                      ),
+                    ),
+                  ),
           ),
         ),
       );
     },
   );
-  overlay.insert(entry);
-  Future<void>.delayed(duration, () {
+  closeSnack = () {
+    if (!identical(_activeGlassSnackEntry, entry)) {
+      if (entry.mounted) entry.remove();
+      return;
+    }
+    _activeGlassSnackTimer?.cancel();
+    _activeGlassSnackTimer = null;
+    _activeGlassSnackEntry = null;
     if (entry.mounted) entry.remove();
-  });
+  };
+
+  _activeGlassSnackEntry = entry;
+  overlay.insert(entry);
+  _activeGlassSnackTimer = Timer(duration, closeSnack);
+}
+
+/// 误操作后悔药：底部显示「已删除・撤销」/「已修改・撤销」，约 4 秒内可点撤销。
+void showGlassUndoSnackBar(
+  BuildContext context, {
+  required String message,
+  required VoidCallback onUndo,
+  GlassSnackTone? tone,
+  Duration duration = const Duration(seconds: 4),
+}) {
+  showGlassSnackBar(
+    context,
+    message,
+    tone: tone,
+    duration: duration,
+    actionLabel: '撤销',
+    onAction: onUndo,
+  );
 }
 
 /// [PopupMenuButton] 的毛玻璃替代：三点 / 自定义 child 都可。
