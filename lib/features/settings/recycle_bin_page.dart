@@ -76,36 +76,16 @@ class _RecycleBinPageState extends ConsumerState<RecycleBinPage> {
   @override
   Widget build(BuildContext context) {
     final ledgerAsync = ref.watch(currentLedgerProvider);
-    return CentliGradientScaffold(
+    return PopScope(
+      canPop: !_selecting,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _selecting) _exitSelect();
+      },
+      child: CentliGradientScaffold(
       appBar: AppBar(
-        title: Text(_selecting ? '已选 ${_selected.length}' : '回收站'),
-        leading: _selecting
-            ? IconButton(
-                tooltip: '取消选择',
-                icon: const Icon(Icons.close),
-                onPressed: _exitSelect,
-              )
-            : null,
+        title: const Text('回收站'),
         actions: [
-          if (_selecting) ...[
-            IconButton(
-              tooltip: '批量恢复',
-              icon: const Icon(Icons.restore),
-              onPressed: _selected.isEmpty
-                  ? null
-                  : () => _batchRestore(context),
-            ),
-            IconButton(
-              tooltip: '批量永久删除',
-              icon: Icon(
-                Icons.delete_forever,
-                color: Theme.of(context).colorScheme.error,
-              ),
-              onPressed: _selected.isEmpty
-                  ? null
-                  : () => _batchPurge(context),
-            ),
-          ] else ...[
+          if (!_selecting) ...[
             IconButton(
               tooltip: '多选',
               icon: const Icon(Icons.checklist),
@@ -143,22 +123,6 @@ class _RecycleBinPageState extends ConsumerState<RecycleBinPage> {
               }
               return Column(
                 children: [
-                  if (_selecting)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                      child: Row(
-                        children: [
-                          TextButton(
-                            onPressed: () => _selectAll(items),
-                            child: const Text('全选'),
-                          ),
-                          TextButton(
-                            onPressed: _exitSelect,
-                            child: const Text('取消'),
-                          ),
-                        ],
-                      ),
-                    ),
                   Expanded(
                     child: ListView.separated(
                       padding: const EdgeInsets.fromLTRB(
@@ -198,12 +162,66 @@ class _RecycleBinPageState extends ConsumerState<RecycleBinPage> {
                       },
                     ),
                   ),
+                  if (_selecting)
+                    Material(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .surface
+                          .withValues(alpha: 0.96),
+                      elevation: 6,
+                      child: SafeArea(
+                        top: false,
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(4, 6, 8, 6),
+                          child: Row(
+                            children: [
+                              TextButton(
+                                onPressed: _exitSelect,
+                                child: const Text('取消'),
+                              ),
+                              Expanded(
+                                child: Text(
+                                  '已选 ${_selected.length} 项',
+                                  textAlign: TextAlign.center,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleSmall
+                                      ?.copyWith(fontWeight: FontWeight.w700),
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: () => _selectAll(items),
+                                child: const Text('全选'),
+                              ),
+                              IconButton(
+                                tooltip: '批量恢复',
+                                onPressed: _selected.isEmpty
+                                    ? null
+                                    : () => _batchRestore(context),
+                                icon: const Icon(Icons.restore),
+                              ),
+                              IconButton(
+                                tooltip: '批量永久删除',
+                                onPressed: _selected.isEmpty
+                                    ? null
+                                    : () => _batchPurge(context),
+                                icon: Icon(
+                                  Icons.delete_forever,
+                                  color: Theme.of(context).colorScheme.error,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                 ],
               );
             },
           );
         },
       ),
+    ),
     );
   }
 

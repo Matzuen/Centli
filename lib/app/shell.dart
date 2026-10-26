@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -9,7 +10,7 @@ import 'theme.dart';
 import '../core/widgets/glass.dart';
 
 /// Flat 5-tab shell: 首页 / 统计 / 记账(+) / 资产 / 我的
-class AppShell extends ConsumerWidget {
+class AppShell extends ConsumerStatefulWidget {
   const AppShell({super.key, required this.navigationShell});
 
   final StatefulNavigationShell navigationShell;
@@ -30,8 +31,53 @@ class AppShell extends ConsumerWidget {
     (icon: Icons.person_outline, selected: Icons.person_rounded, label: '我的'),
   ];
 
+  /// Load traditional manual bookkeeping sheet (deferred).
+  static Future<void> openBookkeeping(BuildContext context) async {
+    await bookkeeping.loadLibrary();
+    if (!context.mounted) return;
+    await bookkeeping.showBookkeepingSheet(context);
+  }
+
+  static Future<void> openQuickBookkeeping(BuildContext context) async {
+    await quick_bk.loadLibrary();
+    if (!context.mounted) return;
+    await quick_bk.showQuickBookkeepingSheet(context);
+  }
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AppShell> createState() => _AppShellState();
+}
+
+class _AppShellState extends ConsumerState<AppShell> {
+  DateTime? _lastBackAt;
+
+  void _onRootBack() {
+    final router = GoRouter.of(context);
+    if (router.canPop()) {
+      router.pop();
+      return;
+    }
+    final now = DateTime.now();
+    if (_lastBackAt != null &&
+        now.difference(_lastBackAt!) < const Duration(seconds: 2)) {
+      SystemNavigator.pop();
+      return;
+    }
+    _lastBackAt = now;
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    messenger?.hideCurrentSnackBar();
+    messenger?.showSnackBar(
+      const SnackBar(
+        content: Text('再按一次退出应用'),
+        duration: Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final navigationShell = widget.navigationShell;
     final ledgerAsync = ref.watch(currentLedgerProvider);
     final ledgerId = ledgerAsync.valueOrNull?.id;
     final pendingCount = ledgerId == null
@@ -42,74 +88,70 @@ class AppShell extends ConsumerWidget {
         ? 0
         : navigationShell.currentIndex;
 
-    return CentliGradientScaffold(
-      // 内容延伸到底栏后方，BackdropFilter 才能采到页面内容。
-      extendBody: true,
-      body: navigationShell,
-      bottomNavigationBar: CentliGlass(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
-        blur: true,
-        sigma: CentliTheme.glassSigma,
-        tint: CentliTheme.glassNavTint(context),
-        child: NavigationBar(
-          backgroundColor: Colors.transparent,
-          selectedIndex: selectedIndex,
-          onDestinationSelected: (index) {
-            if (index == 2) {
-              _openBookkeeping(context);
-              return;
-            }
-            navigationShell.goBranch(
-              index,
-              initialLocation: index == navigationShell.currentIndex,
-            );
-          },
-          destinations: [
-            for (var i = 0; i < _tabs.length; i++)
-              NavigationDestination(
-                icon: i == 0
-                    ? _PendingBadgeIcon(
-                        icon: _tabs[i].icon,
-                        count: pendingCount,
-                      )
-                    : i == 2
-                    ? GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onLongPress: () => _openQuickBookkeeping(context),
-                        child: Icon(_tabs[i].icon),
-                      )
-                    : Icon(_tabs[i].icon),
-                selectedIcon: i == 0
-                    ? _PendingBadgeIcon(
-                        icon: _tabs[i].selected,
-                        count: pendingCount,
-                      )
-                    : i == 2
-                    ? GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onLongPress: () => _openQuickBookkeeping(context),
-                        child: Icon(_tabs[i].selected),
-                      )
-                    : Icon(_tabs[i].selected),
-                label: _tabs[i].label,
-              ),
-          ],
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        _onRootBack();
+      },
+      child: CentliGradientScaffold(
+        // 内容延伸到底栏后方，BackdropFilter 才能采到页面内容。
+        extendBody: true,
+        body: navigationShell,
+        bottomNavigationBar: CentliGlass(
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+          blur: true,
+          sigma: CentliTheme.glassSigma,
+          tint: CentliTheme.glassNavTint(context),
+          child: NavigationBar(
+            backgroundColor: Colors.transparent,
+            selectedIndex: selectedIndex,
+            onDestinationSelected: (index) {
+              if (index == 2) {
+                AppShell.openBookkeeping(context);
+                return;
+              }
+              navigationShell.goBranch(
+                index,
+                initialLocation: index == navigationShell.currentIndex,
+              );
+            },
+            destinations: [
+              for (var i = 0; i < AppShell._tabs.length; i++)
+                NavigationDestination(
+                  icon: i == 0
+                      ? _PendingBadgeIcon(
+                          icon: AppShell._tabs[i].icon,
+                          count: pendingCount,
+                        )
+                      : i == 2
+                      ? GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onLongPress: () =>
+                              AppShell.openQuickBookkeeping(context),
+                          child: Icon(AppShell._tabs[i].icon),
+                        )
+                      : Icon(AppShell._tabs[i].icon),
+                  selectedIcon: i == 0
+                      ? _PendingBadgeIcon(
+                          icon: AppShell._tabs[i].selected,
+                          count: pendingCount,
+                        )
+                      : i == 2
+                      ? GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onLongPress: () =>
+                              AppShell.openQuickBookkeeping(context),
+                          child: Icon(AppShell._tabs[i].selected),
+                        )
+                      : Icon(AppShell._tabs[i].selected),
+                  label: AppShell._tabs[i].label,
+                ),
+            ],
+          ),
         ),
       ),
     );
-  }
-
-  /// Load traditional manual bookkeeping sheet (deferred).
-  static Future<void> _openBookkeeping(BuildContext context) async {
-    await bookkeeping.loadLibrary();
-    if (!context.mounted) return;
-    await bookkeeping.showBookkeepingSheet(context);
-  }
-
-  static Future<void> _openQuickBookkeeping(BuildContext context) async {
-    await quick_bk.loadLibrary();
-    if (!context.mounted) return;
-    await quick_bk.showQuickBookkeepingSheet(context);
   }
 }
 

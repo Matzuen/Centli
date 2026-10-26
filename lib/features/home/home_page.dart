@@ -337,7 +337,12 @@ class _HomePageState extends ConsumerState<HomePage> {
       );
     }
 
-    return CentliGradientScaffold(
+    return PopScope(
+      canPop: !_selectingTxns,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _selectingTxns) _exitTxnSelect();
+      },
+      child: CentliGradientScaffold(
       body: SafeArea(
         bottom: false,
         child: ledgerAsync.when(
@@ -463,46 +468,6 @@ class _HomePageState extends ConsumerState<HomePage> {
 
             return Column(
               children: [
-                if (_selectingTxns)
-                  Material(
-                    color: scheme.surface.withValues(alpha: 0.92),
-                    elevation: 1,
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(4, 4, 8, 4),
-                      child: Row(
-                        children: [
-                          TextButton(
-                            onPressed: _exitTxnSelect,
-                            child: const Text('取消'),
-                          ),
-                          Expanded(
-                            child: Text(
-                              '已选 ${_selectedTxnIds.length} 项',
-                              textAlign: TextAlign.center,
-                              style: Theme.of(context).textTheme.titleSmall
-                                  ?.copyWith(fontWeight: FontWeight.w700),
-                            ),
-                          ),
-                          TextButton(
-                            onPressed: () {
-                              final list =
-                                  recent.valueOrNull ?? const <Transaction>[];
-                              _selectAllTxns(list);
-                            },
-                            child: const Text('全选'),
-                          ),
-                          FilledButton(
-                            style: centliDangerFilledStyle(context),
-                            onPressed: _selectedTxnIds.isEmpty
-                                ? null
-                                : _batchSoftDeleteTxns,
-                            child: const Text('删除'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  )
-                else
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
                     child: Row(
@@ -852,11 +817,57 @@ class _HomePageState extends ConsumerState<HomePage> {
                     ),
                   ),
                 ),
+                if (_selectingTxns)
+                  Padding(
+                    // 抬到底栏上方，不被玻璃 NavigationBar 盖住；盖住底栏区域也可接受
+                    padding: const EdgeInsets.only(
+                      bottom: CentliSpacing.pageBottomNav - 40,
+                    ),
+                    child: Material(
+                      color: scheme.surface.withValues(alpha: 0.96),
+                      elevation: 6,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(4, 6, 8, 6),
+                        child: Row(
+                          children: [
+                            TextButton(
+                              onPressed: _exitTxnSelect,
+                              child: const Text('取消'),
+                            ),
+                            Expanded(
+                              child: Text(
+                                '已选 ${_selectedTxnIds.length} 项',
+                                textAlign: TextAlign.center,
+                                style: Theme.of(context).textTheme.titleSmall
+                                    ?.copyWith(fontWeight: FontWeight.w700),
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: () {
+                                final list =
+                                    recent.valueOrNull ?? const <Transaction>[];
+                                _selectAllTxns(list);
+                              },
+                              child: const Text('全选'),
+                            ),
+                            FilledButton(
+                              style: centliDangerFilledStyle(context),
+                              onPressed: _selectedTxnIds.isEmpty
+                                  ? null
+                                  : _batchSoftDeleteTxns,
+                              child: const Text('删除'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
               ],
             );
           },
         ),
       ),
+    ),
     );
   }
 
