@@ -7,6 +7,8 @@ import 'package:go_router/go_router.dart';
 import 'package:home_widget/home_widget.dart';
 
 import '../core/constants/pref_keys.dart';
+import '../core/widgets/glass.dart';
+import '../data/export/backup_service.dart';
 import '../core/utils/date_range.dart';
 import '../data/db/centli_database.dart';
 import '../data/db/database_provider.dart';
@@ -91,6 +93,7 @@ class _CentliAppState extends ConsumerState<CentliApp> {
     _wasBackgrounded = false;
     _relockIfNeeded();
     unawaited(_syncHomeWidget());
+    unawaited(_maybeAutoBackup(ref.read(databaseProvider)));
   }
 
   Future<void> _relockIfNeeded() async {
@@ -196,6 +199,58 @@ class _CentliAppState extends ConsumerState<CentliApp> {
     unawaited(_handleInitialWidgetLaunch());
     unawaited(_requestPostNotificationsOnLaunch());
     unawaited(_maybePurgeRecycleBin(db));
+    unawaited(_maybeAutoBackup(db));
+    unawaited(_maybePromptBackup());
+  }
+
+
+  /// 启动 / 回前台：按频率把 JSON 备份写入用户自选目录。
+  Future<void> _maybeAutoBackup(CentliDatabase db) async {
+    try {
+      if (!await _isOnboardingDone()) return;
+      await BackupService(db).maybeAutoBackup();
+    } catch (_) {
+      // 自动备份失败不阻断 App；原因写入 settings 供设置页展示。
+    }
+  }
+
+  /// 尚未配置备份时的首次提醒（可跳过；设置页仍可随时配置）。
+  Future<void> _maybePromptBackup() async {
+    try {
+      if (!await _waitUntilOnboardingDone()) return;
+      if (!mounted) return;
+      await Future<void>.delayed(const Duration(milliseconds: 700));
+      if (!mounted) return;
+
+      final db = ref.read(databaseProvider);
+      final svc = BackupService(db);
+      final config = await svc.loadConfig();
+      if (config.isConfigured || config.promptSeen) return;
+
+      final ctx = rootNavigatorKey.currentContext;
+      if (ctx == null || !ctx.mounted) return;
+
+      final goSetup = await showGlassConfirmDialog(
+        context: ctx,
+        title: '备份你的记账数据',
+        content:
+            'Centli 没有云同步，数据只在本机。建议选择一个文件夹'
+            '（本地或网盘同步目录均可），按天 / 周 / 月自动备份，'
+            '换机或重装也能用「导入」找回。',
+        cancelLabel: '稍后再说',
+        confirmLabel: '去设置',
+        barrierDismissible: false,
+      );
+      await svc.markPromptSeen();
+      if (goSetup == true) {
+        final nav = rootNavigatorKey.currentContext;
+        if (nav != null && nav.mounted) {
+          nav.push('/me/backup');
+        }
+      }
+    } catch (_) {
+      // 引导失败不阻断。
+    }
   }
 
   /// 启动时按设置清理回收站超过 30 天的软删记录。

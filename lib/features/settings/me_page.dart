@@ -266,9 +266,17 @@ class MePage extends ConsumerWidget {
                 children: [
                   _tile(
                     context,
+                    icon: Icons.folder_special_outlined,
+                    title: '备份设置',
+                    subtitle: '目录 · 频率 · 立即备份',
+                    onTap: () => context.push('/me/backup'),
+                  ),
+                  const Divider(height: 1),
+                  _tile(
+                    context,
                     icon: Icons.import_export,
                     title: '导出',
-                    subtitle: '定期 JSON / Excel 备份',
+                    subtitle: '手动 JSON / Excel 分享',
                     onTap: () => context.push('/me/export'),
                   ),
                   const Divider(height: 1),

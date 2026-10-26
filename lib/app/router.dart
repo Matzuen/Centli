@@ -22,6 +22,7 @@ import '../features/settings/categories_page.dart';
 import '../features/settings/sub_transactions_page.dart';
 import '../features/settings/me_page.dart';
 import '../features/settings/export_page.dart';
+import '../features/settings/backup_page.dart';
 import '../features/settings/import_page.dart';
 import '../features/settings/about_page.dart';
 import '../features/settings/privacy_policy_page.dart';
@@ -216,6 +217,11 @@ GoRouter createRouter({
                     path: 'smart-fill',
                     parentNavigatorKey: rootNavigatorKey,
                     builder: (context, state) => const SmartFillSettingsPage(),
+                  ),
+                  GoRoute(
+                    path: 'backup',
+                    parentNavigatorKey: rootNavigatorKey,
+                    builder: (context, state) => const BackupPage(),
                   ),
                   GoRoute(
                     path: 'export',

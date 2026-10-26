@@ -16,6 +16,21 @@ abstract final class PrefKeys {
 
   /// 打开 App 时自动清理回收站超过 30 天的记录。默认开。
   static const recycleAutoPurge = 'recycle_auto_purge';
+
+  /// 本地自动备份目录（系统目录选择 / SAF 返回的路径）。
+  static const backupDir = 'backup_dir';
+
+  /// 自动备份频率：off / daily / weekly / monthly。默认 off。
+  static const backupFrequency = 'backup_frequency';
+
+  /// 上次成功备份时间（UTC ISO8601）。
+  static const backupLastOkAt = 'backup_last_ok_at';
+
+  /// 上次自动/手动备份失败原因（成功时清空）。
+  static const backupLastError = 'backup_last_error';
+
+  /// 是否已展示过首次备份引导（或已进入过备份设置）。
+  static const backupPromptSeen = 'backup_prompt_seen';
 }
 
 bool prefBool(String? raw, {bool defaultOn = true}) {
