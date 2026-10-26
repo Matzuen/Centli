@@ -98,7 +98,6 @@ class TxnListTile extends ConsumerWidget {
           ),
         TxnSwipeHost(
           enabled: !selecting,
-          onEdit: () => context.push('/ledger/${txn.id}'),
           onCopy: () {
             showBookkeepingSheet(context, template: txn);
           },

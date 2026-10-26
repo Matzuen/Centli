@@ -9,7 +9,6 @@ void main() {
   Future<void> pumpHost(
     WidgetTester tester, {
     bool enabled = true,
-    VoidCallback? onEdit,
     VoidCallback? onCopy,
     VoidCallback? onDelete,
   }) async {
@@ -26,7 +25,6 @@ void main() {
             width: 390,
             child: TxnSwipeHost(
               enabled: enabled,
-              onEdit: onEdit ?? () {},
               onCopy: onCopy ?? () {},
               onDelete: onDelete ?? () {},
               child: const SizedBox(
@@ -54,19 +52,20 @@ void main() {
 
     expect(find.text('删除'), findsOneWidget);
     expect(find.text('复制新建'), findsOneWidget);
+    expect(find.text('编辑'), findsNothing);
     state = tester.state<TxnSwipeHostState>(find.byType(TxnSwipeHost));
     expect(state.offset, closeTo(-TxnSwipeHost.startActionsExtent, 0.5));
   });
 
-  testWidgets('右滑露出编辑', (tester) async {
+  testWidgets('右滑不露出编辑且偏移保持为 0', (tester) async {
     await pumpHost(tester);
 
     await tester.drag(find.text('流水行'), const Offset(120, 0));
     await tester.pumpAndSettle();
 
-    expect(find.text('编辑'), findsOneWidget);
+    expect(find.text('编辑'), findsNothing);
     final state = tester.state<TxnSwipeHostState>(find.byType(TxnSwipeHost));
-    expect(state.offset, closeTo(TxnSwipeHost.editExtent, 0.5));
+    expect(state.offset, closeTo(0, 0.5));
   });
 
   testWidgets('点删除触发回调并收起', (tester) async {
@@ -101,7 +100,6 @@ void main() {
         theme: CentliTheme.light(),
         home: Scaffold(
           body: TxnSwipeHost(
-            onEdit: () {},
             onCopy: () {},
             onDelete: () {},
             child: SizedBox(

@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../app/theme.dart';
-
 /// 同时只允许一行处于滑开状态。
 class _TxnSwipeRegistry {
   _TxnSwipeRegistry._();
@@ -19,27 +17,25 @@ class _TxnSwipeRegistry {
   }
 }
 
-/// 流水行滑动手势：左滑「删除」「复制新建」，右滑「编辑」。
+/// 流水行滑动手势：仅左滑「删除」「复制新建」（右滑已去掉，单击即可进详情/编辑）。
 ///
 /// [enabled] 为 false（多选模式）时不响应滑动，直接渲染 [child]。
 class TxnSwipeHost extends StatefulWidget {
   const TxnSwipeHost({
     super.key,
     required this.child,
-    required this.onEdit,
     required this.onCopy,
     required this.onDelete,
     this.enabled = true,
   });
 
   final Widget child;
-  final VoidCallback onEdit;
   final VoidCallback onCopy;
   final VoidCallback onDelete;
   final bool enabled;
 
-  /// 右滑露出「编辑」的宽度。
-  static const double editExtent = 76;
+  /// 单个动作按钮宽度。
+  static const double actionExtent = 76;
 
   /// 左滑露出「复制新建」+「删除」的总宽度。
   static const double startActionsExtent = 152;
@@ -55,7 +51,7 @@ class TxnSwipeHostState extends State<TxnSwipeHost>
   double _offset = 0;
   bool _dragging = false;
 
-  /// 当前内容偏移（正 = 右滑露出编辑；负 = 左滑露出复制/删除）。
+  /// 当前内容偏移（仅负值：左滑露出复制/删除）。
   @visibleForTesting
   double get offset => _offset;
 
@@ -130,8 +126,9 @@ class TxnSwipeHostState extends State<TxnSwipeHost>
 
   void _onDragUpdate(DragUpdateDetails details) {
     if (!widget.enabled || !_dragging) return;
+    // 仅允许左滑（负偏移）；右滑方向立刻回弹到 0。
     final next = (_offset + details.delta.dx)
-        .clamp(-TxnSwipeHost.startActionsExtent, TxnSwipeHost.editExtent)
+        .clamp(-TxnSwipeHost.startActionsExtent, 0.0)
         .toDouble();
     setState(() => _offset = next);
   }
@@ -143,12 +140,8 @@ class TxnSwipeHostState extends State<TxnSwipeHost>
     double target = 0;
     if (v < -300) {
       target = -TxnSwipeHost.startActionsExtent;
-    } else if (v > 300) {
-      target = TxnSwipeHost.editExtent;
     } else if (_offset <= -TxnSwipeHost.startActionsExtent * 0.4) {
       target = -TxnSwipeHost.startActionsExtent;
-    } else if (_offset >= TxnSwipeHost.editExtent * 0.4) {
-      target = TxnSwipeHost.editExtent;
     }
     _animateTo(target);
   }
@@ -162,9 +155,6 @@ class TxnSwipeHostState extends State<TxnSwipeHost>
   double _snapTargetFor(double o) {
     if (o <= -TxnSwipeHost.startActionsExtent * 0.4) {
       return -TxnSwipeHost.startActionsExtent;
-    }
-    if (o >= TxnSwipeHost.editExtent * 0.4) {
-      return TxnSwipeHost.editExtent;
     }
     return 0;
   }
@@ -188,23 +178,16 @@ class TxnSwipeHostState extends State<TxnSwipeHost>
           Positioned.fill(
             child: Row(
               children: [
-                _TxnSwipeAction(
-                  width: TxnSwipeHost.editExtent,
-                  color: CentliTheme.brandPrimary,
-                  icon: Icons.edit_outlined,
-                  label: '编辑',
-                  onTap: () => _runAction(widget.onEdit),
-                ),
                 const Spacer(),
                 _TxnSwipeAction(
-                  width: TxnSwipeHost.editExtent,
+                  width: TxnSwipeHost.actionExtent,
                   color: const Color(0xFF546E7A),
                   icon: Icons.copy_outlined,
                   label: '复制新建',
                   onTap: () => _runAction(widget.onCopy),
                 ),
                 _TxnSwipeAction(
-                  width: TxnSwipeHost.editExtent,
+                  width: TxnSwipeHost.actionExtent,
                   color: scheme.error,
                   icon: Icons.delete_outline,
                   label: '删除',
