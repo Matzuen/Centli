@@ -85,6 +85,9 @@ object PaymentOverlayManager {
     private var allCategories: List<Category> = emptyList()
     private var allAccounts: List<Account> = emptyList()
     private var overlayPendingLedgerId: String? = null
+    private var selectedLedgerId: String? = null
+    private var selectedLedgerName: String = ""
+    private var allLedgers: List<Pair<String, String>> = emptyList()
     /** null = showing root (L1); non-null = showing children of this parent (L2). */
     private var browsingParentId: String? = null
     private val categoryViews = mutableListOf<Pair<TextView, Category>>()
@@ -712,6 +715,9 @@ object PaymentOverlayManager {
         selectedToAccountId = null
         selectedToAccountName = null
         suggestedAccountId = null
+        selectedLedgerId = null
+        selectedLedgerName = ""
+        allLedgers = emptyList()
         selectedDirection = dirOrOut(categoryKind)
         overlayCurrency = currency.ifBlank { "CNY" }
         browsingParentId = null
@@ -721,8 +727,7 @@ object PaymentOverlayManager {
         accountViews.clear()
         toAccountViews.clear()
 
-        view.findViewById<TextView>(R.id.tv_title).text =
-            "快速记账 · 检测到$sourceLabel"
+        view.findViewById<TextView>(R.id.tv_title).text = "记账本"
 
         val m = merchant?.trim().orEmpty()
 
@@ -742,6 +747,12 @@ object PaymentOverlayManager {
         confirmBtn.isEnabled = false
         confirmBtn.alpha = 0.5f
         confirmBtn.text = "入账"
+
+        view.findViewById<TextView>(R.id.tv_title).apply {
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { showLedgerPicker(context, view, confirmBtn) }
+        }
 
         val btnOut = view.findViewById<TextView>(R.id.btn_dir_out)
         val btnIn = view.findViewById<TextView>(R.id.btn_dir_in)
@@ -885,7 +896,6 @@ object PaymentOverlayManager {
         }
 
         loadAccounts(context, view, confirmBtn, pendingId)
-        loadCategories(context, view, confirmBtn)
     }
 
     private fun applyConfirmEnabled(root: View, confirmBtn: Button) {
@@ -931,16 +941,35 @@ object PaymentOverlayManager {
         Thread {
             val suggested = queryPendingSuggestedAccount(context, pendingId)
             val pendingLedger = queryPendingLedgerId(context, pendingId)
+            val ledgers = queryLedgers(context)
+            val currentSetting = run {
+                val db = openDb(context)
+                try {
+                    db?.let { querySetting(it, "current_ledger_id") }
+                } finally {
+                    db?.close()
+                }
+            }
+            val initialLedger = pendingLedger
+                ?: currentSetting
+                ?: ledgers.firstOrNull()?.first
+            val ledgerName = ledgers.firstOrNull { it.first == initialLedger }?.second
+                ?: "记账本"
             val accounts = queryAccounts(
                 context,
-                ledgerId = pendingLedger,
-                allLedgers = true,
+                ledgerId = initialLedger,
+                allLedgers = false,
             )
             mainHandler.post {
                 suggestedAccountId = suggested
+                allLedgers = ledgers
+                selectedLedgerId = initialLedger
+                selectedLedgerName = ledgerName
+                overlayPendingLedgerId = initialLedger
                 allAccounts = accounts
-                overlayPendingLedgerId = pendingLedger
+                view.findViewById<TextView>(R.id.tv_title).text = "$ledgerName ▾"
                 renderAccounts(context, view, confirmBtn)
+                loadCategories(context, view, confirmBtn)
             }
         }.start()
     }
@@ -1068,7 +1097,7 @@ object PaymentOverlayManager {
             }
             for (acc in row) {
                 val chip = TextView(context).apply {
-                    text = acc.displayLabel(overlayPendingLedgerId)
+                    text = acc.name
                     textSize = 13f
                     gravity = android.view.Gravity.CENTER
                     setPadding(
@@ -1484,6 +1513,9 @@ object PaymentOverlayManager {
         selectedToAccountId = null
         selectedToAccountName = null
         suggestedAccountId = null
+        selectedLedgerId = null
+        selectedLedgerName = ""
+        allLedgers = emptyList()
         selectedDirection = "out"
         browsingParentId = null
         allCategories = emptyList()
@@ -1686,6 +1718,103 @@ object PaymentOverlayManager {
         } finally {
             db.close()
         }
+    }
+
+
+    private fun queryLedgers(context: Context): List<Pair<String, String>> {
+        val db = openDb(context) ?: return emptyList()
+        try {
+            val out = ArrayList<Pair<String, String>>()
+            db.rawQuery(
+                "SELECT id, name FROM ledgers WHERE archived=0 ORDER BY created_at DESC",
+                null,
+            ).use { c ->
+                while (c.moveToNext()) {
+                    out.add(c.getString(0) to (c.getString(1) ?: ""))
+                }
+            }
+            return out
+        } catch (e: Exception) {
+            Log.e(TAG, "queryLedgers", e)
+            return emptyList()
+        } finally {
+            db.close()
+        }
+    }
+
+    private fun showLedgerPicker(context: Context, view: View, confirmBtn: Button) {
+        fun present(ledgers: List<Pair<String, String>>) {
+            if (ledgers.isEmpty()) {
+                Toast.makeText(context, "暂无记账本", Toast.LENGTH_SHORT).show()
+                return
+            }
+            val names = ledgers.map { it.second.ifBlank { "记账本" } }.toTypedArray()
+            val checked = ledgers.indexOfFirst { it.first == selectedLedgerId }.coerceAtLeast(0)
+            val dialog = android.app.AlertDialog.Builder(context)
+                .setTitle("切换记账本")
+                .setSingleChoiceItems(names, checked) { d, which ->
+                    val picked = ledgers[which]
+                    d.dismiss()
+                    if (picked.first == selectedLedgerId) return@setSingleChoiceItems
+                    switchLedger(context, view, confirmBtn, picked.first, picked.second)
+                }
+                .setNegativeButton("取消", null)
+                .create()
+            dialog.window?.setType(
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                } else {
+                    @Suppress("DEPRECATION")
+                    WindowManager.LayoutParams.TYPE_PHONE
+                },
+            )
+            dialog.show()
+        }
+        if (allLedgers.isNotEmpty()) {
+            present(allLedgers)
+            return
+        }
+        Thread {
+            val list = queryLedgers(context)
+            mainHandler.post {
+                allLedgers = list
+                present(list)
+            }
+        }.start()
+    }
+
+    private fun switchLedger(
+        context: Context,
+        view: View,
+        confirmBtn: Button,
+        ledgerId: String,
+        ledgerName: String,
+    ) {
+        selectedLedgerId = ledgerId
+        selectedLedgerName = ledgerName
+        overlayPendingLedgerId = ledgerId
+        view.findViewById<TextView>(R.id.tv_title).text = "$ledgerName ▾"
+        selectedAccountId = null
+        selectedAccountName = null
+        selectedToAccountId = null
+        selectedToAccountName = null
+        selectedCategoryId = null
+        selectedCategoryName = null
+        browsingParentId = null
+        confirmBtn.isEnabled = false
+        confirmBtn.alpha = 0.5f
+        Thread {
+            val accounts = queryAccounts(
+                context,
+                ledgerId = ledgerId,
+                allLedgers = false,
+            )
+            mainHandler.post {
+                allAccounts = accounts
+                renderAccounts(context, view, confirmBtn)
+                loadCategories(context, view, confirmBtn)
+            }
+        }.start()
     }
 
     private fun queryAccounts(

@@ -22,7 +22,7 @@
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
-            <!-- 标题：快速记账 · 检测到某某支付 + 关闭 -->
+            <!-- 标题：当前记账本名（可点切换）+ 关闭 -->
             <RelativeLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content">
@@ -37,7 +37,7 @@
                     android:ellipsize="end"
                     android:maxLines="1"
                     android:paddingEnd="8dp"
-                    android:text="快速记账"
+                    android:text="记账本"
                     android:textColor="#FF1A1A1A"
                     android:textSize="16sp"
                     android:textStyle="bold" />
