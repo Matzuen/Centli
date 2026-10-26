@@ -15,6 +15,7 @@ import '../utils/account_label.dart';
 import '../utils/money.dart';
 import 'centli_icon.dart';
 import 'glass.dart';
+import 'txn_swipe.dart';
 
 /// Highlight colour for search keywords on transaction rows.
 const Color kKeywordHighlight = CentliTheme.brandPrimary;
@@ -95,144 +96,154 @@ class TxnListTile extends ConsumerWidget {
             endIndent: 16,
             color: Theme.of(context).colorScheme.outlineVariant,
           ),
-        InkWell(
-          onTap: () {
-            if (selecting) {
-              onToggleSelect?.call();
-              return;
-            }
-            context.push('/ledger/${txn.id}');
+        TxnSwipeHost(
+          enabled: !selecting,
+          onEdit: () => context.push('/ledger/${txn.id}'),
+          onCopy: () {
+            showBookkeepingSheet(context, template: txn);
           },
-          onLongPress: () {
-            if (selecting) {
-              onToggleSelect?.call();
-              return;
-            }
-            if (onEnterSelect != null) {
-              onEnterSelect!();
-              return;
-            }
-            _showTxnContextMenu(context, ref);
+          onDelete: () {
+            _softDeleteTxn(context, ref);
           },
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-            // 金额列按内容宽度贴右，但最多占 55%：大字号/大金额时省略，
-            // 而不是把整行撑破（flex: 0 会让它拿到无界宽度）。
-            child: LayoutBuilder(
-              builder: (context, constraints) => Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  if (selecting) ...[
-                    Checkbox(
-                      value: selected,
-                      onChanged: (_) => onToggleSelect?.call(),
-                      visualDensity: VisualDensity.compact,
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          child: InkWell(
+            onTap: () {
+              if (selecting) {
+                onToggleSelect?.call();
+                return;
+              }
+              context.push('/ledger/${txn.id}');
+            },
+            onLongPress: () {
+              if (selecting) {
+                onToggleSelect?.call();
+                return;
+              }
+              if (onEnterSelect != null) {
+                onEnterSelect!();
+                return;
+              }
+              _showTxnContextMenu(context, ref);
+            },
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+              // 金额列按内容宽度贴右，但最多占 55%：大字号/大金额时省略，
+              // 而不是把整行撑破（flex: 0 会让它拿到无界宽度）。
+              child: LayoutBuilder(
+                builder: (context, constraints) => Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    if (selecting) ...[
+                      Checkbox(
+                        value: selected,
+                        onChanged: (_) => onToggleSelect?.call(),
+                        visualDensity: VisualDensity.compact,
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      const SizedBox(width: 4),
+                    ],
+                    CentliIconChip(
+                      name: (cat?.name ?? '').trim(),
+                      kind: isTransfer ? 'transfer' : txn.type,
+                      iconKey: cat?.icon,
+                      size: 40,
                     ),
-                    const SizedBox(width: 4),
-                  ],
-                  CentliIconChip(
-                    name: (cat?.name ?? '').trim(),
-                    kind: isTransfer ? 'transfer' : txn.type,
-                    iconKey: cat?.icon,
-                    size: 40,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _HighlightedText(
-                          text: title,
-                          keywords: highlight,
-                          maxLines: 1,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 13,
-                            height: 1.2,
-                          ).copyWith(color: scheme.onSurface),
-                        ),
-                        if (subtitle.isNotEmpty) ...[
-                          const SizedBox(height: 3),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                           _HighlightedText(
-                            text: subtitle,
+                            text: title,
                             keywords: highlight,
                             maxLines: 1,
-                            style: TextStyle(
-                              color: muted,
-                              fontSize: 12,
-                              height: 1.25,
-                              fontWeight: FontWeight.w400,
-                            ),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13,
+                              height: 1.2,
+                            ).copyWith(color: scheme.onSurface),
                           ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  // 金额只占自身宽度并贴行尾；上限 55% 宽度，
-                  // 超出时省略，避免大字号/大金额把行撞破。
-                  ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxWidth: constraints.maxWidth * 0.55,
-                    ),
-                    child: Builder(
-                      builder: (context) {
-                        final ledger = ref
-                            .watch(currentLedgerProvider)
-                            .valueOrNull;
-                        final book = ref.watch(fxBookProvider).valueOrNull;
-                        final base = ledger?.baseCurrency;
-                        var unconverted = false;
-                        if (base != null &&
-                            book != null &&
-                            txn.currency != base &&
-                            txn.type != 'transfer') {
-                          final day = FxBook.dayFromHappenAtMs(txn.happenAt);
-                          unconverted =
-                              book.rate(
-                                fromCcy: txn.currency,
-                                toCcy: base,
-                                onDay: day,
-                              ) ==
-                              null;
-                        }
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _AmountText(
-                              symbol: hide
-                                  ? ''
-                                  : (currencySymbols[txn.currency] ??
-                                        txn.currency),
-                              number: hide ? '****' : _amountNumber(),
-                              color: amountColor,
-                            ),
+                          if (subtitle.isNotEmpty) ...[
                             const SizedBox(height: 3),
-                            Text(
-                              [
-                                timeLabel,
-                                if (unconverted) '\u672a\u6298\u7b97',
-                                if (txn.includeInStat == 0)
-                                  '\u4e0d\u8ba1\u5165',
-                              ].join(' · '),
+                            _HighlightedText(
+                              text: subtitle,
+                              keywords: highlight,
                               maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              textAlign: TextAlign.right,
                               style: TextStyle(
-                                color: unconverted ? scheme.error : muted,
+                                color: muted,
                                 fontSize: 12,
                                 height: 1.25,
                                 fontWeight: FontWeight.w400,
                               ),
                             ),
                           ],
-                        );
-                      },
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 12),
+                    // 金额只占自身宽度并贴行尾；上限 55% 宽度，
+                    // 超出时省略，避免大字号/大金额把行撞破。
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxWidth: constraints.maxWidth * 0.55,
+                      ),
+                      child: Builder(
+                        builder: (context) {
+                          final ledger = ref
+                              .watch(currentLedgerProvider)
+                              .valueOrNull;
+                          final book = ref.watch(fxBookProvider).valueOrNull;
+                          final base = ledger?.baseCurrency;
+                          var unconverted = false;
+                          if (base != null &&
+                              book != null &&
+                              txn.currency != base &&
+                              txn.type != 'transfer') {
+                            final day = FxBook.dayFromHappenAtMs(txn.happenAt);
+                            unconverted =
+                                book.rate(
+                                  fromCcy: txn.currency,
+                                  toCcy: base,
+                                  onDay: day,
+                                ) ==
+                                null;
+                          }
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _AmountText(
+                                symbol: hide
+                                    ? ''
+                                    : (currencySymbols[txn.currency] ??
+                                          txn.currency),
+                                number: hide ? '****' : _amountNumber(),
+                                color: amountColor,
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                [
+                                  timeLabel,
+                                  if (unconverted) '\u672a\u6298\u7b97',
+                                  if (txn.includeInStat == 0)
+                                    '\u4e0d\u8ba1\u5165',
+                                ].join(' · '),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.right,
+                                style: TextStyle(
+                                  color: unconverted ? scheme.error : muted,
+                                  fontSize: 12,
+                                  height: 1.25,
+                                  fontWeight: FontWeight.w400,
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
