@@ -51,3 +51,12 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+// 打包产物文件名（AGP 9 / Gradle 9：用 base.archivesName，替代已移除的 archivesBaseName）
+// 模块名默认是 app，不设此项会得到 app-release.apk / app-debug.apk。
+// 最终形如：Centli-2.1.3-46-release.apk、Centli-2.1.3-46-debug.apk
+// （versionName / versionCode 与 pubspec.yaml 的 version: x.y.z+build 同步，由 Flutter Gradle 注入）
+// 若日后加 productFlavor，Gradle 会自动拼进变体名，例如 Centli-2.1.3-46-freeRelease.apk。
+base {
+    archivesName.set("Centli-${flutter.versionName}-${flutter.versionCode}")
+}
