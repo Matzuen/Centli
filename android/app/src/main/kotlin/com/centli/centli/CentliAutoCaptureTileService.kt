@@ -91,17 +91,23 @@ class CentliAutoCaptureTileService : TileService() {
     private fun refreshTile() {
         val tile = qsTile ?: return
         val app = applicationContext
-        val enabled = CentliNotificationListener.isAutoCaptureEnabled(app)
-        val granted = CentliNotificationListener.isNotificationAccessGranted(app)
+        val snap = CentliNotificationListener.statusSnapshot(app)
+        val enabled = snap["enabled"] as? Boolean ?: false
+        val granted = snap["permission"] as? Boolean ?: false
+        val connected = snap["connected"] as? Boolean ?: false
+        val recovering = snap["recovering"] as? Boolean ?: false
         tile.label = getString(R.string.qs_tile_auto_capture_label)
         tile.contentDescription = getString(R.string.qs_tile_auto_capture_label)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             tile.subtitle = when {
                 !granted -> getString(R.string.qs_tile_subtitle_need_access)
-                enabled -> getString(R.string.qs_tile_subtitle_on)
-                else -> getString(R.string.qs_tile_subtitle_off)
+                !enabled -> getString(R.string.qs_tile_subtitle_off)
+                connected -> getString(R.string.qs_tile_subtitle_on)
+                recovering -> getString(R.string.qs_tile_subtitle_reconnecting)
+                else -> getString(R.string.qs_tile_subtitle_disconnected)
             }
         }
+        // 开关开着但已断开：仍标 ACTIVE 方便辨认「功能开着」，副标题标明断开。
         tile.state = when {
             !granted -> Tile.STATE_INACTIVE
             enabled -> Tile.STATE_ACTIVE

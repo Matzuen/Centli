@@ -28,6 +28,11 @@ abstract final class NotificationCaptureStub {
 
   static Future<bool> isListenerConnected() async => false;
 
+  static void Function(ListenerConnectionStatus status)? onListenerStatus;
+
+  static Future<ListenerConnectionStatus> getListenerStatus() async =>
+      ListenerConnectionStatus.unsupported;
+
   static Future<void> ensureListenerRebind() async {}
 
   static Future<bool> awaitListenerConnected({
@@ -126,3 +131,48 @@ class LaunchableAppInfo {
   final String label;
 }
 
+class ListenerConnectionStatus {
+  const ListenerConnectionStatus({
+    required this.permission,
+    required this.enabled,
+    required this.connected,
+    required this.recovering,
+    required this.phase,
+    required this.reason,
+    required this.message,
+    required this.changedAtMs,
+  });
+
+  static const unsupported = ListenerConnectionStatus(
+    permission: false,
+    enabled: false,
+    connected: false,
+    recovering: false,
+    phase: 'unsupported',
+    reason: '',
+    message: '当前平台不支持通知监听',
+    changedAtMs: 0,
+  );
+
+  final bool permission;
+  final bool enabled;
+  final bool connected;
+  final bool recovering;
+  final String phase;
+  final String reason;
+  final String message;
+  final int changedAtMs;
+
+  factory ListenerConnectionStatus.fromMap(Map<String, dynamic> map) {
+    return const ListenerConnectionStatus(
+      permission: false,
+      enabled: false,
+      connected: false,
+      recovering: false,
+      phase: 'unsupported',
+      reason: '',
+      message: '当前平台不支持通知监听',
+      changedAtMs: 0,
+    );
+  }
+}

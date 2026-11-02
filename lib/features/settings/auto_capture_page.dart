@@ -31,6 +31,8 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
   bool _postNotificationsGranted = true;
   bool _listenerConnected = false;
   bool _listenerConnecting = false;
+  String _listenerStatusMessage = '';
+  Timer? _listenerPoll;
   int _templateVersion = kNotiTemplateFallbackVersion;
   String? _templateUpdatedAt;
   String _templateSource = 'builtin';
@@ -51,11 +53,22 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    NotificationCaptureStub.onListenerStatus = _onNativeListenerStatus;
     _reload();
+    _listenerPoll = Timer.periodic(const Duration(seconds: 2), (_) {
+      if (!mounted) return;
+      if (!_enabled && !_listenerConnecting) return;
+      unawaited(_refreshListenerStatusOnly());
+    });
   }
 
   @override
   void dispose() {
+    _listenerPoll?.cancel();
+    _listenerPoll = null;
+    if (NotificationCaptureStub.onListenerStatus == _onNativeListenerStatus) {
+      NotificationCaptureStub.onListenerStatus = null;
+    }
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -67,6 +80,36 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
     }
   }
 
+  void _onNativeListenerStatus(ListenerConnectionStatus status) {
+    if (!mounted) return;
+    setState(() {
+      _applyListenerStatus(status);
+    });
+  }
+
+  void _applyListenerStatus(ListenerConnectionStatus status) {
+    // 权限以系统 probe 为准。
+    _granted = status.permission;
+    _listenerConnected = status.connected;
+    _listenerConnecting =
+        status.phase == 'connecting' || (status.recovering && !status.connected);
+    _listenerStatusMessage = status.message.isNotEmpty
+        ? status.message
+        : (_listenerConnected
+            ? '已连接'
+            : (_listenerConnecting ? '正在连接…' : '已断开'));
+  }
+
+  Future<void> _refreshListenerStatusOnly() async {
+    try {
+      final status = await NotificationCaptureStub.getListenerStatus();
+      if (!mounted) return;
+      setState(() => _applyListenerStatus(status));
+    } catch (_) {
+      // ignore transient channel blips
+    }
+  }
+
   Future<void> _reload({bool soft = false}) async {
     if (!soft && mounted) setState(() => _loading = true);
     final db = ref.read(databaseProvider);
@@ -75,7 +118,7 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
     final enabledF = db.getSetting('auto_capture_enabled');
     final grantedF = NotificationCaptureStub.isPermissionGranted();
     final postF = NotificationCaptureStub.isPostNotificationsGranted();
-    final connectedF = NotificationCaptureStub.isListenerConnected();
+    final statusF = NotificationCaptureStub.getListenerStatus();
     final batteryF = NotificationCaptureStub.isBatteryOptimizationIgnored();
     final resurrectF = NotificationCaptureStub.isResurrectScheduled();
     final overlayOnF = NotificationCaptureStub.isOverlayEnabled();
@@ -87,7 +130,8 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
     final enabled = (await enabledF) == 'true';
     final granted = await grantedF;
     final postGranted = await postF;
-    final connected = await connectedF;
+    final listenerStatus = await statusF;
+    final connected = listenerStatus.connected;
     final batteryIgnored = await batteryF;
     final resurrectScheduled = await resurrectF;
     final overlayEnabled = await overlayOnF;
@@ -133,8 +177,23 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
       _enabled = enabled;
       _granted = granted;
       _postNotificationsGranted = postGranted;
-      _listenerConnected = connected;
-      _listenerConnecting = granted && enabled && !connected;
+      _applyListenerStatus(
+        ListenerConnectionStatus(
+          permission: granted,
+          enabled: enabled,
+          connected: connected,
+          recovering: listenerStatus.recovering ||
+              (granted && enabled && !connected && listenerStatus.phase == 'connecting'),
+          phase: listenerStatus.phase.isNotEmpty
+              ? listenerStatus.phase
+              : (granted && enabled && !connected
+                  ? 'connecting'
+                  : (connected ? 'connected' : 'disconnected')),
+          reason: listenerStatus.reason,
+          message: listenerStatus.message,
+          changedAtMs: listenerStatus.changedAtMs,
+        ),
+      );
       _batteryIgnored = batteryIgnored;
       _resurrectScheduled = resurrectScheduled;
       _overlayEnabled = overlayEnabled;
@@ -164,17 +223,15 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
   Future<void> _refreshListenerInBackground() async {
     try {
       await NotificationCaptureStub.ensureListenerRebind();
-      final connected = await NotificationCaptureStub.awaitListenerConnected(
+      await NotificationCaptureStub.awaitListenerConnected(
         timeout: const Duration(seconds: 3),
       );
+      final status = await NotificationCaptureStub.getListenerStatus();
       if (!mounted) return;
-      setState(() {
-        _listenerConnected = connected;
-        _listenerConnecting = false;
-      });
+      setState(() => _applyListenerStatus(status));
     } catch (_) {
       if (!mounted) return;
-      setState(() => _listenerConnecting = false);
+      unawaited(_refreshListenerStatusOnly());
     }
   }
 
@@ -266,15 +323,34 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
       if (mounted) setState(() => _listenerConnecting = true);
       await NotificationCaptureStub.forceListenerRebind();
       final connected = await NotificationCaptureStub.awaitListenerConnected();
+      final status = await NotificationCaptureStub.getListenerStatus();
       if (!mounted) return;
       setState(() {
-        _listenerConnected = connected;
-        _listenerConnecting = false;
+        _applyListenerStatus(
+          ListenerConnectionStatus(
+            permission: status.permission,
+            enabled: status.enabled,
+            connected: connected || status.connected,
+            recovering: !(connected || status.connected) && status.recovering,
+            phase: (connected || status.connected)
+                ? 'connected'
+                : status.phase,
+            reason: status.reason,
+            message: (connected || status.connected)
+                ? '已连接'
+                : (status.message.isNotEmpty ? status.message : '已断开'),
+            changedAtMs: status.changedAtMs,
+          ),
+        );
       });
-      if (connected) {
+      if (connected || status.connected) {
         showGlassSnackBar(context, '已重新连接通知监听');
         return;
       }
+      showGlassSnackBar(
+        context,
+        status.message.isNotEmpty ? status.message : '仍未连接，请稍后重试或检查通知使用权',
+      );
     }
     final result = await context.push<bool>(
       _granted ? '/me/permission' : '/me/permission?open=1',
@@ -600,7 +676,7 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
             subtitle: Text(
               listenOk && readyCount == total
                   ? '权限已齐 · 支付后可走悬浮窗或待确认'
-                  : '建议按序完成 $readyCount/$total · 监听${listenOk ? '已连接' : (_listenerConnecting ? '连接中…' : '未连接')}',
+                  : '建议按序完成 $readyCount/$total · 监听${listenOk ? '已连接' : (_listenerConnecting ? '连接中…' : '已断开')}',
             ),
           ),
           const Divider(height: 1),
@@ -615,9 +691,17 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
             subtitle: Text(
               !_granted
                   ? '需先开通知使用权'
-                  : (_listenerConnected
-                      ? '已连接'
-                      : (_listenerConnecting ? '正在连接…' : '未连接 · 点此重连')),
+                  : (_listenerStatusMessage.isNotEmpty
+                      ? (_listenerConnected
+                          ? _listenerStatusMessage
+                          : (_listenerConnecting
+                              ? _listenerStatusMessage
+                              : '$_listenerStatusMessage · 点此重连'))
+                      : (_listenerConnected
+                          ? '已连接'
+                          : (_listenerConnecting
+                              ? '正在连接…'
+                              : '已断开 · 点此重连'))),
             ),
             trailing: (!_granted || _listenerConnected || _busy)
                 ? null

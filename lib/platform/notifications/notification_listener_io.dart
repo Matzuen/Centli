@@ -30,6 +30,9 @@ abstract final class NotificationCaptureStub {
   /// Native SQLite mutated pending_captures outside Drift.
   static void Function()? onPendingDbChanged;
 
+  /// NLS 连接状态变化（native `listener_status` 推送）。
+  static void Function(ListenerConnectionStatus status)? onListenerStatus;
+
   static bool get supported => !kIsWeb && Platform.isAndroid;
 
   /// MethodChannel available for share / deeplink on Android + iOS.
@@ -88,6 +91,42 @@ abstract final class NotificationCaptureStub {
     } on PlatformException {
       return false;
     }
+  }
+
+  /// 结构化监听状态（权限 / 开关 / 是否已连接 / 中文说明）。
+  static Future<ListenerConnectionStatus> getListenerStatus() async {
+    if (!supported) return ListenerConnectionStatus.unsupported;
+    try {
+      final raw = await _channel.invokeMethod<dynamic>('getListenerStatus');
+      if (raw is Map) {
+        return ListenerConnectionStatus.fromMap(Map<String, dynamic>.from(raw));
+      }
+    } on MissingPluginException {
+      // older builds
+    } on PlatformException {
+      // ignore
+    }
+    final connected = await isListenerConnected();
+    final enabled = await isAutoCaptureEnabled();
+    final permission = await isPermissionGranted();
+    return ListenerConnectionStatus(
+      permission: permission,
+      enabled: enabled,
+      connected: connected,
+      recovering: permission && enabled && !connected,
+      phase: !permission
+          ? 'no_permission'
+          : (!enabled
+              ? 'disabled'
+              : (connected ? 'connected' : 'disconnected')),
+      reason: '',
+      message: !permission
+          ? '未授予通知使用权'
+          : (!enabled
+              ? '已关闭自动记账'
+              : (connected ? '已连接' : '已断开')),
+      changedAtMs: 0,
+    );
   }
 
   /// Soft rebind: no-op when already connected. Safe for page reload / resume.
@@ -302,6 +341,15 @@ abstract final class NotificationCaptureStub {
       onPendingDbChanged?.call();
       return null;
     }
+    if (call.method == 'listener_status') {
+      final args = call.arguments;
+      if (args is Map) {
+        final status =
+            ListenerConnectionStatus.fromMap(Map<String, dynamic>.from(args));
+        onListenerStatus?.call(status);
+      }
+      return null;
+    }
     if (call.method == 'pending_intake') {
       final args = call.arguments;
       if (args is Map) {
@@ -317,6 +365,7 @@ abstract final class NotificationCaptureStub {
   static void unbind() {
     _onCapture = null;
     onPendingIntake = null;
+    onListenerStatus = null;
     if (_bound && channelSupported) {
       _channel.setMethodCallHandler(null);
       _bound = false;
@@ -558,4 +607,62 @@ class LaunchableAppInfo {
 
   final String packageName;
   final String label;
+}
+
+/// 通知监听（NotificationListenerService）连接状态。
+class ListenerConnectionStatus {
+  const ListenerConnectionStatus({
+    required this.permission,
+    required this.enabled,
+    required this.connected,
+    required this.recovering,
+    required this.phase,
+    required this.reason,
+    required this.message,
+    required this.changedAtMs,
+  });
+
+  static const unsupported = ListenerConnectionStatus(
+    permission: false,
+    enabled: false,
+    connected: false,
+    recovering: false,
+    phase: 'unsupported',
+    reason: '',
+    message: '当前平台不支持通知监听',
+    changedAtMs: 0,
+  );
+
+  final bool permission;
+  final bool enabled;
+  final bool connected;
+  final bool recovering;
+
+  /// connected | disconnected | connecting | disabled | no_permission | unsupported
+  final String phase;
+  final String reason;
+
+  /// 中文说明，可直接展示。
+  final String message;
+  final int changedAtMs;
+
+  factory ListenerConnectionStatus.fromMap(Map<String, dynamic> map) {
+    bool asBool(Object? v) => v == true || v == 1 || v == 'true';
+    int asInt(Object? v) {
+      if (v is int) return v;
+      if (v is num) return v.toInt();
+      return int.tryParse('$v') ?? 0;
+    }
+
+    return ListenerConnectionStatus(
+      permission: asBool(map['permission']),
+      enabled: asBool(map['enabled']),
+      connected: asBool(map['connected']),
+      recovering: asBool(map['recovering']),
+      phase: '${map['phase'] ?? ''}',
+      reason: '${map['reason'] ?? ''}',
+      message: '${map['message'] ?? ''}',
+      changedAtMs: asInt(map['changedAt']),
+    );
+  }
 }

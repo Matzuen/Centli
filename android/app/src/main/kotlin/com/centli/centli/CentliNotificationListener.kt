@@ -37,8 +37,11 @@ class CentliNotificationListener : NotificationListenerService() {
         super.onListenerConnected()
         instance = this
         connected = true
+        recovering = false
         cancelRebindRetries()
+        recordStatus(this, reason = "connected", disconnected = false)
         Log.i(TAG, "onListenerConnected")
+        publishStatus(this)
         if (isAutoCaptureEnabled(this)) {
             CentliResurrect.ensureAlive(this)
         }
@@ -60,19 +63,17 @@ class CentliNotificationListener : NotificationListenerService() {
     override fun onListenerDisconnected() {
         connected = false
         instance = null
-        Log.w(TAG, "onListenerDisconnected — requesting rebind")
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            try {
-                requestRebind(ComponentName(this, CentliNotificationListener::class.java))
-            } catch (e: Exception) {
-                Log.e(TAG, "requestRebind failed", e)
-            }
-        }
-        // 退出 App 后立刻来通知：补绑要快，不要干等 8s / 15min Job。
+        Log.w(TAG, "onListenerDisconnected")
+        recordStatus(this, reason = "system_unbind", disconnected = true)
+        // 只走 recoverBinding 一条路径，避免与 requestRebind + scheduleRetry 叠加重试导致偶发绑失败。
         if (isAutoCaptureEnabled(this)) {
-            CentliResurrect.scheduleRetry(this, delayMs = 2_000L)
-            CentliResurrect.ensureAlive(this)
+            recovering = true
+            publishStatus(this)
             recoverBinding(applicationContext)
+            CentliResurrect.ensureAlive(this)
+        } else {
+            recovering = false
+            publishStatus(this)
         }
         super.onListenerDisconnected()
     }
@@ -82,9 +83,17 @@ class CentliNotificationListener : NotificationListenerService() {
             instance = null
             connected = false
         }
-        // 服务被拆时再排一次短补救（划掉后台常见）。
+        // 服务被拆时再排一次短补救（划掉后台常见）；状态对 Flutter/磁贴可见。
         if (isAutoCaptureEnabled(applicationContext)) {
+            recordStatus(applicationContext, reason = "service_destroy", disconnected = true)
+            recovering = true
+            publishStatus(applicationContext)
             CentliResurrect.scheduleRetry(applicationContext, delayMs = 2_000L)
+            recoverBinding(applicationContext)
+        } else {
+            recordStatus(applicationContext, reason = "service_destroy", disconnected = true)
+            recovering = false
+            publishStatus(applicationContext)
         }
         super.onDestroy()
     }
@@ -206,11 +215,20 @@ class CentliNotificationListener : NotificationListenerService() {
         var connected: Boolean = false
             private set
 
+        /** True while soft/hard rebind retries are outstanding after a disconnect. */
+        @Volatile
+        var recovering: Boolean = false
+            private set
+
         @Volatile
         private var instance: CentliNotificationListener? = null
 
         private val rebindHandler = Handler(Looper.getMainLooper())
         private val rebindRetryRunnables = mutableListOf<Runnable>()
+
+        private const val KEY_LAST_REASON = "listener_last_reason"
+        private const val KEY_LAST_CHANGE_AT = "listener_last_change_at"
+        private const val KEY_LAST_DISCONNECTED = "listener_last_disconnected"
 
         /** 内容去重窗口（对齐 AutoBookKeeping 5 分钟）。 */
         private const val CONTENT_DEDUP_WINDOW_MS = 5 * 60 * 1000L
@@ -261,8 +279,13 @@ class CentliNotificationListener : NotificationListenerService() {
                     ensureRebind(app)
                 }
                 CentliResurrect.ensureAlive(app)
+                publishStatus(app)
             } else if (!enabled) {
+                recovering = false
                 CentliResurrect.cancel(app)
+                cancelRebindRetries()
+                recordStatus(app, reason = "user_disable", disconnected = true)
+                publishStatus(app)
             }
         }
 
@@ -501,6 +524,78 @@ class CentliNotificationListener : NotificationListenerService() {
             }
         }
 
+        /**
+         * 给 Flutter / 磁贴用的实时状态快照。
+         * phase: connected | disconnected | connecting | disabled | no_permission
+         */
+        fun statusSnapshot(context: Context): Map<String, Any?> {
+            val app = context.applicationContext
+            val granted = isNotificationAccessGranted(app)
+            val enabled = isAutoCaptureEnabled(app)
+            val live = isConnectedNow()
+            val p = prefs(app)
+            val reason = p.getString(KEY_LAST_REASON, null)
+            val changedAt = p.getLong(KEY_LAST_CHANGE_AT, 0L)
+            val phase = when {
+                !granted -> "no_permission"
+                !enabled -> "disabled"
+                live -> "connected"
+                recovering -> "connecting"
+                else -> "disconnected"
+            }
+            val message = when (phase) {
+                "connected" -> "已连接"
+                "connecting" -> when (reason) {
+                    "system_unbind" -> "已断开，正在重连…"
+                    "service_destroy" -> "监听服务已结束，正在重连…"
+                    "user_rebind" -> "正在重新连接…"
+                    else -> "正在连接…"
+                }
+                "disconnected" -> when (reason) {
+                    "system_unbind" -> "已断开（系统解绑）"
+                    "service_destroy" -> "已断开（服务被系统回收）"
+                    "rebind_exhausted" -> "已断开（自动重连未成功，可点重连）"
+                    "user_disable" -> "已关闭自动记账"
+                    "user_rebind" -> "已断开（正在按你的操作重连）"
+                    else -> "已断开"
+                }
+                "disabled" -> "已关闭自动记账"
+                "no_permission" -> "未授予通知使用权"
+                else -> phase
+            }
+            return hashMapOf(
+                "permission" to granted,
+                "enabled" to enabled,
+                "connected" to live,
+                "recovering" to recovering,
+                "phase" to phase,
+                "reason" to (reason ?: ""),
+                "message" to message,
+                "changedAt" to changedAt,
+            )
+        }
+
+        private fun recordStatus(context: Context, reason: String, disconnected: Boolean) {
+            try {
+                prefs(context.applicationContext).edit()
+                    .putString(KEY_LAST_REASON, reason)
+                    .putLong(KEY_LAST_CHANGE_AT, System.currentTimeMillis())
+                    .putBoolean(KEY_LAST_DISCONNECTED, disconnected)
+                    .apply()
+            } catch (e: Exception) {
+                Log.w(TAG, "recordStatus failed", e)
+            }
+        }
+
+        private fun publishStatus(context: Context) {
+            try {
+                MainActivity.emitListenerStatus(context.applicationContext, statusSnapshot(context))
+            } catch (e: Exception) {
+                Log.w(TAG, "publishStatus failed", e)
+            }
+            CentliAutoCaptureTileService.requestRefresh(context)
+        }
+
         fun isNotificationAccessGranted(context: Context): Boolean {
             val flat = Settings.Secure.getString(
                 context.contentResolver,
@@ -580,23 +675,41 @@ class CentliNotificationListener : NotificationListenerService() {
         ) {
             cancelRebindRetries()
             val app = context.applicationContext
+            recovering = true
             // 冷启动 / 刚退出 App：尽快软绑；约 2s 起升级硬重绑（划掉后台后软绑常无效）。
-            val delays = longArrayOf(300L, 1_000L, 2_000L, 4_000L, 8_000L)
+            // 退避略拉长，减少与 OEM 绑定窗口打架导致的偶发失败。
+            val delays = longArrayOf(400L, 1_200L, 2_500L, 5_000L, 10_000L)
+            val lastDelay = delays.last()
             for (delay in delays) {
-                val useForce = escalateToForce && delay >= 2_000L
+                val useForce = escalateToForce && delay >= 2_500L
+                val isLast = delay == lastDelay
                 val r = Runnable {
-                    if (isConnectedNow()) return@Runnable
-                    if (!isNotificationAccessGranted(app)) return@Runnable
-                    if (!isAutoCaptureEnabled(app)) return@Runnable
+                    if (isConnectedNow()) {
+                        recovering = false
+                        publishStatus(app)
+                        return@Runnable
+                    }
+                    if (!isNotificationAccessGranted(app) || !isAutoCaptureEnabled(app)) {
+                        recovering = false
+                        publishStatus(app)
+                        return@Runnable
+                    }
                     if (useForce) {
                         forceRebindThrottled(app)
                     } else {
                         requestSoftRebind(app)
                     }
+                    if (isLast && !isConnectedNow()) {
+                        // 重试耗尽：保持「已断开」，不再假装连接中。
+                        recovering = false
+                        recordStatus(app, reason = "rebind_exhausted", disconnected = true)
+                        publishStatus(app)
+                    }
                 }
                 rebindRetryRunnables.add(r)
                 rebindHandler.postDelayed(r, delay)
             }
+            publishStatus(app)
         }
 
         private fun forceRebindThrottled(context: Context) {
@@ -618,6 +731,7 @@ class CentliNotificationListener : NotificationListenerService() {
             rebindRetryRunnables.clear()
         }
 
+
         /**
          * Hard rebind for the settings UI "重新连接" button — disable/enable the
          * component. Do **not** call this on a timer.
@@ -629,6 +743,9 @@ class CentliNotificationListener : NotificationListenerService() {
             try {
                 connected = false
                 instance = null
+                recovering = true
+                recordStatus(app, reason = "user_rebind", disconnected = true)
+                publishStatus(app)
                 lastForceRebindAtMs = System.currentTimeMillis()
                 val pm = app.packageManager
                 pm.setComponentEnabledSetting(

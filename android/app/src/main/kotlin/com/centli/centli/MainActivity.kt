@@ -42,6 +42,9 @@ class MainActivity : FlutterFragmentActivity() {
                     // Probe the live bind — static flag alone is false on cold start.
                     result.success(CentliNotificationListener.isConnectedNow())
                 }
+                "getListenerStatus" -> {
+                    result.success(CentliNotificationListener.statusSnapshot(this))
+                }
                 "ensureListenerRebind" -> {
                     try {
                         // Soft: no-op when already connected. Safe for page reload /
@@ -192,6 +195,8 @@ class MainActivity : FlutterFragmentActivity() {
                     flushQueuedCaptures()
                     flushQueuedPendingIntake()
                     flushQueuedOpenRoute()
+                    // Dart 刚绑上 handler：立刻同步一次监听连接状态。
+                    emitListenerStatus(this)
                     result.success(null)
                 }
                 "getDroppedNotifications" -> {
@@ -581,6 +586,24 @@ class MainActivity : FlutterFragmentActivity() {
 
         @JvmStatic
         fun isDartBridgeReady(): Boolean = dartBridgeReadyGlobal
+
+        /** Push NLS connection phase to Flutter (and no-op if engine gone). */
+        @JvmStatic
+        fun emitListenerStatus(context: android.content.Context, snapshot: Map<String, Any?>? = null) {
+            val payload = snapshot ?: CentliNotificationListener.statusSnapshot(context)
+            val ch = methodChannel
+            if (ch == null || !dartBridgeReadyGlobal) {
+                Log.d("CentliMain", "listener_status deferred (bridge not ready) phase=${payload["phase"]}")
+                return
+            }
+            Handler(Looper.getMainLooper()).post {
+                try {
+                    ch.invokeMethod("listener_status", payload)
+                } catch (e: Exception) {
+                    Log.w("CentliMain", "listener_status failed", e)
+                }
+            }
+        }
 
         /** Native SQLite wrote pending/txn — refresh Drift watchers when Flutter is up. */
         @JvmStatic
