@@ -631,6 +631,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
       ),
     );
     if (merge == null) return;
+    if (!mounted) return;
 
     setState(() => _busy = true);
     try {
@@ -645,6 +646,134 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
       if (!mounted) return;
       final msg = e is FormatException ? (e.message) : '$e';
       showGlassSnackBar(context, '网络导入失败: $msg');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _importUserPaste() async {
+    final textCtrl = TextEditingController();
+    try {
+      final clip = await Clipboard.getData(Clipboard.kTextPlain);
+      final clipText = clip?.text?.trim() ?? '';
+      if (clipText.isNotEmpty &&
+          (clipText.startsWith('{') || clipText.startsWith('['))) {
+        textCtrl.text = clipText;
+      }
+    } catch (_) {}
+
+    if (!mounted) {
+      textCtrl.dispose();
+      return;
+    }
+
+    final pasted = await showGlassDialog<String>(
+      context: context,
+      builder: (ctx) => CentliGlassDialog(
+        title: const Text('粘贴导入我的规则'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              '粘贴导出的「我的规则」JSON（与导出/文件导入同一格式）。'
+              '仅更新「我的规则」，不会改动内置规则。',
+            ),
+            const SizedBox(height: CentliSpacing.section),
+            TextField(
+              controller: textCtrl,
+              autofocus: true,
+              maxLines: 10,
+              minLines: 6,
+              decoration: const InputDecoration(
+                labelText: '规则 JSON',
+                hintText: '{ "version": 1, "templates": [ ... ] }',
+                alignLabelWithHint: true,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(14)),
+                ),
+              ),
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: () async {
+                  try {
+                    final clip = await Clipboard.getData(Clipboard.kTextPlain);
+                    final t = clip?.text?.trim() ?? '';
+                    if (t.isEmpty) {
+                      if (ctx.mounted) showGlassSnackBar(ctx, '剪贴板为空');
+                      return;
+                    }
+                    textCtrl.text = t;
+                    textCtrl.selection = TextSelection.collapsed(
+                      offset: textCtrl.text.length,
+                    );
+                  } catch (e) {
+                    if (ctx.mounted) {
+                      showGlassSnackBar(ctx, '读取剪贴板失败: $e');
+                    }
+                  }
+                },
+                icon: const Icon(Icons.content_paste_outlined, size: 18),
+                label: const Text('从剪贴板填入'),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, textCtrl.text.trim()),
+            child: const Text('下一步'),
+          ),
+        ],
+      ),
+    );
+    textCtrl.dispose();
+    final raw = pasted?.trim() ?? '';
+    if (raw.isEmpty) return;
+    if (!mounted) return;
+
+    final merge = await showGlassDialog<bool>(
+      context: context,
+      builder: (ctx) => CentliGlassDialog(
+        title: const Text('导入方式'),
+        content: const Text('合并到现有规则，还是完全替换？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('替换'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('合并'),
+          ),
+        ],
+      ),
+    );
+    if (merge == null) return;
+
+    setState(() => _busy = true);
+    try {
+      final n = await NotiTemplateStore.importUserRulesJson(
+        raw,
+        merge: merge,
+      );
+      await _reload();
+      if (!mounted) return;
+      showGlassSnackBar(context, '已粘贴导入 $n 条规则');
+    } catch (e) {
+      if (!mounted) return;
+      final msg = e is FormatException ? e.message : '$e';
+      showGlassSnackBar(context, '粘贴导入失败: $msg');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -772,6 +901,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
             onSelected: (v) {
               if (v == 'export') _exportUser();
               if (v == 'import') _importUser();
+              if (v == 'import_paste') _importUserPaste();
               if (v == 'import_url') _importUserFromUrl();
               if (v == 'import_official') _importOfficialFile();
               if (v == 'import_official_url') _importOfficialFromUrl();
@@ -780,6 +910,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
             items: const [
               CentliMenuItem(value: 'export', label: '导出我的规则'),
               CentliMenuItem(value: 'import', label: '从文件导入我的规则'),
+              CentliMenuItem(value: 'import_paste', label: '粘贴导入我的规则'),
               CentliMenuItem(value: 'import_url', label: '从网络导入我的规则'),
               CentliMenuItem(value: 'import_official', label: '从文件导入内置规则'),
               CentliMenuItem(
