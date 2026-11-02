@@ -3,6 +3,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../app/theme.dart';
 import '../../core/app_version.dart';
+import '../../core/update_check.dart';
+import '../../core/widgets/glass.dart';
 
 /// About hub: version, privacy policy, OSS licenses.
 /// Wireframe §8: 关于 — 版本、开源许可、隐私说明链接.
@@ -19,6 +21,7 @@ class _AboutPageState extends State<AboutPage> {
       displayAppVersion(kAppVersionFallback);
 
   late final Future<String> _versionFuture = loadDisplayAppVersion();
+  bool _checkingUpdate = false;
 
   @override
   Widget build(BuildContext context) {
@@ -95,6 +98,20 @@ class _AboutPageState extends State<AboutPage> {
                         );
                       },
                     ),
+                    const Divider(height: 1, indent: 56),
+                    ListTile(
+                      leading: _checkingUpdate
+                          ? const SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.system_update_alt_outlined),
+                      title: const Text('检查更新'),
+                      subtitle: const Text('对照 GitHub 版本标签检测新版本'),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: _checkingUpdate ? null : _onCheckUpdate,
+                    ),
                   ],
                 ),
               ),
@@ -142,5 +159,44 @@ class _AboutPageState extends State<AboutPage> {
         },
       ),
     );
+  }
+
+  Future<void> _onCheckUpdate() async {
+    if (_checkingUpdate) return;
+    setState(() => _checkingUpdate = true);
+    try {
+      final result = await checkForAppUpdate();
+      if (!mounted) return;
+      if (result.hasUpdate) {
+        final open = await showGlassDialog<bool>(
+          context: context,
+          builder: (ctx) => CentliGlassDialog(
+            title: const Text('发现新版本'),
+            content: Text(result.message),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('稍后'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('查看下载'),
+              ),
+            ],
+          ),
+        );
+        if (open == true) {
+          final ok = await openAppUpdatePage(result.openUrl);
+          if (!mounted) return;
+          if (!ok) {
+            showGlassSnackBar(context, '无法打开下载页，请稍后重试');
+          }
+        }
+      } else {
+        showGlassSnackBar(context, result.message);
+      }
+    } finally {
+      if (mounted) setState(() => _checkingUpdate = false);
+    }
   }
 }
