@@ -81,7 +81,8 @@ class PendingActionReceiver : BroadcastReceiver() {
         private fun showOverlayOrReview(context: Context, pendingId: String) {
             val app = context.applicationContext
             if (!PaymentOverlayManager.isEnabled(app) ||
-                PaymentOverlayManager.isAppLockEnabled(app)
+                PaymentOverlayManager.isAppLockEnabled(app) ||
+                MainActivity.isAppInForeground()
             ) {
                 openReview(app, pendingId)
                 return

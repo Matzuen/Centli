@@ -33,6 +33,7 @@ import android.widget.TextView
 import android.widget.Toast
 import java.io.File
 import java.lang.ref.WeakReference
+import java.util.ArrayDeque
 import java.util.Locale
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
@@ -69,6 +70,7 @@ object PaymentOverlayManager {
      */
     /** Cap zombie pile-up if remove keeps failing (GONE leftovers). */
     private const val MAX_TRACKED_WM_VIEWS = 4
+    private const val MAX_DEFERRED = 5
 
     private val trackedWmViews = mutableListOf<View>()
     private var deferredShowRunnable: Runnable? = null
@@ -95,9 +97,9 @@ object PaymentOverlayManager {
     private val toAccountViews = mutableListOf<Pair<TextView, Account>>()
     private var hostActivity: WeakReference<Activity>? = null
 
-    /** 锁屏期间推迟弹出；解锁后再 show，避免 WM 窗在解锁后变成「看得见但关不掉」。 */
-    private var deferredShow: DeferredShow? = null
-    /** 当前正在展示的那一笔；锁屏时挪到 [deferredShow]，解锁后重建新窗。 */
+    /** 锁屏 / 已有浮层时 FIFO 排队；解锁或关窗后按序弹出。容量见 [MAX_DEFERRED]。 */
+    private val deferredQueue: ArrayDeque<DeferredShow> = ArrayDeque()
+    /** 当前正在展示的那一笔；锁屏时插队头再 dismiss，解锁后重建新窗。 */
     private var activeShow: DeferredShow? = null
     private val unlockReceiverRegistered = AtomicBoolean(false)
 
@@ -124,9 +126,9 @@ object PaymentOverlayManager {
                     parkOverlayForLock(app, reason = "user_present")
                     purgeAllTrackedWmViews(app, reason = "user_present")
                     forceRemoveOrphanOverlay(app)
-                    val pending = deferredShow ?: return@post
-                    // 等锁屏动画 / WM 稳定后再弹，否则 remove 与 add 抢同一帧，旧窗仍在。
-                    scheduleDeferredShow(app, pending, delayMs = 280L)
+                    if (deferredQueue.isEmpty()) return@post
+                    // 等锁屏动画 / WM 稳定后再弹队首，否则 remove 与 add 抢同一帧，旧窗仍在。
+                    scheduleShowNextFromQueue(app, delayMs = 280L)
                 }
             }
         }
@@ -376,46 +378,59 @@ object PaymentOverlayManager {
             sourcePkg.contains("Alipay") || sourcePkg.contains("alipay") -> "支付宝"
             else -> "支付通知"
         }
-        val dir = when (direction) {
-            "in", "refund" -> "in"
-            else -> "out"
-        }
+        // 保留 transfer 三态；refund 归入 in（与 WM/Activity 一致）。
+        val dir = dirOrOut(direction ?: "out")
         val granted = hasPermission(app)
         val locked = isKeyguardLocked(app)
         Log.i(
             TAG,
             "showPending id=$pendingId amount=$amountMajor granted=$granted locked=$locked " +
+                "queue=${deferredQueue.size} " +
                 "canDraw=${if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) Settings.canDrawOverlays(app) else true}",
+        )
+
+        val payload = DeferredShow(
+            pendingId = pendingId,
+            amountMinor = amountMinor,
+            currency = currency,
+            sourcePkg = sourcePkg,
+            merchant = merchant,
+            direction = direction,
         )
 
         mainHandler.post {
             ensureUnlockReceiver(app)
-            dismissInternal()
 
-            // 锁屏时绝不用 WindowManager：OEM 解锁后窗体常成僵尸（看得见、点关闭无效）。
-            // 推迟到 USER_PRESENT 再弹；期间用户仍可从系统通知点「确认」。
+            // 锁屏：只入队，不抢跑；解锁后 FIFO 弹。
             if (locked) {
-                deferredShow = DeferredShow(
-                    pendingId = pendingId,
-                    amountMinor = amountMinor,
-                    currency = currency,
-                    sourcePkg = sourcePkg,
-                    merchant = merchant,
-                    direction = direction,
-                )
-                Log.i(TAG, "keyguard locked → defer overlay id=$pendingId")
+                enqueueDeferred(payload, front = false)
+                Log.i(TAG, "keyguard locked → enqueue overlay id=$pendingId size=${deferredQueue.size}")
                 return@post
             }
 
-            deferredShow = null
-            val payload = DeferredShow(
-                pendingId = pendingId,
-                amountMinor = amountMinor,
-                currency = currency,
-                sourcePkg = sourcePkg,
-                merchant = merchant,
-                direction = direction,
-            )
+            // App 前台：优先应用内确认，不盖系统浮层。
+            if (MainActivity.isAppInForeground()) {
+                Log.i(TAG, "app foreground → in-app review id=$pendingId")
+                MainActivity.requestInAppPendingReview(pendingId)
+                return@post
+            }
+
+            // 已有浮层：新单入队尾，不顶掉当前 UI。
+            val showing = overlayView != null ||
+                hostActivity?.get() != null ||
+                activeShow != null
+            if (showing) {
+                if (activeShow?.pendingId == pendingId) {
+                    Log.i(TAG, "already showing id=$pendingId; skip")
+                    return@post
+                }
+                enqueueDeferred(payload, front = false)
+                Log.i(TAG, "overlay busy → enqueue id=$pendingId size=${deferredQueue.size}")
+                return@post
+            }
+
+            dismissInternal(chainNext = false)
+
             if (tryShowWindowOverlay(
                     app,
                     pendingId = pendingId,
@@ -454,8 +469,8 @@ object PaymentOverlayManager {
     }
 
     /**
-     * 亮屏已弹出 → 息屏/解锁：拆掉当前窗并记入 [deferredShow]。
-     * 解锁后再 [showPending] 建新窗，避免僵尸悬浮窗关不掉。
+     * 亮屏已弹出 → 息屏/解锁：拆掉当前窗并把 active 插到队头（去重）。
+     * 解锁后再从队列 [scheduleShowNextFromQueue] 建新窗，避免僵尸悬浮窗关不掉。
      */
     private fun parkOverlayForLock(context: Context, reason: String) {
         val showing = overlayView != null ||
@@ -464,25 +479,76 @@ object PaymentOverlayManager {
         if (!showing) return
         val snap = activeShow
         if (snap != null) {
-            deferredShow = snap
-            Log.i(TAG, "$reason → park overlay id=${snap.pendingId}")
+            enqueueDeferred(snap, front = true)
+            Log.i(TAG, "$reason → park overlay id=${snap.pendingId} size=${deferredQueue.size}")
         } else {
             Log.i(TAG, "$reason → dismiss overlay (no active payload)")
         }
         ensureUnlockReceiver(context)
-        dismissInternal()
+        dismissInternal(chainNext = false)
         // 息屏阶段 remove 常失败：名单保留未拆掉的 view，解锁后再 purge。
         purgeAllTrackedWmViews(context, reason = reason)
     }
 
-    /** 解锁后延迟弹出，先再清一次旧窗。 */
-    private fun scheduleDeferredShow(app: Context, pending: DeferredShow, delayMs: Long) {
+    /** 同 pendingId 去重；超限丢最旧（通知栏仍可确认）。 */
+    private fun enqueueDeferred(payload: DeferredShow, front: Boolean) {
+        // 同 pendingId：移除旧项后以最新 payload 入队。
+        val it = deferredQueue.iterator()
+        while (it.hasNext()) {
+            if (it.next().pendingId == payload.pendingId) {
+                it.remove()
+                break
+            }
+        }
+        if (front) {
+            deferredQueue.addFirst(payload)
+            while (deferredQueue.size > MAX_DEFERRED) {
+                val dropped = deferredQueue.removeLast()
+                Log.w(TAG, "deferred queue full → drop oldest id=${dropped.pendingId}")
+            }
+        } else {
+            deferredQueue.addLast(payload)
+            while (deferredQueue.size > MAX_DEFERRED) {
+                val dropped = deferredQueue.removeFirst()
+                Log.w(TAG, "deferred queue full → drop oldest id=${dropped.pendingId}")
+            }
+        }
+    }
+
+    /** 解锁 / 确认忽略后弹队首。 */
+    private fun scheduleShowNextFromQueue(app: Context, delayMs: Long) {
         deferredShowRunnable?.let { mainHandler.removeCallbacks(it) }
-        deferredShow = null
+        if (deferredQueue.isEmpty()) {
+            deferredShowRunnable = null
+            return
+        }
         val r = Runnable {
             deferredShowRunnable = null
+            if (isKeyguardLocked(app)) {
+                Log.i(TAG, "still locked; keep queue size=${deferredQueue.size}")
+                return@Runnable
+            }
+            if (MainActivity.isAppInForeground()) {
+                val next = deferredQueue.pollFirst() ?: return@Runnable
+                // 其余仍 pending，靠通知栏；避免队列在前台残留到下次亮屏才弹。
+                if (deferredQueue.isNotEmpty()) {
+                    Log.i(TAG, "foreground drain: drop queued remain=${deferredQueue.size}")
+                    deferredQueue.clear()
+                }
+                Log.i(TAG, "queue→in-app id=${next.pendingId}")
+                MainActivity.requestInAppPendingReview(next.pendingId)
+                return@Runnable
+            }
+            val showing = overlayView != null ||
+                hostActivity?.get() != null ||
+                activeShow != null
+            if (showing) {
+                Log.i(TAG, "still showing; defer chain size=${deferredQueue.size}")
+                return@Runnable
+            }
+            val pending = deferredQueue.pollFirst() ?: return@Runnable
             purgeAllTrackedWmViews(app, reason = "before_deferred_show")
-            Log.i(TAG, "deferred show overlay id=${pending.pendingId}")
+            Log.i(TAG, "deferred show overlay id=${pending.pendingId} remain=${deferredQueue.size}")
             showPending(
                 app,
                 pendingId = pending.pendingId,
@@ -617,10 +683,15 @@ object PaymentOverlayManager {
             sourcePkg.contains("Alipay") || sourcePkg.contains("alipay") -> "支付宝"
             else -> "支付通知"
         }
-        val dir = when (direction) {
-            "in", "refund" -> "in"
-            else -> "out"
-        }
+        val dir = dirOrOut(direction ?: "out")
+        activeShow = DeferredShow(
+            pendingId = pendingId,
+            amountMinor = amountMinor,
+            currency = currency,
+            sourcePkg = sourcePkg,
+            merchant = merchant,
+            direction = direction,
+        )
         bindView(
             activity,
             view,
@@ -638,8 +709,8 @@ object PaymentOverlayManager {
         mainHandler.post {
             deferredShowRunnable?.let { mainHandler.removeCallbacks(it) }
             deferredShowRunnable = null
-            deferredShow = null
-            dismissInternal()
+            // 保留队列供下次解锁 / 后续链式弹出；只清当前窗。
+            dismissInternal(chainNext = false)
         }
     }
 
@@ -812,18 +883,19 @@ object PaymentOverlayManager {
         })
 
         view.findViewById<ImageButton>(R.id.btn_close_x).setOnClickListener {
-            dismissInternal()
+            // 稍后/关窗不回队，靠通知；若队列还有则弹下一笔。
+            dismissInternal(chainNext = true)
         }
         view.findViewById<Button>(R.id.btn_later).setOnClickListener {
-            dismissInternal()
+            dismissInternal(chainNext = true)
         }
         view.findViewById<Button>(R.id.btn_ignore).setOnClickListener {
             ignorePending(context, pendingId)
-            dismissInternal()
+            dismissInternal(chainNext = true)
         }
         view.findViewById<TextView>(R.id.btn_open_detail).setOnClickListener {
             openReview(context, pendingId)
-            dismissInternal()
+            dismissInternal(chainNext = true)
         }
 
         confirmBtn.setOnClickListener {
@@ -1466,17 +1538,18 @@ object PaymentOverlayManager {
         val accPart = if (accountName.isNotBlank()) " · $accountName" else ""
         view.findViewById<TextView>(R.id.tv_success_detail).text =
             "$symbol${formatMajor(overlayCurrency, amountMajor)} · $categoryName$accPart"
-        mainHandler.postDelayed({ dismissInternal() }, SUCCESS_DISMISS_MS)
+        mainHandler.postDelayed({ dismissInternal(chainNext = true) }, SUCCESS_DISMISS_MS)
     }
 
     private fun scheduleAutoDismiss() {
         autoDismiss?.let { mainHandler.removeCallbacks(it) }
-        val r = Runnable { dismissInternal() }
+        // 超时只关 UI、不 ignore、不回队；有队列则弹下一笔。
+        val r = Runnable { dismissInternal(chainNext = true) }
         autoDismiss = r
         mainHandler.postDelayed(r, AUTO_DISMISS_MS)
     }
 
-    private fun dismissInternal() {
+    private fun dismissInternal(chainNext: Boolean = false) {
         autoDismiss?.let { mainHandler.removeCallbacks(it) }
         autoDismiss = null
         activeShow = null
@@ -1527,6 +1600,14 @@ object PaymentOverlayManager {
         val act = hostActivity?.get()
         hostActivity = null
         finishHostActivity(act)
+
+        if (chainNext) {
+            val appCtx = view?.context?.applicationContext
+                ?: act?.applicationContext
+            if (appCtx != null && !isKeyguardLocked(appCtx) && deferredQueue.isNotEmpty()) {
+                scheduleShowNextFromQueue(appCtx, delayMs = 200L)
+            }
+        }
     }
 
 

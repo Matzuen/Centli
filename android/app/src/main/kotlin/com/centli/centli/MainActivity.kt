@@ -606,6 +606,38 @@ class MainActivity : FlutterFragmentActivity() {
         }
 
         /** Native SQLite wrote pending/txn — refresh Drift watchers when Flutter is up. */
+        /** True while [MainActivity] is resumed (UI visible). */
+        @JvmStatic
+        fun isAppInForeground(): Boolean = appInForeground
+
+        /**
+         * App 前台时由 [PaymentOverlayManager] 调用：走 Flutter open_route 应用内确认，
+         * 不盖系统浮层。
+         */
+        @JvmStatic
+        fun requestInAppPendingReview(pendingId: String) {
+            if (pendingId.isBlank()) return
+            val payload = hashMapOf<String, Any?>(
+                "route" to "/home/pending",
+                "pendingId" to pendingId,
+                "review" to true,
+            )
+            val ch = methodChannel
+            if (ch == null || !dartBridgeReadyGlobal) {
+                queuedOpenRoute = payload
+                Log.d("CentliMain", "in-app review queued (bridge not ready) id=$pendingId")
+                return
+            }
+            Handler(Looper.getMainLooper()).post {
+                try {
+                    ch.invokeMethod("open_route", payload)
+                } catch (e: Exception) {
+                    queuedOpenRoute = payload
+                    Log.w("CentliMain", "in-app review failed; queued", e)
+                }
+            }
+        }
+
         @JvmStatic
         fun notifyPendingDbChanged() {
             val ch = methodChannel

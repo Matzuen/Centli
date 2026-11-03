@@ -172,24 +172,31 @@ object NativeCaptureIngest {
 
             // 资产锁开启：通知栏不暴露金额/商户（悬浮窗/FSI 已在别处拦截）。
             val lockOn = PaymentOverlayManager.isAppLockEnabled(context)
+            val keyguardLocked = run {
+                val km = context.getSystemService(Context.KEYGUARD_SERVICE)
+                    as? android.app.KeyguardManager
+                km?.isKeyguardLocked == true
+            }
             val pushTitle = when {
                 lockOn -> "待确认记账"
                 amountMinor != null -> "待确认 ${formatYuan(currency, amountMinor)}"
                 else -> "待确认"
             }
             val pushBody = if (lockOn) null else merchant
-            val overlayLaunch = if (lockOn) {
-                null
-            } else {
-                PaymentOverlayActivity.launchIntent(
-                    context,
-                    pendingId = id,
-                    amountMinor = amountMinor,
-                    currency = currency,
-                    sourcePkg = pkg,
-                    merchant = merchant,
-                    direction = direction,
-                )
+            // 自动展示统一走 showPending；锁屏禁止 FSI 抢跑；无悬浮窗权限时才挂 FSI 兜底。
+            val overlayLaunch = when {
+                lockOn || keyguardLocked -> null
+                !PaymentOverlayManager.hasPermission(context) ->
+                    PaymentOverlayActivity.launchIntent(
+                        context,
+                        pendingId = id,
+                        amountMinor = amountMinor,
+                        currency = currency,
+                        sourcePkg = pkg,
+                        merchant = merchant,
+                        direction = direction,
+                    )
+                else -> null
             }
             PendingConfirmNotifier.show(
                 context,
@@ -197,8 +204,8 @@ object NativeCaptureIngest {
                 pushTitle,
                 pushBody,
                 overlayLaunch = overlayLaunch,
+                secretLockscreen = lockOn,
             )
-            // LiteNote 式悬浮窗：WM 优先；失败则 Activity / 通知全屏 Intent 兜底。
             PaymentOverlayManager.showPending(
                 context,
                 pendingId = id,

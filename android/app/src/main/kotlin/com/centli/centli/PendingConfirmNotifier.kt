@@ -72,6 +72,8 @@ object PendingConfirmNotifier {
         body: String?,
         /** When set, also attach a full-screen intent for LiteNote-style quick UI. */
         overlayLaunch: Intent? = null,
+        /** 资产锁开启时锁屏不展示通知明文（与脱敏文案对齐）。 */
+        secretLockscreen: Boolean = false,
     ) {
         ensureChannel(context)
         val app = context.applicationContext
@@ -150,7 +152,10 @@ object PendingConfirmNotifier {
             .setAutoCancel(true)
             .setOnlyAlertOnce(true)
             .setCategory(Notification.CATEGORY_STATUS)
-            .setVisibility(Notification.VISIBILITY_PUBLIC)
+            .setVisibility(
+                if (secretLockscreen) Notification.VISIBILITY_SECRET
+                else Notification.VISIBILITY_PRIVATE,
+            )
             .setShowWhen(true)
             .setWhen(System.currentTimeMillis())
             // 仅展开用自定义按钮；不 setCustomContentView / 不 addAction，避免重复按钮且利于一级展示。
