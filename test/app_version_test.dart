@@ -12,8 +12,8 @@ void main() {
   });
 
   test('displayAppVersion hides build number', () {
-    expect(displayAppVersion('2.1.3+46'), '2.1.3');
-    expect(displayAppVersion('2.1.3'), '2.1.3');
-    expect(displayAppVersion(kAppVersionFallback), '2.1.3');
+    expect(displayAppVersion('2.1.4+47'), '2.1.4');
+    expect(displayAppVersion('2.1.4'), '2.1.4');
+    expect(displayAppVersion(kAppVersionFallback), '2.1.4');
   });
 }
