@@ -782,16 +782,22 @@ class _CentliTrendChartState extends State<CentliTrendChart> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Text(
-                widget.title,
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
+              Flexible(
+                child: Text(
+                  widget.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
-              const Spacer(),
               if (widget.trailing != null) ...[
                 const SizedBox(width: CentliSpacing.dense),
-                widget.trailing!,
+                Expanded(
+                  flex: 2,
+                  child: widget.trailing!,
+                ),
               ],
             ],
           ),

@@ -5,6 +5,12 @@ abstract final class PrefKeys {
   /// 首页是否展示预算进度条。默认开。
   static const homeShowBudgetCard = 'home_show_budget_card';
 
+  /// 首页流水区是否只预览约 6 条（关 = 当前区间全量）。默认开（预览）。
+  static const homeTxnPreview = 'home_txn_preview';
+
+  /// 首页净资产趋势是否默认展开。默认关（折叠，避免重首页）。
+  static const homeTrendExpanded = 'home_trend_expanded';
+
   /// 预算进度到约 80% 时发本地通知。默认开。
   static const budgetWarnNotify = 'budget_warn_notify';
 

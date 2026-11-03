@@ -84,6 +84,22 @@ final homeShowBudgetCardProvider = StreamProvider<bool>((ref) {
       .map(prefBool);
 });
 
+/// 首页流水预览约 6 条（默认开）；关 = 当前区间全量。
+final homeTxnPreviewProvider = StreamProvider<bool>((ref) {
+  return ref
+      .watch(databaseProvider)
+      .watchSetting(PrefKeys.homeTxnPreview)
+      .map((raw) => prefBool(raw, defaultOn: true));
+});
+
+/// 首页趋势默认展开（默认关 = 折叠）。
+final homeTrendExpandedProvider = StreamProvider<bool>((ref) {
+  return ref
+      .watch(databaseProvider)
+      .watchSetting(PrefKeys.homeTrendExpanded)
+      .map((raw) => prefBool(raw, defaultOn: false));
+});
+
 final _rangeBaseProvider =
     FutureProvider.family<
       BaseRangeSummary,
@@ -463,6 +479,10 @@ class _HomePageState extends ConsumerState<HomePage> {
             );
             final showBudget =
                 ref.watch(homeShowBudgetCardProvider).valueOrNull ?? true;
+            final txnPreview =
+                ref.watch(homeTxnPreviewProvider).valueOrNull ?? true;
+            final trendExpanded =
+                ref.watch(homeTrendExpandedProvider).valueOrNull ?? false;
             final ledgers =
                 ref.watch(_ledgersListProvider).valueOrNull ?? const <Ledger>[];
 
@@ -677,6 +697,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                             incomeSeries: incomeSeries,
                             expenseSeries: expenseSeries,
                             netWorth: nw,
+                            initialExpanded: trendExpanded,
                           ),
                           const SizedBox(height: CentliSpacing.sectionLoose),
                           CentliSoftCard(
@@ -705,7 +726,10 @@ class _HomePageState extends ConsumerState<HomePage> {
                                   error: (e, _) =>
                                       CentliErrorState(error: e, compact: true),
                                   data: (txns) {
-                                    if (txns.isEmpty) {
+                                    final preview = txnPreview
+                                        ? txns.take(6).toList()
+                                        : txns;
+                                    if (preview.isEmpty) {
                                       return Padding(
                                         padding: const EdgeInsets.all(
                                           CentliSpacing.cardPad,
@@ -768,7 +792,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                                       );
                                     }
                                     return TxnGroupedSection(
-                                      txns: txns,
+                                      txns: preview,
                                       hide: hide,
                                       selecting: _selectingTxns,
                                       selectedIds: _selectedTxnIds,
@@ -1448,7 +1472,7 @@ class _HomeBudgetStrip extends StatelessWidget {
 }
 
 /// 净资产变化卡：折线 + 右上「账单列表 / 分类占比」两个入口。
-class _NetChangeChartCard extends StatelessWidget {
+class _NetChangeChartCard extends StatefulWidget {
   const _NetChangeChartCard({
     required this.ledgerId,
     required this.base,
@@ -1456,6 +1480,7 @@ class _NetChangeChartCard extends StatelessWidget {
     required this.incomeSeries,
     required this.expenseSeries,
     required this.netWorth,
+    this.initialExpanded = false,
   });
 
   final String ledgerId;
@@ -1464,9 +1489,71 @@ class _NetChangeChartCard extends StatelessWidget {
   final AsyncValue<List<({DateTime dayLocal, int totalMinor})>> incomeSeries;
   final AsyncValue<List<({DateTime dayLocal, int totalMinor})>> expenseSeries;
   final AsyncValue<BaseNetWorth> netWorth;
+  final bool initialExpanded;
+
+  @override
+  State<_NetChangeChartCard> createState() => _NetChangeChartCardState();
+}
+
+class _NetChangeChartCardState extends State<_NetChangeChartCard> {
+  late bool _expanded = widget.initialExpanded;
+
+  @override
+  void didUpdateWidget(covariant _NetChangeChartCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialExpanded != widget.initialExpanded) {
+      _expanded = widget.initialExpanded;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final incomeSeries = widget.incomeSeries;
+    final expenseSeries = widget.expenseSeries;
+    final netWorth = widget.netWorth;
+    final base = widget.base;
+    final hide = widget.hide;
+    final scheme = Theme.of(context).colorScheme;
+
+    if (!_expanded) {
+      return CentliSoftCard(
+        padding: const EdgeInsets.fromLTRB(12, 6, 8, 6),
+        child: InkWell(
+          onTap: () => setState(() => _expanded = true),
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '净资产变化',
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w800,
+                            ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '默认折叠 · 点按展开',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(Icons.expand_more_rounded, color: scheme.onSurfaceVariant),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     final loading =
         incomeSeries.isLoading || expenseSeries.isLoading || netWorth.isLoading;
     final failed =
@@ -1540,17 +1627,25 @@ class _NetChangeChartCard extends StatelessWidget {
       hide: hide,
       sparseMessage: '\u533a\u95f4\u53d8\u52a8\u8f83\u5c11',
       height: 112,
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _ChartActionButton(
-            key: const Key('net_change_pie'),
-            tooltip: '分类占比',
-            icon: Icons.pie_chart_outline,
-            // 直接切到「统计」tab，而不是在当前 tab 上叠一层统计页。
-            onPressed: () => openTab('/stats'),
-          ),
-        ],
+      trailing: Align(
+        alignment: Alignment.centerRight,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _ChartActionButton(
+              key: const Key('net_change_pie'),
+              tooltip: '分类占比',
+              icon: Icons.pie_chart_outline,
+              // 直接切到「统计」tab，而不是在当前 tab 上叠一层统计页。
+              onPressed: () => openTab('/stats'),
+            ),
+            _ChartActionButton(
+              tooltip: '折叠',
+              icon: Icons.expand_less_rounded,
+              onPressed: () => setState(() => _expanded = false),
+            ),
+          ],
+        ),
       ),
     );
   }

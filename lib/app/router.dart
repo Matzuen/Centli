@@ -25,6 +25,7 @@ import '../features/settings/export_page.dart';
 import '../features/settings/backup_page.dart';
 import '../features/settings/import_page.dart';
 import '../features/settings/about_page.dart';
+import '../features/settings/bookkeeping_prefs_page.dart';
 import '../features/settings/privacy_policy_page.dart';
 import '../features/settings/security_page.dart';
 import '../features/settings/fx_rates_page.dart';
@@ -242,6 +243,11 @@ GoRouter createRouter({
                     path: 'fx',
                     parentNavigatorKey: rootNavigatorKey,
                     builder: (context, state) => const FxRatesPage(),
+                  ),
+                  GoRoute(
+                    path: 'bookkeeping-prefs',
+                    parentNavigatorKey: rootNavigatorKey,
+                    builder: (context, state) => const BookkeepingPrefsPage(),
                   ),
                   GoRoute(
                     path: 'about',

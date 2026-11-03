@@ -7,7 +7,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../app/theme.dart';
 import '../../core/constants/currencies.dart';
-import '../../core/constants/pref_keys.dart';
 import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
 import '../../platform/home_widget/centli_home_widget_sync.dart';
@@ -15,10 +14,6 @@ import '../../platform/notifications/notification_listener_stub.dart';
 
 import '../../core/widgets/glass.dart';
 
-final _prefBoolProvider =
-    StreamProvider.family<bool, String>((ref, key) {
-  return ref.watch(databaseProvider).watchSetting(key).map(prefBool);
-});
 
 class MePage extends ConsumerWidget {
   const MePage({super.key});
@@ -167,56 +162,12 @@ class MePage extends ConsumerWidget {
             const SizedBox(height: CentliSpacing.section),
             _sectionHeader(context, '记账偏好'),
             CentliSoftCard(
-              child: Column(
-                children: [
-                  _prefSwitch(
-                    context,
-                    ref,
-                    key: PrefKeys.homeShowBudgetCard,
-                    title: '首页显示预算卡',
-                    subtitle: '概览卡片下方的本月预算进度',
-                  ),
-                  const Divider(height: 1),
-                  _prefSwitch(
-                    context,
-                    ref,
-                    key: PrefKeys.budgetWarnNotify,
-                    title: '预算进度预警',
-                    subtitle: '用到约 80% 时本地提醒一次（可关闭）',
-                  ),
-                  const Divider(height: 1),
-                  _prefSwitch(
-                    context,
-                    ref,
-                    key: PrefKeys.rememberCategoryAccount,
-                    title: '记忆分类对应账户',
-                    subtitle: '选分类时回填该分类上次资产账户',
-                  ),
-                  const Divider(height: 1),
-                  _prefSwitch(
-                    context,
-                    ref,
-                    key: PrefKeys.rememberCategoryNote,
-                    title: '记忆分类对应备注',
-                    subtitle: '选分类时回填该分类上次备注',
-                  ),
-                  const Divider(height: 1),
-                  _prefSwitch(
-                    context,
-                    ref,
-                    key: PrefKeys.confirmBeforeDelete,
-                    title: '删除前确认',
-                    subtitle: '长按流水删除时弹出确认',
-                  ),
-                  const Divider(height: 1),
-                  _prefSwitch(
-                    context,
-                    ref,
-                    key: PrefKeys.recycleAutoPurge,
-                    title: '回收站自动清理',
-                    subtitle: '启动时永久删除超过 30 天的记录',
-                  ),
-                ],
+              child: _tile(
+                context,
+                icon: Icons.tune_outlined,
+                title: '记账偏好',
+                subtitle: '首页展示 · 记忆回填 · 删除确认',
+                onTap: () => context.push('/me/bookkeeping-prefs'),
               ),
             ),
             const SizedBox(height: CentliSpacing.section),
@@ -387,25 +338,6 @@ class MePage extends ConsumerWidget {
     );
   }
 
-  Widget _prefSwitch(
-    BuildContext context,
-    WidgetRef ref, {
-    required String key,
-    required String title,
-    String? subtitle,
-    VoidCallback? onChangedExtra,
-  }) {
-    final on = ref.watch(_prefBoolProvider(key)).valueOrNull ?? true;
-    return SwitchListTile(
-      title: Text(title),
-      subtitle: subtitle == null ? null : Text(subtitle),
-      value: on,
-      onChanged: (v) async {
-        await ref.read(databaseProvider).setSetting(key, v ? 'true' : 'false');
-        onChangedExtra?.call();
-      },
-    );
-  }
 }
 
 String _themeLabel(WidgetRef ref) {
