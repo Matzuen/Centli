@@ -1101,6 +1101,8 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
                             },
                           ),
                           // Finch rhythm: compact amount (right), chips flush under.
+                          // Slightly more air under type switcher; tighter above chips.
+                          const SizedBox(height: CentliSpacing.item),
                           Padding(
                             padding: const EdgeInsets.fromLTRB(16, 0, 18, 0),
                             child: Column(
@@ -1162,7 +1164,7 @@ class _BookkeepingSheetState extends ConsumerState<BookkeepingSheet> {
                               ],
                             ),
                           ),
-                          const SizedBox(height: CentliSpacing.section),
+                          const SizedBox(height: CentliSpacing.dense),
                           // Chips: time / category / account / tags（与改版前同排，不挤「更多」）
                           Padding(
                             key: const Key('bk_chips_row'),
@@ -1468,6 +1470,9 @@ class _Keypad extends StatelessWidget {
   ];
 
   static const _colFlex = [78, 78, 78, 86];
+  static const double _gap = 7;
+  /// Slightly shorter than prior 54 so the sheet breathes; still tappable.
+  static const double _keyH = 50;
 
   Color _bg(BuildContext context, String k) {
     if (k == '\u2713') return CentliTheme.keypadConfirm(context);
@@ -1496,51 +1501,42 @@ class _Keypad extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Match 备注 field horizontal inset (16) so left/right edges align.
     return Padding(
-      padding: const EdgeInsets.fromLTRB(9, 0, 9, 0),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (var r = 0; r < _rows.length; r++) ...[
-            if (r > 0) const SizedBox(height: 3.5),
-            _buildRow(context, _rows[r], isLast: r == _rows.length - 1),
-          ],
-        ],
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final totalFlex = _colFlex.reduce((a, b) => a + b);
+          final unit = (constraints.maxWidth - _gap * 3) / totalFlex;
+          final widths = [for (final f in _colFlex) f * unit];
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (var r = 0; r < _rows.length; r++) ...[
+                if (r > 0) const SizedBox(height: 3.5),
+                if (r == _rows.length - 1)
+                  _buildLastRow(context, widths)
+                else
+                  _buildRow(context, _rows[r], widths),
+              ],
+            ],
+          );
+        },
       ),
     );
   }
 
   Widget _buildRow(
     BuildContext context,
-    List<String> row, {
-    required bool isLast,
-  }) {
-    if (isLast) {
-      return Row(
-        children: [
-          Expanded(
-            flex: _colFlex[0] + _colFlex[1],
-            child: _keyBtn(context, '0'),
-          ),
-          const SizedBox(width: 7),
-          Expanded(
-            flex: _colFlex[2],
-            child: _keyBtn(context, '.'),
-          ),
-          const SizedBox(width: 7),
-          Expanded(
-            flex: _colFlex[3],
-            child: _keyBtn(context, '\u2713'),
-          ),
-        ],
-      );
-    }
+    List<String> row,
+    List<double> widths,
+  ) {
     return Row(
       children: [
         for (var i = 0; i < row.length; i++) ...[
-          if (i > 0) const SizedBox(width: 7),
-          Expanded(
-            flex: _colFlex[i],
+          if (i > 0) const SizedBox(width: _gap),
+          SizedBox(
+            width: widths[i],
             child: _keyBtn(context, row[i]),
           ),
         ],
@@ -1548,9 +1544,32 @@ class _Keypad extends StatelessWidget {
     );
   }
 
+  /// 0 spans cols 0+1 including the inter-column gap so its right edge
+  /// shares the same vertical seam as keys 2|3 / 5|6 / 8|9 above.
+  Widget _buildLastRow(BuildContext context, List<double> widths) {
+    return Row(
+      children: [
+        SizedBox(
+          width: widths[0] + _gap + widths[1], // == flex sum of _colFlex[0] + _colFlex[1] plus gap
+          child: _keyBtn(context, '0'),
+        ),
+        const SizedBox(width: _gap),
+        SizedBox(
+          width: widths[2],
+          child: _keyBtn(context, '.'),
+        ),
+        const SizedBox(width: _gap),
+        SizedBox(
+          width: widths[3],
+          child: _keyBtn(context, '\u2713'),
+        ),
+      ],
+    );
+  }
+
   Widget _keyBtn(BuildContext context, String k) {
     return SizedBox(
-      height: 54,
+      height: _keyH,
       child: Tooltip(
         message: k == '\u2713' ? '\u957f\u6309\u518d\u8bb0\u4e00\u7b14' : '',
         child: Material(
