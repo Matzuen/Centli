@@ -62,6 +62,22 @@ abstract final class CentliTheme {
   /// Soft mint accent (pairs with purple in the gradient).
   static const brandGreen = Color(0xFF6BB89A);
 
+  /// CTA pill gradient: mint -> lilac (master 绿紫, not Teal).
+  static const brandGradient = LinearGradient(
+    begin: Alignment.centerLeft,
+    end: Alignment.centerRight,
+    colors: [brandGreen, brandPrimary],
+  );
+  static const brandGradientDark = LinearGradient(
+    begin: Alignment.centerLeft,
+    end: Alignment.centerRight,
+    colors: [Color(0xFF7BC4A8), Color(0xFF9B94E0)],
+  );
+  static LinearGradient brandGrad(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return dark ? brandGradientDark : brandGradient;
+  }
+
   // 背景渐变：薄荷绿 → 淡紫 → 丁香紫（浅色紫略提亮，避免发闷）。
   static const gradientTop = Color(0xFFE4F2EC);
   static const gradientMid = Color(0xFFF3EFFA);
