@@ -231,9 +231,8 @@ class MainActivity : FlutterFragmentActivity() {
             if (isNotificationAccessGranted() &&
                 CentliNotificationListener.isAutoCaptureEnabled(this)
             ) {
-                // 回前台补绑：划掉后台后可能需硬重绑才能恢复监听。
+                // 回前台补绑：ensureAlive 内已 recoverBinding，勿再连打重置重试队列。
                 CentliResurrect.ensureAlive(this)
-                CentliNotificationListener.recoverBinding(this)
             } else if (isNotificationAccessGranted() &&
                 !CentliNotificationListener.isConnectedNow()
             ) {
@@ -248,10 +247,14 @@ class MainActivity : FlutterFragmentActivity() {
         super.onResume()
         appInForeground = true
         // 每次回前台都尽量把监听补上（已连接则 no-op；断开则 soft→force）。
+        // 只走一条 recover 路径；ensureAlive 会再调 recoverBinding，合并后仍只排一次重试。
         if (isNotificationAccessGranted()) {
             if (CentliNotificationListener.isAutoCaptureEnabled(this)) {
                 CentliNotificationListener.recoverBinding(this)
-                CentliResurrect.ensureAlive(this)
+                CentliResurrect.schedule(this)
+                if (!CentliNotificationListener.isConnectedNow()) {
+                    CentliResurrect.scheduleRetry(this, delayMs = 8_000L)
+                }
             } else {
                 CentliNotificationListener.ensureRebind(this)
             }

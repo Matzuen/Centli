@@ -785,7 +785,11 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
                           ? '当前平台不可用'
                           : (_granted
                                 ? (_enabled
-                                    ? '已开启 · 支付通知进待确认或悬浮窗'
+                                    ? (_listenerConnected
+                                        ? '已开启 · 已连接，支付通知进待确认或悬浮窗'
+                                        : (_listenerConnecting
+                                            ? '已开启 · 正在重连系统通知监听…'
+                                            : '已开启 · 监听已断开（未在收通知），请点下方重连'))
                                     : '已关闭 · 不再监听支付通知')
                                 : '需先授予通知使用权'),
                     ),

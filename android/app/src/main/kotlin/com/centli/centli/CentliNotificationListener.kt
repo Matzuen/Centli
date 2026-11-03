@@ -613,10 +613,16 @@ class CentliNotificationListener : NotificationListenerService() {
         }
 
         /** 硬重绑节流：划掉后台后 OEM 常卡在僵尸绑定，但频繁 disable/enable 会丢通知。 */
-        private const val FORCE_REBIND_MIN_INTERVAL_MS = 45_000L
+        private const val FORCE_REBIND_MIN_INTERVAL_MS = 12_000L
+        /** 前台用户主动等待连接时略放宽，避免「回 App 要连很多次」。 */
+        private const val FORCE_REBIND_MIN_INTERVAL_FG_MS = 6_000L
 
         @Volatile
         private var lastForceRebindAtMs: Long = 0L
+
+        /** 当前重试队列是否会升级到 forceRebind。 */
+        @Volatile
+        private var currentEscalate: Boolean = false
 
         /**
          * Soft rebind: if already connected, do nothing (toggling the component
@@ -627,6 +633,11 @@ class CentliNotificationListener : NotificationListenerService() {
             if (isConnectedNow()) return
             val app = context.applicationContext
             if (!isNotificationAccessGranted(app)) return
+            // 已有重试在飞：勿 cancel 重排，否则前台反复 onResume 永远到不了 force。
+            if (recovering && rebindRetryRunnables.isNotEmpty()) {
+                Log.i(TAG, "ensureRebind coalesced (retry in flight)")
+                return
+            }
             requestSoftRebind(app)
             scheduleRebindRetries(app)
         }
@@ -641,6 +652,18 @@ class CentliNotificationListener : NotificationListenerService() {
             if (!isAutoCaptureEnabled(app)) return
             if (!isNotificationAccessGranted(app)) return
             if (isConnectedNow()) return
+            // onResume + ensureAlive + Application 常连打：合并重试，避免反复 cancel 导致要连很多次。
+            if (recovering && rebindRetryRunnables.isNotEmpty()) {
+                if (!currentEscalate) {
+                    Log.i(TAG, "recoverBinding upgrade soft→force schedule")
+                    requestSoftRebind(app)
+                    scheduleRebindRetries(app, escalateToForce = true)
+                } else {
+                    Log.i(TAG, "recoverBinding coalesced (force schedule in flight)")
+                }
+                CentliResurrect.scheduleRetry(app, delayMs = 2_000L)
+                return
+            }
             requestSoftRebind(app)
             scheduleRebindRetries(app, escalateToForce = true)
             CentliResurrect.scheduleRetry(app, delayMs = 2_000L)
@@ -676,12 +699,19 @@ class CentliNotificationListener : NotificationListenerService() {
             cancelRebindRetries()
             val app = context.applicationContext
             recovering = true
-            // 冷启动 / 刚退出 App：尽快软绑；约 2s 起升级硬重绑（划掉后台后软绑常无效）。
+            currentEscalate = escalateToForce
+            // 冷启动 / 刚退出 App：尽快软绑；前台用户等待时更早升级硬重绑。
             // 退避略拉长，减少与 OEM 绑定窗口打架导致的偶发失败。
-            val delays = longArrayOf(400L, 1_200L, 2_500L, 5_000L, 10_000L)
+            val foreground = MainActivity.isAppInForeground()
+            val delays = if (foreground) {
+                longArrayOf(300L, 900L, 1_800L, 3_500L, 7_000L)
+            } else {
+                longArrayOf(400L, 1_200L, 2_500L, 5_000L, 10_000L)
+            }
+            val forceAfter = if (foreground) 900L else 2_500L
             val lastDelay = delays.last()
             for (delay in delays) {
-                val useForce = escalateToForce && delay >= 2_500L
+                val useForce = escalateToForce && delay >= forceAfter
                 val isLast = delay == lastDelay
                 val r = Runnable {
                     if (isConnectedNow()) {
@@ -715,8 +745,13 @@ class CentliNotificationListener : NotificationListenerService() {
         private fun forceRebindThrottled(context: Context) {
             if (isConnectedNow()) return
             val now = System.currentTimeMillis()
-            if (now - lastForceRebindAtMs < FORCE_REBIND_MIN_INTERVAL_MS) {
-                Log.i(TAG, "forceRebind throttled")
+            val minInterval = if (MainActivity.isAppInForeground()) {
+                FORCE_REBIND_MIN_INTERVAL_FG_MS
+            } else {
+                FORCE_REBIND_MIN_INTERVAL_MS
+            }
+            if (now - lastForceRebindAtMs < minInterval) {
+                Log.i(TAG, "forceRebind throttled (min=${minInterval}ms)")
                 requestSoftRebind(context)
                 return
             }
@@ -729,6 +764,8 @@ class CentliNotificationListener : NotificationListenerService() {
                 rebindHandler.removeCallbacks(r)
             }
             rebindRetryRunnables.clear()
+            // scheduleRebindRetries 会立刻重设 currentEscalate；此处清空避免陈旧 true。
+            currentEscalate = false
         }
 
 

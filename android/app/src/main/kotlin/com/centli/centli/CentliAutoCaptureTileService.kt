@@ -11,17 +11,18 @@ import android.util.Log
 import android.widget.Toast
 
 /**
- * 控制中心快捷开关：一键开/关自动账单监听（对齐 NekoBox / v2rayNG 式 QS Tile）。
+ * 控制中心快捷开关：一键开/关自动记账监听（对齐 NekoBox / v2rayNG 式 QS Tile）。
  *
- * - 未授予通知使用权时点开：跳转系统授权页，不偷偷打开开关。
- * - 开关状态与 SharedPreferences + app_settings 双向同步。
+ * - 未授予通知使用权时点开：跳转系统授权页，不假装打开开关。
+ * - 磁贴亮灭与 NLS **真实连接**一致：prefs 开着但已断绑 → 灭；假开不可。
+ * - 开关偏好仍写入 SharedPreferences + app_settings；点灭才关偏好。
  */
 class CentliAutoCaptureTileService : TileService() {
 
     override fun onStartListening() {
         super.onStartListening()
         val app = applicationContext
-        // 划掉后台后磁贴仍显示「开」但 NLS 已断：展开控制中心时自动补绑。
+        // 划掉后台后磁贴曾假亮但 NLS 已断：展开控制中心时自动补绑。
         if (CentliNotificationListener.isAutoCaptureEnabled(app) &&
             CentliNotificationListener.isNotificationAccessGranted(app) &&
             !CentliNotificationListener.isConnectedNow()
@@ -34,8 +35,12 @@ class CentliAutoCaptureTileService : TileService() {
     override fun onClick() {
         super.onClick()
         val app = applicationContext
-        val currentlyOn = CentliNotificationListener.isAutoCaptureEnabled(app)
-        if (!currentlyOn) {
+        val live = CentliNotificationListener.isConnectedNow()
+        // 以真实连接为准：已连接 → 关掉；未连接 → 打开/硬重绑（含 prefs 仍开但已断的假开场景）。
+        if (live) {
+            CentliNotificationListener.applyAutoCaptureEnabled(app, false)
+            Toast.makeText(app, R.string.qs_tile_turned_off, Toast.LENGTH_SHORT).show()
+        } else {
             if (!CentliNotificationListener.isNotificationAccessGranted(app)) {
                 openNotificationAccessSettings()
                 Toast.makeText(
@@ -81,9 +86,6 @@ class CentliAutoCaptureTileService : TileService() {
                 },
                 Toast.LENGTH_SHORT,
             ).show()
-        } else {
-            CentliNotificationListener.applyAutoCaptureEnabled(app, false)
-            Toast.makeText(app, R.string.qs_tile_turned_off, Toast.LENGTH_SHORT).show()
         }
         refreshTile()
     }
@@ -101,16 +103,16 @@ class CentliAutoCaptureTileService : TileService() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             tile.subtitle = when {
                 !granted -> getString(R.string.qs_tile_subtitle_need_access)
-                !enabled -> getString(R.string.qs_tile_subtitle_off)
                 connected -> getString(R.string.qs_tile_subtitle_on)
                 recovering -> getString(R.string.qs_tile_subtitle_reconnecting)
-                else -> getString(R.string.qs_tile_subtitle_disconnected)
+                enabled -> getString(R.string.qs_tile_subtitle_disconnected)
+                else -> getString(R.string.qs_tile_subtitle_off)
             }
         }
-        // 开关开着但已断开：仍标 ACTIVE 方便辨认「功能开着」，副标题标明断开。
+        // 仅 NLS 真实已连接才亮；prefs 开着但断绑 / 重连中 → 灭（假开不可）。
         tile.state = when {
             !granted -> Tile.STATE_INACTIVE
-            enabled -> Tile.STATE_ACTIVE
+            connected -> Tile.STATE_ACTIVE
             else -> Tile.STATE_INACTIVE
         }
         tile.updateTile()
