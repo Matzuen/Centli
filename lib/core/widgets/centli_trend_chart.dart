@@ -792,12 +792,10 @@ class _CentliTrendChartState extends State<CentliTrendChart> {
                   ),
                 ),
               ),
+              const Spacer(),
               if (widget.trailing != null) ...[
                 const SizedBox(width: CentliSpacing.dense),
-                Expanded(
-                  flex: 2,
-                  child: widget.trailing!,
-                ),
+                widget.trailing!,
               ],
             ],
           ),
