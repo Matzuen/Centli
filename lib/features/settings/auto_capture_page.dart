@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -257,7 +257,7 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
     setState(() => _busy = true);
     try {
       if (!NotificationCaptureStub.supported) {
-        if (!kDebugMode) {
+        if (kReleaseMode) {
           if (mounted) {
             showGlassSnackBar(context, '预览失败：仅 debug 包可用');
           }
@@ -284,7 +284,7 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
           showGlassSnackBar(context, '预览失败：缺少悬浮窗权限');
         case PreviewOverlayKind.channelFailed:
         case PreviewOverlayKind.unsupported:
-          if (kDebugMode) {
+          if (!kReleaseMode) {
             await showPaymentOverlayDesktopPreview(context);
           } else {
             showGlassSnackBar(
@@ -909,7 +909,7 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
                                 )),
                   ),
                 ),
-                if (kDebugMode) ...[
+                if (!kReleaseMode) ...[
                   const SizedBox(height: CentliSpacing.dense),
                   CentliSoftCard(
                     child: ListTile(

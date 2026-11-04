@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -156,7 +156,7 @@ class _AboutPageState extends State<AboutPage> {
                   ],
                 ),
               ),
-              if (kDebugMode) ...[
+              if (!kReleaseMode) ...[
                 const SizedBox(height: CentliSpacing.section),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(
@@ -202,7 +202,7 @@ class _AboutPageState extends State<AboutPage> {
   Future<void> _previewPaymentOverlay() async {
     // PC / 非 Android：Flutter 仿悬浮窗，方便调布局。
     if (!NotificationCaptureStub.supported) {
-      if (!kDebugMode) {
+      if (kReleaseMode) {
         showGlassSnackBar(context, '预览失败：仅 debug 包可用');
         return;
       }
@@ -225,7 +225,7 @@ class _AboutPageState extends State<AboutPage> {
       case PreviewOverlayKind.channelFailed:
       case PreviewOverlayKind.unsupported:
         // Android 上 channel 失败时兜底用 Flutter 仿窗。
-        if (kDebugMode) {
+        if (!kReleaseMode) {
           await showPaymentOverlayDesktopPreview(context);
         } else {
           showGlassSnackBar(
