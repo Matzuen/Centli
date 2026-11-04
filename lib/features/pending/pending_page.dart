@@ -921,6 +921,27 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
                       color: scheme.onSurfaceVariant,
                     ),
               ),
+              // 已忽略 Tab：常驻「写入过滤」，随时可把该类通知写入用户排除规则。
+              if (c.status == 'ignored') ...[
+                const SizedBox(height: CentliSpacing.item),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    onPressed: () {
+                      showQuickExcludeFilterSheet(
+                        context,
+                        pkg: c.sourcePkg,
+                        title: c.rawTitle,
+                        body: c.rawText,
+                      );
+                    },
+                    child: const Text('写入过滤'),
+                  ),
+                ),
+              ],
             ],
           ],
         ),
