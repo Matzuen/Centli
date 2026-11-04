@@ -123,6 +123,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
       userRules: NotiTemplateStore.peekUser(),
       meta: NotiTemplateStore.peekDistillMeta(),
     );
+    await AiNotiTrace.flush();
     final trace = await AiNotiTrace.load(force: true);
     if (!mounted) return;
     setState(() {

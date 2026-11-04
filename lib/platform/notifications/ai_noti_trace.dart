@@ -119,6 +119,10 @@ class AiNotiTraceEvent {
         return '命中已有 AI 排除规则';
       case AiNotiTraceKinds.localOverrideAi:
         return 'AI 判排除但本地支付模板兜底';
+      case AiNotiTraceKinds.localDrop:
+        return '本地弱信号 / 未识别 · 已忽略';
+      case AiNotiTraceKinds.nativeDrop:
+        return '原生规则丢弃 · 已忽略';
       default:
         return kind;
     }
@@ -146,6 +150,9 @@ class AiNotiTraceEvent {
       case AiNotiTraceKinds.aiFailed:
       case AiNotiTraceKinds.aiRateLimited:
         return 'AI 未成功 · 回落本地';
+      case AiNotiTraceKinds.localDrop:
+      case AiNotiTraceKinds.nativeDrop:
+        return '已忽略';
       default:
         return '已处理';
     }
@@ -166,6 +173,8 @@ abstract final class AiNotiTraceKinds {
   static const ingestDeduped = 'ingest_deduped';
   static const reuseExclude = 'reuse_exclude';
   static const localOverrideAi = 'local_override_ai';
+  static const localDrop = 'local_drop';
+  static const nativeDrop = 'native_drop';
 }
 
 /// Human-readable local template recognition for AI 处理.
@@ -195,7 +204,9 @@ abstract final class AiNotiTrace {
       List<AiNotiTraceEvent>.unmodifiable(_events);
 
   static Future<List<AiNotiTraceEvent>> load({bool force = false}) async {
-    if (_loaded && (!force || _dirty)) return peek();
+    // 页面打开 / force 时先把内存脏数据落盘，避免「刚记了轨迹却读到旧盘」。
+    if (_dirty) await flush();
+    if (_loaded && !force) return peek();
     _loadFuture ??= _loadFromDisk();
     await _loadFuture;
     _loadFuture = null;

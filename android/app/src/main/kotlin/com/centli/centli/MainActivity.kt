@@ -697,8 +697,10 @@ class MainActivity : FlutterFragmentActivity() {
          * Called from [CentliNotificationListener].
          *
          * 对齐 LiteNote / AutoBookKeeping：**始终由 native 解析并写待确认**，
-         * 不依赖 Flutter 是否在前台。前台时额外通知 Dart 做 AI 反写
-         * （二次入库会被 dedupe 挡掉）。
+         * 不依赖 Flutter 是否在前台。只要 MethodChannel 与 Dart bridge 已就绪，
+         * 就通知 Dart 记「最近处理」并做 AI 反写（二次入库会被 dedupe 挡掉）；
+         * 不再要求 [appInForeground]，避免悬浮窗已弹出但轨迹为空。
+         * 丢弃结果也会回传，方便「最近处理」展示排除/忽略。
          */
         @JvmStatic
         fun emitNotificationCapture(context: android.content.Context, payload: Map<String, Any?>) {
@@ -706,13 +708,13 @@ class MainActivity : FlutterFragmentActivity() {
             val outcome = NativeCaptureIngest.takeLastOutcome()
 
             val ch = methodChannel
-            if (ch != null && dartBridgeReadyGlobal && appInForeground) {
+            if (ch != null && dartBridgeReadyGlobal) {
                 Handler(Looper.getMainLooper()).post {
                     try {
                         val enriched = HashMap(payload)
                         when (outcome) {
                             NativeCaptureIngest.OUTCOME_INSERTED -> {
-                                // Dart 侧主要用于 AI 蒸馏；入库已由 native 完成。
+                                // Dart 侧主要用于轨迹 + AI 蒸馏；入库已由 native 完成。
                                 enriched["nativeIngested"] = true
                                 ch.invokeMethod("notification_capture", enriched)
                             }
@@ -724,7 +726,11 @@ class MainActivity : FlutterFragmentActivity() {
                                 ch.invokeMethod("notification_capture", enriched)
                             }
                             else -> {
-                                // dropped — 不打扰 Dart
+                                // dropped — 仍通知 Dart 写入「最近处理」轨迹。
+                                enriched["nativeDropped"] = true
+                                enriched["nativeIngested"] = false
+                                enriched["dropReason"] = outcome
+                                ch.invokeMethod("notification_capture", enriched)
                             }
                         }
                     } catch (e: Exception) {

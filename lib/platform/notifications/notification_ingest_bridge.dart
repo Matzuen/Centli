@@ -73,8 +73,23 @@ abstract final class NotificationIngestBridge {
     if (ledgerId == null || ledgerId.isEmpty) return null;
 
     final nativeIngested = raw['nativeIngested'] == true;
+    final nativeDropped = raw['nativeDropped'] == true;
     final notification = RawNotification.fromMap(raw);
     if (notification.title.isEmpty && notification.text.isEmpty) return null;
+
+    // Native 已判定丢弃（排除规则等）：只记轨迹，不再二次解析入库。
+    if (nativeDropped) {
+      final reason = raw['dropReason']?.toString() ?? 'dropped';
+      unawaited(
+        AiNotiTrace.recordForRaw(
+          raw: notification,
+          kind: AiNotiTraceKinds.nativeDrop,
+          detail: reason,
+          recognition: '原生侧丢弃 · $reason',
+        ),
+      );
+      return null;
+    }
 
     final templates = await NotiTemplateStore.load();
 
@@ -225,6 +240,17 @@ abstract final class NotificationIngestBridge {
           text: notification.text,
         ) ||
         (!matched && parsed.amountMinor == null)) {
+      unawaited(
+        AiNotiTrace.recordForRaw(
+          raw: notification,
+          kind: AiNotiTraceKinds.localDrop,
+          detail: 'weak',
+          recognition: formatLocalRecognition(
+            parsed,
+            note: '弱信号 / 无金额 · 已忽略',
+          ),
+        ),
+      );
       if (!skipInsert) {
         await NotificationCaptureStub.recordDroppedNotification(
           pkg: notification.pkg,
@@ -235,6 +261,17 @@ abstract final class NotificationIngestBridge {
       return null;
     }
     if (!matched) {
+      unawaited(
+        AiNotiTrace.recordForRaw(
+          raw: notification,
+          kind: AiNotiTraceKinds.localDrop,
+          detail: 'no_template',
+          recognition: formatLocalRecognition(
+            parsed,
+            note: '未命中本地模板 · 已忽略',
+          ),
+        ),
+      );
       if (!skipInsert) {
         await NotificationCaptureStub.recordDroppedNotification(
           pkg: notification.pkg,
