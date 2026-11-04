@@ -57,10 +57,14 @@ class PendingActionReceiver : BroadcastReceiver() {
     }
 
     companion object {
-        const val ACTION_CONFIRM = "com.centli.centli.action.CONFIRM"
-        const val ACTION_DETAIL = "com.centli.centli.action.DETAIL"
-        const val ACTION_IGNORE = "com.centli.centli.action.IGNORE"
-        const val ACTION_SET_AMOUNT = "com.centli.centli.action.SET_AMOUNT"
+        val ACTION_CONFIRM: String
+            get() = "${BuildConfig.APPLICATION_ID}.action.CONFIRM"
+        val ACTION_DETAIL: String
+            get() = "${BuildConfig.APPLICATION_ID}.action.DETAIL"
+        val ACTION_IGNORE: String
+            get() = "${BuildConfig.APPLICATION_ID}.action.IGNORE"
+        val ACTION_SET_AMOUNT: String
+            get() = "${BuildConfig.APPLICATION_ID}.action.SET_AMOUNT"
         const val EXTRA_PENDING_ID = "pendingId"
         const val KEY_AMOUNT_INPUT = "centli_amount_input"
         private const val TAG = "CentliPendingAction"

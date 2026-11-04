@@ -153,13 +153,14 @@ class MainActivity : FlutterFragmentActivity() {
                 "previewPaymentOverlay" -> {
                     // Debug APK only — release / non-debuggable builds are rejected.
                     if (!PaymentOverlayManager.isDebuggable(this)) {
-                        result.error("denied", "debug only", null)
+                        result.error("not_debug", "仅 debug 包可用", null)
                         return@setMethodCallHandler
                     }
                     try {
                         val id = PaymentOverlayManager.previewDebugOverlay(this)
                         if (id == null) {
-                            result.error("preview_failed", "无法构造调试 pending", null)
+                            // Common cause: no ledger row for fake pending insert.
+                            result.error("no_ledger", "缺少账本，请先创建账本", null)
                         } else {
                             result.success(id)
                         }
@@ -590,7 +591,7 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
 
-    /** Debug intent: com.centli.centli.ACTION_PREVIEW_PAYMENT_OVERLAY (debug manifest). */
+    /** Debug intent: ${applicationId}.ACTION_PREVIEW_PAYMENT_OVERLAY (debug manifest). */
     private fun maybePreviewPaymentOverlay(intent: Intent?) {
         if (intent?.action != ACTION_PREVIEW_PAYMENT_OVERLAY) return
         if (!PaymentOverlayManager.isDebuggable(this)) {
@@ -605,8 +606,8 @@ class MainActivity : FlutterFragmentActivity() {
 
     companion object {
         const val CHANNEL_NAME = "centli/notification_capture"
-        const val ACTION_PREVIEW_PAYMENT_OVERLAY =
-            "com.centli.centli.ACTION_PREVIEW_PAYMENT_OVERLAY"
+        val ACTION_PREVIEW_PAYMENT_OVERLAY: String
+            get() = "${BuildConfig.APPLICATION_ID}.ACTION_PREVIEW_PAYMENT_OVERLAY"
         private const val REQ_POST_NOTIFICATIONS = 4201
 
         @Volatile

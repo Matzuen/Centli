@@ -15,6 +15,7 @@ import '../../platform/notifications/noti_template_store.dart';
 import '../../app/theme.dart';
 import '../../core/widgets/glass.dart';
 import '../../core/widgets/account_cascade_picker.dart';
+import 'payment_overlay_desktop_preview.dart';
 
 /// Full auto-capture settings at `/me/auto` (wireframe §8).
 class AutoCapturePage extends ConsumerStatefulWidget {
@@ -255,13 +256,44 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
     if (_busy) return;
     setState(() => _busy = true);
     try {
-      final id = await NotificationCaptureStub.previewPaymentOverlay();
+      if (!NotificationCaptureStub.supported) {
+        if (!kDebugMode) {
+          if (mounted) {
+            showGlassSnackBar(context, '预览失败：仅 debug 包可用');
+          }
+          return;
+        }
+        if (mounted) {
+          await showPaymentOverlayDesktopPreview(context);
+        }
+        return;
+      }
+
+      final outcome =
+          await NotificationCaptureStub.previewPaymentOverlayDetailed();
       if (!mounted) return;
-      if (id == null) {
-        showGlassSnackBar(context, '预览失败：仅 debug 包可用，或缺少账本/悬浮窗权限');
-      } else {
-        showGlassSnackBar(context, '已弹出调试悬浮窗');
-        await _reload(soft: true);
+      switch (outcome.kind) {
+        case PreviewOverlayKind.shown:
+          showGlassSnackBar(context, '已弹出调试悬浮窗');
+          await _reload(soft: true);
+        case PreviewOverlayKind.notDebug:
+          showGlassSnackBar(context, '预览失败：仅 debug 包可用');
+        case PreviewOverlayKind.noLedger:
+          showGlassSnackBar(context, '预览失败：缺少账本，请先创建账本');
+        case PreviewOverlayKind.noOverlayPermission:
+          showGlassSnackBar(context, '预览失败：缺少悬浮窗权限');
+        case PreviewOverlayKind.channelFailed:
+        case PreviewOverlayKind.unsupported:
+          if (kDebugMode) {
+            await showPaymentOverlayDesktopPreview(context);
+          } else {
+            showGlassSnackBar(
+              context,
+              outcome.message ?? '预览失败：系统悬浮窗不可用',
+            );
+          }
+        case PreviewOverlayKind.failed:
+          showGlassSnackBar(context, outcome.message ?? '预览失败');
       }
     } catch (e) {
       if (mounted) {
@@ -885,9 +917,15 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
                         Icons.bug_report_outlined,
                         color: scheme.tertiary,
                       ),
-                      title: const Text('预览支付悬浮窗'),
-                      subtitle: const Text(
-                        '开发调试：构造假 pending，强制弹出与真支付相同的悬浮窗',
+                      title: Text(
+                        NotificationCaptureStub.supported
+                            ? '预览支付悬浮窗'
+                            : '预览悬浮窗界面（桌面）',
+                      ),
+                      subtitle: Text(
+                        NotificationCaptureStub.supported
+                            ? '开发调试：构造假 pending，强制弹出与真支付相同的悬浮窗'
+                            : '桌面为界面预览；真机 debug 为系统悬浮窗',
                       ),
                       trailing: const Icon(Icons.chevron_right),
                       onTap: _busy ? null : _previewPaymentOverlay,

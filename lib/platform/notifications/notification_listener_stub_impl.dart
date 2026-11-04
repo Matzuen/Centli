@@ -1,7 +1,9 @@
 import 'dropped_notification.dart';
+import 'preview_overlay_outcome.dart';
 import 'notification_parse.dart';
 
 export 'dropped_notification.dart';
+export 'preview_overlay_outcome.dart';
 
 /// Non-Android / web stub. Windows desktop keeps this path via conditional
 /// import so MethodChannel is never touched.
@@ -107,6 +109,9 @@ abstract final class NotificationCaptureStub {
   static Future<void> openOverlayPermissionSettings() async {}
 
   static Future<String?> previewPaymentOverlay() async => null;
+
+  static Future<PreviewOverlayOutcome> previewPaymentOverlayDetailed() async =>
+      PreviewOverlayOutcome.unsupported();
 
   static Future<List<DroppedNotification>> getDroppedNotifications() async =>
       const [];

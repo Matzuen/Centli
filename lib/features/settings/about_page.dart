@@ -7,6 +7,7 @@ import '../../core/app_version.dart';
 import '../../core/update_check.dart';
 import '../../core/widgets/glass.dart';
 import '../../platform/notifications/notification_listener_stub.dart';
+import 'payment_overlay_desktop_preview.dart';
 
 /// About hub: version, privacy policy, OSS licenses.
 /// Wireframe §8: 关于 — 版本、开源许可、隐私说明链接.
@@ -175,8 +176,16 @@ class _AboutPageState extends State<AboutPage> {
                 CentliSoftCard(
                   child: ListTile(
                     leading: const Icon(Icons.bug_report_outlined),
-                    title: const Text('预览支付悬浮窗'),
-                    subtitle: const Text('无需真支付，强制弹出调试悬浮窗'),
+                    title: Text(
+                      NotificationCaptureStub.supported
+                          ? '预览支付悬浮窗'
+                          : '预览悬浮窗界面（桌面）',
+                    ),
+                    subtitle: Text(
+                      NotificationCaptureStub.supported
+                          ? '无需真支付，强制弹出调试悬浮窗'
+                          : '桌面为界面预览；真机 debug 为系统悬浮窗',
+                    ),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: _previewPaymentOverlay,
                   ),
@@ -191,12 +200,44 @@ class _AboutPageState extends State<AboutPage> {
   }
 
   Future<void> _previewPaymentOverlay() async {
-    final id = await NotificationCaptureStub.previewPaymentOverlay();
+    // PC / 非 Android：Flutter 仿悬浮窗，方便调布局。
+    if (!NotificationCaptureStub.supported) {
+      if (!kDebugMode) {
+        showGlassSnackBar(context, '预览失败：仅 debug 包可用');
+        return;
+      }
+      await showPaymentOverlayDesktopPreview(context);
+      return;
+    }
+
+    final outcome =
+        await NotificationCaptureStub.previewPaymentOverlayDetailed();
     if (!mounted) return;
-    if (id == null) {
-      showGlassSnackBar(context, '预览失败：仅 debug 包可用，或缺少账本');
-    } else {
-      showGlassSnackBar(context, '已弹出调试悬浮窗');
+    switch (outcome.kind) {
+      case PreviewOverlayKind.shown:
+        showGlassSnackBar(context, '已弹出调试悬浮窗');
+      case PreviewOverlayKind.notDebug:
+        showGlassSnackBar(context, '预览失败：仅 debug 包可用');
+      case PreviewOverlayKind.noLedger:
+        showGlassSnackBar(context, '预览失败：缺少账本，请先创建账本');
+      case PreviewOverlayKind.noOverlayPermission:
+        showGlassSnackBar(context, '预览失败：缺少悬浮窗权限');
+      case PreviewOverlayKind.channelFailed:
+      case PreviewOverlayKind.unsupported:
+        // Android 上 channel 失败时兜底用 Flutter 仿窗。
+        if (kDebugMode) {
+          await showPaymentOverlayDesktopPreview(context);
+        } else {
+          showGlassSnackBar(
+            context,
+            outcome.message ?? '预览失败：系统悬浮窗不可用',
+          );
+        }
+      case PreviewOverlayKind.failed:
+        showGlassSnackBar(
+          context,
+          outcome.message ?? '预览失败',
+        );
     }
   }
 

@@ -5,9 +5,11 @@ import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:flutter/services.dart';
 
 import 'dropped_notification.dart';
+import 'preview_overlay_outcome.dart';
 import 'notification_parse.dart';
 
 export 'dropped_notification.dart';
+export 'preview_overlay_outcome.dart';
 
 /// IO platforms: real MethodChannel on Android; graceful no-op elsewhere
 /// (Windows / macOS / Linux / iOS).
@@ -463,14 +465,37 @@ abstract final class NotificationCaptureStub {
   /// Debug-only: force-show the payment overlay with a fake pending (Android).
   /// Returns the inserted pending id, or null if unavailable / release build.
   static Future<String?> previewPaymentOverlay() async {
-    if (!supported) return null;
+    final o = await previewPaymentOverlayDetailed();
+    return o.pendingId;
+  }
+
+  /// Same as [previewPaymentOverlay] but distinguishes failure reasons.
+  static Future<PreviewOverlayOutcome> previewPaymentOverlayDetailed() async {
+    if (!supported) {
+      return PreviewOverlayOutcome.unsupported();
+    }
     try {
       final v = await _channel.invokeMethod<String>('previewPaymentOverlay');
-      return v;
+      if (v == null || v.isEmpty) {
+        return PreviewOverlayOutcome.failed('无法预览悬浮窗');
+      }
+      return PreviewOverlayOutcome.shown(v);
     } on MissingPluginException {
-      return null;
-    } on PlatformException {
-      return null;
+      return PreviewOverlayOutcome.channelFailed();
+    } on PlatformException catch (e) {
+      final code = e.code;
+      if (code == 'denied' || code == 'not_debug') {
+        return PreviewOverlayOutcome.notDebug();
+      }
+      if (code == 'no_ledger') {
+        return PreviewOverlayOutcome.noLedger();
+      }
+      if (code == 'no_overlay_permission') {
+        return PreviewOverlayOutcome.noOverlayPermission();
+      }
+      return PreviewOverlayOutcome.failed(
+        e.message?.isNotEmpty == true ? e.message! : '预览失败（$code）',
+      );
     }
   }
 

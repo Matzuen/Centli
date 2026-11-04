@@ -28,6 +28,7 @@ class CentliBootReceiver : BroadcastReceiver() {
 
     companion object {
         private const val TAG = "CentliBootReceiver"
-        const val ACTION_WATCHDOG = "com.centli.centli.CAPTURE_WATCHDOG"
+        val ACTION_WATCHDOG: String
+            get() = "${BuildConfig.APPLICATION_ID}.CAPTURE_WATCHDOG"
     }
 }

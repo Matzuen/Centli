@@ -14,6 +14,10 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    buildFeatures {
+        buildConfig = true
+    }
+
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.centli.centli"
@@ -30,6 +34,13 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Side-by-side with release: com.centli.centli.debug
+            applicationIdSuffix = ".debug"
+            resValue("string", "app_name", "厘记 Debug")
+            resValue("string", "notification_listener_label", "厘记 Debug 账单监听")
+            resValue("string", "widget_title", "厘记 Debug")
+        }
         release {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.

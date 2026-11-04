@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Centli</string>
-    <string name="notification_listener_label">Centli 账单监听</string>
-    <string name="widget_title">Centli</string>
+    <string name="app_name">厘记</string>
+    <string name="notification_listener_label">厘记 账单监听</string>
+    <string name="widget_title">厘记</string>
     <string name="widget_description">今日支出与待确认概览</string>
     <string name="widget_expense_label">今日支出</string>
     <string name="widget_pending_label">待确认</string>

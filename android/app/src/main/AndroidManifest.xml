@@ -90,10 +90,10 @@
             android:name=".PendingActionReceiver"
             android:exported="false">
             <intent-filter>
-                <action android:name="com.centli.centli.action.CONFIRM" />
-                <action android:name="com.centli.centli.action.DETAIL" />
-                <action android:name="com.centli.centli.action.IGNORE" />
-                <action android:name="com.centli.centli.action.SET_AMOUNT" />
+                <action android:name="${applicationId}.action.CONFIRM" />
+                <action android:name="${applicationId}.action.DETAIL" />
+                <action android:name="${applicationId}.action.IGNORE" />
+                <action android:name="${applicationId}.action.SET_AMOUNT" />
             </intent-filter>
         </receiver>
         <!-- 后台复活：周期任务把通知监听的绑定补回来（无前台服务、无常驻通知） -->
@@ -111,7 +111,7 @@
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
                 <action android:name="android.intent.action.QUICKBOOT_POWERON" />
                 <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
-                <action android:name="com.centli.centli.CAPTURE_WATCHDOG" />
+                <action android:name="${applicationId}.CAPTURE_WATCHDOG" />
             </intent-filter>
         </receiver>
         <service

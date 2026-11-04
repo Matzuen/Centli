@@ -5,12 +5,12 @@
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
 
-    <!-- Debug-only: adb shell am start -n com.centli.centli/.MainActivity \
-         -a com.centli.centli.ACTION_PREVIEW_PAYMENT_OVERLAY -->
+    <!-- Debug-only: adb shell am start -n com.centli.centli.debug/.MainActivity \
+         -a com.centli.centli.debug.ACTION_PREVIEW_PAYMENT_OVERLAY -->
     <application>
         <activity android:name=".MainActivity">
             <intent-filter>
-                <action android:name="com.centli.centli.ACTION_PREVIEW_PAYMENT_OVERLAY" />
+                <action android:name="${applicationId}.ACTION_PREVIEW_PAYMENT_OVERLAY" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>

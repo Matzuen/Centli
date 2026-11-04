@@ -177,7 +177,7 @@ object PaymentOverlayManager {
      * used by real payment captures (bypasses foreground in-app path).
      *
      * adb (debug build):
-     *   adb shell am start -n com.centli.centli/.MainActivity -a com.centli.centli.ACTION_PREVIEW_PAYMENT_OVERLAY
+     *   adb shell am start -n com.centli.centli.debug/.MainActivity -a com.centli.centli.debug.ACTION_PREVIEW_PAYMENT_OVERLAY
      */
     fun previewDebugOverlay(context: Context): String? {
         if (!isDebuggable(context)) {
