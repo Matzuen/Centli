@@ -310,6 +310,131 @@ Future<String?> distillRecognitionRuleFromAi({
   return id;
 }
 
+/// Distill selectable keyword chips from a notification for「快速加入过滤」.
+///
+/// Prefers [matchedKeywords] / AI mustHint fragments, then Chinese runs from
+/// title+body that pass [isExcludeSafeFragment]. Never invents payment words.
+List<String> distillExcludeKeywordChips({
+  required String title,
+  String? body,
+  String? matchedKeywords,
+  int maxChips = 6,
+}) {
+  final out = <String>[];
+  final seen = <String>{};
+
+  void add(String? raw) {
+    final t = raw?.trim() ?? '';
+    if (t.isEmpty || t.length > 16) return;
+    if (!isExcludeSafeFragment(t)) return;
+    final key = normalizeDistillHint(t);
+    if (key.isEmpty || seen.contains(key)) return;
+    seen.add(key);
+    out.add(t);
+  }
+
+  final matched = matchedKeywords?.trim() ?? '';
+  if (matched.isNotEmpty) {
+    for (final part in matched.split(RegExp(r'[|、,，/\\]+'))) {
+      add(part);
+      if (out.length >= maxChips) return out;
+    }
+  }
+
+  // Whole title if specific enough (contact / scene name).
+  add(title);
+
+  final blob = '${title.trim()} ${(body ?? '').trim()}'.trim();
+  if (blob.isNotEmpty) {
+    // Longer Chinese runs first so「积分待领取」beats「积分」.
+    final runs = RegExp(r'[\u4e00-\u9fffA-Za-z0-9]{2,12}')
+        .allMatches(blob)
+        .map((m) => m.group(0)!)
+        .toList()
+      ..sort((a, b) => b.length.compareTo(a.length));
+    for (final run in runs) {
+      add(run);
+      if (out.length >= maxChips) break;
+    }
+  }
+
+  return out.length <= maxChips ? out : out.sublist(0, maxChips);
+}
+
+/// Persist a **user** exclude filter from confirmed keyword chips.
+///
+/// Fuses into the per-app distill exclude rule (`软件名-排除`) — same store as
+/// AI exclude distill. Does **not** touch official/builtin templates.
+Future<String?> upsertUserExcludeFilterFromKeywords({
+  required String pkg,
+  required List<String> keywords,
+  String? title,
+  String? body,
+}) async {
+  final p = pkg.trim();
+  if (p.isEmpty) return null;
+  final fragments = <String>[];
+  final seen = <String>{};
+  for (final k in keywords) {
+    final t = k.trim();
+    if (!isExcludeSafeFragment(t)) continue;
+    final key = normalizeDistillHint(t);
+    if (key.isEmpty || seen.contains(key)) continue;
+    seen.add(key);
+    fragments.add(t);
+  }
+  if (fragments.isEmpty) return null;
+
+  await NotiTemplateStore.load();
+  final users = NotiTemplateStore.peekUser();
+  final id = distilledExcludeRuleId(p);
+  final name = distilledExcludeRuleDisplayName(p);
+  final prev = findDistillExcludeRule(userRules: users, pkg: p);
+
+  final must = fuseMustPattern(
+    mustHint: fragments.first,
+    existingPattern: prev?.mustContainRegex,
+    sceneFragments: fragments.skip(1),
+    maxAlts: 64,
+  );
+
+  final raw = RawNotification(
+    pkg: p,
+    title: (title ?? '').trim().isEmpty ? fragments.first : title!.trim(),
+    text: body ?? '',
+    whenMs: DateTime.now().millisecondsSinceEpoch,
+  );
+  final matchOn = _pickMatchOn(must, raw);
+
+  if (prev != null &&
+      prev.mustContainRegex == must &&
+      prev.matchOn == matchOn) {
+    return id;
+  }
+
+  final template = NotiTemplate(
+    id: id,
+    name: name,
+    packages: [p],
+    defaultCurrency: 'CNY',
+    mustContainRegex: must,
+    amountRegex: prev?.amountRegex ?? kAmountRegex,
+    merchantFromTitle: false,
+    direction: 'out',
+    matchOn: matchOn,
+  );
+
+  try {
+    template.validateRegexes();
+  } catch (_) {
+    return prev != null ? id : null;
+  }
+
+  await NotiTemplateStore.upsertUserTemplate(template);
+  await NotiTemplateStore.ensureDistillMeta(id);
+  return id;
+}
+
 /// Fuse AI "not a payment" verdicts into **one** rule per app: `微信-排除`.
 ///
 /// 匹配片段只取**实际通知里足够具体**的文字（联系人名、群名、场景词），按

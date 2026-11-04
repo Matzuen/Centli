@@ -207,6 +207,328 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
     );
   }
 
+  bool _canWriteExcludeFilter(AiNotiTraceEvent e) {
+    switch (e.kind) {
+      case AiNotiTraceKinds.localDrop:
+      case AiNotiTraceKinds.nativeDrop:
+      case AiNotiTraceKinds.aiCalledExclude:
+      case AiNotiTraceKinds.reuseExclude:
+      case AiNotiTraceKinds.distillExclude:
+        return true;
+      default:
+        return e.destinationLabel == '已忽略' || e.destinationLabel == '被排除';
+    }
+  }
+
+  String _traceClock(int whenMs) {
+    if (whenMs <= 0) return '';
+    final d = DateTime.fromMillisecondsSinceEpoch(whenMs);
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${two(d.month)}-${two(d.day)} ${two(d.hour)}:${two(d.minute)}';
+  }
+
+  String _traceAmountLine(AiNotiTraceEvent e) {
+    final rec = e.recognition ?? '';
+    for (final line in rec.split('\n')) {
+      final t = line.trim();
+      if (t.startsWith('金额:')) {
+        final v = t.substring(3).trim();
+        if (v.isNotEmpty && v != '（未识别）') return v;
+      }
+    }
+    // Fallback: ¥ in title/body
+    final blob = e.originalNotification;
+    final m = RegExp(r'[¥￥]\s*[\d,.]+').firstMatch(blob);
+    if (m != null) return m.group(0)!;
+    return '金额未知';
+  }
+
+  Future<void> _showQuickAddFilterSheet(AiNotiTraceEvent e) async {
+    final scheme = Theme.of(context).colorScheme;
+    final initial = distillExcludeKeywordChips(
+      title: e.title,
+      body: e.body,
+      matchedKeywords: e.matchedKeywords,
+    );
+    // Ensure at least one confirmable chip when possible.
+    final chips = List<String>.from(initial);
+    if (chips.isEmpty) {
+      final fallback = e.title.trim();
+      if (fallback.length >= 2) chips.add(fallback);
+    }
+    if (chips.isEmpty) {
+      showGlassSnackBar(context, '这条通知没有可写入的关键词');
+      return;
+    }
+
+    final selected = {for (final c in chips) c};
+    final scopeAppOnly = ValueNotifier<bool>(true);
+    final result = await showGlassSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      useSafeArea: true,
+      builder: (ctx) {
+        return Padding(
+          padding: EdgeInsets.only(
+            left: CentliSpacing.pageH,
+            right: CentliSpacing.pageH,
+            top: CentliSpacing.item,
+            bottom: MediaQuery.viewInsetsOf(ctx).bottom + CentliSpacing.pageBottom,
+          ),
+          child: StatefulBuilder(
+            builder: (ctx, setLocal) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    '快速加入过滤',
+                    style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                  const SizedBox(height: CentliSpacing.item),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final c in chips)
+                        FilterChip(
+                          label: Text(c),
+                          selected: selected.contains(c),
+                          onSelected: (v) {
+                            setLocal(() {
+                              if (v) {
+                                selected.add(c);
+                              } else {
+                                selected.remove(c);
+                              }
+                            });
+                          },
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: CentliSpacing.item),
+                  Text(
+                    '之后同类通知将自动忽略',
+                    style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                  ),
+                  const SizedBox(height: CentliSpacing.section),
+                  ValueListenableBuilder<bool>(
+                    valueListenable: scopeAppOnly,
+                    builder: (ctx, onlyApp, _) {
+                      return InkWell(
+                        onTap: () => scopeAppOnly.value = !onlyApp,
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: scheme.outlineVariant,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                onlyApp
+                                    ? Icons.radio_button_checked
+                                    : Icons.radio_button_off,
+                                size: 20,
+                                color: onlyApp
+                                    ? scheme.primary
+                                    : scheme.onSurfaceVariant,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  '仅${_pkgLabel(e.pkg)}',
+                                  style: Theme.of(ctx).textTheme.bodyMedium,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: CentliSpacing.section),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          child: const Text('取消'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: selected.isEmpty
+                              ? null
+                              : () => Navigator.pop(ctx, true),
+                          child: const Text('加入过滤'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              );
+            },
+          ),
+        );
+      },
+    );
+    scopeAppOnly.dispose();
+    if (result != true || !mounted) return;
+    if (selected.isEmpty) return;
+
+    setState(() => _busy = true);
+    try {
+      final id = await upsertUserExcludeFilterFromKeywords(
+        pkg: e.pkg,
+        keywords: selected.toList(),
+        title: e.title,
+        body: e.body,
+      );
+      if (!mounted) return;
+      if (id == null) {
+        showGlassSnackBar(context, '未能写入过滤（关键词可能不安全）');
+        return;
+      }
+      await AiNotiTrace.record(
+        pkg: e.pkg,
+        title: e.title,
+        body: e.body,
+        kind: AiNotiTraceKinds.distillExclude,
+        ruleName: distilledExcludeRuleDisplayName(e.pkg),
+        matchedKeywords: selected.join('|'),
+        detail: '手动一键写入过滤',
+        recognition: e.recognition,
+      );
+      await _reload();
+      if (!mounted) return;
+      showGlassSnackBar(
+        context,
+        '已加入「${distilledExcludeRuleDisplayName(e.pkg)}」过滤',
+      );
+    } catch (err) {
+      if (!mounted) return;
+      showGlassSnackBar(context, '写入失败: $err');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Widget _recentTraceCard(AiNotiTraceEvent e, ColorScheme scheme) {
+    final canFilter = _canWriteExcludeFilter(e);
+    final time = _traceClock(e.atMs);
+    final amount = _traceAmountLine(e);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+      child: Material(
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: () => _showAiTraceDetail(e),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        [
+                          if (time.isNotEmpty) time,
+                          _pkgLabel(e.pkg),
+                        ].join(' · '),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                              color: scheme.onSurfaceVariant,
+                            ),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: scheme.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        e.destinationLabel,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                              color: scheme.onSurfaceVariant,
+                            ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  amount,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  e.titleShort,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                        height: 1.35,
+                      ),
+                ),
+                if (e.matchedKeywords != null &&
+                    e.matchedKeywords!.trim().isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    '关键词 ${e.matchedKeywords}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: scheme.primary,
+                        ),
+                  ),
+                ],
+                if (canFilter) ...[
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: scheme.primary,
+                        side: BorderSide(color: scheme.primary),
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                      ),
+                      onPressed: _busy ? null : () => _showQuickAddFilterSheet(e),
+                      child: const Text('写入过滤'),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _userRuleTile(NotiTemplate t, ColorScheme scheme) {
     return CentliSoftCard(
       child: ListTile(
@@ -896,6 +1218,17 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
       appBar: AppBar(
         title: const Text('识别规则'),
         actions: [
+          IconButton(
+            tooltip: '添加规则',
+            icon: const Icon(Icons.add),
+            onPressed: _busy
+                ? null
+                : () async {
+                    final changed =
+                        await context.push<bool>('/me/auto/rules/edit');
+                    if (changed == true) await _reload();
+                  },
+          ),
           CentliGlassPopupButton<String>(
             tooltip: '更多',
             maxWidth: 260,
@@ -920,17 +1253,6 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
               ),
               CentliMenuItem(value: 'rollback_official', label: '恢复内置规则'),
             ],
-          ),
-          IconButton(
-            tooltip: '添加规则',
-            icon: const Icon(Icons.add),
-            onPressed: _busy
-                ? null
-                : () async {
-                    final changed =
-                        await context.push<bool>('/me/auto/rules/edit');
-                    if (changed == true) await _reload();
-                  },
           ),
         ],
       ),
@@ -1038,7 +1360,7 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
                 const SizedBox(height: CentliSpacing.dense),
                 Text(
                   '本地规则与 AI 识别的最近最多 50 条决策。'
-                  '点某条可看匹配关键词、去向（待确认 / 排除等），以及原通知与识别详情。',
+                  '已忽略 / 被排除条目可「写入过滤」；点卡片可看匹配关键词与识别详情。',
                   style: Theme.of(context).textTheme.bodySmall
                       ?.copyWith(color: scheme.onSurfaceVariant),
                 ),
@@ -1073,61 +1395,13 @@ class _RecognitionRulesPageState extends State<RecognitionRulesPage> {
                         )
                       else
                         SizedBox(
-                          height: 168,
+                          height: 320,
                           child: ListView.builder(
-                            padding: EdgeInsets.zero,
+                            padding: const EdgeInsets.only(bottom: 4),
                             itemCount: _aiTrace.take(50).length,
                             itemBuilder: (context, i) {
                               final e = _aiTrace[i];
-                              return ListTile(
-                                dense: true,
-                                leading: Icon(
-                                  e.kind.contains('distill')
-                                      ? Icons.auto_awesome
-                                      : e.kind.contains('exclude')
-                                          ? Icons.block_outlined
-                                          : e.kind.contains('local') ||
-                                                  e.kind.contains('reuse')
-                                              ? Icons.rule_outlined
-                                              : Icons.smart_toy_outlined,
-                                  size: 20,
-                                  color: scheme.primary,
-                                ),
-                                title: Text(
-                                  e.kindLabel,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                subtitle: Text(
-                                  [
-                                    e.destinationLabel,
-                                    _pkgLabel(e.pkg),
-                                    e.titleShort,
-                                    if (e.matchedKeywords != null &&
-                                        e.matchedKeywords!.trim().isNotEmpty)
-                                      '关键词 ${e.matchedKeywords}',
-                                    if (e.recognition != null &&
-                                        e.recognition!.contains('金额:'))
-                                      e.recognition!
-                                          .split('\n')
-                                          .firstWhere(
-                                            (l) => l.startsWith('金额:'),
-                                            orElse: () => '',
-                                          ),
-                                    if (e.ruleName != null &&
-                                        e.ruleName!.isNotEmpty)
-                                      e.ruleName!,
-                                    _relTrace(e.atMs),
-                                  ].where((s) => s.isNotEmpty).join(' · '),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                trailing: Icon(
-                                  Icons.chevron_right,
-                                  color: scheme.onSurfaceVariant,
-                                ),
-                                onTap: () => _showAiTraceDetail(e),
-                              );
+                              return _recentTraceCard(e, scheme);
                             },
                           ),
                         ),

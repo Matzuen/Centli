@@ -782,7 +782,8 @@ class _CentliTrendChartState extends State<CentliTrendChart> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Flexible(
+              // Expanded 吃满标题侧，trailing（饼图圆形图标）贴标题行最右。
+              Expanded(
                 child: Text(
                   widget.title,
                   maxLines: 1,
@@ -792,7 +793,6 @@ class _CentliTrendChartState extends State<CentliTrendChart> {
                   ),
                 ),
               ),
-              const Spacer(),
               if (widget.trailing != null) ...[
                 const SizedBox(width: CentliSpacing.dense),
                 widget.trailing!,
