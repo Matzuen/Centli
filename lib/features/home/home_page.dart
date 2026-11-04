@@ -25,6 +25,7 @@ import '../../platform/notifications/notification_listener_stub.dart';
 import '../../platform/notifications/notification_parse.dart';
 import '../../platform/notifications/noti_template_store.dart';
 import '../pending/pending_confirm_sheet.dart';
+import '../pending/quick_exclude_filter.dart';
 import '../../core/widgets/glass.dart';
 
 /// 首页轮播：只收「解析成功、可直接确认」的待入账。
@@ -2162,6 +2163,13 @@ class _HomePendingSectionState extends ConsumerState<_HomePendingSection> {
     try {
       await ref.read(databaseProvider).ignorePendingCapture(c.id);
       await NotificationCaptureStub.cancelPendingConfirm(c.id);
+      if (!mounted) return;
+      offerQuickExcludeFilterAfterIgnore(
+        context,
+        pkg: c.sourcePkg,
+        title: c.rawTitle,
+        body: c.rawText,
+      );
     } finally {
       if (mounted) setState(() => _busyId = null);
     }

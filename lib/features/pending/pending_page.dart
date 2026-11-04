@@ -20,6 +20,7 @@ import '../capture/capture_intake_actions.dart';
 import '../ledger/account_picker_sheet.dart';
 import '../ledger/category_picker_sheet.dart';
 import 'pending_confirm_sheet.dart';
+import 'quick_exclude_filter.dart';
 
 
 /// Badge label for pending capture cards. Status takes priority over parseOk.
@@ -932,6 +933,13 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
     try {
       await ref.read(databaseProvider).ignorePendingCapture(c.id);
       await NotificationCaptureStub.cancelPendingConfirm(c.id);
+      if (!mounted) return;
+      offerQuickExcludeFilterAfterIgnore(
+        context,
+        pkg: c.sourcePkg,
+        title: c.rawTitle,
+        body: c.rawText,
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
