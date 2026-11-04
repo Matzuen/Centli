@@ -711,7 +711,6 @@ class CentliSoftCard extends StatelessWidget {
     this.color,
     this.clipBehavior = Clip.antiAlias,
     this.glass = true,
-    this.shadow = true,
   });
 
   final Widget child;
@@ -726,9 +725,6 @@ class CentliSoftCard extends StatelessWidget {
 
   /// 关掉毛玻璃（例如需要完全实色、或嵌在另一个玻璃层里避免重复模糊）。
   final bool glass;
-
-  /// 玻璃投影；流水日组等嵌在渐变上的面板关掉，避免整块「浮」得太实。
-  final bool shadow;
 
   @override
   Widget build(BuildContext context) {
@@ -768,7 +764,6 @@ class CentliSoftCard extends StatelessWidget {
       tint: color,
       // 卡片背后只有平滑渐变，不开模糊；弹窗 / sheet 仍走真毛玻璃。
       blur: false,
-      shadow: shadow,
       borderColor: CentliTheme.glassCardBorder(context, dark: dark),
       borderWidth: CentliTheme.glassCardBorderWidth,
       child: content,

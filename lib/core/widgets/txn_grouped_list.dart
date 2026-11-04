@@ -208,15 +208,11 @@ class _TxnDateGroup extends StatelessWidget {
             ),
           ),
         ),
-        // 半透玻璃日组：无投影、略淡雾面，与浅色亚克力融合；行界靠细分隔。
-        // 金额色（含转账蓝）不动。
+        // 半透玻璃日组卡片：避免不透明 surface 整块压在亚克力/渐变上显得突兀；
+        // 日组间距 + 行内细分隔仍保留清晰分界。金额色（含转账蓝）不变。
         CentliSoftCard(
           padding: EdgeInsets.zero,
           margin: const EdgeInsets.fromLTRB(12, 0, 12, 4),
-          shadow: false,
-          color: Theme.of(context).brightness == Brightness.dark
-              ? const Color(0xFF1B1F24).withValues(alpha: 0.12)
-              : Colors.white.withValues(alpha: 0.14),
           child: Column(
             children: [
               for (var i = 0; i < items.length; i++)

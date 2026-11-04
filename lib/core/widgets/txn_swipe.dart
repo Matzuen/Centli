@@ -205,16 +205,7 @@ class TxnSwipeHostState extends State<TxnSwipeHost>
               offset: Offset(_offset, 0),
               child: Stack(
                 children: [
-                  Material(
-                    // 静止时透明，露出日组 SoftCard 亚克力；滑开时用半透雾面盖住背后操作钮。
-                    // 勿用实心 scheme.surface，否则整条行底压死浅色渐变。
-                    color: open
-                        ? (Theme.of(context).brightness == Brightness.dark
-                            ? const Color(0xFF1B1F24).withValues(alpha: 0.88)
-                            : Colors.white.withValues(alpha: 0.88))
-                        : Colors.transparent,
-                    child: widget.child,
-                  ),
+                  Material(color: scheme.surface, child: widget.child),
                   if (open)
                     Positioned.fill(
                       child: GestureDetector(
