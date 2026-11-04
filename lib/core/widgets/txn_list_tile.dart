@@ -94,7 +94,11 @@ class TxnListTile extends ConsumerWidget {
             thickness: 0.5,
             indent: 72,
             endIndent: 16,
-            color: Theme.of(context).colorScheme.outlineVariant,
+            // 更淡：雾面日组上仍能看出行界，不划死硬线。
+            color: Theme.of(context)
+                .colorScheme
+                .outlineVariant
+                .withValues(alpha: 0.28),
           ),
         TxnSwipeHost(
           enabled: !selecting,
