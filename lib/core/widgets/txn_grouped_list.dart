@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/theme.dart';
+
 import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
 import 'txn_list_tile.dart';
@@ -206,8 +208,11 @@ class _TxnDateGroup extends StatelessWidget {
             ),
           ),
         ),
-        Material(
-          color: scheme.surface,
+        // 半透玻璃日组卡片：避免不透明 surface 整块压在亚克力/渐变上显得突兀；
+        // 日组间距 + 行内细分隔仍保留清晰分界。金额色（含转账蓝）不变。
+        CentliSoftCard(
+          padding: EdgeInsets.zero,
+          margin: const EdgeInsets.fromLTRB(12, 0, 12, 4),
           child: Column(
             children: [
               for (var i = 0; i < items.length; i++)
