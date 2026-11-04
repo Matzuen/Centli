@@ -94,11 +94,11 @@ class TxnListTile extends ConsumerWidget {
             thickness: 0.5,
             indent: 72,
             endIndent: 16,
-            // 略淡：日组玻璃底上仍可见分界，又不抢对比度。
+            // 更淡：亚克力日组上仍能看出行界，不划死硬线。
             color: Theme.of(context)
                 .colorScheme
                 .outlineVariant
-                .withValues(alpha: 0.55),
+                .withValues(alpha: 0.32),
           ),
         TxnSwipeHost(
           enabled: !selecting,

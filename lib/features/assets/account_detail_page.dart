@@ -278,8 +278,13 @@ class _AccountDetailBody extends ConsumerWidget {
                             ),
                       ),
                     ),
-                    Material(
-                      color: scheme.surface,
+                    CentliSoftCard(
+                      padding: EdgeInsets.zero,
+                      margin: const EdgeInsets.fromLTRB(0, 0, 0, 4),
+                      shadow: false,
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? const Color(0xFF1B1F24).withValues(alpha: 0.12)
+                          : Colors.white.withValues(alpha: 0.14),
                       child: Column(
                         children: [
                           for (var i = 0; i < groups[gi].items.length; i++)
@@ -353,12 +358,15 @@ class _AccountTxnTile extends ConsumerWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         if (showSeparator)
-          const Divider(
+          Divider(
             height: 1,
             thickness: 0.5,
             indent: 72,
             endIndent: 16,
-            color: Color(0xFFEEEEEE),
+            color: Theme.of(context)
+                .colorScheme
+                .outlineVariant
+                .withValues(alpha: 0.32),
           ),
         InkWell(
           onTap: () => context.push('/ledger/${txn.id}'),
