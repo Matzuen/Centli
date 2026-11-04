@@ -16,6 +16,8 @@ android {
 
     buildFeatures {
         buildConfig = true
+        // AGP 9+: resValue()/resValues in buildTypes require explicit opt-in
+        resValues = true
     }
 
     defaultConfig {
