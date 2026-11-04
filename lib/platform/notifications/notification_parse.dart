@@ -341,7 +341,7 @@ List<NotiTemplate> builtinNotiTemplates() => const [
         packages: ['com.eg.android.AlipayGphone'],
         mustContainRegex: kTitleCaptureWords,
         excludeTextRegex:
-            r'验证码|登录|服务通知|生活号|待还|应还|请于|即将到期|还款提醒|账单提醒|账单日|还款日',
+            r'验证码|登录|服务通知|生活号|待还|应还|请于|即将到期|还款提醒|账单提醒|账单日|还款日|会员积分|积分待领取|兑换权益|出行进阶卡|出行券|开通出行|退款规则|退款路径|城乡居民医保|医保缴费开始',
         amountRegex: kAmountRegex,
         merchantRegex: r'(?:向|给|商户|来自|从)\s*(.+?)(?:\s|$)',
         defaultAccountHint: 'alipay',

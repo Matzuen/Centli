@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'dart:io';
 
 import 'package:centli/platform/notifications/notification_parse.dart';
@@ -54,6 +54,14 @@ void main() {
       '普通聊天': '我在忙，晚点回你',
       '拍一拍': '张三 拍了拍我',
     };
+    // Alipay marketing / PSA noise from「最近处理」已忽略样例（仅测支付宝标题门控）。
+    final alipayNoise = <String, String>{
+      '会员积分': '49个支付宝会员积分待领取',
+      '出行卡推销': '【支付宝出行】4.9元开通出行进阶卡',
+      '花呗退款规则': '花呗退款规则详解',
+      '医保缴费广告': '湖南省城乡居民医保缴费开始',
+      '退款路径说明': '花呗还款后退款路径官方说明',
+    };
 
     excluded.forEach((label, text) {
       test(label, () {
@@ -64,12 +72,21 @@ void main() {
         expect(wechatR.templateId, isNull, reason: 'wechat: $text');
       });
     });
+
+    alipayNoise.forEach((label, title) {
+      test('支付宝噪声 · $label', () {
+        final r = parseNotification(
+          raw(alipay, '正文可含金额 ¥4.90 或说明', title: title),
+        );
+        expect(r.templateId, isNull, reason: title);
+      });
+    });
   });
 
-  test('assets/noti_templates.json mirrors the builtin rules (v11)', () async {
+  test('assets/noti_templates.json mirrors the builtin rules (v12)', () async {
     final rawJson = await File('assets/noti_templates.json').readAsString();
     final map = jsonDecode(rawJson) as Map<String, dynamic>;
-    expect(map['version'], 11);
+    expect(map['version'], 12);
     final list = (map['templates'] as List).cast<Map<String, dynamic>>();
     final assets = {
       for (final item in list) item['id'] as String: NotiTemplate.fromJson(item),

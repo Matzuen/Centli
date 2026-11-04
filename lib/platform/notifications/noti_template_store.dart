@@ -1113,7 +1113,7 @@ class TemplateUpdateResult {
 }
 
 /// Keep in sync with assets/noti_templates.json `version`.
-const int kNotiTemplateFallbackVersion = 11;
+const int kNotiTemplateFallbackVersion = 12;
 
 class JoinWatchResult {
   const JoinWatchResult({
