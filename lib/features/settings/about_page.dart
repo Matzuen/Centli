@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -5,6 +6,7 @@ import '../../app/theme.dart';
 import '../../core/app_version.dart';
 import '../../core/update_check.dart';
 import '../../core/widgets/glass.dart';
+import '../../platform/notifications/notification_listener_stub.dart';
 
 /// About hub: version, privacy policy, OSS licenses.
 /// Wireframe §8: 关于 — 版本、开源许可、隐私说明链接.
@@ -153,12 +155,49 @@ class _AboutPageState extends State<AboutPage> {
                   ],
                 ),
               ),
+              if (kDebugMode) ...[
+                const SizedBox(height: CentliSpacing.section),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    4,
+                    0,
+                    4,
+                    CentliSpacing.dense,
+                  ),
+                  child: Text(
+                    '开发者',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      color: theme.colorScheme.primary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                CentliSoftCard(
+                  child: ListTile(
+                    leading: const Icon(Icons.bug_report_outlined),
+                    title: const Text('预览支付悬浮窗'),
+                    subtitle: const Text('无需真支付，强制弹出调试悬浮窗'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: _previewPaymentOverlay,
+                  ),
+                ),
+              ],
               const SizedBox(height: CentliSpacing.section),
             ],
           );
         },
       ),
     );
+  }
+
+  Future<void> _previewPaymentOverlay() async {
+    final id = await NotificationCaptureStub.previewPaymentOverlay();
+    if (!mounted) return;
+    if (id == null) {
+      showGlassSnackBar(context, '预览失败：仅 debug 包可用，或缺少账本');
+    } else {
+      showGlassSnackBar(context, '已弹出调试悬浮窗');
+    }
   }
 
   Future<void> _onCheckUpdate() async {

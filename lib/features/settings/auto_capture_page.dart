@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -244,6 +245,27 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
       setState(() => _postNotificationsGranted = ok);
       if (!ok) {
         showGlassSnackBar(context, '请在系统设置中允许 Centli 发送通知');
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _previewPaymentOverlay() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final id = await NotificationCaptureStub.previewPaymentOverlay();
+      if (!mounted) return;
+      if (id == null) {
+        showGlassSnackBar(context, '预览失败：仅 debug 包可用，或缺少账本/悬浮窗权限');
+      } else {
+        showGlassSnackBar(context, '已弹出调试悬浮窗');
+        await _reload(soft: true);
+      }
+    } catch (e) {
+      if (mounted) {
+        showGlassSnackBar(context, '预览失败：$e');
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -855,6 +877,23 @@ class _AutoCapturePageState extends ConsumerState<AutoCapturePage>
                                 )),
                   ),
                 ),
+                if (kDebugMode) ...[
+                  const SizedBox(height: CentliSpacing.dense),
+                  CentliSoftCard(
+                    child: ListTile(
+                      leading: Icon(
+                        Icons.bug_report_outlined,
+                        color: scheme.tertiary,
+                      ),
+                      title: const Text('预览支付悬浮窗'),
+                      subtitle: const Text(
+                        '开发调试：构造假 pending，强制弹出与真支付相同的悬浮窗',
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: _busy ? null : _previewPaymentOverlay,
+                    ),
+                  ),
+                ],
                 const SizedBox(height: CentliSpacing.section),
                 CentliSoftCard(
                   child: ListTile(

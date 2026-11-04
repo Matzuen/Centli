@@ -150,6 +150,23 @@ class MainActivity : FlutterFragmentActivity() {
                         result.error("open_failed", e.message, null)
                     }
                 }
+                "previewPaymentOverlay" -> {
+                    // Debug APK only — release / non-debuggable builds are rejected.
+                    if (!PaymentOverlayManager.isDebuggable(this)) {
+                        result.error("denied", "debug only", null)
+                        return@setMethodCallHandler
+                    }
+                    try {
+                        val id = PaymentOverlayManager.previewDebugOverlay(this)
+                        if (id == null) {
+                            result.error("preview_failed", "无法构造调试 pending", null)
+                        } else {
+                            result.success(id)
+                        }
+                    } catch (e: Exception) {
+                        result.error("preview_failed", e.message, null)
+                    }
+                }
                 "cancelPendingConfirm" -> {
                     @Suppress("UNCHECKED_CAST")
                     val args = call.arguments as? Map<String, Any?> ?: emptyMap()
@@ -228,6 +245,7 @@ class MainActivity : FlutterFragmentActivity() {
         mainHandler.post {
             deliverOpenRoute(intent)
             deliverPendingIntake(intent)
+            maybePreviewPaymentOverlay(intent)
             if (isNotificationAccessGranted() &&
                 CentliNotificationListener.isAutoCaptureEnabled(this)
             ) {
@@ -283,6 +301,7 @@ class MainActivity : FlutterFragmentActivity() {
         setIntent(intent)
         deliverOpenRoute(intent)
         deliverPendingIntake(intent)
+        maybePreviewPaymentOverlay(intent)
     }
 
     override fun onDestroy() {
@@ -570,8 +589,24 @@ class MainActivity : FlutterFragmentActivity() {
         }
     }
 
+
+    /** Debug intent: com.centli.centli.ACTION_PREVIEW_PAYMENT_OVERLAY (debug manifest). */
+    private fun maybePreviewPaymentOverlay(intent: Intent?) {
+        if (intent?.action != ACTION_PREVIEW_PAYMENT_OVERLAY) return
+        if (!PaymentOverlayManager.isDebuggable(this)) {
+            Log.w("CentliMain", "preview overlay intent ignored: not debuggable")
+            return
+        }
+        mainHandler.post {
+            val id = PaymentOverlayManager.previewDebugOverlay(this)
+            Log.i("CentliMain", "previewPaymentOverlay via intent id=$id")
+        }
+    }
+
     companion object {
         const val CHANNEL_NAME = "centli/notification_capture"
+        const val ACTION_PREVIEW_PAYMENT_OVERLAY =
+            "com.centli.centli.ACTION_PREVIEW_PAYMENT_OVERLAY"
         private const val REQ_POST_NOTIFICATIONS = 4201
 
         @Volatile

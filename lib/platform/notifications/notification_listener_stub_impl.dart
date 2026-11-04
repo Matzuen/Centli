@@ -106,6 +106,8 @@ abstract final class NotificationCaptureStub {
 
   static Future<void> openOverlayPermissionSettings() async {}
 
+  static Future<String?> previewPaymentOverlay() async => null;
+
   static Future<List<DroppedNotification>> getDroppedNotifications() async =>
       const [];
 

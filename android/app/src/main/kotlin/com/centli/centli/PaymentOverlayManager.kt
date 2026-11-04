@@ -92,6 +92,11 @@ object PaymentOverlayManager {
     private var allLedgers: List<Pair<String, String>> = emptyList()
     /** null = showing root (L1); non-null = showing children of this parent (L2). */
     private var browsingParentId: String? = null
+    /** Category / account grids stay collapsed until the summary row is tapped. */
+    private var categoriesExpanded: Boolean = false
+    private var accountsExpanded: Boolean = false
+    private var toAccountsExpanded: Boolean = false
+    private var overlaySourceLabel: String = ""
     private val categoryViews = mutableListOf<Pair<TextView, Category>>()
     private val accountViews = mutableListOf<Pair<TextView, Account>>()
     private val toAccountViews = mutableListOf<Pair<TextView, Account>>()
@@ -160,6 +165,87 @@ object PaymentOverlayManager {
     fun setEnabled(context: Context, enabled: Boolean) {
         prefs(context).edit().putBoolean(KEY_ENABLED, enabled).apply()
         if (!enabled) dismiss()
+    }
+
+    /** Debug / preview only: true when the installed APK is debuggable. */
+    fun isDebuggable(context: Context): Boolean {
+        return (context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+    }
+
+    /**
+     * Debug-only: insert a fake pending row and force-show the same WM/Activity overlay
+     * used by real payment captures (bypasses foreground in-app path).
+     *
+     * adb (debug build):
+     *   adb shell am start -n com.centli.centli/.MainActivity -a com.centli.centli.ACTION_PREVIEW_PAYMENT_OVERLAY
+     */
+    fun previewDebugOverlay(context: Context): String? {
+        if (!isDebuggable(context)) {
+            Log.w(TAG, "previewDebugOverlay blocked: not debuggable")
+            return null
+        }
+        val app = context.applicationContext
+        val pendingId = insertDebugPending(app) ?: run {
+            Log.e(TAG, "previewDebugOverlay: failed to insert fake pending")
+            return null
+        }
+        // Ensure toggle on so showPending path is consistent for subsequent real captures.
+        if (!isEnabled(app)) {
+            setEnabled(app, true)
+        }
+        showPending(
+            app,
+            pendingId = pendingId,
+            amountMinor = 1280,
+            currency = "CNY",
+            sourcePkg = "com.tencent.mm",
+            merchant = "调试预览 · 咖啡",
+            direction = "out",
+            forceOverlay = true,
+        )
+        MainActivity.notifyPendingDbChanged()
+        return pendingId
+    }
+
+    private fun insertDebugPending(context: Context): String? {
+        val db = openDb(context) ?: return null
+        return try {
+            val ledgerId = querySetting(db, "current_ledger_id")
+                ?: db.rawQuery(
+                    "SELECT id FROM ledgers WHERE archived=0 ORDER BY created_at ASC LIMIT 1",
+                    null,
+                ).use { c -> if (c.moveToFirst()) c.getString(0) else null }
+            if (ledgerId.isNullOrBlank()) {
+                Log.e(TAG, "insertDebugPending: no ledger")
+                return null
+            }
+            val id = "debug-overlay-" + UUID.randomUUID().toString()
+            val now = System.currentTimeMillis()
+            val dedupe = "debug-overlay-$now"
+            db.execSQL(
+                """
+                INSERT INTO pending_captures(
+                  id, ledger_id, source_pkg, raw_title, raw_text,
+                  amount_minor, currency, note, happen_at,
+                  suggested_category_id, suggested_account_id,
+                  status, dedupe_key, parse_ok, direction,
+                  created_at, updated_at
+                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                """.trimIndent(),
+                arrayOf<Any?>(
+                    id, ledgerId, "com.tencent.mm", "微信支付", "调试预览支出 ¥12.80",
+                    1280, "CNY", "调试预览 · 咖啡", now,
+                    null, null, "pending", dedupe,
+                    1, "out", now, now,
+                ),
+            )
+            id
+        } catch (e: Exception) {
+            Log.e(TAG, "insertDebugPending", e)
+            null
+        } finally {
+            try { db.close() } catch (_: Exception) {}
+        }
     }
 
     /**
@@ -357,12 +443,13 @@ object PaymentOverlayManager {
         sourcePkg: String,
         merchant: String?,
         direction: String?,
+        forceOverlay: Boolean = false,
     ) {
-        if (!isEnabled(context)) {
+        if (!forceOverlay && !isEnabled(context)) {
             Log.i(TAG, "overlay disabled by user; skip")
             return
         }
-        if (isAppLockEnabled(context)) {
+        if (!forceOverlay && isAppLockEnabled(context)) {
             Log.i(TAG, "app_lock on; skip overlay (use in-app confirm)")
             return
         }
@@ -408,8 +495,8 @@ object PaymentOverlayManager {
                 return@post
             }
 
-            // App 前台：优先应用内确认，不盖系统浮层。
-            if (MainActivity.isAppInForeground()) {
+            // App 前台：优先应用内确认，不盖系统浮层（调试预览 forceOverlay 例外）。
+            if (!forceOverlay && MainActivity.isAppInForeground()) {
                 Log.i(TAG, "app foreground → in-app review id=$pendingId")
                 MainActivity.requestInAppPendingReview(pendingId)
                 return@post
@@ -797,10 +884,28 @@ object PaymentOverlayManager {
         categoryViews.clear()
         accountViews.clear()
         toAccountViews.clear()
+        categoriesExpanded = false
+        accountsExpanded = false
+        toAccountsExpanded = false
+        overlaySourceLabel = sourceLabel
 
         view.findViewById<TextView>(R.id.tv_title).text = "记账本"
 
         val m = merchant?.trim().orEmpty()
+
+        val metaTv = view.findViewById<TextView>(R.id.tv_source_meta)
+        val metaParts = mutableListOf<String>()
+        if (sourceLabel.isNotBlank()) metaParts.add(sourceLabel)
+        // Best-effort clock stamp so meta is not empty when source is generic.
+        val nowLabel = java.text.SimpleDateFormat("HH:mm", Locale.getDefault())
+            .format(java.util.Date())
+        metaParts.add(nowLabel)
+        if (metaParts.isEmpty()) {
+            metaTv.visibility = View.GONE
+        } else {
+            metaTv.visibility = View.VISIBLE
+            metaTv.text = metaParts.joinToString(" · ")
+        }
 
         val amountEt = view.findViewById<EditText>(R.id.et_amount)
         if (amountMajor != null) {
@@ -843,8 +948,11 @@ object PaymentOverlayManager {
             if (selectedDirection == dir) return
             selectedDirection = dir
             paintDirection()
-            clearCategorySelection(confirmBtn)
+            clearCategorySelection(confirmBtn, view)
             browsingParentId = null
+            categoriesExpanded = false
+            accountsExpanded = false
+            toAccountsExpanded = false
             if (dir != "transfer") {
                 selectedToAccountId = null
                 selectedToAccountName = null
@@ -857,9 +965,23 @@ object PaymentOverlayManager {
         btnIn.setOnClickListener { onDirectionPicked("in") }
         btnTransfer.setOnClickListener { onDirectionPicked("transfer") }
 
+        view.findViewById<View>(R.id.row_category_summary).setOnClickListener {
+            setCategoriesExpanded(view, !categoriesExpanded)
+        }
+        view.findViewById<View>(R.id.row_account_summary).setOnClickListener {
+            setAccountsExpanded(view, !accountsExpanded)
+        }
+        view.findViewById<View>(R.id.row_to_account_summary).setOnClickListener {
+            setToAccountsExpanded(view, !toAccountsExpanded)
+        }
+        applyPanelVisibility(view)
+        refreshCategorySummary(view)
+        refreshAccountSummary(view)
+        refreshToAccountSummary(view)
+
         view.findViewById<TextView>(R.id.btn_cat_back).setOnClickListener {
             browsingParentId = null
-            clearCategorySelection(confirmBtn)
+            clearCategorySelection(confirmBtn, view)
             renderCategoryLevel(context, view, confirmBtn)
         }
 
@@ -970,6 +1092,76 @@ object PaymentOverlayManager {
         loadAccounts(context, view, confirmBtn, pendingId)
     }
 
+
+    private fun applyPanelVisibility(root: View) {
+        root.findViewById<View>(R.id.panel_categories).visibility =
+            if (categoriesExpanded) View.VISIBLE else View.GONE
+        root.findViewById<View>(R.id.panel_accounts).visibility =
+            if (accountsExpanded) View.VISIBLE else View.GONE
+        val transfer = selectedDirection == "transfer"
+        root.findViewById<View>(R.id.row_to_account_summary).visibility =
+            if (transfer) View.VISIBLE else View.GONE
+        root.findViewById<View>(R.id.panel_to_accounts).visibility =
+            if (transfer && toAccountsExpanded) View.VISIBLE else View.GONE
+        // Keep inner to-account widgets visible when panel is shown.
+        if (transfer) {
+            root.findViewById<View>(R.id.tv_to_account_level).visibility = View.VISIBLE
+            root.findViewById<View>(R.id.scroll_to_accounts).visibility = View.VISIBLE
+        }
+        val catChevron = root.findViewById<TextView>(R.id.tv_category_summary_chevron)
+        if (catChevron != null) {
+            catChevron.text = if (categoriesExpanded) "˅" else "›"
+        }
+    }
+
+    private fun setCategoriesExpanded(root: View, expanded: Boolean) {
+        categoriesExpanded = expanded
+        if (expanded) {
+            accountsExpanded = false
+            toAccountsExpanded = false
+        }
+        applyPanelVisibility(root)
+    }
+
+    private fun setAccountsExpanded(root: View, expanded: Boolean) {
+        accountsExpanded = expanded
+        if (expanded) {
+            categoriesExpanded = false
+            toAccountsExpanded = false
+        }
+        applyPanelVisibility(root)
+    }
+
+    private fun setToAccountsExpanded(root: View, expanded: Boolean) {
+        toAccountsExpanded = expanded
+        if (expanded) {
+            categoriesExpanded = false
+            accountsExpanded = false
+        }
+        applyPanelVisibility(root)
+    }
+
+    private fun refreshCategorySummary(root: View) {
+        val tv = root.findViewById<TextView>(R.id.tv_category_summary_value) ?: return
+        val name = selectedCategoryName?.trim().orEmpty()
+        tv.text = if (name.isNotEmpty()) name else "未选择"
+        tv.setTextColor(if (name.isNotEmpty()) 0xFF1A1A1A.toInt() else 0xFF999999.toInt())
+    }
+
+    private fun refreshAccountSummary(root: View) {
+        val tv = root.findViewById<TextView>(R.id.tv_account_summary_value) ?: return
+        val name = selectedAccountName?.trim().orEmpty()
+        tv.text = if (name.isNotEmpty()) name else "未选择"
+        tv.setTextColor(if (name.isNotEmpty()) 0xFF1A1A1A.toInt() else 0xFF999999.toInt())
+    }
+
+    private fun refreshToAccountSummary(root: View) {
+        val tv = root.findViewById<TextView>(R.id.tv_to_account_summary_value) ?: return
+        val name = selectedToAccountName?.trim().orEmpty()
+        tv.text = if (name.isNotEmpty()) name else "未选择"
+        tv.setTextColor(if (name.isNotEmpty()) 0xFF1A1A1A.toInt() else 0xFF999999.toInt())
+    }
+
     private fun applyConfirmEnabled(root: View, confirmBtn: Button) {
         val amountOk = parseAmountMinorFrom(root.findViewById(R.id.et_amount)) != null
         val transferOk = selectedDirection != "transfer" ||
@@ -991,7 +1183,7 @@ object PaymentOverlayManager {
         }
     }
 
-    private fun clearCategorySelection(confirmBtn: Button) {
+    private fun clearCategorySelection(confirmBtn: Button, root: View? = null) {
         selectedCategoryId = null
         selectedCategoryName = null
         for ((v, _) in categoryViews) {
@@ -1000,6 +1192,7 @@ object PaymentOverlayManager {
         }
         confirmBtn.isEnabled = false
         confirmBtn.alpha = 0.5f
+        root?.let { refreshCategorySummary(it) }
     }
 
     private fun loadAccounts(
@@ -1054,19 +1247,26 @@ object PaymentOverlayManager {
         val scroll = view.findViewById<ScrollView>(R.id.scroll_accounts)
         val container = view.findViewById<LinearLayout>(R.id.container_accounts)
         val levelTv = view.findViewById<TextView>(R.id.tv_account_level)
+        val labelTv = view.findViewById<TextView>(R.id.tv_account_summary_label)
         val toLevel = view.findViewById<TextView>(R.id.tv_to_account_level)
         val toScroll = view.findViewById<ScrollView>(R.id.scroll_to_accounts)
+        val toSummary = view.findViewById<View>(R.id.row_to_account_summary)
         container.removeAllViews()
         accountViews.clear()
         val transfer = selectedDirection == "transfer"
         levelTv.text = if (transfer) "选择转出账户" else "选择账户"
-        toLevel.visibility = if (transfer) View.VISIBLE else View.GONE
-        toScroll.visibility = if (transfer) View.VISIBLE else View.GONE
+        labelTv.text = if (transfer) "转出" else "账户"
+        toSummary.visibility = if (transfer) View.VISIBLE else View.GONE
+        // Inner to-account grid visibility follows expand state via applyPanelVisibility.
+        toLevel.visibility = View.VISIBLE
+        toScroll.visibility = View.VISIBLE
         if (!transfer) {
             selectedToAccountId = null
             selectedToAccountName = null
+            toAccountsExpanded = false
             toAccountViews.clear()
             view.findViewById<LinearLayout>(R.id.container_to_accounts).removeAllViews()
+            view.findViewById<View>(R.id.panel_to_accounts).visibility = View.GONE
         }
 
         if (allAccounts.isEmpty()) {
@@ -1077,6 +1277,9 @@ object PaymentOverlayManager {
             }
             container.addView(tip)
             scroll.visibility = View.VISIBLE
+            refreshAccountSummary(view)
+            refreshToAccountSummary(view)
+            applyPanelVisibility(view)
             return
         }
 
@@ -1100,11 +1303,16 @@ object PaymentOverlayManager {
             accountViews.firstOrNull { it.second.id == preferId }?.let { (chip, acc) ->
                 selectAccount(view, chip, acc, confirmBtn)
             }
+        } else {
+            refreshAccountSummary(view)
         }
 
         if (transfer) {
             renderToAccounts(context, view, confirmBtn)
+        } else {
+            refreshToAccountSummary(view)
         }
+        applyPanelVisibility(view)
     }
 
     private fun renderToAccounts(
@@ -1123,6 +1331,8 @@ object PaymentOverlayManager {
                 textSize = 12f
             }
             container.addView(tip)
+            refreshToAccountSummary(view)
+            applyPanelVisibility(view)
             return
         }
         fillAccountGrid(
@@ -1143,7 +1353,10 @@ object PaymentOverlayManager {
             toAccountViews.firstOrNull { it.second.id == preferTo }?.let { (chip, acc) ->
                 selectToAccount(view, chip, acc, confirmBtn)
             }
+        } else {
+            refreshToAccountSummary(view)
         }
+        applyPanelVisibility(view)
     }
 
     private fun fillAccountGrid(
@@ -1227,6 +1440,11 @@ object PaymentOverlayManager {
         }
         chip.isSelected = true
         chip.setTextColor(0xFFFFFFFF.toInt())
+        refreshAccountSummary(root)
+        // Collapse after pick so the card stays compact.
+        if (accountsExpanded) {
+            setAccountsExpanded(root, false)
+        }
         if (selectedDirection == "transfer" && selectedToAccountId == acc.id) {
             selectedToAccountId = null
             selectedToAccountName = null
@@ -1234,6 +1452,7 @@ object PaymentOverlayManager {
                 v.isSelected = false
                 v.setTextColor(0xFF1A1A1A.toInt())
             }
+            refreshToAccountSummary(root)
             toAccountViews.firstOrNull { it.second.id != acc.id }?.let { (c, a) ->
                 selectToAccount(root, c, a, confirmBtn)
                 return
@@ -1260,6 +1479,10 @@ object PaymentOverlayManager {
         }
         chip.isSelected = true
         chip.setTextColor(0xFFFFFFFF.toInt())
+        refreshToAccountSummary(root)
+        if (toAccountsExpanded) {
+            setToAccountsExpanded(root, false)
+        }
         applyConfirmEnabled(root, confirmBtn)
     }
 
@@ -1270,8 +1493,14 @@ object PaymentOverlayManager {
     ) {
         val loading = view.findViewById<LinearLayout>(R.id.loading_container)
         val scroll = view.findViewById<ScrollView>(R.id.scroll_categories)
+        val summaryValue = view.findViewById<TextView>(R.id.tv_category_summary_value)
         loading.visibility = View.VISIBLE
         scroll.visibility = View.GONE
+        summaryValue.text = "加载中…"
+        // Briefly reveal panel so ProgressBar is visible when user expands; summary shows loading too.
+        if (categoriesExpanded) {
+            view.findViewById<View>(R.id.panel_categories).visibility = View.VISIBLE
+        }
 
         Thread {
             val lid = overlayPendingLedgerId ?: run {
@@ -1382,6 +1611,8 @@ object PaymentOverlayManager {
             }
             container.addView(tip)
             scroll.visibility = View.VISIBLE
+            refreshCategorySummary(view)
+            applyPanelVisibility(view)
             return
         }
 
@@ -1449,6 +1680,7 @@ object PaymentOverlayManager {
         scroll.visibility = View.VISIBLE
 
         // Prefill last-used leaf on the current level only.
+        var prefills = false
         if (lastId != null) {
             val last = allCategories.firstOrNull { it.id == lastId }
             val lastIsOnThisLevel = when {
@@ -1461,9 +1693,14 @@ object PaymentOverlayManager {
             if (lastIsOnThisLevel) {
                 categoryViews.firstOrNull { it.second.id == lastId }?.let { (chip, cat) ->
                     selectLeafCategory(view, chip, cat, confirmBtn)
+                    prefills = true
                 }
             }
         }
+        if (!prefills) {
+            refreshCategorySummary(view)
+        }
+        applyPanelVisibility(view)
     }
 
     private fun onCategoryChipTap(
@@ -1478,7 +1715,8 @@ object PaymentOverlayManager {
             val kids = childrenOf(cat.id)
             if (kids.isNotEmpty()) {
                 browsingParentId = cat.id
-                clearCategorySelection(confirmBtn)
+                clearCategorySelection(confirmBtn, view)
+                categoriesExpanded = true
                 renderCategoryLevel(context, view, confirmBtn)
                 return
             }
@@ -1500,6 +1738,10 @@ object PaymentOverlayManager {
         }
         chip.isSelected = true
         chip.setTextColor(0xFFFFFFFF.toInt())
+        refreshCategorySummary(root)
+        if (categoriesExpanded) {
+            setCategoriesExpanded(root, false)
+        }
         applyConfirmEnabled(root, confirmBtn)
     }
 
@@ -1591,6 +1833,10 @@ object PaymentOverlayManager {
         allLedgers = emptyList()
         selectedDirection = "out"
         browsingParentId = null
+        categoriesExpanded = false
+        accountsExpanded = false
+        toAccountsExpanded = false
+        overlaySourceLabel = ""
         allCategories = emptyList()
         allAccounts = emptyList()
         toAccountViews.clear()
@@ -1884,6 +2130,13 @@ object PaymentOverlayManager {
         browsingParentId = null
         confirmBtn.isEnabled = false
         confirmBtn.alpha = 0.5f
+        categoriesExpanded = false
+        accountsExpanded = false
+        toAccountsExpanded = false
+        refreshCategorySummary(view)
+        refreshAccountSummary(view)
+        refreshToAccountSummary(view)
+        applyPanelVisibility(view)
         Thread {
             val accounts = queryAccounts(
                 context,

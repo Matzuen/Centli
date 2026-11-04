@@ -460,6 +460,20 @@ abstract final class NotificationCaptureStub {
     }
   }
 
+  /// Debug-only: force-show the payment overlay with a fake pending (Android).
+  /// Returns the inserted pending id, or null if unavailable / release build.
+  static Future<String?> previewPaymentOverlay() async {
+    if (!supported) return null;
+    try {
+      final v = await _channel.invokeMethod<String>('previewPaymentOverlay');
+      return v;
+    } on MissingPluginException {
+      return null;
+    } on PlatformException {
+      return null;
+    }
+  }
+
   /// System local notification: pending confirm title + optional merchant body.
   static Future<void> showPendingConfirm({
     required String pendingId,
