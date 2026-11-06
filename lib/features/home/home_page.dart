@@ -680,19 +680,28 @@ class _HomePageState extends ConsumerState<HomePage> {
                             netWorth: nw,
                           ),
                           const SizedBox(height: CentliSpacing.sectionLoose),
+                          // SoftCard 包住整块；区间保留内边距，流水行左右贴满卡片。
                           CentliSoftCard(
-                            padding: const EdgeInsets.all(
-                              CentliSpacing.cardPad,
-                            ),
+                            padding: EdgeInsets.zero,
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                DateRangeControl(
-                                  range: range,
-                                  onChanged: (next) {
-                                    ref.read(homeRangeProvider.notifier).state =
-                                        next;
-                                  },
+                                Padding(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    CentliSpacing.cardPad,
+                                    CentliSpacing.cardPad,
+                                    CentliSpacing.cardPad,
+                                    CentliSpacing.dense,
+                                  ),
+                                  child: DateRangeControl(
+                                    range: range,
+                                    onChanged: (next) {
+                                      ref
+                                              .read(homeRangeProvider.notifier)
+                                              .state =
+                                          next;
+                                    },
+                                  ),
                                 ),
                                 recent.when(
                                   loading: () => const Padding(
@@ -703,12 +712,22 @@ class _HomePageState extends ConsumerState<HomePage> {
                                       child: CircularProgressIndicator(),
                                     ),
                                   ),
-                                  error: (e, _) =>
-                                      CentliErrorState(error: e, compact: true),
+                                  error: (e, _) => Padding(
+                                    padding: const EdgeInsets.all(
+                                      CentliSpacing.cardPad,
+                                    ),
+                                    child: CentliErrorState(
+                                      error: e,
+                                      compact: true,
+                                    ),
+                                  ),
                                   data: (txns) {
                                     if (txns.isEmpty) {
                                       return Padding(
-                                        padding: const EdgeInsets.all(
+                                        padding: const EdgeInsets.fromLTRB(
+                                          CentliSpacing.cardPad,
+                                          CentliSpacing.item,
+                                          CentliSpacing.cardPad,
                                           CentliSpacing.cardPad,
                                         ),
                                         child: Column(
@@ -724,7 +743,8 @@ class _HomePageState extends ConsumerState<HomePage> {
                                             Text(
                                               '还没有流水',
                                               style: TextStyle(
-                                                color: scheme.onSurfaceVariant,
+                                                color:
+                                                    scheme.onSurfaceVariant,
                                                 fontWeight: FontWeight.w600,
                                               ),
                                             ),
@@ -738,8 +758,8 @@ class _HomePageState extends ConsumerState<HomePage> {
                                                   .textTheme
                                                   .bodySmall
                                                   ?.copyWith(
-                                                    color:
-                                                        scheme.onSurfaceVariant,
+                                                    color: scheme
+                                                        .onSurfaceVariant,
                                                   ),
                                             ),
                                             const SizedBox(
@@ -751,8 +771,8 @@ class _HomePageState extends ConsumerState<HomePage> {
                                               runSpacing: 8,
                                               children: [
                                                 FilledButton.tonal(
-                                                  onPressed: () =>
-                                                      context.push('/me/auto'),
+                                                  onPressed: () => context
+                                                      .push('/me/auto'),
                                                   child: const Text('开自动记账'),
                                                 ),
                                                 FilledButton(
@@ -768,13 +788,22 @@ class _HomePageState extends ConsumerState<HomePage> {
                                         ),
                                       );
                                     }
-                                    return TxnGroupedSection(
-                                      txns: txns,
-                                      hide: hide,
-                                      selecting: _selectingTxns,
-                                      selectedIds: _selectedTxnIds,
-                                      onToggleSelect: _toggleTxnSelect,
-                                      onEnterSelect: _enterTxnSelect,
+                                    return Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
+                                      children: [
+                                        TxnGroupedSection(
+                                          txns: txns,
+                                          hide: hide,
+                                          selecting: _selectingTxns,
+                                          selectedIds: _selectedTxnIds,
+                                          onToggleSelect: _toggleTxnSelect,
+                                          onEnterSelect: _enterTxnSelect,
+                                        ),
+                                        const SizedBox(
+                                          height: CentliSpacing.dense,
+                                        ),
+                                      ],
                                     );
                                   },
                                 ),
@@ -1295,7 +1324,8 @@ class _LedgerSummaryCard extends StatelessWidget {
           const SizedBox(height: CentliSpacing.section),
           Divider(
             height: 1,
-            color: scheme.outlineVariant.withValues(alpha: 0.7),
+            thickness: CentliTheme.cardDividerThickness,
+            color: CentliTheme.cardDivider(context),
           ),
           const SizedBox(height: CentliSpacing.section),
           IntrinsicHeight(
@@ -1317,8 +1347,8 @@ class _LedgerSummaryCard extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   child: VerticalDivider(
                     width: 1,
-                    thickness: 1,
-                    color: scheme.outlineVariant.withValues(alpha: 0.7),
+                    thickness: CentliTheme.cardDividerThickness,
+                    color: CentliTheme.cardDivider(context),
                   ),
                 ),
                 Expanded(

@@ -35,7 +35,7 @@ class TxnListTile extends ConsumerWidget {
     super.key,
     required this.txn,
     required this.hide,
-    this.showSeparator = false,
+    this.showBottomBorder = true,
     this.lookups = TxnListLookups.empty,
     this.highlight = const [],
     this.selecting = false,
@@ -47,8 +47,8 @@ class TxnListTile extends ConsumerWidget {
   final Transaction txn;
   final bool hide;
 
-  /// Light divider above this row (indented past the icon).
-  final bool showSeparator;
+  /// 行底部分界线（每条流水下方一条）。
+  final bool showBottomBorder;
 
   /// Preloaded category/account maps for this ledger.
   final TxnListLookups lookups;
@@ -88,18 +88,6 @@ class TxnListTile extends ConsumerWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (showSeparator)
-          Divider(
-            height: 1,
-            thickness: 0.5,
-            indent: 72,
-            endIndent: 16,
-            // 更淡：雾面日组上仍能看出行界，不划死硬线。
-            color: Theme.of(context)
-                .colorScheme
-                .outlineVariant
-                .withValues(alpha: 0.28),
-          ),
         TxnSwipeHost(
           enabled: !selecting,
           onCopy: () {
@@ -251,6 +239,14 @@ class TxnListTile extends ConsumerWidget {
             ),
           ),
         ),
+        if (showBottomBorder)
+          Divider(
+            height: CentliTheme.cardDividerThickness,
+            thickness: CentliTheme.cardDividerThickness,
+            indent: 16,
+            endIndent: 16,
+            color: CentliTheme.cardDivider(context),
+          ),
       ],
     );
   }

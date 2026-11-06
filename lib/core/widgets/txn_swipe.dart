@@ -120,7 +120,7 @@ class TxnSwipeHostState extends State<TxnSwipeHost>
   void _onDragStart(DragStartDetails details) {
     if (!widget.enabled) return;
     _controller.stop();
-    _dragging = true;
+    setState(() => _dragging = true);
     _TxnSwipeRegistry.notifyOpen(_close);
   }
 
@@ -171,31 +171,45 @@ class TxnSwipeHostState extends State<TxnSwipeHost>
 
     final scheme = Theme.of(context).colorScheme;
     final open = _offset.abs() > 0.5;
+    // 露出宽度 = 左滑距离；右侧裁切，滑动多少露多少（透明行也不会整块透出）。
+    final reveal = (-_offset).clamp(0.0, TxnSwipeHost.startActionsExtent);
 
     return ClipRect(
       child: Stack(
         children: [
-          Positioned.fill(
-            child: Row(
-              children: [
-                const Spacer(),
-                _TxnSwipeAction(
-                  width: TxnSwipeHost.actionExtent,
-                  color: const Color(0xFF546E7A),
-                  icon: Icons.copy_outlined,
-                  label: '复制新建',
-                  onTap: () => _runAction(widget.onCopy),
+          if (reveal > 0.5)
+            Positioned(
+              right: 0,
+              top: 0,
+              bottom: 0,
+              width: reveal,
+              child: ClipRect(
+                child: OverflowBox(
+                  alignment: Alignment.centerRight,
+                  minWidth: TxnSwipeHost.startActionsExtent,
+                  maxWidth: TxnSwipeHost.startActionsExtent,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _TxnSwipeAction(
+                        width: TxnSwipeHost.actionExtent,
+                        color: const Color(0xFF546E7A),
+                        icon: Icons.copy_outlined,
+                        label: '复制新建',
+                        onTap: () => _runAction(widget.onCopy),
+                      ),
+                      _TxnSwipeAction(
+                        width: TxnSwipeHost.actionExtent,
+                        color: scheme.error,
+                        icon: Icons.delete_outline,
+                        label: '删除',
+                        onTap: () => _runAction(widget.onDelete),
+                      ),
+                    ],
+                  ),
                 ),
-                _TxnSwipeAction(
-                  width: TxnSwipeHost.actionExtent,
-                  color: scheme.error,
-                  icon: Icons.delete_outline,
-                  label: '删除',
-                  onTap: () => _runAction(widget.onDelete),
-                ),
-              ],
+              ),
             ),
-          ),
           GestureDetector(
             onHorizontalDragStart: _onDragStart,
             onHorizontalDragUpdate: _onDragUpdate,
@@ -203,17 +217,20 @@ class TxnSwipeHostState extends State<TxnSwipeHost>
             onHorizontalDragCancel: _onDragCancel,
             child: Transform.translate(
               offset: Offset(_offset, 0),
-              child: Stack(
-                children: [
-                  Material(color: scheme.surface, child: widget.child),
-                  if (open)
-                    Positioned.fill(
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: _close,
+              child: Material(
+                type: MaterialType.transparency,
+                child: Stack(
+                  children: [
+                    widget.child,
+                    if (open)
+                      Positioned.fill(
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: _close,
+                        ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

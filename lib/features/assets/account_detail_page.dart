@@ -293,7 +293,6 @@ class _AccountDetailBody extends ConsumerWidget {
                               accountId: account.id,
                               accountCurrency: account.currency,
                               hide: hide,
-                              showSeparator: i > 0,
                             ),
                         ],
                       ),
@@ -328,14 +327,12 @@ class _AccountTxnTile extends ConsumerWidget {
     required this.accountId,
     required this.accountCurrency,
     required this.hide,
-    this.showSeparator = false,
   });
 
   final Transaction txn;
   final String accountId;
   final String accountCurrency;
   final bool hide;
-  final bool showSeparator;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -357,17 +354,6 @@ class _AccountTxnTile extends ConsumerWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (showSeparator)
-          Divider(
-            height: 1,
-            thickness: 0.5,
-            indent: 72,
-            endIndent: 16,
-            color: Theme.of(context)
-                .colorScheme
-                .outlineVariant
-                .withValues(alpha: 0.28),
-          ),
         InkWell(
           onTap: () => context.push('/ledger/${txn.id}'),
           child: Padding(
@@ -453,6 +439,13 @@ class _AccountTxnTile extends ConsumerWidget {
               ],
             ),
           ),
+        ),
+        Divider(
+          height: CentliTheme.cardDividerThickness,
+          thickness: CentliTheme.cardDividerThickness,
+          indent: 16,
+          endIndent: 16,
+          color: CentliTheme.cardDivider(context),
         ),
       ],
     );
