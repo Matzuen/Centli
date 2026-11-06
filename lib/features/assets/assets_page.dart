@@ -1081,6 +1081,8 @@ Future<void> showAccountEditor(
   WidgetRef ref, {
   required String ledgerId,
   Account? existing,
+  /// 新建时预填的资产分类（如从「资产分类」菜单进入）。
+  String? initialTypeId,
 }) async {
   final nameCtrl = TextEditingController(text: existing?.name ?? '');
   final db = ref.read(databaseProvider);
@@ -1108,6 +1110,9 @@ Future<void> showAccountEditor(
   String type;
   if (existing != null) {
     type = existing.type;
+  } else if (initialTypeId != null &&
+      allTypes.any((t) => t.id == initialTypeId)) {
+    type = initialTypeId;
   } else if (activeTypes.isNotEmpty) {
     type = activeTypes.first.id;
   } else if (allTypes.isNotEmpty) {
@@ -1115,11 +1120,11 @@ Future<void> showAccountEditor(
   } else {
     type = await db.resolveAssetTypeId(ledgerId: ledgerId, raw: 'cash');
   }
-  // Dropdown: active types + current value if archived
+  // Dropdown: active types + current / 预填分类（可能已归档）
   final dropdownTypes = <AssetType>[
     ...activeTypes,
-    if (existing != null && !activeTypes.any((t) => t.id == existing.type))
-      ...allTypes.where((t) => t.id == existing.type),
+    if (!activeTypes.any((t) => t.id == type))
+      ...allTypes.where((t) => t.id == type),
   ];
   String? iconKey = existing?.icon;
 

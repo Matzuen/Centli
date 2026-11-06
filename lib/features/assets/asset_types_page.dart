@@ -6,6 +6,7 @@ import '../../core/widgets/centli_icon.dart';
 import '../../data/db/centli_database.dart';
 import '../../data/db/database_provider.dart';
 import '../../core/widgets/glass.dart';
+import 'assets_page.dart' show showAccountEditor;
 
 final _assetTypesManageProvider =
     StreamProvider.family<List<AssetType>, String>((ref, ledgerId) {
@@ -52,7 +53,8 @@ class AssetTypesPage extends ConsumerWidget {
                 return const Center(child: Text('暂无分类'));
               }
               return ListView.separated(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+                // 仍挂在底栏 shell 内，底边距要清开导航。
+                padding: CentliSpacing.pagePaddingNav.copyWith(top: 12),
                 itemCount: types.length,
                 separatorBuilder: (_, _) => const SizedBox(height: CentliSpacing.item),
                 itemBuilder: (context, index) {
@@ -133,7 +135,14 @@ class _AssetTypeTile extends ConsumerWidget {
                 CentliGlassPopupButton<String>(
                   onSelected: (v) async {
                     try {
-                      if (v == 'rename') {
+                      if (v == 'new_account') {
+                        await showAccountEditor(
+                          context,
+                          ref,
+                          ledgerId: type.ledgerId,
+                          initialTypeId: type.id,
+                        );
+                      } else if (v == 'rename') {
                         await _promptRename(context, ref, type);
                       } else if (v == 'archive') {
                         await db.setAssetTypeArchived(type.id, true);
@@ -149,6 +158,10 @@ class _AssetTypeTile extends ConsumerWidget {
                     }
                   },
                   items: [
+                    const CentliMenuItem(
+                      value: 'new_account',
+                      label: '新建资产账户',
+                    ),
                     const CentliMenuItem(value: 'rename', label: '重命名'),
                     if (archived)
                       const CentliMenuItem(
