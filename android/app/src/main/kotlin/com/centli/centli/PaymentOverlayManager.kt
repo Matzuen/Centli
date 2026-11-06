@@ -27,6 +27,8 @@ import android.view.inputmethod.InputMethodManager
 import android.widget.Button
 import android.widget.EditText
 import android.widget.ImageButton
+import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import java.io.File
@@ -38,7 +40,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * LiteNote 式支付悬浮窗：在其他 App 上层弹出待确认卡片，
- * 可选分类/账户（摘要行旁级联弹出菜单）后快速入账，或打开 App / 忽略 / 稍后。
+ * 分类 chip + 卡内「更多」网格 / 账户常显网格后快速入账，或忽略 / 稍后。
  *
  * 需要 [Settings.canDrawOverlays]；未授权时静默跳过（仍有系统通知）。
  */
@@ -54,6 +56,13 @@ object PaymentOverlayManager {
     private const val SUCCESS_DISMISS_MS = 1_400L
     private const val KEY_LAST_PERM_TOAST = "last_perm_toast_ms"
     private const val PERM_TOAST_COOLDOWN_MS = 30_000L
+    private const val ACCOUNTS_PER_ROW = 3
+    private const val CATEGORIES_PER_ROW = 3
+    /** 账户 / 分类网格最多露出两行，其余可滚动。 */
+    private const val MAX_VISIBLE_ROWS = 2
+    private const val COLOR_MINT = 0xFF6BB89A.toInt()
+    private const val COLOR_MUTED = 0xFF666666.toInt()
+    private const val COLOR_INK = 0xFF1A1A1A.toInt()
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private var windowManager: WindowManager? = null
@@ -85,8 +94,17 @@ object PaymentOverlayManager {
     private var selectedLedgerName: String = ""
     private var allLedgers: List<Pair<String, String>> = emptyList()
     private var overlaySourceLabel: String = ""
+    private var overlayMerchant: String = ""
+    private var amountMasked: Boolean = false
+    /** 确认卡顶部 3 个候选分类（id, name）。 */
+    private var categoryChipChoices: List<Pair<String, String>> = emptyList()
     /** asset_types.id → name for current ledger scope (filled with accounts). */
     private var assetTypeNameById: Map<String, String> = emptyMap()
+    private var browsingParentId: String? = null
+    private var categoryMoreExpanded: Boolean = false
+    private val categoryViews = mutableListOf<Pair<TextView, Category>>()
+    private val accountViews = mutableListOf<Pair<TextView, Account>>()
+    private val toAccountViews = mutableListOf<Pair<TextView, Account>>()
     private var hostActivity: WeakReference<Activity>? = null
 
     /** 锁屏 / 已有浮层时 FIFO 排队；解锁或关窗后按序弹出。容量见 [MAX_DEFERRED]。 */
@@ -827,13 +845,18 @@ object PaymentOverlayManager {
             @Suppress("DEPRECATION")
             WindowManager.LayoutParams.TYPE_PHONE
         }
-        // Full-screen dim + card (LiteNote style). NOT_FOCUSABLE would block buttons.
+        // 居中确认卡 + 常规遮罩；API 31+ 开背后模糊做成亚克力。
+        var flags = WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            @Suppress("DEPRECATION")
+            flags = flags or WindowManager.LayoutParams.FLAG_BLUR_BEHIND
+        }
         return WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
             type,
-            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            flags,
             PixelFormat.TRANSLUCENT,
         ).apply {
             gravity = Gravity.CENTER
@@ -841,6 +864,13 @@ object PaymentOverlayManager {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 layoutInDisplayCutoutMode =
                     WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                try {
+                    setBlurBehindRadius(48)
+                } catch (_: Throwable) {
+                    // 部分 OEM 未实现背后模糊，退回遮罩 + 雾面底。
+                }
             }
         }
     }
@@ -870,48 +900,58 @@ object PaymentOverlayManager {
         allCategories = emptyList()
         allAccounts = emptyList()
         assetTypeNameById = emptyMap()
+        categoryChipChoices = emptyList()
+        browsingParentId = null
+        categoryMoreExpanded = false
+        categoryViews.clear()
+        accountViews.clear()
+        toAccountViews.clear()
+        amountMasked = false
         overlaySourceLabel = sourceLabel
         OverlayCascadePopup.dismiss()
 
-        view.findViewById<TextView>(R.id.tv_title).text = "记账本"
-
         val m = merchant?.trim().orEmpty()
+        overlayMerchant = m
 
         val metaTv = view.findViewById<TextView>(R.id.tv_source_meta)
-        val metaParts = mutableListOf<String>()
-        if (sourceLabel.isNotBlank()) metaParts.add(sourceLabel)
-        // Best-effort clock stamp so meta is not empty when source is generic.
         val nowLabel = java.text.SimpleDateFormat("HH:mm", Locale.getDefault())
             .format(java.util.Date())
-        metaParts.add(nowLabel)
-        if (metaParts.isEmpty()) {
-            metaTv.visibility = View.GONE
-        } else {
-            metaTv.visibility = View.VISIBLE
-            metaTv.text = metaParts.joinToString(" · ")
-        }
+        val src = sourceLabel.ifBlank { "支付通知" }
+        metaTv.text = "$src · $nowLabel"
+
+        val merchantTv = view.findViewById<TextView>(R.id.tv_merchant)
+        merchantTv.text = if (m.isNotEmpty()) m else src
 
         val amountEt = view.findViewById<EditText>(R.id.et_amount)
+        val amountMaskedTv = view.findViewById<TextView>(R.id.tv_amount_masked)
         if (amountMajor != null) {
             amountEt.setText(formatMajor(overlayCurrency, amountMajor))
             amountEt.setSelection(amountEt.text.length)
         } else {
             amountEt.setText("")
         }
+        fun applyAmountMask() {
+            amountEt.visibility = if (amountMasked) View.GONE else View.VISIBLE
+            amountMaskedTv.visibility = if (amountMasked) View.VISIBLE else View.GONE
+        }
+        applyAmountMask()
+        view.findViewById<View>(R.id.btn_mask_amount).setOnClickListener {
+            amountMasked = !amountMasked
+            applyAmountMask()
+        }
 
         val noteEt = view.findViewById<EditText>(R.id.et_note)
         noteEt.setText(m)
-        noteEt.hint = if (m.isNotEmpty()) "备注（可改）" else "备注（可选）"
 
         val confirmBtn = view.findViewById<Button>(R.id.btn_confirm)
         confirmBtn.isEnabled = false
         confirmBtn.alpha = 0.5f
         confirmBtn.text = "入账"
 
-        view.findViewById<TextView>(R.id.tv_title).apply {
-            isClickable = true
-            isFocusable = true
-            setOnClickListener { showLedgerPicker(context, view, confirmBtn) }
+        // 账本切换：长按来源行
+        metaTv.setOnLongClickListener {
+            showLedgerPicker(context, view, confirmBtn)
+            true
         }
 
         val btnOut = view.findViewById<TextView>(R.id.btn_dir_out)
@@ -927,6 +967,8 @@ object PaymentOverlayManager {
             paint(btnOut, selectedDirection == "out")
             paint(btnIn, selectedDirection == "in")
             paint(btnTransfer, selectedDirection == "transfer")
+            view.findViewById<View>(R.id.row_direction).visibility =
+                if (selectedDirection == "transfer") View.VISIBLE else View.GONE
         }
         fun onDirectionPicked(dir: String) {
             if (selectedDirection == dir) return
@@ -938,7 +980,6 @@ object PaymentOverlayManager {
                 selectedToAccountId = null
                 selectedToAccountName = null
             }
-            // 转账需要跨账本账户列表；切回支出/收入则收回到当前账本。
             Thread {
                 val lid = selectedLedgerId ?: overlayPendingLedgerId
                 val accounts = queryAccounts(
@@ -963,19 +1004,39 @@ object PaymentOverlayManager {
         btnIn.setOnClickListener { onDirectionPicked("in") }
         btnTransfer.setOnClickListener { onDirectionPicked("transfer") }
 
-        view.findViewById<View>(R.id.row_category_summary).setOnClickListener { anchor ->
-            showCategoryCascadeMenu(context, anchor, view, confirmBtn)
+        fun wireChip(chip: TextView, index: Int) {
+            chip.setOnClickListener {
+                val choice = categoryChipChoices.getOrNull(index) ?: return@setOnClickListener
+                selectedCategoryId = choice.first
+                selectedCategoryName = choice.second
+                setCategoryMoreExpanded(view, false)
+                refreshCategoryChips(view)
+                paintInlineCategorySelection()
+                applyConfirmEnabled(view, confirmBtn)
+            }
         }
-        view.findViewById<View>(R.id.row_account_summary).setOnClickListener { anchor ->
-            showAccountCascadeMenu(context, anchor, view, confirmBtn, toAccount = false)
+        wireChip(view.findViewById(R.id.chip_cat_0), 0)
+        wireChip(view.findViewById(R.id.chip_cat_1), 1)
+        wireChip(view.findViewById(R.id.chip_cat_2), 2)
+        view.findViewById<View>(R.id.chip_cat_more).setOnClickListener {
+            if (allCategories.isEmpty()) {
+                Toast.makeText(context, "暂无分类，请打开 App 确认", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            val expand = !categoryMoreExpanded
+            setCategoryMoreExpanded(view, expand)
+            if (expand) {
+                browsingParentId = null
+                renderCategoryLevel(context, view, confirmBtn)
+            }
         }
-        view.findViewById<View>(R.id.row_to_account_summary).setOnClickListener { anchor ->
-            showAccountCascadeMenu(context, anchor, view, confirmBtn, toAccount = true)
+        view.findViewById<TextView>(R.id.btn_cat_back).setOnClickListener {
+            browsingParentId = null
+            renderCategoryLevel(context, view, confirmBtn)
         }
         applyPanelVisibility(view)
-        refreshCategorySummary(view)
-        refreshAccountSummary(view)
-        refreshToAccountSummary(view)
+        refreshCategoryChips(view)
+        refreshMerchantSubtitle(view)
 
         fun parseAmountMinor(): Int? {
             val raw = amountEt.text?.toString()?.trim().orEmpty()
@@ -996,14 +1057,18 @@ object PaymentOverlayManager {
             override fun afterTextChanged(s: Editable?) = refreshConfirmEnabled()
         })
 
+        // 点弱遮罩收起；点卡片本身不关闭。
+        view.setOnClickListener { dismissInternal(chainNext = true) }
+        view.findViewById<View>(R.id.panel_card).setOnClickListener { /* consume */ }
+
         view.findViewById<ImageButton>(R.id.btn_close_x).setOnClickListener {
             // 稍后/关窗不回队，靠通知；若队列还有则弹下一笔。
             dismissInternal(chainNext = true)
         }
-        view.findViewById<Button>(R.id.btn_later).setOnClickListener {
+        view.findViewById<TextView>(R.id.btn_later).setOnClickListener {
             dismissInternal(chainNext = true)
         }
-        view.findViewById<Button>(R.id.btn_ignore).setOnClickListener {
+        view.findViewById<TextView>(R.id.btn_ignore).setOnClickListener {
             ignorePending(context, pendingId)
             dismissInternal(chainNext = true)
         }
@@ -1087,33 +1152,92 @@ object PaymentOverlayManager {
 
     private fun applyPanelVisibility(root: View) {
         val transfer = selectedDirection == "transfer"
-        root.findViewById<View>(R.id.row_to_account_summary).visibility =
+        root.findViewById<View>(R.id.tv_to_account_level)?.visibility =
             if (transfer) View.VISIBLE else View.GONE
-        val labelTv = root.findViewById<TextView>(R.id.tv_account_summary_label)
-        if (labelTv != null) {
-            labelTv.text = if (transfer) "转出" else "账户"
+        root.findViewById<View>(R.id.scroll_to_accounts)?.visibility =
+            if (transfer) View.VISIBLE else View.GONE
+        root.findViewById<View>(R.id.row_direction)?.visibility =
+            if (transfer) View.VISIBLE else View.GONE
+        root.findViewById<TextView>(R.id.tv_account_level)?.text =
+            if (transfer) "转出" else "账户"
+        refreshMerchantSubtitle(root)
+    }
+
+    private fun setCategoryMoreExpanded(root: View, expanded: Boolean) {
+        categoryMoreExpanded = expanded
+        root.findViewById<View>(R.id.panel_category_more)?.visibility =
+            if (expanded) View.VISIBLE else View.GONE
+        val more = root.findViewById<TextView>(R.id.chip_cat_more)
+        more?.isSelected = expanded
+        more?.setTextColor(if (expanded) COLOR_MINT else 0xFF888888.toInt())
+        if (!expanded) {
+            browsingParentId = null
+            categoryViews.clear()
+            root.findViewById<LinearLayout>(R.id.container_categories)?.removeAllViews()
         }
     }
 
-    private fun refreshCategorySummary(root: View) {
-        val tv = root.findViewById<TextView>(R.id.tv_category_summary_value) ?: return
-        val name = selectedCategoryName?.trim().orEmpty()
-        tv.text = if (name.isNotEmpty()) name else "未选择"
-        tv.setTextColor(if (name.isNotEmpty()) 0xFF1A1A1A.toInt() else 0xFF999999.toInt())
+    private fun refreshMerchantSubtitle(root: View) {
+        val merchantTv = root.findViewById<TextView>(R.id.tv_merchant) ?: return
+        val merchant = overlayMerchant.ifBlank { overlaySourceLabel.ifBlank { "—" } }
+        val acc = selectedAccountName?.trim().orEmpty()
+        merchantTv.text = if (acc.isNotEmpty()) "$merchant · $acc" else merchant
     }
 
-    private fun refreshAccountSummary(root: View) {
-        val tv = root.findViewById<TextView>(R.id.tv_account_summary_value) ?: return
-        val name = selectedAccountName?.trim().orEmpty()
-        tv.text = if (name.isNotEmpty()) name else "未选择"
-        tv.setTextColor(if (name.isNotEmpty()) 0xFF1A1A1A.toInt() else 0xFF999999.toInt())
+    private fun refreshCategoryChips(root: View) {
+        val leaves = allCategories.filter { cat ->
+            allCategories.none { it.parentId == cat.id }
+        }
+        val preferred = mutableListOf<Pair<String, String>>()
+        val selId = selectedCategoryId
+        val selName = selectedCategoryName
+        if (!selId.isNullOrBlank() && !selName.isNullOrBlank()) {
+            preferred.add(selId to selName)
+        }
+        for (leaf in leaves) {
+            if (preferred.size >= 3) break
+            if (preferred.any { it.first == leaf.id }) continue
+            preferred.add(leaf.id to leaf.name)
+        }
+        categoryChipChoices = preferred
+
+        val chips = listOf(
+            root.findViewById<TextView>(R.id.chip_cat_0),
+            root.findViewById<TextView>(R.id.chip_cat_1),
+            root.findViewById<TextView>(R.id.chip_cat_2),
+        )
+        for ((i, chip) in chips.withIndex()) {
+            if (chip == null) continue
+            val choice = preferred.getOrNull(i)
+            if (choice == null) {
+                chip.visibility = View.GONE
+                continue
+            }
+            chip.visibility = View.VISIBLE
+            chip.text = choice.second
+            val on = choice.first == selectedCategoryId
+            chip.isSelected = on
+            chip.setTextColor(if (on) COLOR_MINT else COLOR_MUTED)
+            chip.setTypeface(
+                null,
+                if (on) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL,
+            )
+        }
     }
 
-    private fun refreshToAccountSummary(root: View) {
-        val tv = root.findViewById<TextView>(R.id.tv_to_account_summary_value) ?: return
-        val name = selectedToAccountName?.trim().orEmpty()
-        tv.text = if (name.isNotEmpty()) name else "未选择"
-        tv.setTextColor(if (name.isNotEmpty()) 0xFF1A1A1A.toInt() else 0xFF999999.toInt())
+    private fun paintChipSelected(chip: TextView, selected: Boolean) {
+        chip.isSelected = selected
+        chip.setTextColor(if (selected) COLOR_MINT else COLOR_INK)
+        chip.setTypeface(
+            null,
+            if (selected) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL,
+        )
+    }
+
+    private fun paintInlineCategorySelection() {
+        for ((v, cat) in categoryViews) {
+            paintChipSelected(v, cat.id == selectedCategoryId)
+        }
     }
 
     private fun applyConfirmEnabled(root: View, confirmBtn: Button) {
@@ -1142,7 +1266,11 @@ object PaymentOverlayManager {
         selectedCategoryName = null
         confirmBtn.isEnabled = false
         confirmBtn.alpha = 0.5f
-        root?.let { refreshCategorySummary(it) }
+        root?.let {
+            setCategoryMoreExpanded(it, false)
+            refreshCategoryChips(it)
+            paintInlineCategorySelection()
+        }
     }
 
     private fun loadAccounts(
@@ -1194,29 +1322,61 @@ object PaymentOverlayManager {
         }.start()
     }
 
-    /** Prefill last/suggested accounts; selection UI is the cascade popup. */
+    /** Prefill last/suggested accounts and render always-visible grids. */
     private fun applyPreferredAccounts(
         context: Context,
         view: View,
         confirmBtn: Button,
     ) {
         OverlayCascadePopup.dismiss()
+        renderAccounts(context, view, confirmBtn)
+    }
+
+    private fun renderAccounts(
+        context: Context,
+        view: View,
+        confirmBtn: Button,
+    ) {
+        val scroll = view.findViewById<ScrollView>(R.id.scroll_accounts) ?: return
+        val container = view.findViewById<LinearLayout>(R.id.container_accounts) ?: return
+        container.removeAllViews()
+        accountViews.clear()
         val transfer = selectedDirection == "transfer"
         applyPanelVisibility(view)
         if (!transfer) {
             selectedToAccountId = null
             selectedToAccountName = null
+            toAccountViews.clear()
+            view.findViewById<LinearLayout>(R.id.container_to_accounts)?.removeAllViews()
         }
+
         if (allAccounts.isEmpty()) {
             selectedAccountId = null
             selectedAccountName = null
             selectedToAccountId = null
             selectedToAccountName = null
-            refreshAccountSummary(view)
-            refreshToAccountSummary(view)
+            val tip = TextView(context).apply {
+                text = "暂无资产账户，请打开 App 确认"
+                setTextColor(0xFF888888.toInt())
+                textSize = 12f
+            }
+            container.addView(tip)
+            scroll.visibility = View.VISIBLE
+            refreshMerchantSubtitle(view)
             applyConfirmEnabled(view, confirmBtn)
             return
         }
+
+        fillAccountGrid(
+            context = context,
+            container = container,
+            scroll = scroll,
+            accounts = allAccounts,
+            views = accountViews,
+            onPick = { chip, acc -> selectAccount(view, chip, acc, confirmBtn) },
+        )
+        scroll.visibility = View.VISIBLE
+
         val lastId = prefs(context).getString(KEY_LAST_ACCOUNT, null)
         val preferId = when {
             !suggestedAccountId.isNullOrBlank() &&
@@ -1224,60 +1384,158 @@ object PaymentOverlayManager {
             !lastId.isNullOrBlank() && allAccounts.any { it.id == lastId } -> lastId
             else -> allAccounts.firstOrNull()?.id
         }
-        val prefer = allAccounts.firstOrNull { it.id == preferId }
-        if (prefer != null) {
-            selectedAccountId = prefer.id
-            selectedAccountName = prefer.name
+        if (preferId != null) {
+            accountViews.firstOrNull { it.second.id == preferId }?.let { (chip, acc) ->
+                selectAccount(view, chip, acc, confirmBtn)
+            }
         } else {
-            selectedAccountId = null
-            selectedAccountName = null
+            refreshMerchantSubtitle(view)
+            applyConfirmEnabled(view, confirmBtn)
         }
-        refreshAccountSummary(view)
 
         if (transfer) {
-            val lastTo = prefs(context).getString(KEY_LAST_TO_ACCOUNT, null)
-            val preferTo = when {
-                !lastTo.isNullOrBlank() &&
-                    lastTo != selectedAccountId &&
-                    allAccounts.any { it.id == lastTo } -> lastTo
-                else -> allAccounts.firstOrNull { it.id != selectedAccountId }?.id
-            }
-            val to = allAccounts.firstOrNull { it.id == preferTo }
-            if (to != null) {
-                selectedToAccountId = to.id
-                selectedToAccountName = to.name
-            } else {
-                selectedToAccountId = null
-                selectedToAccountName = null
-            }
+            renderToAccounts(context, view, confirmBtn)
         }
-        refreshToAccountSummary(view)
-        applyConfirmEnabled(view, confirmBtn)
     }
 
-    private fun selectAccountById(
+    private fun renderToAccounts(
+        context: Context,
+        view: View,
+        confirmBtn: Button,
+    ) {
+        val scroll = view.findViewById<ScrollView>(R.id.scroll_to_accounts) ?: return
+        val container = view.findViewById<LinearLayout>(R.id.container_to_accounts) ?: return
+        container.removeAllViews()
+        toAccountViews.clear()
+        if (allAccounts.size < 2) {
+            val tip = TextView(context).apply {
+                text = "转账至少需要两个资产账户"
+                setTextColor(0xFF888888.toInt())
+                textSize = 12f
+            }
+            container.addView(tip)
+            return
+        }
+        val candidates = allAccounts.filter { it.id != selectedAccountId }.ifEmpty { allAccounts }
+        fillAccountGrid(
+            context = context,
+            container = container,
+            scroll = scroll,
+            accounts = candidates,
+            views = toAccountViews,
+            onPick = { chip, acc -> selectToAccount(view, chip, acc, confirmBtn) },
+        )
+        val lastTo = prefs(context).getString(KEY_LAST_TO_ACCOUNT, null)
+        val preferTo = when {
+            !lastTo.isNullOrBlank() &&
+                lastTo != selectedAccountId &&
+                candidates.any { it.id == lastTo } -> lastTo
+            else -> candidates.firstOrNull { it.id != selectedAccountId }?.id
+        }
+        if (preferTo != null) {
+            toAccountViews.firstOrNull { it.second.id == preferTo }?.let { (chip, acc) ->
+                selectToAccount(view, chip, acc, confirmBtn)
+            }
+        }
+    }
+
+    private fun fillAccountGrid(
+        context: Context,
+        container: LinearLayout,
+        scroll: ScrollView,
+        accounts: List<Account>,
+        views: MutableList<Pair<TextView, Account>>,
+        onPick: (TextView, Account) -> Unit,
+    ) {
+        val density = context.resources.displayMetrics.density
+        val rowH = (40 * density).toInt()
+        val gap = (8 * density).toInt()
+        val chunks = accounts.chunked(ACCOUNTS_PER_ROW)
+        chunks.forEachIndexed { rowIndex, row ->
+            val rowLayout = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                ).apply {
+                    if (rowIndex < chunks.size - 1) bottomMargin = gap
+                }
+            }
+            for (acc in row) {
+                val chip = TextView(context).apply {
+                    text = acc.displayLabel(selectedLedgerId)
+                    textSize = 12f
+                    maxLines = 1
+                    ellipsize = android.text.TextUtils.TruncateAt.END
+                    gravity = Gravity.CENTER
+                    setPadding(
+                        (6 * density).toInt(),
+                        (8 * density).toInt(),
+                        (6 * density).toInt(),
+                        (8 * density).toInt(),
+                    )
+                    setBackgroundResource(R.drawable.centli_overlay_chip)
+                    paintChipSelected(this, false)
+                    layoutParams = LinearLayout.LayoutParams(0, rowH, 1f).apply {
+                        marginStart = (3 * density).toInt()
+                        marginEnd = (3 * density).toInt()
+                    }
+                    setOnClickListener { onPick(this, acc) }
+                }
+                rowLayout.addView(chip)
+                views.add(chip to acc)
+            }
+            repeat(ACCOUNTS_PER_ROW - row.size) {
+                rowLayout.addView(
+                    View(context).apply {
+                        layoutParams = LinearLayout.LayoutParams(0, 1, 1f).apply {
+                            marginStart = (3 * density).toInt()
+                            marginEnd = (3 * density).toInt()
+                        }
+                    },
+                )
+            }
+            container.addView(rowLayout)
+        }
+        scroll.layoutParams = scroll.layoutParams.apply {
+            height = if (chunks.size > MAX_VISIBLE_ROWS) {
+                MAX_VISIBLE_ROWS * rowH + (MAX_VISIBLE_ROWS - 1) * gap
+            } else {
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            }
+        }
+    }
+
+    private fun selectAccount(
         root: View,
+        chip: TextView,
         acc: Account,
         confirmBtn: Button,
     ) {
         selectedAccountId = acc.id
         selectedAccountName = acc.name
-        refreshAccountSummary(root)
+        for ((v, _) in accountViews) {
+            paintChipSelected(v, false)
+        }
+        paintChipSelected(chip, true)
+        refreshMerchantSubtitle(root)
         if (selectedDirection == "transfer" && selectedToAccountId == acc.id) {
             selectedToAccountId = null
             selectedToAccountName = null
-            val other = allAccounts.firstOrNull { it.id != acc.id }
-            if (other != null) {
-                selectedToAccountId = other.id
-                selectedToAccountName = other.name
+            for ((v, _) in toAccountViews) {
+                paintChipSelected(v, false)
             }
-            refreshToAccountSummary(root)
+            toAccountViews.firstOrNull { it.second.id != acc.id }?.let { (c, a) ->
+                selectToAccount(root, c, a, confirmBtn)
+                return
+            }
         }
         applyConfirmEnabled(root, confirmBtn)
     }
 
-    private fun selectToAccountById(
+    private fun selectToAccount(
         root: View,
+        chip: TextView,
         acc: Account,
         confirmBtn: Button,
     ) {
@@ -1287,7 +1545,10 @@ object PaymentOverlayManager {
         }
         selectedToAccountId = acc.id
         selectedToAccountName = acc.name
-        refreshToAccountSummary(root)
+        for ((v, _) in toAccountViews) {
+            paintChipSelected(v, false)
+        }
+        paintChipSelected(chip, true)
         applyConfirmEnabled(root, confirmBtn)
     }
 
@@ -1296,10 +1557,6 @@ object PaymentOverlayManager {
         view: View,
         confirmBtn: Button,
     ) {
-        val summaryValue = view.findViewById<TextView>(R.id.tv_category_summary_value)
-        summaryValue?.text = "加载中…"
-        summaryValue?.setTextColor(0xFF999999.toInt())
-
         Thread {
             val lid = overlayPendingLedgerId ?: run {
                 val db = openDb(context)
@@ -1312,7 +1569,11 @@ object PaymentOverlayManager {
             val cats = queryCategories(context, selectedDirection, lid)
             mainHandler.post {
                 allCategories = cats
+                browsingParentId = null
                 applyPreferredCategory(context, view, confirmBtn)
+                if (categoryMoreExpanded) {
+                    renderCategoryLevel(context, view, confirmBtn)
+                }
             }
         }.start()
     }
@@ -1322,34 +1583,33 @@ object PaymentOverlayManager {
         view: View,
         confirmBtn: Button,
     ) {
+        fun firstLeaf(): Category? =
+            allCategories.firstOrNull { childrenOf(it.id).isEmpty() }
+                ?: allCategories.firstOrNull()
+
         val lastId = prefs(context).getString(KEY_LAST_CATEGORY, null)
         val last = lastId?.let { id -> allCategories.firstOrNull { it.id == id } }
-        if (last != null) {
-            val kids = childrenOf(last.id)
-            // Prefer a leaf category id.
-            if (kids.isEmpty()) {
-                selectedCategoryId = last.id
-                selectedCategoryName = last.name
-            } else {
-                selectedCategoryId = null
-                selectedCategoryName = null
+        when {
+            last != null -> {
+                val kids = childrenOf(last.id)
+                val pick = if (kids.isEmpty()) last else kids.first()
+                selectedCategoryId = pick.id
+                selectedCategoryName = pick.name
             }
-        } else if (selectedDirection == "transfer") {
-            val transfer = rootsOf(allCategories).firstOrNull { childrenOf(it.id).isEmpty() }
-                ?: allCategories.firstOrNull { childrenOf(it.id).isEmpty() }
-                ?: allCategories.firstOrNull()
-            if (transfer != null) {
-                selectedCategoryId = transfer.id
-                selectedCategoryName = transfer.name
-            } else {
-                selectedCategoryId = null
-                selectedCategoryName = null
+            selectedDirection == "transfer" -> {
+                val transfer = rootsOf(allCategories).firstOrNull { childrenOf(it.id).isEmpty() }
+                    ?: firstLeaf()
+                selectedCategoryId = transfer?.id
+                selectedCategoryName = transfer?.name
             }
-        } else {
-            selectedCategoryId = null
-            selectedCategoryName = null
+            else -> {
+                val pick = firstLeaf()
+                selectedCategoryId = pick?.id
+                selectedCategoryName = pick?.name
+            }
         }
-        refreshCategorySummary(view)
+        refreshCategoryChips(view)
+        paintInlineCategorySelection()
         applyConfirmEnabled(view, confirmBtn)
     }
 
@@ -1405,147 +1665,144 @@ object PaymentOverlayManager {
     private fun childrenOf(parentId: String): List<Category> =
         allCategories.filter { it.parentId == parentId }
 
-
-    private fun showCategoryCascadeMenu(
+    /** Show either L1 roots or L2 children — never side-by-side. */
+    private fun renderCategoryLevel(
         context: Context,
-        anchor: View,
-        root: View,
+        view: View,
         confirmBtn: Button,
     ) {
-        if (allCategories.isEmpty()) {
-            Toast.makeText(context, "暂无分类，请打开 App 确认", Toast.LENGTH_SHORT).show()
-            return
-        }
-        fun toItems(cats: List<Category>): List<OverlayCascadePopup.Item> {
-            return cats.map { cat ->
-                val kids = childrenOf(cat.id)
-                OverlayCascadePopup.Item(
-                    id = cat.id,
-                    label = cat.name,
-                    selected = cat.id == selectedCategoryId,
-                    children = if (kids.isEmpty()) emptyList() else toItems(kids),
-                )
-            }
-        }
-        val items = toItems(rootsOf(allCategories))
-        if (items.isEmpty()) {
-            Toast.makeText(context, "暂无分类，请打开 App 确认", Toast.LENGTH_SHORT).show()
-            return
-        }
-        OverlayCascadePopup.show(anchor, items) { picked ->
-            val cat = allCategories.firstOrNull { it.id == picked.id } ?: return@show
-            selectedCategoryId = cat.id
-            selectedCategoryName = cat.name
-            refreshCategorySummary(root)
-            applyConfirmEnabled(root, confirmBtn)
-        }
-    }
+        val scroll = view.findViewById<ScrollView>(R.id.scroll_categories) ?: return
+        val container = view.findViewById<LinearLayout>(R.id.container_categories) ?: return
+        val back = view.findViewById<TextView>(R.id.btn_cat_back)
+        val levelTv = view.findViewById<TextView>(R.id.tv_cat_level)
+        container.removeAllViews()
+        categoryViews.clear()
 
-    private fun showAccountCascadeMenu(
-        context: Context,
-        anchor: View,
-        root: View,
-        confirmBtn: Button,
-        toAccount: Boolean,
-    ) {
-        if (allAccounts.isEmpty()) {
-            Toast.makeText(context, "暂无资产账户，请打开 App 确认", Toast.LENGTH_SHORT).show()
-            return
-        }
-        val selectedId = if (toAccount) selectedToAccountId else selectedAccountId
-        val items = buildAccountCascadeItems(
-            accounts = allAccounts,
-            selectedId = selectedId,
-            excludeId = if (toAccount) selectedAccountId else null,
-            currentLedgerId = selectedLedgerId,
-        )
-        if (items.isEmpty()) {
-            Toast.makeText(
-                context,
-                if (toAccount) "转账至少需要两个资产账户" else "暂无资产账户，请打开 App 确认",
-                Toast.LENGTH_SHORT,
-            ).show()
-            return
-        }
-        OverlayCascadePopup.show(anchor, items) { picked ->
-            val acc = allAccounts.firstOrNull { it.id == picked.id } ?: return@show
-            if (toAccount) {
-                selectToAccountById(root, acc, confirmBtn)
-            } else {
-                selectAccountById(root, acc, confirmBtn)
-            }
-        }
-    }
-
-    /**
-     * 账户级联：同账本 → 资产分类 › 账户；
-     * 跨账本（多 ledger）→ 账本 › 资产分类 › 账户。
-     */
-    private fun buildAccountCascadeItems(
-        accounts: List<Account>,
-        selectedId: String?,
-        excludeId: String?,
-        currentLedgerId: String?,
-    ): List<OverlayCascadePopup.Item> {
-        val usable = accounts.filter { excludeId == null || it.id != excludeId }
-        if (usable.isEmpty()) return emptyList()
-
-        fun accountLeaves(list: List<Account>): List<OverlayCascadePopup.Item> =
-            list.map {
-                OverlayCascadePopup.Item(
-                    id = it.id,
-                    label = it.name,
-                    selected = it.id == selectedId,
-                )
-            }
-
-        fun typeGroups(list: List<Account>): List<OverlayCascadePopup.Item> {
-            // Preserve first-seen order of type ids.
-            val order = linkedMapOf<String, MutableList<Account>>()
-            for (a in list) {
-                val key = a.typeId.ifBlank { "_other" }
-                order.getOrPut(key) { mutableListOf() }.add(a)
-            }
-            if (order.size <= 1) {
-                // 只有一类时直接平铺账户，少点一层。
-                return accountLeaves(list)
-            }
-            return order.map { (typeId, accs) ->
-                val label = when {
-                    typeId == "_other" -> "其他"
-                    else -> assetTypeNameById[typeId]
-                        ?: accs.firstOrNull()?.typeName?.takeIf { it.isNotBlank() }
-                        ?: "其他"
-                }
-                OverlayCascadePopup.Item(
-                    id = "type:$typeId",
-                    label = label,
-                    children = accountLeaves(accs),
-                )
-            }
-        }
-
-        val byLedger = linkedMapOf<String, MutableList<Account>>()
-        for (a in usable) {
-            val lid = a.ledgerId.ifBlank { currentLedgerId ?: "_unknown" }
-            byLedger.getOrPut(lid) { mutableListOf() }.add(a)
-        }
-        return if (byLedger.size <= 1) {
-            typeGroups(usable)
+        val parentId = browsingParentId
+        val items: List<Category>
+        if (parentId == null) {
+            back?.visibility = View.GONE
+            levelTv?.text = if (selectedDirection == "transfer") "选择分类" else "选择一级分类"
+            items = rootsOf(allCategories)
         } else {
-            byLedger.map { (lid, accs) ->
-                val lname = accs.firstOrNull()?.ledgerName?.takeIf { it.isNotBlank() }
-                    ?: allLedgers.firstOrNull { it.first == lid }?.second
-                    ?: "账本"
-                OverlayCascadePopup.Item(
-                    id = "ledger:$lid",
-                    label = lname,
-                    children = typeGroups(accs),
+            back?.visibility = View.VISIBLE
+            val parentName = allCategories.firstOrNull { it.id == parentId }?.name ?: ""
+            levelTv?.text =
+                if (parentName.isNotEmpty()) "选择「$parentName」二级分类" else "选择二级分类"
+            items = childrenOf(parentId)
+        }
+
+        if (items.isEmpty()) {
+            val tip = TextView(context).apply {
+                text = if (parentId == null) {
+                    "暂无分类，请打开 App 确认"
+                } else {
+                    "该分类下暂无二级，可点上方返回"
+                }
+                setTextColor(0xFF888888.toInt())
+                textSize = 12f
+            }
+            container.addView(tip)
+            scroll.visibility = View.VISIBLE
+            return
+        }
+
+        val density = context.resources.displayMetrics.density
+        val rowH = (40 * density).toInt()
+        val gap = (8 * density).toInt()
+        val chunks = items.chunked(CATEGORIES_PER_ROW)
+        chunks.forEachIndexed { rowIndex, row ->
+            val rowLayout = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                ).apply {
+                    if (rowIndex < chunks.size - 1) bottomMargin = gap
+                }
+            }
+            for (cat in row) {
+                val chip = TextView(context).apply {
+                    text = cat.name
+                    textSize = 12.5f
+                    maxLines = 1
+                    ellipsize = android.text.TextUtils.TruncateAt.END
+                    gravity = Gravity.CENTER
+                    setPadding(
+                        (6 * density).toInt(),
+                        (8 * density).toInt(),
+                        (6 * density).toInt(),
+                        (8 * density).toInt(),
+                    )
+                    setBackgroundResource(R.drawable.centli_overlay_chip)
+                    paintChipSelected(this, cat.id == selectedCategoryId)
+                    layoutParams = LinearLayout.LayoutParams(0, rowH, 1f).apply {
+                        marginStart = (3 * density).toInt()
+                        marginEnd = (3 * density).toInt()
+                    }
+                    setOnClickListener {
+                        onCategoryChipTap(context, view, confirmBtn, this, cat)
+                    }
+                }
+                rowLayout.addView(chip)
+                categoryViews.add(chip to cat)
+            }
+            repeat(CATEGORIES_PER_ROW - row.size) {
+                rowLayout.addView(
+                    View(context).apply {
+                        layoutParams = LinearLayout.LayoutParams(0, 1, 1f).apply {
+                            marginStart = (3 * density).toInt()
+                            marginEnd = (3 * density).toInt()
+                        }
+                    },
                 )
             }
+            container.addView(rowLayout)
         }
+        scroll.layoutParams = scroll.layoutParams.apply {
+            height = if (chunks.size > MAX_VISIBLE_ROWS) {
+                MAX_VISIBLE_ROWS * rowH + (MAX_VISIBLE_ROWS - 1) * gap
+            } else {
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            }
+        }
+        scroll.visibility = View.VISIBLE
     }
 
+    private fun onCategoryChipTap(
+        context: Context,
+        view: View,
+        confirmBtn: Button,
+        chip: TextView,
+        cat: Category,
+    ) {
+        if (browsingParentId == null) {
+            val kids = childrenOf(cat.id)
+            if (kids.isNotEmpty()) {
+                browsingParentId = cat.id
+                renderCategoryLevel(context, view, confirmBtn)
+                return
+            }
+        }
+        selectLeafCategory(view, chip, cat, confirmBtn)
+    }
+
+    private fun selectLeafCategory(
+        root: View,
+        chip: TextView,
+        cat: Category,
+        confirmBtn: Button,
+    ) {
+        selectedCategoryId = cat.id
+        selectedCategoryName = cat.name
+        for ((v, _) in categoryViews) {
+            paintChipSelected(v, false)
+        }
+        paintChipSelected(chip, true)
+        refreshCategoryChips(root)
+        setCategoryMoreExpanded(root, false)
+        applyConfirmEnabled(root, confirmBtn)
+    }
 
     private fun parseAmountMinorFrom(amountEt: EditText?): Int? {
         val raw = amountEt?.text?.toString()?.trim().orEmpty()
@@ -1572,6 +1829,7 @@ object PaymentOverlayManager {
         accountName: String,
     ) {
         view.findViewById<View>(R.id.content_main).visibility = View.GONE
+        view.findViewById<View>(R.id.row_secondary_actions)?.visibility = View.GONE
         val success = view.findViewById<View>(R.id.content_success)
         success.visibility = View.VISIBLE
         val symbol = when (overlayCurrency.uppercase(Locale.US)) {
@@ -1634,6 +1892,12 @@ object PaymentOverlayManager {
         selectedLedgerName = ""
         allLedgers = emptyList()
         selectedDirection = "out"
+        browsingParentId = null
+        categoryMoreExpanded = false
+        categoryChipChoices = emptyList()
+        categoryViews.clear()
+        accountViews.clear()
+        toAccountViews.clear()
         OverlayCascadePopup.dismiss()
         overlaySourceLabel = ""
         allCategories = emptyList()
@@ -1924,12 +2188,12 @@ object PaymentOverlayManager {
         selectedToAccountName = null
         selectedCategoryId = null
         selectedCategoryName = null
+        browsingParentId = null
         OverlayCascadePopup.dismiss()
         confirmBtn.isEnabled = false
         confirmBtn.alpha = 0.5f
-        refreshCategorySummary(view)
-        refreshAccountSummary(view)
-        refreshToAccountSummary(view)
+        setCategoryMoreExpanded(view, false)
+        refreshCategoryChips(view)
         applyPanelVisibility(view)
         Thread {
             val crossLedger = selectedDirection == "transfer"

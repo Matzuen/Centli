@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>厘记 · 悬浮窗快速记账</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%2312825B'/%3E%3Cstop offset='.55' stop-color='%233E7E9E'/%3E%3Cstop offset='1' stop-color='%236E5BC2'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='9' fill='url(%23g)'/%3E%3Ctext x='16' y='22' font-size='16' font-family='sans-serif' font-weight='700' text-anchor='middle' fill='white'%3E厘%3C/text%3E%3C/svg%3E">
+<style>
+/* ===== 令牌：与主原型同一套绿紫渐变 + 毛玻璃 ===== */
+:root{
+  --bg:#F1EEE8; --ink:#211D17; --ink2:#6C6558; --ink3:#A39B8C;
+  --surface:rgba(255,255,255,.72);
+  --surface-2:rgba(255,255,255,.55);
+  --cell:rgba(255,255,255,.62);
+  --line:rgba(56,48,32,.10);
+  --line-strong:rgba(56,48,32,.16);
+  --g1:#12825B; --g2:#3E7E9E; --g3:#6E5BC2;
+  --grad:linear-gradient(135deg,#12825B 0%,#3E7E9E 52%,#6E5BC2 100%);
+  --ok:#1E8A52; --warn:#A67C3B;
+  --shadow:0 24px 64px rgba(30,24,14,.26), 0 2px 8px rgba(30,24,14,.08);
+  --app-bg:#E8E5DE;
+  --bubble-in:#FFFFFF; --bubble-out:#DDE7E1;
+  --glow-1:rgba(18,130,91,.12); --glow-2:rgba(110,91,194,.12);
+}
+.dark{
+  --bg:#14120F; --ink:#F0EDE4; --ink2:#A79F8F; --ink3:#6E6656;
+  --surface:rgba(38,34,28,.78);
+  --surface-2:rgba(255,255,255,.07);
+  --cell:rgba(255,255,255,.09);
+  --line:rgba(255,255,255,.10);
+  --line-strong:rgba(255,255,255,.18);
+  --g1:#2EBB82; --g2:#6C9FCC; --g3:#9A87E8;
+  --grad:linear-gradient(135deg,#2EBB82 0%,#6C9FCC 52%,#9A87E8 100%);
+  --ok:#4FC486; --warn:#C9A260;
+  --shadow:0 24px 64px rgba(0,0,0,.55), 0 2px 8px rgba(0,0,0,.35);
+  --app-bg:#1A1815;
+  --bubble-in:#26231E; --bubble-out:#22302A;
+  --glow-1:rgba(46,187,130,.10); --glow-2:rgba(154,135,232,.12);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+html{background:var(--bg)}
+body{
+  min-height:100vh;
+  font-family:"MiSans","PingFang SC","HarmonyOS Sans SC","Source Han Sans SC",system-ui,-apple-system,"Segoe UI",sans-serif;
+  background:
+    radial-gradient(720px 460px at 12% -8%, var(--glow-1), transparent 70%),
+    radial-gradient(760px 520px at 96% 106%, var(--glow-2), transparent 72%),
+    repeating-linear-gradient(0deg, transparent 0 31px, rgba(120,105,80,.045) 31px 32px),
+    repeating-linear-gradient(90deg, transparent 0 31px, rgba(120,105,80,.045) 31px 32px),
+    var(--bg);
+  background-attachment:fixed;
+  color:var(--ink);
+  -webkit-font-smoothing:antialiased;
+  transition:background-color .25s ease,color .25s ease;
+}
+button{font-family:inherit;color:inherit;border:0;background:none;padding:0;cursor:pointer}
+input{font-family:inherit}
+
+/* ===== 顶栏（舞台工具，不属于 App 界面） ===== */
+.topbar{
+  max-width:1180px;margin:0 auto;padding:22px 20px 0;
+  display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
+}
+.brand{display:flex;align-items:center;gap:12px}
+.brand .mark{
+  width:40px;height:40px;border-radius:12px;background:var(--grad);
+  display:grid;place-items:center;color:#fff;font-weight:700;font-size:16px;
+  box-shadow:0 8px 20px rgba(62,126,158,.28);
+}
+.brand h1{margin:0;font-size:19px;font-weight:700;letter-spacing:.2px}
+.brand p{margin:2px 0 0;font-size:12.5px;color:var(--ink2)}
+.nav{display:flex;gap:6px;flex-wrap:wrap}
+.nav button{
+  height:36px;padding:0 13px;border-radius:18px;font-size:13px;
+  background:var(--surface);border:1px solid var(--line);color:var(--ink2);
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  transition:all .16s ease;
+}
+.nav button:hover{border-color:var(--line-strong);color:var(--ink)}
+.nav button.on{
+  background:var(--ink);color:var(--bg);border-color:transparent;font-weight:600;
+}
+.nav button.ghost{color:var(--ink3)}
+
+/* ===== 舞台 ===== */
+.stage{
+  max-width:1180px;margin:0 auto;padding:26px 20px 72px;
+  display:grid;grid-template-columns:minmax(340px,420px) minmax(320px,1fr);
+  gap:56px;align-items:start;justify-items:center;
+}
+.phone-col{display:flex;flex-direction:column;align-items:center;gap:14px;position:sticky;top:14px}
+@media(max-width:960px){
+  .stage{grid-template-columns:1fr;gap:30px;padding-top:18px}
+  .phone-col{position:static}
+}
+.caption{font-size:12px;color:var(--ink3);margin:0;text-align:center;max-width:340px;line-height:1.6}
+
+/* ===== 手机（其他应用示意） ===== */
+.phone{
+  position:relative;width:min(390px,calc(100vw - 40px));aspect-ratio:390/844;
+  border-radius:36px;overflow:hidden;background:var(--app-bg);
+  box-shadow:0 40px 90px rgba(28,22,12,.28), 0 0 0 1px rgba(0,0,0,.16), inset 0 0 0 6px rgba(255,255,255,.55);
+  isolation:isolate;
+}
+.sb{
+  height:30px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 22px;font-size:11.5px;font-weight:600;color:#2A2A2A;
+}
+.dark .sb{color:#EDEAE2}
+.sb-r{display:flex;align-items:center;gap:5px}
+.sb-r i{display:block;width:14px;height:8px;border-radius:2px;background:currentColor;opacity:.55}
+.sb-r i.b{width:18px;opacity:.7}
+.app{position:absolute;inset:30px 0 0 0;display:flex;flex-direction:column}
+.app-bar{
+  height:48px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 18px;font-size:15px;font-weight:600;color:var(--ink);
+  border-bottom:1px solid rgba(120,105,80,.10);
+}
+.dark .app-bar{border-color:rgba(255,255,255,.06)}
+.app-ttl{font-size:16px}
+.app-ic{font-size:18px;color:var(--ink2);letter-spacing:2px}
+.msgs{padding:18px 16px;display:flex;flex-direction:column;gap:12px;flex:1;overflow:hidden}
+.m{
+  max-width:75%;padding:10px 13px;border-radius:16px;font-size:13.5px;line-height:1.55;
+  color:var(--ink);background:var(--bubble-in);box-shadow:0 1px 2px rgba(0,0,0,.05);
+  position:relative;
+}
+.m em{display:block;font-style:normal;font-size:10.5px;color:var(--ink3);margin-top:4px}
+.m.out{align-self:flex-end;background:var(--bubble-out)}
+.m.img{
+  width:180px;height:96px;padding:0;background:
+    linear-gradient(135deg,rgba(18,130,91,.18),rgba(110,91,194,.22));
+  border:1px dashed rgba(120,105,80,.22);
+}
+.composer{
+  margin:0 12px 14px;height:44px;border-radius:22px;background:rgba(255,255,255,.7);
+  display:flex;align-items:center;padding:0 16px;font-size:13px;color:var(--ink3);
+  border:1px solid rgba(120,105,80,.12);
+}
+.dark .composer{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.08)}
+
+/* ===== 悬浮层 ===== */
+.ov{position:absolute;inset:0;pointer-events:none;z-index:5}
+.ov > *{pointer-events:auto}
+
+.bubble{
+  position:absolute;right:14px;top:57%;width:56px;height:56px;border-radius:50%;
+  background:var(--grad);color:#fff;display:grid;place-items:center;
+  box-shadow:0 12px 28px rgba(40,60,80,.36), 0 0 0 1px rgba(255,255,255,.28) inset;
+  cursor:grab;touch-action:none;transition:transform .18s ease, opacity .18s ease;
+}
+.bubble:active{cursor:grabbing;transform:scale(.96)}
+.bubble svg{width:22px;height:22px}
+.bubble .dot{
+  position:absolute;top:-3px;right:-3px;min-width:18px;height:18px;border-radius:9px;
+  background:#CE4A41;color:#fff;font-size:10.5px;font-weight:700;
+  display:none;align-items:center;justify-content:center;padding:0 4px;
+  box-shadow:0 2px 6px rgba(206,74,65,.5);
+}
+.bubble.has .dot{display:flex}
+.pilllet{
+  position:absolute;right:78px;top:calc(57% + 15px);transform:translateY(-50%);
+  height:34px;padding:0 12px 0 10px;border-radius:17px;display:none;align-items:center;gap:7px;
+  background:var(--surface);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  border:1px solid var(--line);box-shadow:0 8px 22px rgba(30,24,14,.16);
+  font-size:12px;color:var(--ink2);white-space:nowrap;
+}
+.pilllet.show{display:flex}
+.pilllet b{color:var(--ink);font-variant-numeric:tabular-nums}
+.pilllet .pdot{width:6px;height:6px;border-radius:50%;background:#CE4A41;animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.45;transform:scale(.8)}}
+
+/* ===== 卡片 ===== */
+.card{
+  position:absolute;left:50%;bottom:14px;transform:translate(-50%,10px) scale(.98);
+  width:min(332px,calc(100% - 24px));
+  background:var(--surface);backdrop-filter:blur(24px) saturate(1.2);-webkit-backdrop-filter:blur(24px) saturate(1.2);
+  border:1px solid rgba(255,255,255,.55);border-radius:24px;
+  box-shadow:var(--shadow);
+  padding:13px 13px 11px;opacity:0;visibility:hidden;pointer-events:none;
+  transition:opacity .2s ease, transform .24s cubic-bezier(.32,.72,.35,1), visibility .2s;
+}
+.dark .card{border-color:rgba(255,255,255,.14)}
+.card.on{opacity:1;visibility:visible;pointer-events:auto;transform:translate(-50%,0) scale(1)}
+
+.card-top{display:flex;align-items:center;gap:8px;margin-bottom:9px}
+.src{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--ink2);min-width:0}
+.src .sdot{width:16px;height:16px;border-radius:5px;background:var(--grad);display:grid;place-items:center;flex:none}
+.src .sdot svg{width:9px;height:9px;color:#fff}
+.src span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tag{
+  font-size:10px;color:var(--g1);background:rgba(18,130,91,.10);
+  border-radius:6px;padding:3px 6px;flex:none;letter-spacing:.2px;
+}
+.dark .tag{color:#7FD9B0;background:rgba(46,187,130,.14)}
+.spacer{flex:1}
+.icon-btn{
+  width:36px;height:36px;border-radius:50%;display:grid;place-items:center;color:var(--ink2);
+  transition:background .15s;
+}
+.icon-btn:hover{background:var(--surface-2);color:var(--ink)}
+.icon-btn svg{width:15px;height:15px}
+
+.merchant{font-size:14.5px;font-weight:600;letter-spacing:.1px;display:flex;align-items:baseline;gap:6px;flex-wrap:wrap}
+.merchant .sub{font-size:11px;font-weight:400;color:var(--ink3)}
+.amount{
+  margin:6px 0 10px;font-size:34px;font-weight:700;letter-spacing:-.5px;
+  font-variant-numeric:tabular-nums;line-height:1.15;
+}
+.amount .cur{font-size:18px;font-weight:600;margin-right:2px;color:var(--ink2)}
+.amount.masked{letter-spacing:2px;color:var(--ink3)}
+
+.field{display:flex;align-items:center;gap:9px;margin-bottom:8px}
+.flabel{font-size:11.5px;color:var(--ink3);flex:none;width:24px}
+.chips{display:flex;gap:6px;flex:1;min-width:0;overflow:hidden}
+.chip{
+  height:38px;padding:0 13px;border-radius:19px;font-size:12.5px;color:var(--ink2);
+  background:var(--surface-2);border:1px solid transparent;white-space:nowrap;
+  transition:all .15s;
+}
+.chip:hover{border-color:var(--line-strong);color:var(--ink)}
+.chip.on{
+  background:rgba(18,130,91,.12);color:var(--g1);font-weight:600;
+  border-color:rgba(18,130,91,.28);
+}
+.dark .chip.on{color:#7FD9B0;background:rgba(46,187,130,.16);border-color:rgba(46,187,130,.32)}
+.chip.more{color:var(--ink3);padding:0 8px}
+
+.acc{
+  display:flex;align-items:center;gap:7px;height:40px;padding:0 11px;border-radius:20px;
+  background:var(--surface-2);font-size:12px;color:var(--ink2);position:relative;
+}
+.acc b{color:var(--ink);font-weight:600;max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.acc svg{width:10px;height:10px;color:var(--ink3);flex:none}
+
+.picklist{
+  position:absolute;right:0;bottom:40px;width:190px;padding:6px;border-radius:16px;
+  background:var(--surface);backdrop-filter:blur(20px);border:1px solid var(--line);
+  box-shadow:0 16px 40px rgba(30,24,14,.22);display:none;z-index:3;
+}
+.picklist.show{display:block}
+.picklist button{
+  display:flex;width:100%;align-items:center;justify-content:space-between;gap:8px;
+  height:42px;padding:0 10px;border-radius:10px;font-size:12.5px;color:var(--ink2);text-align:left;
+}
+.picklist button:hover{background:var(--surface-2);color:var(--ink)}
+.picklist button.on{color:var(--g1);font-weight:600}
+.dark .picklist button.on{color:#7FD9B0}
+
+.hint{font-size:10.5px;color:var(--ink3);margin:2px 0 10px;display:flex;align-items:center;gap:5px}
+.hint svg{width:11px;height:11px;flex:none}
+
+.primary{
+  width:100%;height:52px;border-radius:16px;background:var(--grad);color:#fff;
+  font-size:16px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:7px;
+  box-shadow:0 10px 24px rgba(62,126,158,.32);transition:transform .12s ease, box-shadow .2s;
+}
+.primary:active{transform:scale(.985)}
+.primary svg{width:17px;height:17px}
+.primary.off{opacity:.45;pointer-events:none}
+.foot{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:7px;color:var(--ink3);font-size:11px}
+.foot button{height:40px;padding:0 13px;border-radius:12px;font-size:11.5px;color:var(--ink2)}
+.foot button:hover{background:var(--surface-2);color:var(--ink)}
+.foot i{font-style:normal;opacity:.5}
+
+/* ===== 手记卡 ===== */
+.qtl{font-size:14.5px;font-weight:700}
+.seg{display:flex;background:var(--surface-2);border-radius:12px;padding:3px;gap:2px}
+.seg button{height:36px;padding:0 13px;border-radius:9px;font-size:11.5px;color:var(--ink2)}
+.seg button.on{background:var(--surface);color:var(--ink);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.dark .seg button.on{background:rgba(255,255,255,.14)}
+.qamt{display:flex;align-items:baseline;gap:2px;margin:9px 2px 8px;font-variant-numeric:tabular-nums}
+.qamt .cur{font-size:16px;font-weight:600;color:var(--ink2)}
+.qamt .v{font-size:30px;font-weight:700;letter-spacing:-.5px}
+.qamt .v.small{color:var(--ink3);font-size:26px}
+.pad{display:grid;grid-template-columns:1fr 1fr 1fr 1.08fr;grid-template-rows:repeat(4,47px);gap:5px;margin-bottom:9px}
+.k{
+  border-radius:13px;background:var(--cell);border:1px solid var(--line);
+  font-size:19px;font-weight:600;display:grid;place-items:center;
+  transition:transform .08s ease, background .15s;
+}
+.k:hover{background:rgba(255,255,255,.85)}
+.dark .k:hover{background:rgba(255,255,255,.16)}
+.k:active{transform:scale(.96)}
+.k.fn{font-size:15px;color:var(--ink2);font-weight:500;display:grid;place-items:center}
+.k svg{width:19px;height:19px}
+.k.save{
+  grid-column:4;grid-row:2/5;background:var(--grad);color:#fff;border:0;border-radius:13px;
+  font-size:14px;font-weight:700;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+  box-shadow:0 8px 20px rgba(62,126,158,.28);
+}
+.k.save span{font-size:9.5px;font-weight:400;opacity:.82;letter-spacing:.2px}
+.k.save:disabled{opacity:1;background:var(--surface-2);color:var(--ink3);border:1px solid var(--line);box-shadow:none}
+.qcats{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin-bottom:9px}
+.qcat{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+  height:50px;border-radius:13px;background:var(--surface-2);font-size:10.5px;color:var(--ink2);
+}
+.qcat svg{width:16px;height:16px;opacity:.82;color:var(--ink2)}
+.qcat.on{background:rgba(18,130,91,.12);color:var(--g1);font-weight:600}
+.qcat.on svg{opacity:1;color:var(--g1)}
+.dark .qcat.on{color:#7FD9B0;background:rgba(46,187,130,.16)}
+.dark .qcat.on svg{color:#7FD9B0}
+.qfoot{display:flex;align-items:center;gap:8px;justify-content:space-between}
+.qfoot .acc{flex:1;min-width:0}
+.sw{display:flex;align-items:center;gap:6px;height:40px;font-size:11px;color:var(--ink3);flex:none}
+.track{width:30px;height:18px;border-radius:9px;background:var(--line-strong);position:relative;transition:background .2s}
+.track::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:7px;background:#fff;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.track.on{background:var(--g1)}
+.dark .track.on{background:#2EBB82}
+.track.on::after{transform:translateX(12px)}
+
+/* ===== 完成卡 ===== */
+.done{text-align:center;padding:18px 14px 12px}
+.dico{
+  width:46px;height:46px;border-radius:50%;margin:0 auto 10px;background:var(--grad);
+  display:grid;place-items:center;color:#fff;box-shadow:0 10px 24px rgba(62,126,158,.3);
+}
+.dico svg{width:20px;height:20px}
+.dttl{font-size:16px;font-weight:700;margin-bottom:3px}
+.dsub{font-size:11.5px;color:var(--ink3);margin-bottom:8px}
+.damt{font-size:26px;font-weight:700;font-variant-numeric:tabular-nums;margin-bottom:12px}
+.undo{
+  position:relative;height:40px;border-radius:11px;background:var(--surface-2);
+  display:flex;align-items:center;gap:8px;padding:0 12px;overflow:hidden;margin-bottom:8px;
+}
+.undo .bar{position:absolute;left:0;bottom:0;height:2px;width:100%;background:var(--grad);opacity:.6;transition:width .12s linear}
+.undo svg{position:relative;width:13px;height:13px;color:var(--g1)}
+.dark .undo svg{color:#7FD9B0}
+.undo b{position:relative;font-size:12.5px;color:var(--g1);font-weight:600}
+.dark .undo b{color:#7FD9B0}
+.undo i{position:relative;font-style:normal;font-size:11px;color:var(--ink3);margin-left:auto}
+.ghostbtn{
+  width:100%;height:40px;border-radius:12px;font-size:12.5px;color:var(--ink2);background:transparent;
+}
+.ghostbtn:hover{background:var(--surface-2);color:var(--ink)}
+
+/* ===== toast ===== */
+.toast{
+  position:absolute;left:50%;bottom:30px;transform:translate(-50%,8px);
+  background:rgba(28,24,18,.88);color:#F6F3EA;font-size:12px;padding:9px 14px;border-radius:12px;
+  opacity:0;transition:all .25s ease;pointer-events:none;z-index:6;max-width:80%;text-align:center;
+}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+
+/* ===== 说明栏 ===== */
+.notes{width:100%;max-width:520px}
+.notes h2{margin:0 0 6px;font-size:22px;letter-spacing:-.2px}
+.notes .lede{margin:0 0 22px;font-size:13px;line-height:1.75;color:var(--ink2);max-width:46ch}
+.notes h3{
+  margin:24px 0 10px;font-size:12px;color:var(--ink3);font-weight:600;letter-spacing:.4px;
+  display:flex;align-items:center;gap:8px;
+}
+.notes h3::after{content:"";flex:1;height:1px;background:var(--line)}
+.cmp{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:6px}
+.cmp > div{padding:12px 13px;border-radius:14px;background:var(--surface);border:1px solid var(--line)}
+.cmp .lab{font-size:10.5px;color:var(--ink3);margin-bottom:6px;letter-spacing:.3px}
+.cmp ol,.cmp ul{margin:0;padding-left:16px;font-size:12px;line-height:1.85;color:var(--ink2)}
+.cmp .new{border-color:rgba(18,130,91,.24)}
+.cmp .new ol{color:var(--ink)}
+.cmp .new li:first-child{font-weight:600;color:var(--g1)}
+.dark .cmp .new li:first-child{color:#7FD9B0}
+.rules{display:flex;flex-direction:column;gap:2px;margin:0;padding:0;list-style:none}
+.rules li{display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}
+.rules li:last-child{border-bottom:0}
+.rules .n{
+  width:22px;height:22px;border-radius:7px;background:var(--surface-2);color:var(--ink2);
+  font-size:11px;font-weight:600;display:grid;place-items:center;flex:none;margin-top:1px;
+}
+.rules b{display:block;font-size:13px;margin-bottom:3px}
+.rules p{margin:0;font-size:11.5px;line-height:1.7;color:var(--ink2)}
+.kv{display:flex;flex-wrap:wrap;gap:8px}
+.kv span{
+  font-size:11px;color:var(--ink2);background:var(--surface);border:1px solid var(--line);
+  padding:6px 9px;border-radius:9px;
+}
+.kv b{color:var(--ink);font-weight:600}
+.states-list{font-size:12px;line-height:1.9;color:var(--ink2);margin:0;padding-left:16px}
+.states-list code{
+  font-size:11px;background:var(--surface-2);padding:1px 5px;border-radius:4px;color:var(--ink);
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media(max-width:700px){
+  .stage{padding:14px 14px 44px;gap:22px}
+  .phone{width:100%;max-width:390px}
+  .notes{max-width:100%}
+  .notes h2{font-size:19px}
+  .cmp{grid-template-columns:1fr}
+  .topbar{gap:12px}
+  .nav{width:100%;display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+  .nav button{height:34px;width:100%;padding:0 8px;font-size:12.5px}
+  .caption{max-width:100%}
+}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="mark">厘</div>
+    <div>
+      <h1>悬浮窗 · 快速记账</h1>
+      <p>点一下气泡或切换状态，查看四种形态</p>
+    </div>
+  </div>
+  <nav class="nav" id="nav">
+    <button data-state="idle" class="on">气泡</button>
+    <button data-state="pending">待确认</button>
+    <button data-state="quick">手记</button>
+    <button data-state="done">已入账</button>
+    <button data-state="flow" class="ghost">演示流程</button>
+    <button data-theme class="ghost">深色</button>
+  </nav>
+</header>
+
+<main class="stage">
+  <div class="phone-col">
+    <div class="phone" id="phone">
+      <div class="sb">
+        <span>9:41</span>
+        <span class="sb-r"><i></i><i class="b"></i><i></i></span>
+      </div>
+      <div class="app">
+        <div class="app-bar"><span>‹</span><span class="app-ttl">聊天</span><span class="app-ic">⋯</span></div>
+        <div class="msgs">
+          <div class="m in">周末一起爬山吗？<em>10:02</em></div>
+          <div class="m out">去啊，几点集合？<em>10:03</em></div>
+          <div class="m in">八点半，老地方<em>10:05</em></div>
+          <div class="m out">好，我买点咖啡带过去<em>10:05</em></div>
+          <div class="m in img"></div>
+        </div>
+        <div class="composer">说点什么…</div>
+      </div>
+
+      <!-- 悬浮层 -->
+      <div class="ov" id="ov">
+        <button class="bubble" id="bubble" title="拖动可换位置">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          <span class="dot" id="dot">1</span>
+        </button>
+        <div class="pilllet" id="pilllet"><span class="pdot"></span>待确认 <b>¥18.00</b></div>
+
+        <!-- 待确认卡 -->
+        <div class="card" id="cardPending">
+          <div class="card-top">
+            <span class="src">
+              <span class="sdot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 4h10v16l-5-4-5 4z"/></svg></span>
+              <span>微信支付 · 18:32</span>
+            </span>
+            <span class="tag">来自通知</span>
+            <span class="spacer"></span>
+            <button class="icon-btn" data-act="mask" title="隐藏金额">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6-10-6-10-6z"/><circle cx="12" cy="12" r="2.6"/></svg>
+            </button>
+            <button class="icon-btn" data-act="close" title="收起">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg>
+            </button>
+          </div>
+          <div class="merchant">瑞幸咖啡 <span class="sub">· 招商银行信用卡</span></div>
+          <div class="amount" id="amtPending"><span class="cur">¥</span>18.00</div>
+
+          <div class="field">
+            <span class="flabel">分类</span>
+            <div class="chips" id="pCats">
+              <button class="chip on">餐饮</button>
+              <button class="chip">咖啡</button>
+              <button class="chip">其他</button>
+              <button class="chip more" data-act="morecat">更多</button>
+            </div>
+          </div>
+          <div class="field" style="margin-bottom:4px">
+            <span class="flabel">账户</span>
+            <div class="acc" role="button" tabindex="0" data-act="accpick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="18" height="13" rx="3"/><path d="M3 10h18"/></svg><b id="pAcc">招商银行信用卡</b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+              <div class="picklist" id="pAccList">
+                <button class="on">招商银行信用卡</button>
+                <button>微信零钱</button>
+                <button>支付宝余额</button>
+              </div>
+            </div>
+          </div>
+          <div class="hint">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l8 4v5c0 5-3.4 8-8 9-4.6-1-8-4-8-9v-5z"/></svg>
+            已按 12 次历史记录预填，直接确认即可
+          </div>
+          <button class="primary" data-act="confirm">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+            入账
+          </button>
+          <div class="foot">
+            <button data-act="ignore">忽略</button><i>·</i><button data-act="later">稍后</button>
+          </div>
+        </div>
+
+        <!-- 手记卡 -->
+        <div class="card" id="cardQuick">
+          <div class="card-top">
+            <span class="qtl">记一笔</span>
+            <span class="seg" id="qseg">
+              <button class="on" data-dir="out">支出</button>
+              <button data-dir="in">收入</button>
+            </span>
+            <span class="spacer"></span>
+            <button class="icon-btn" data-act="close" title="收起">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg>
+            </button>
+          </div>
+          <div class="qamt"><span class="cur">¥</span><span class="v small" id="qAmt">0.00</span></div>
+          <div class="pad" id="pad">
+            <button class="k" data-k="1">1</button>
+            <button class="k" data-k="2">2</button>
+            <button class="k" data-k="3">3</button>
+            <button class="k fn" data-k="del" aria-label="删除">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M9 6h9a2 2 0 012 2v8a2 2 0 01-2 2H9l-6-6z"/><path d="M11.5 10l4 4M15.5 10l-4 4"/></svg>
+            </button>
+            <button class="k" data-k="4">4</button>
+            <button class="k" data-k="5">5</button>
+            <button class="k" data-k="6">6</button>
+            <button class="k save" data-act="qsave" disabled>保存<span>松手收起</span></button>
+            <button class="k" data-k="7">7</button>
+            <button class="k" data-k="8">8</button>
+            <button class="k" data-k="9">9</button>
+            <button class="k" data-k=".">.</button>
+            <button class="k" data-k="0">0</button>
+            <button class="k fn" data-k="00">00</button>
+          </div>
+          <div class="qcats" id="qcats">
+            <button class="qcat on" data-cat="餐饮"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 4v8a2 2 0 004 0V4M7 12v8"/><path d="M17 4c-1.6 1-2.4 2.6-2.4 4.6 0 1.4.8 2.4 2.4 2.6V20"/></svg>餐饮</button>
+            <button class="qcat" data-cat="交通"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="16" height="12" rx="3"/><path d="M4 12h16M8 20l1.5-4M16 20l-1.5-4"/></svg>交通</button>
+            <button class="qcat" data-cat="购物"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 8h12l1 12H5z"/><path d="M9 8V6a3 3 0 016 0v2"/></svg>购物</button>
+            <button class="qcat" data-cat="娱乐"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 5v14M16 5v14M8 9h8M8 15h8"/></svg>娱乐</button>
+            <button class="qcat" data-cat="其他"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M4 12h16M4 17h10"/></svg>其他</button>
+          </div>
+          <div class="qfoot">
+            <div class="acc" role="button" tabindex="0" data-act="qaccpick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="18" height="13" rx="3"/><path d="M3 10h18"/></svg><b id="qAcc">微信零钱</b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+              <div class="picklist" id="qAccList">
+                <button class="on">微信零钱</button>
+                <button>招商银行信用卡</button>
+                <button>支付宝余额</button>
+              </div>
+            </div>
+            <span class="sw" data-act="budget">计入预算<span class="track on" id="trk"></span></span>
+          </div>
+        </div>
+
+        <!-- 已入账 -->
+        <div class="card done" id="cardDone">
+          <div class="dico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+          <div class="dttl">已入账</div>
+          <div class="dsub" id="dSub">瑞幸咖啡 · 餐饮 · 招商银行信用卡</div>
+          <div class="damt" id="dAmt">¥18.00</div>
+          <div class="undo" data-act="undo">
+            <span class="bar" id="undoBar"></span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 10a8 8 0 1 1 2 7"/><path d="M4 4v6h6"/></svg>
+            <b>撤销</b>
+            <i id="undoCd">3 秒后收起</i>
+          </div>
+          <button class="ghostbtn" data-act="again">再记一笔</button>
+        </div>
+
+        <div class="toast" id="toast"></div>
+      </div>
+    </div>
+    <p class="caption">背景为「其他应用」示意：悬浮卡不遮全屏、不弹系统键盘，也不挡住正在输入的区域。</p>
+  </div>
+
+  <aside class="notes">
+    <h2>把悬浮窗做成「确认卡」，不是缩小版记账页</h2>
+    <p class="lede">支付通知已经知道金额、商户和时间。用户要做的事只有一件：确认。当前那套输入框 + 二级级联，把「确认」变成了「重新录一遍」。</p>
+
+    <h3>现状 7 步 → 现在 1 步</h3>
+    <div class="cmp">
+      <div>
+        <div class="lab">现在的悬浮窗</div>
+        <ol>
+          <li>通知触发，全屏遮罩弹出</li>
+          <li>点金额框，系统键盘顶起</li>
+          <li>输金额、选账本</li>
+          <li>点分类 pill → 级联弹窗</li>
+          <li>点账户 pill → 级联弹窗</li>
+          <li>方向 chips 再确认一次</li>
+          <li>点「确认入账」</li>
+        </ol>
+      </div>
+      <div class="new">
+        <div class="lab">新的悬浮窗</div>
+        <ol>
+          <li>点「入账」，完成</li>
+        </ol>
+        <ol start="2">
+          <li>要改分类：点 chip</li>
+          <li>要改账户：点账户行</li>
+          <li>要改金额：点金额</li>
+        </ol>
+      </div>
+    </div>
+
+    <h3>三条规则</h3>
+    <ul class="rules">
+      <li><span class="n">1</span><div><b>默认即答案</b><p>金额、商户、分类、账户全部预填；预填依据是商户规则与上次选择，卡片底部只写一行小字说明来源。</p></div></li>
+      <li><span class="n">2</span><div><b>改是例外，不是流程</b><p>分类给 3 个候选 chip，账户是一行可点文本，不再用弹出式级联菜单压住卡片。</p></div></li>
+      <li><span class="n">3</span><div><b>不遮屏，不抬键盘</b><p>没有全屏遮罩，卡片贴底悬浮；手记键盘自绘，不触发系统 IME，卡片不会被顶起或跳动。</p></div></li>
+    </ul>
+
+    <h3>形态与尺寸</h3>
+    <div class="kv">
+      <span>气泡 <b>56dp</b></span>
+      <span>卡片宽 <b>332dp</b></span>
+      <span>圆角 <b>24dp</b></span>
+      <span>主按钮 <b>52dp</b></span>
+      <span>点按 <b>≥36dp</b></span>
+      <span>卡片高度上限 <b>屏高 55%</b></span>
+    </div>
+
+    <h3>状态机</h3>
+    <ul class="states-list">
+      <li><code>气泡</code> 常驻，可拖动吸附左右边缘，位置记忆</li>
+      <li><code>待确认</code> 通知到达，气泡带红点，点开确认卡</li>
+      <li><code>手记</code> 点气泡直接记一笔，金额键盘 + 5 个常用分类</li>
+      <li><code>已入账</code> 撤销倒计时 3 秒，结束后收起回气泡</li>
+    </ul>
+
+    <h3>两个容易被忽略的点</h3>
+    <ul class="rules">
+      <li><span class="n">A</span><div><b>金额会露在别人面前</b><p>浮窗压在微信/相册上，金额默认可见。给一个眼睛按钮即时遮蔽，设置里再放「悬浮窗始终隐藏金额」。</p></div></li>
+      <li><span class="n">B</span><div><b>确认完不该打断节奏</b><p>「入账」后原地变结果并给 3 秒撤销，不弹第二个页面；连记场景点「再记一笔」金额清空、分类与账户保留。</p></div></li>
+    </ul>
+  </aside>
+</main>
+
+<script>
+/* ========== 状态 ========== */
+var S = {
+  state: 'idle',
+  hasPending: false,
+  masked: false,
+  amount: '0.00',
+  cat: '餐饮',
+  acc: '招商银行信用卡',
+  qacc: '微信零钱',
+  dir: 'out',
+  budget: true,
+  cd: 3,
+  dAmount: '18.00',
+  moved: false,
+  flowTimers: [],
+  timers: []
+};
+var $ = function (s, r) { return (r || document).querySelector(s); };
+var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
+
+function clearTimers() {
+  S.timers.forEach(function (t) { clearTimeout(t); clearInterval(t); });
+  S.timers = [];
+}
+function later(fn, ms) { var t = setTimeout(fn, ms); S.timers.push(t); return t; }
+function every(fn, ms) { var t = setInterval(fn, ms); S.timers.push(t); return t; }
+
+/* ========== 渲染 ========== */
+function render() {
+  var bubble = $('#bubble'), pill = $('#pilllet');
+  $('#cardPending').classList.toggle('on', S.state === 'pending');
+  $('#cardQuick').classList.toggle('on', S.state === 'quick');
+  $('#cardDone').classList.toggle('on', S.state === 'done');
+  var cardOpen = S.state !== 'idle';
+  bubble.style.opacity = cardOpen ? '0' : '1';
+  bubble.style.pointerEvents = cardOpen ? 'none' : 'auto';
+  pill.classList.toggle('show', S.state === 'idle' && !!S.hasPending && !S.moved);
+  bubble.classList.toggle('has', !!S.hasPending);
+  $('#dot').textContent = S.hasPending ? '1' : '';
+
+  $('#amtPending').classList.toggle('masked', S.masked);
+  $('#amtPending').innerHTML = S.masked
+    ? '<span class="cur">¥</span>•••'
+    : '<span class="cur">¥</span>18.00';
+  $$('#nav button[data-state]').forEach(function (b) {
+    b.classList.toggle('on', b.dataset.state === S.state);
+  });
+  $('#qAmt').textContent = S.amount;
+  $('#qAmt').classList.toggle('small', S.amount === '0.00');
+  $('#qAmt').classList.toggle('masked', S.masked);
+  $('#dAmt').textContent = S.masked ? '¥ •••' : '¥' + S.dAmount;
+  var saveBtn = $('.k.save');
+  saveBtn.disabled = !(parseFloat(S.amount) > 0);
+}
+function setState(s, opts) {
+  opts = opts || {};
+  clearTimers();
+  S.state = s;
+  if (s === 'pending') { S.hasPending = true; }
+  if (s === 'idle') { S.hasPending = opts.keepPending ? S.hasPending : false; }
+  if (s === 'quick') { S.amount = '0.00'; }
+  if (s === 'done') { startCountdown(); }
+  render();
+}
+
+/* ========== 已入账倒计时 ========== */
+function startCountdown() {
+  S.cd = 3;
+  var bar = $('#undoBar'), cd = $('#undoCd');
+  if (!bar) return;
+  bar.style.width = '100%';
+  cd.textContent = '3 秒后收起';
+  var tick = every(function () {
+    S.cd = Math.max(0, S.cd - 0.1);
+    if (S.cd <= 0) {
+      clearTimers();
+      S.state = 'idle';
+      S.hasPending = false;
+      render();
+      return;
+    }
+    cd.textContent = Math.ceil(S.cd) + ' 秒后收起';
+    bar.style.width = (S.cd / 3 * 100) + '%';
+  }, 100);
+}
+
+/* ========== 交互 ========== */
+$('#nav').addEventListener('click', function (e) {
+  var b = e.target.closest('button');
+  if (!b) return;
+  if (b.hasAttribute('data-theme')) {
+    var dark = document.body.classList.toggle('dark');
+    b.textContent = dark ? '浅色' : '深色';
+    return;
+  }
+  if (b.dataset.state === 'flow') { runFlow(); return; }
+  if (b.dataset.state) clearFlow();
+  if (b.dataset.state === 'done') {
+    S.dAmount = parseFloat(S.amount) > 0 ? Number(S.amount).toFixed(2) : '18.00';
+    setState('done');
+    return;
+  }
+  if (b.dataset.state === 'pending') {
+    $('#dSub').textContent = '瑞幸咖啡 · ' + S.cat + ' · ' + S.acc;
+    setState('pending');
+    return;
+  }
+  setState(b.dataset.state);
+});
+
+/* 气泡拖拽 + 点击 */
+(function () {
+  var b = $('#bubble'), phone = $('#phone');
+  var dragging = false, moved = false, sx = 0, sy = 0, ox = 0, oy = 0;
+  b.addEventListener('pointerdown', function (e) {
+    dragging = true; moved = false;
+    sx = e.clientX; sy = e.clientY;
+    var r = b.getBoundingClientRect(), p = phone.getBoundingClientRect();
+    ox = r.left - p.left; oy = r.top - p.top;
+    b.setPointerCapture(e.pointerId);
+    b.style.right = 'auto'; b.style.left = ox + 'px'; b.style.top = oy + 'px';
+  });
+  b.addEventListener('pointermove', function (e) {
+    if (!dragging) return;
+    var dx = e.clientX - sx, dy = e.clientY - sy;
+    if (Math.abs(dx) + Math.abs(dy) > 4) moved = true;
+    var p = phone.getBoundingClientRect();
+    var x = Math.min(Math.max(ox + dx, 8), p.width - 64);
+    var y = Math.min(Math.max(oy + dy, 44), p.height - 64);
+    b.style.left = x + 'px'; b.style.top = y + 'px';
+  });
+  b.addEventListener('pointerup', function (e) {
+    if (!dragging) return;
+    dragging = false;
+    var p = phone.getBoundingClientRect();
+    var r = b.getBoundingClientRect();
+    var x = r.left - p.left;
+    var snapLeft = x < p.width / 2 - 28;
+    b.style.left = snapLeft ? '14px' : 'auto';
+    b.style.right = snapLeft ? 'auto' : '14px';
+    b.style.top = (r.top - p.top) + 'px';
+    if (moved) { S.moved = true; render(); }
+  });
+  b.addEventListener('click', function (e) {
+    if (moved) { moved = false; return; }
+    setState(S.hasPending ? 'pending' : 'quick');
+  });
+})();
+
+/* 卡片内的动作 */
+$('#ov').addEventListener('click', function (e) {
+  var el = e.target.closest('[data-act]');
+  if (!el) return;
+  var act = el.dataset.act;
+
+  if (act === 'close') { setState('idle', { keepPending: S.hasPending }); return; }
+  if (act === 'mask') {
+    S.masked = !S.masked;
+    render();
+    toast(S.masked ? '金额已遮蔽' : '金额已显示');
+    return;
+  }
+  if (act === 'morecat') { toast('更多分类在 App 内选择'); return; }
+  if (act === 'accpick') { $('#pAccList').classList.toggle('show'); return; }
+  if (act === 'qaccpick') { $('#qAccList').classList.toggle('show'); return; }
+  if (act === 'confirm') {
+    $('#dSub').textContent = '瑞幸咖啡 · ' + S.cat + ' · ' + S.acc;
+    S.dAmount = '18.00';
+    setState('done');
+    return;
+  }
+  if (act === 'ignore') { S.hasPending = false; setState('idle'); toast('已忽略，可在待确认里找回'); return; }
+  if (act === 'later') { setState('idle', { keepPending: true }); toast('稍后提醒'); return; }
+  if (act === 'undo') {
+    setState('pending');
+    toast('已撤销');
+    return;
+  }
+  if (act === 'again') { setState('quick'); return; }
+  if (act === 'qsave') {
+    var v = parseFloat(S.amount);
+    if (!(v > 0)) return;
+    $('#dSub').textContent = (S.dir === 'out' ? '记一笔 · ' : '收入 · ') + S.cat + ' · ' + S.qacc;
+    S.dAmount = v.toFixed(2);
+    setState('done');
+    return;
+  }
+  if (act === 'budget') {
+    S.budget = !S.budget;
+    $('#trk').classList.toggle('on', S.budget);
+    toast(S.budget ? '已计入预算' : '不计入预算');
+    return;
+  }
+});
+
+/* 待确认分类 */
+$('#pCats').addEventListener('click', function (e) {
+  var c = e.target.closest('.chip');
+  if (!c || c.dataset.act) return;
+  $$('#pCats .chip').forEach(function (x) { x.classList.remove('on'); });
+  c.classList.add('on');
+  S.cat = c.textContent.trim();
+});
+
+/* 账户选择 */
+function bindAccList(listId, targetId, setter) {
+  var list = $(listId);
+  list.addEventListener('click', function (e) {
+    var b = e.target.closest('button');
+    if (!b) return;
+    $$('button', list).forEach(function (x) { x.classList.remove('on'); });
+    b.classList.add('on');
+    $(targetId).textContent = b.textContent.trim();
+    setter(b.textContent.trim());
+    list.classList.remove('show');
+    e.stopPropagation();
+  });
+}
+bindAccList('#pAccList', '#pAcc', function (v) {
+  S.acc = v;
+  var sub = $('.merchant .sub');
+  if (sub) sub.textContent = '· ' + v;
+});
+bindAccList('#qAccList', '#qAcc', function (v) { S.qacc = v; });
+
+/* 手记键盘 */
+$('#pad').addEventListener('click', function (e) {
+  var k = e.target.closest('[data-k]');
+  if (!k) return;
+  var key = k.dataset.k;
+  var v = S.amount === '0.00' ? '' : S.amount;
+  if (key === 'del') { v = v.slice(0, -1); }
+  else if (key === '.') { if (v.indexOf('.') < 0) v = (v || '0') + '.'; }
+  else if (key === '00') { if (v && v.indexOf('.') < 0) v += '00'; }
+  else {
+    var dot = v.indexOf('.');
+    if (dot > -1 && v.length - dot > 2) return;
+    v = (v === '0' ? '' : v) + key;
+  }
+  if (v === '' || v === '.') v = '0.00';
+  else if (v.endsWith('.')) v = v;
+  else if (v.indexOf('.') < 0) v = v;
+  S.amount = v === '0' ? '0.00' : v;
+  render();
+});
+
+/* 手记分类 / 方向 */
+$('#qcats').addEventListener('click', function (e) {
+  var c = e.target.closest('.qcat');
+  if (!c) return;
+  $$('#qcats .qcat').forEach(function (x) { x.classList.remove('on'); });
+  c.classList.add('on');
+  S.cat = c.dataset.cat;
+});
+$('#qseg').addEventListener('click', function (e) {
+  var b = e.target.closest('button');
+  if (!b) return;
+  $$('#qseg button').forEach(function (x) { x.classList.remove('on'); });
+  b.classList.add('on');
+  S.dir = b.dataset.dir;
+});
+
+/* 点空白关掉下拉 */
+document.addEventListener('click', function (e) {
+  if (!e.target.closest('.acc')) {
+    $('#pAccList').classList.remove('show');
+    $('#qAccList').classList.remove('show');
+  }
+});
+
+/* toast */
+var toastTimer = null;
+function toast(msg) {
+  var t = $('#toast');
+  t.textContent = msg;
+  t.classList.add('on');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function () { t.classList.remove('on'); }, 1700);
+}
+
+/* 演示流程 */
+function clearFlow() {
+  S.flowTimers.forEach(function (t) { clearTimeout(t); });
+  S.flowTimers = [];
+}
+function runFlow() {
+  clearTimers();
+  clearFlow();
+  S.state = 'idle'; S.hasPending = false;
+  render();
+  S.flowTimers.push(setTimeout(function () {
+    S.hasPending = true; setState('pending');
+  }, 700));
+  S.flowTimers.push(setTimeout(function () {
+    $('#dSub').textContent = '瑞幸咖啡 · ' + S.cat + ' · ' + S.acc;
+    S.dAmount = '18.00';
+    setState('done');
+  }, 2400));
+}
+
+/* ========== 初始化 ========== */
+render();
+</script>
+</body>
+</html>

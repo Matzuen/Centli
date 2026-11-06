@@ -1,12 +1,12 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 
+import '../../app/theme.dart';
 import '../../core/widgets/glass.dart';
 
-/// v1 支付悬浮窗的 Flutter 仿制品：供 Windows / 桌面 debug 调布局，
-/// 以及 Android 上 MethodChannel 失败时的兜底。不写真实账本。
-///
-/// 分类 / 账户与真机一致：摘要行旁弹出级联菜单（有子项再展一级），
-/// 不要独立大底栏 sheet。
+/// 支付悬浮窗桌面预览：确认卡 + 主题绿紫；分类 chip / 账户常显网格。
+/// 不写真实账本；真机走 Android 系统悬浮窗。
 Future<void> showPaymentOverlayDesktopPreview(BuildContext context) {
   return showDialog<void>(
     context: context,
@@ -33,15 +33,12 @@ class _PaymentOverlayDesktopDialog extends StatefulWidget {
 
 class _PaymentOverlayDesktopDialogState
     extends State<_PaymentOverlayDesktopDialog> {
-  static const _purple = Color(0xFF5B4B8A);
-  static const _cardBg = Color(0xFFF5F2FA);
-  static const _teal = Color(0xFF00897B);
-  static const _incomeGreen = Color(0xFF43A047);
   static const _ink = Color(0xFF1A1A1A);
+  static const _muted = Color(0xFF666666);
+  static const _hint = Color(0xFF888888);
+  static const _purple = CentliTheme.brandPrimary;
+  static const _mint = CentliTheme.brandGreen;
 
-  static const _demoLedgers = ['日常账本', '旅行账本', '家庭账本'];
-
-  /// 分类树：餐饮 › 外卖/堂食 …
   static const _demoCategoryTree = <_CatNode>[
     _CatNode('餐饮', [_CatNode('外卖'), _CatNode('堂食'), _CatNode('咖啡')]),
     _CatNode('交通', [_CatNode('地铁'), _CatNode('打车'), _CatNode('加油')]),
@@ -50,223 +47,86 @@ class _PaymentOverlayDesktopDialogState
     _CatNode('其他'),
   ];
 
-  /// 资产分类 › 账户；跨账本时先账本。
-  static const _demoAccountsByLedger = <String, Map<String, List<String>>>{
-    '日常账本': {
-      '现金账户': ['现金'],
-      '信用账户': ['微信', '支付宝'],
-      '银行账户': ['银行卡'],
-    },
-    '旅行账本': {
-      '现金账户': ['旅行现金'],
-      '信用账户': ['旅行信用卡'],
-    },
-    '家庭账本': {
-      '银行账户': ['家庭储蓄卡'],
-      '信用账户': ['家庭支付宝'],
-    },
-  };
+  static const _demoAccounts = ['招商银行信用卡', '微信零钱', '支付宝余额', '农业银行'];
 
-  String _ledger = _demoLedgers.first;
-  String _direction = 'out'; // out | in | transfer
   late final TextEditingController _amountCtrl;
-  late final TextEditingController _noteCtrl;
-  String? _category = '外卖';
-  String? _account = '微信';
+  String _category = '餐饮';
+  String _account = '招商银行信用卡';
   String? _toAccount;
+  static const bool _transfer = false;
+  bool _masked = false;
   bool _showSuccess = false;
+  bool _catMore = false;
+  String? _browseParent;
 
-  final GlobalKey _catKey = GlobalKey();
-  final GlobalKey _accKey = GlobalKey();
-  final GlobalKey _toAccKey = GlobalKey();
+  List<String> get _chips {
+    final pool = <String>[_category, '咖啡', '其他', '外卖', '交通', '购物'];
+    final out = <String>[];
+    for (final n in pool) {
+      if (out.contains(n)) continue;
+      out.add(n);
+      if (out.length >= 3) break;
+    }
+    return out;
+  }
+
+  List<_CatNode> get _catLevelItems {
+    if (_browseParent == null) return _demoCategoryTree;
+    return _demoCategoryTree
+            .firstWhere(
+              (n) => n.name == _browseParent,
+              orElse: () => const _CatNode(''),
+            )
+            .children;
+  }
 
   @override
   void initState() {
     super.initState();
-    _amountCtrl = TextEditingController(text: '12.80');
-    _noteCtrl = TextEditingController(text: '调试预览 · 咖啡');
+    _amountCtrl = TextEditingController(text: '18.00');
   }
 
   @override
   void dispose() {
     _amountCtrl.dispose();
-    _noteCtrl.dispose();
     super.dispose();
   }
 
   bool get _canConfirm {
-    if (_direction == 'transfer') {
-      return _account != null &&
-          _toAccount != null &&
-          _account != _toAccount &&
-          _category != null;
-    }
-    return _category != null && _account != null;
+    final amountOk = (double.tryParse(_amountCtrl.text.trim()) ?? 0) > 0;
+    final transferOk = !_transfer ||
+        (_toAccount != null &&
+            _toAccount!.isNotEmpty &&
+            _toAccount != _account);
+    return _category.isNotEmpty && _account.isNotEmpty && amountOk && transferOk;
   }
 
-  List<_CatNode> get _categoryRoots {
-    if (_direction == 'transfer') {
-      return const [
-        _CatNode('转账'),
-        _CatNode('还款'),
-        _CatNode('其他'),
-      ];
-    }
-    return _demoCategoryTree;
-  }
-
-  Future<void> _pickLedgerNearTitle(BuildContext titleContext) async {
-    final picked = await _showCascadeMenu(
-      anchorContext: titleContext,
-      roots: [
-        for (final name in _demoLedgers)
-          _CascadeNode(
-            id: name,
-            label: name,
-            selected: name == _ledger,
-          ),
-      ],
-    );
-    if (picked != null && mounted) {
-      setState(() {
-        _ledger = picked.id;
-        _category = _direction == 'transfer' ? '转账' : '外卖';
-        _account = (_demoAccountsByLedger[_ledger]?.values.expand((e) => e).firstOrNull) ??
-            '微信';
-        _toAccount = null;
-      });
-    }
-  }
-
-  Future<void> _pickCategory() async {
-    final roots = [
-      for (final n in _categoryRoots)
-        _CascadeNode(
-          id: n.name,
-          label: n.name,
-          selected: n.name == _category,
-          children: [
-            for (final c in n.children)
-              _CascadeNode(
-                id: c.name,
-                label: c.name,
-                selected: c.name == _category,
-              ),
-          ],
-        ),
-    ];
-    final picked = await _showCascadeMenu(
-      anchorContext: _catKey.currentContext!,
-      roots: roots,
-    );
-    if (picked != null && mounted) {
-      setState(() => _category = picked.id);
-    }
-  }
-
-  List<_CascadeNode> _accountCascadeRoots({String? exclude, String? selectedId}) {
-    // 当前账本：资产分类 › 账户；并附「其他账本」入口（跨账本）。
-    final current = _demoAccountsByLedger[_ledger] ?? const {};
-    final nodes = <_CascadeNode>[];
-    for (final entry in current.entries) {
-      final leaves = [
-        for (final name in entry.value)
-          if (name != exclude)
-            _CascadeNode(
-              id: name,
-              label: name,
-              selected: name == selectedId,
-            ),
-      ];
-      if (leaves.isEmpty) continue;
-      if (current.length <= 1) {
-        nodes.addAll(leaves);
-      } else {
-        nodes.add(
-          _CascadeNode(
-            id: 'type:${entry.key}',
-            label: entry.key,
-            children: leaves,
-          ),
-        );
-      }
-    }
-    final otherLedgers = _demoLedgers.where((l) => l != _ledger).toList();
-    if (otherLedgers.isNotEmpty) {
-      nodes.add(
-        _CascadeNode(
-          id: '_other_ledgers',
-          label: '其他账本',
-          children: [
-            for (final l in otherLedgers)
-              _CascadeNode(
-                id: 'ledger:$l',
-                label: l,
-                children: [
-                  for (final e
-                      in (_demoAccountsByLedger[l] ?? const {}).entries)
-                    _CascadeNode(
-                      id: 'type:$l/${e.key}',
-                      label: e.key,
-                      children: [
-                        for (final name in e.value)
-                          if (name != exclude)
-                            _CascadeNode(
-                              id: name,
-                              label: name,
-                              selected: name == selectedId,
-                            ),
-                      ],
-                    ),
-                ],
-              ),
-          ],
-        ),
-      );
-    }
-    return nodes;
-  }
-
-  Future<void> _pickAccount({required bool toAccount}) async {
-    final key = toAccount ? _toAccKey : _accKey;
-    final ctx = key.currentContext;
-    if (ctx == null) return;
-    final picked = await _showCascadeMenu(
-      anchorContext: ctx,
-      roots: _accountCascadeRoots(
-        exclude: toAccount ? _account : null,
-        selectedId: toAccount ? _toAccount : _account,
-      ),
-    );
-    if (picked != null && mounted) {
-      setState(() {
-        if (toAccount) {
-          _toAccount = picked.id;
-        } else {
-          _account = picked.id;
-          if (_toAccount == _account) {
-            _toAccount = null;
-          }
-        }
-      });
-    }
-  }
-
-  void _setDirection(String dir) {
+  void _pickCatChip(String name) {
     setState(() {
-      _direction = dir;
-      if (dir == 'transfer') {
-        _category = '转账';
-        _toAccount ??= (_demoAccountsByLedger[_ledger]
-                ?.values
-                .expand((e) => e)
-                .where((a) => a != _account)
-                .firstOrNull) ??
-            null;
-      } else {
-        _category ??= '外卖';
-        _toAccount = null;
+      _category = name;
+      _catMore = false;
+      _browseParent = null;
+    });
+  }
+
+  void _toggleCatMore() {
+    setState(() {
+      _catMore = !_catMore;
+      if (_catMore) {
+        _browseParent = null;
       }
+    });
+  }
+
+  void _onCatGridTap(_CatNode node) {
+    if (_browseParent == null && node.isGroup) {
+      setState(() => _browseParent = node.name);
+      return;
+    }
+    setState(() {
+      _category = node.name;
+      _catMore = false;
+      _browseParent = null;
     });
   }
 
@@ -274,30 +134,50 @@ class _PaymentOverlayDesktopDialogState
     if (!_canConfirm) return;
     showGlassSnackBar(context, '桌面预览，未写入');
     setState(() => _showSuccess = true);
-    Future<void>.delayed(const Duration(milliseconds: 900), () {
+    Future<void>.delayed(const Duration(milliseconds: 1400), () {
       if (mounted) Navigator.of(context).pop();
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final maxW = MediaQuery.sizeOf(context).width.clamp(280.0, 420.0);
+    final maxW = MediaQuery.sizeOf(context).width.clamp(280.0, 332.0);
+    const radius = BorderRadius.all(Radius.circular(24));
     return Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: maxW),
-        child: Material(
-          color: _cardBg,
-          elevation: 12,
-          shadowColor: _purple.withValues(alpha: 0.25),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
-            side: BorderSide(color: _purple.withValues(alpha: 0.25)),
+        child: DecoratedBox(
+          decoration: const BoxDecoration(
+            borderRadius: radius,
+            boxShadow: [
+              BoxShadow(
+                color: Color(0x338B84D6),
+                blurRadius: 28,
+                offset: Offset(0, 12),
+              ),
+            ],
           ),
-          child: Padding(
-            padding: const EdgeInsets.all(18),
-            child: _showSuccess ? _buildSuccess() : _buildMain(),
+          child: ClipRRect(
+            borderRadius: radius,
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 28, sigmaY: 28),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: const Color(0xE8F3EFFA),
+                  borderRadius: radius,
+                  border: Border.all(color: _purple.withValues(alpha: 0.28)),
+                ),
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(13, 13, 13, 11),
+                    child: _showSuccess ? _buildSuccess() : _buildPending(),
+                  ),
+                ),
+              ),
+            ),
           ),
         ),
       ),
@@ -305,34 +185,29 @@ class _PaymentOverlayDesktopDialogState
   }
 
   Widget _buildSuccess() {
+    final accLabel = _transfer && _toAccount != null
+        ? '$_account → $_toAccount'
+        : _account;
     return SizedBox(
       width: double.infinity,
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 28),
+        padding: const EdgeInsets.symmetric(vertical: 18),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             const Text(
-              '已入账（预览）',
+              '已入账',
               style: TextStyle(
                 color: _ink,
-                fontSize: 20,
+                fontSize: 16,
                 fontWeight: FontWeight.w700,
               ),
             ),
             const SizedBox(height: 8),
             Text(
-              '¥${_amountCtrl.text}',
-              style: const TextStyle(
-                color: Color(0xFF666666),
-                fontSize: 14,
-                fontFamily: 'monospace',
-              ),
-            ),
-            const SizedBox(height: 4),
-            const Text(
-              '桌面预览，未写入真实账本',
-              style: TextStyle(color: Color(0xFF999999), fontSize: 12),
+              '¥${_amountCtrl.text} · $_category · $accLabel',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: _muted, fontSize: 14),
             ),
           ],
         ),
@@ -340,249 +215,373 @@ class _PaymentOverlayDesktopDialogState
     );
   }
 
-  Widget _buildMain() {
-    return SingleChildScrollView(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // 1. 顶栏：账本 ▾ + 关闭
-          Row(
-            children: [
-              Expanded(
-                child: Builder(
-                  builder: (titleCtx) => InkWell(
-                    onTap: () => _pickLedgerNearTitle(titleCtx),
-                    borderRadius: BorderRadius.circular(8),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: Text(
-                        '$_ledger ▾',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: _ink,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
+  Widget _buildPending() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            const Expanded(
+              child: Text(
+                '微信支付 · 刚刚',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: _muted, fontSize: 11.5),
               ),
-              IconButton(
-                visualDensity: VisualDensity.compact,
-                onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Icons.close, size: 20),
-                tooltip: '关闭',
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+              decoration: BoxDecoration(
+                color: _mint.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: const Text(
+                '来自通知',
+                style: TextStyle(color: _mint, fontSize: 10),
+              ),
+            ),
+            IconButton(
+              visualDensity: VisualDensity.compact,
+              tooltip: _masked ? '显示金额' : '隐藏金额',
+              onPressed: () => setState(() => _masked = !_masked),
+              icon: Icon(
+                _masked
+                    ? Icons.visibility_off_outlined
+                    : Icons.visibility_outlined,
+                size: 18,
+                color: _muted,
+              ),
+            ),
+            IconButton(
+              visualDensity: VisualDensity.compact,
+              tooltip: '收起',
+              onPressed: () => Navigator.of(context).pop(),
+              icon: const Icon(Icons.close, size: 18, color: _muted),
+            ),
+          ],
+        ),
+        Text.rich(
+          TextSpan(
+            style: const TextStyle(
+              color: _ink,
+              fontSize: 14.5,
+              fontWeight: FontWeight.w600,
+            ),
+            children: [
+              const TextSpan(text: '瑞幸咖啡'),
+              TextSpan(
+                text: ' · $_account',
+                style: const TextStyle(
+                  color: _hint,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w400,
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          // 2. 支出｜收入｜转账
-          SizedBox(
-            height: 40,
-            child: Row(
-              children: [
-                Expanded(child: _dirChip('out', '支出')),
-                const SizedBox(width: 8),
-                Expanded(child: _dirChip('in', '收入')),
-                const SizedBox(width: 8),
-                Expanded(child: _dirChip('transfer', '转账')),
-              ],
+        ),
+        const SizedBox(height: 6),
+        if (_masked)
+          const Text(
+            '¥ •••',
+            style: TextStyle(
+              color: _hint,
+              fontSize: 34,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 2,
             ),
-          ),
-          const SizedBox(height: 14),
-          // 3. 大号金额
+          )
+        else
           Row(
-            mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic,
             children: [
               const Text(
                 '¥',
                 style: TextStyle(
-                  color: _ink,
-                  fontSize: 28,
-                  fontWeight: FontWeight.w700,
-                  fontFamily: 'monospace',
+                  color: _muted,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
-              const SizedBox(width: 4),
+              const SizedBox(width: 2),
               IntrinsicWidth(
                 child: TextField(
                   controller: _amountCtrl,
                   keyboardType:
                       const TextInputType.numberWithOptions(decimal: true),
-                  textAlign: TextAlign.center,
                   style: const TextStyle(
                     color: _ink,
-                    fontSize: 32,
+                    fontSize: 34,
                     fontWeight: FontWeight.w700,
                     fontFamily: 'monospace',
+                    height: 1.15,
                   ),
                   decoration: const InputDecoration(
                     isDense: true,
                     border: InputBorder.none,
-                    hintText: '0.00',
-                    hintStyle: TextStyle(color: Color(0xFFBBBBBB)),
+                    contentPadding: EdgeInsets.zero,
                   ),
+                  onChanged: (_) => setState(() {}),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 4),
-          const Text(
-            '微信支付 · 刚刚',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: _teal, fontSize: 12),
-          ),
-          const SizedBox(height: 10),
-          // 4. 备注
-          TextField(
-            controller: _noteCtrl,
-            maxLines: 2,
-            style: const TextStyle(color: _ink, fontSize: 13),
-            decoration: InputDecoration(
-              hintText: '备注（可选）',
-              hintStyle: const TextStyle(color: Color(0xFF999999)),
-              filled: true,
-              fillColor: const Color(0xCCFFFFFF),
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: _purple.withValues(alpha: 0.2)),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: _purple.withValues(alpha: 0.2)),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: _purple),
-              ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            const SizedBox(
+              width: 28,
+              child: Text('分类', style: TextStyle(color: _muted, fontSize: 11.5)),
             ),
-          ),
-          const SizedBox(height: 12),
-          // 5. 分类摘要 → 级联弹出菜单
-          KeyedSubtree(
-            key: _catKey,
-            child: _summaryRow(
-              label: '分类',
-              value: _category ?? '未选择',
-              onTap: _pickCategory,
-            ),
-          ),
-          const SizedBox(height: 8),
-          // 6. 账户摘要 → 级联弹出菜单
-          KeyedSubtree(
-            key: _accKey,
-            child: _summaryRow(
-              label: _direction == 'transfer' ? '转出' : '账户',
-              value: _account ?? '未选择',
-              onTap: () => _pickAccount(toAccount: false),
-            ),
-          ),
-          if (_direction == 'transfer') ...[
-            const SizedBox(height: 8),
-            KeyedSubtree(
-              key: _toAccKey,
-              child: _summaryRow(
-                label: '转入',
-                value: _toAccount ?? '未选择',
-                onTap: () => _pickAccount(toAccount: true),
+            Expanded(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    for (final name in _chips) ...[
+                      _chip(
+                        label: name,
+                        selected: name == _category,
+                        onTap: () => _pickCatChip(name),
+                      ),
+                      const SizedBox(width: 6),
+                    ],
+                    _chip(
+                      label: '更多',
+                      selected: _catMore,
+                      muted: !_catMore,
+                      onTap: _toggleCatMore,
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
-          const SizedBox(height: 16),
-          // 7. 忽略｜稍后｜入账
-          Row(
-            children: [
-              Expanded(
-                flex: 5,
-                child: _outlineBtn('忽略', () => Navigator.of(context).pop()),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                flex: 5,
-                child: _outlineBtn('稍后', () {
-                  showGlassSnackBar(context, '桌面预览：稍后（未写入）');
-                  Navigator.of(context).pop();
-                }),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                flex: 6,
-                child: Opacity(
-                  opacity: _canConfirm ? 1 : 0.5,
-                  child: SizedBox(
-                    height: 48,
-                    child: FilledButton(
-                      onPressed: _canConfirm ? _onConfirm : null,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: _incomeGreen,
-                        foregroundColor: Colors.white,
-                        disabledBackgroundColor: _incomeGreen,
-                        disabledForegroundColor: Colors.white70,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
-                      child: const Text(
-                        '入账',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
+        ),
+        if (_catMore) ...[
+          const SizedBox(height: 6),
+          if (_browseParent != null)
+            InkWell(
+              onTap: () => setState(() => _browseParent = null),
+              child: const Padding(
+                padding: EdgeInsets.symmetric(vertical: 4),
+                child: Text(
+                  '‹ 返回',
+                  style: TextStyle(
+                    color: _purple,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          TextButton(
-            onPressed: () {
-              showGlassSnackBar(context, '桌面预览：打开详情（无跳转）');
-            },
-            child: const Text(
-              '打开 App 详细确认',
-              style: TextStyle(color: _purple, fontSize: 13),
             ),
+          Text(
+            _browseParent == null
+                ? '选择一级分类'
+                : '选择「$_browseParent」二级分类',
+            style: const TextStyle(color: _hint, fontSize: 11),
           ),
           const SizedBox(height: 4),
-          const Text(
-            '桌面为界面预览 · 真机 debug 为系统悬浮窗',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Color(0xFF999999), fontSize: 11),
+          _grid(
+            items: [
+              for (final n in _catLevelItems)
+                _GridItem(
+                  label: n.name,
+                  selected: n.name == _category,
+                  onTap: () => _onCatGridTap(n),
+                ),
+            ],
           ),
         ],
-      ),
+        const SizedBox(height: 8),
+        Text(
+          _transfer ? '转出' : '账户',
+          style: const TextStyle(color: _muted, fontSize: 11.5),
+        ),
+        const SizedBox(height: 6),
+        _grid(
+          items: [
+            for (final a in _demoAccounts)
+              _GridItem(
+                label: a,
+                selected: a == _account,
+                onTap: () => setState(() {
+                  _account = a;
+                  if (_toAccount == a) {
+                    _toAccount =
+                        _demoAccounts.firstWhere((x) => x != a, orElse: () => a);
+                  }
+                }),
+              ),
+          ],
+        ),
+        if (_transfer) ...[
+          const SizedBox(height: 8),
+          const Text('转入', style: TextStyle(color: _muted, fontSize: 11.5)),
+          const SizedBox(height: 6),
+          _grid(
+            items: [
+              for (final a in _demoAccounts.where((x) => x != _account))
+                _GridItem(
+                  label: a,
+                  selected: a == _toAccount,
+                  onTap: () => setState(() => _toAccount = a),
+                ),
+            ],
+          ),
+        ],
+        const SizedBox(height: 8),
+        const Text(
+          '已按历史记录预填，直接确认即可',
+          style: TextStyle(color: _hint, fontSize: 10.5),
+        ),
+        const SizedBox(height: 10),
+        Opacity(
+          opacity: _canConfirm ? 1 : 0.45,
+          child: SizedBox(
+            height: 52,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                gradient: CentliTheme.brandGradient,
+                boxShadow: [
+                  BoxShadow(
+                    color: _purple.withValues(alpha: 0.28),
+                    blurRadius: 18,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Material(
+                type: MaterialType.transparency,
+                child: InkWell(
+                  onTap: _canConfirm ? _onConfirm : null,
+                  borderRadius: BorderRadius.circular(16),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.check_rounded, color: Colors.white, size: 18),
+                      SizedBox(width: 6),
+                      Text(
+                        '入账',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 7),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              style: TextButton.styleFrom(
+                foregroundColor: _purple,
+                padding: const EdgeInsets.symmetric(horizontal: 13),
+                minimumSize: const Size(0, 40),
+              ),
+              child: const Text('忽略', style: TextStyle(fontSize: 12)),
+            ),
+            Text('·', style: TextStyle(color: _purple.withValues(alpha: 0.4))),
+            TextButton(
+              onPressed: () {
+                showGlassSnackBar(context, '桌面预览：稍后（未写入）');
+                Navigator.of(context).pop();
+              },
+              style: TextButton.styleFrom(
+                foregroundColor: _purple,
+                padding: const EdgeInsets.symmetric(horizontal: 13),
+                minimumSize: const Size(0, 40),
+              ),
+              child: const Text('稍后', style: TextStyle(fontSize: 12)),
+            ),
+          ],
+        ),
+      ],
     );
   }
 
-  Widget _dirChip(String key, String label) {
-    final selected = _direction == key;
+  Widget _grid({required List<_GridItem> items}) {
+    if (items.isEmpty) {
+      return const Text(
+        '暂无选项',
+        style: TextStyle(color: _hint, fontSize: 12),
+      );
+    }
+    final rows = <List<_GridItem>>[];
+    for (var i = 0; i < items.length; i += 3) {
+      rows.add(items.sublist(i, (i + 3).clamp(0, items.length)));
+    }
+    final body = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var r = 0; r < rows.length; r++) ...[
+          if (r > 0) const SizedBox(height: 8),
+          Row(
+            children: [
+              for (var c = 0; c < 3; c++) ...[
+                if (c > 0) const SizedBox(width: 6),
+                Expanded(
+                  child: c < rows[r].length
+                      ? _gridChip(rows[r][c])
+                      : const SizedBox(height: 40),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ],
+    );
+    if (rows.length <= 2) return body;
+    return SizedBox(
+      height: 40 * 2 + 8,
+      child: SingleChildScrollView(child: body),
+    );
+  }
+
+  Widget _gridChip(_GridItem item) {
     return Material(
-      color: selected ? _purple : const Color(0xCCFFFFFF),
+      color: item.selected
+          ? _mint.withValues(alpha: 0.12)
+          : const Color(0xCCFFFFFF),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         side: BorderSide(
-          color: selected ? _purple : _purple.withValues(alpha: 0.2),
+          color: item.selected
+              ? _mint.withValues(alpha: 0.28)
+              : _purple.withValues(alpha: 0.2),
         ),
       ),
       child: InkWell(
-        onTap: () => _setDirection(key),
-        borderRadius: BorderRadius.circular(12),
-        child: Center(
-          child: Text(
-            label,
-            style: TextStyle(
-              color: selected ? Colors.white : _ink,
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
+        onTap: item.onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: SizedBox(
+          height: 40,
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Text(
+                item.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: item.selected ? _mint : _ink,
+                  fontSize: 12,
+                  fontWeight:
+                      item.selected ? FontWeight.w700 : FontWeight.w500,
+                ),
+              ),
             ),
           ),
         ),
@@ -590,262 +589,54 @@ class _PaymentOverlayDesktopDialogState
     );
   }
 
-  Widget _summaryRow({
+  Widget _chip({
     required String label,
-    required String value,
+    required bool selected,
     required VoidCallback onTap,
+    bool muted = false,
   }) {
     return Material(
-      color: const Color(0xCCFFFFFF),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: BorderSide(color: _purple.withValues(alpha: 0.2)),
+      color: selected ? _mint.withValues(alpha: 0.12) : const Color(0xCCFFFFFF),
+      shape: StadiumBorder(
+        side: BorderSide(
+          color: selected
+              ? _mint.withValues(alpha: 0.28)
+              : _purple.withValues(alpha: 0.2),
+        ),
       ),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
+        customBorder: const StadiumBorder(),
         child: SizedBox(
-          height: 44,
+          height: 38,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Row(
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(color: Color(0xFF666666), fontSize: 13),
+            padding: EdgeInsets.symmetric(horizontal: muted ? 8 : 13),
+            child: Center(
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: selected
+                      ? _mint
+                      : (muted ? _hint : _muted),
+                  fontSize: 12.5,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    value,
-                    textAlign: TextAlign.end,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: _ink,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                const Text(
-                  '›',
-                  style: TextStyle(
-                    color: _purple,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ),
       ),
     );
   }
-
-  Widget _outlineBtn(String label, VoidCallback onTap) {
-    return SizedBox(
-      height: 48,
-      child: OutlinedButton(
-        onPressed: onTap,
-        style: OutlinedButton.styleFrom(
-          foregroundColor: _purple,
-          side: BorderSide(color: _purple.withValues(alpha: 0.2), width: 1.5),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
-          backgroundColor: Colors.white,
-        ),
-        child: Text(
-          label,
-          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
-        ),
-      ),
-    );
-  }
 }
 
-class _CascadeNode {
-  const _CascadeNode({
-    required this.id,
+class _GridItem {
+  const _GridItem({
     required this.label,
-    this.selected = false,
-    this.children = const [],
+    required this.selected,
+    required this.onTap,
   });
-  final String id;
   final String label;
   final bool selected;
-  final List<_CascadeNode> children;
-  bool get isGroup => children.isNotEmpty;
-}
-
-class _CascadePick {
-  const _CascadePick(this.id, this.label);
-  final String id;
-  final String label;
-}
-
-Future<_CascadePick?> _showCascadeMenu({
-  required BuildContext anchorContext,
-  required List<_CascadeNode> roots,
-}) {
-  final box = anchorContext.findRenderObject() as RenderBox?;
-  final overlay =
-      Overlay.of(anchorContext).context.findRenderObject() as RenderBox?;
-  if (box == null || overlay == null) {
-    return _showCascadeDialog(anchorContext, roots);
-  }
-  final topLeft = box.localToGlobal(Offset.zero, ancestor: overlay);
-  final rect = Rect.fromLTWH(
-    topLeft.dx,
-    topLeft.dy,
-    box.size.width,
-    box.size.height,
-  );
-  return showGeneralDialog<_CascadePick>(
-    context: anchorContext,
-    barrierDismissible: true,
-    barrierLabel: 'dismiss',
-    barrierColor: Colors.transparent,
-    pageBuilder: (ctx, anim, secondary) {
-      return Stack(
-        children: [
-          Positioned.fill(
-            child: GestureDetector(
-              onTap: () => Navigator.pop(ctx),
-              behavior: HitTestBehavior.opaque,
-              child: const SizedBox.expand(),
-            ),
-          ),
-          Positioned(
-            left: rect.left.clamp(12.0, overlay.size.width - 220),
-            top: (rect.bottom + 4).clamp(12.0, overlay.size.height - 120),
-            width: 220,
-            child: _CascadePopupCard(
-              roots: roots,
-              onPick: (p) => Navigator.pop(ctx, p),
-            ),
-          ),
-        ],
-      );
-    },
-  );
-}
-
-Future<_CascadePick?> _showCascadeDialog(
-  BuildContext context,
-  List<_CascadeNode> roots,
-) {
-  return showDialog<_CascadePick>(
-    context: context,
-    barrierColor: const Color(0x33000000),
-    builder: (ctx) => Dialog(
-      backgroundColor: Colors.transparent,
-      alignment: Alignment.center,
-      child: SizedBox(
-        width: 240,
-        child: _CascadePopupCard(
-          roots: roots,
-          onPick: (p) => Navigator.pop(ctx, p),
-        ),
-      ),
-    ),
-  );
-}
-
-class _CascadePopupCard extends StatefulWidget {
-  const _CascadePopupCard({required this.roots, required this.onPick});
-  final List<_CascadeNode> roots;
-  final ValueChanged<_CascadePick> onPick;
-
-  @override
-  State<_CascadePopupCard> createState() => _CascadePopupCardState();
-}
-
-class _CascadePopupCardState extends State<_CascadePopupCard> {
-  static const _purple = Color(0xFF5B4B8A);
-  static const _cardBg = Color(0xFFF5F2FA);
-  static const _ink = Color(0xFF1A1A1A);
-
-  final List<({String? title, List<_CascadeNode> items})> _stack = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _stack.add((title: null, items: widget.roots));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final level = _stack.last;
-    return Material(
-      color: _cardBg,
-      elevation: 10,
-      shadowColor: _purple.withValues(alpha: 0.3),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: BorderSide(color: _purple.withValues(alpha: 0.25)),
-      ),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxHeight: 320),
-        child: ListView(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          shrinkWrap: true,
-          children: [
-            if (_stack.length > 1)
-              ListTile(
-                dense: true,
-                title: Text(
-                  '‹ ${level.title ?? '返回'}',
-                  style: const TextStyle(
-                    color: _purple,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14,
-                  ),
-                ),
-                onTap: () => setState(() => _stack.removeLast()),
-              ),
-            for (final item in level.items)
-              ListTile(
-                dense: true,
-                title: Text(
-                  item.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: item.selected ? _purple : _ink,
-                    fontWeight:
-                        item.selected ? FontWeight.w700 : FontWeight.w500,
-                    fontSize: 14,
-                  ),
-                ),
-                trailing: item.isGroup
-                    ? const Text(
-                        '›',
-                        style: TextStyle(
-                          color: _purple,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      )
-                    : (item.selected
-                        ? const Icon(Icons.check, color: _purple, size: 18)
-                        : null),
-                onTap: () {
-                  if (item.isGroup) {
-                    setState(() {
-                      _stack.add((title: item.label, items: item.children));
-                    });
-                  } else {
-                    widget.onPick(_CascadePick(item.id, item.label));
-                  }
-                },
-              ),
-          ],
-        ),
-      ),
-    );
-  }
+  final VoidCallback onTap;
 }

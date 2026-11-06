@@ -1,7 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">
-    <!-- CentliTheme.incomeGreen — distinguish from account/category chip purple -->
-    <solid android:color="#FF43A047" />
-    <corners android:radius="14dp" />
+    <!-- CentliTheme.brandGradient：薄荷绿 → 丁香紫 -->
+    <gradient
+        android:angle="0"
+        android:endColor="#FF8B84D6"
+        android:startColor="#FF6BB89A" />
+    <corners android:radius="16dp" />
 </shape>
