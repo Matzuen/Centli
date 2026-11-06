@@ -49,14 +49,11 @@ class _AppShellState extends ConsumerState<AppShell> {
       return;
     }
     _lastBackAt = now;
-    final messenger = ScaffoldMessenger.maybeOf(context);
-    messenger?.hideCurrentSnackBar();
-    messenger?.showSnackBar(
-      const SnackBar(
-        content: Text('再按一次退出应用'),
-        duration: Duration(seconds: 2),
-        behavior: SnackBarBehavior.floating,
-      ),
+    showGlassSnackBar(
+      context,
+      '再按一次退出应用',
+      tone: GlassSnackTone.warning,
+      duration: const Duration(seconds: 2),
     );
   }
 
