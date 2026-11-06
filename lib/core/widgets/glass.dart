@@ -16,9 +16,8 @@ import '../../app/theme.dart';
 /// 3. `BackdropFilter` 采样下方像素并模糊
 /// 4. 最内层是半透明填充 + 描边（宽度见 [CentliTheme.glassBorderWidth]）
 ///
-/// [blur] 为 false 时只保留半透明 + 描边：卡片这类「背后只有一层平滑渐变」
-/// 的表面用不着模糊（视觉上没有差别，却要付出真实的 GPU 开销），弹窗这类
-/// 「背后是页面内容」的表面才需要真模糊。
+/// [blur] 为 false 时只保留半透明填充（SoftCard 走这条，背景已在 scaffold 磨砂）。
+/// 弹窗 / 菜单仍开真毛玻璃；可用 [CentliGlass.blurEnabled] 全局关掉。
 class CentliGlass extends StatelessWidget {
   const CentliGlass({
     super.key,
@@ -87,7 +86,8 @@ class CentliGlass extends StatelessWidget {
       decoration: BoxDecoration(
         color: fill,
         borderRadius: radius,
-        border: Border.all(color: hairline, width: stroke),
+        // stroke<=0：SoftCard 等只要雾面、不要独立描边。
+        border: stroke > 0 ? Border.all(color: hairline, width: stroke) : null,
       ),
       child: Material(type: MaterialType.transparency, child: content),
     );
@@ -510,9 +510,14 @@ Future<T?> showGlassMenu<T>({
 
   final topLeft = box.localToGlobal(Offset.zero, ancestor: overlay);
   final size = box.size;
-  final menuTop = topLeft.dy + size.height + 4;
   final screenW = overlay.size.width;
+  final screenH = overlay.size.height;
+  final media = MediaQuery.of(context);
+  final safeTop = media.padding.top;
+  final safeBottom = media.padding.bottom;
   final cappedMax = maxWidth.clamp(minWidth, screenW - 16);
+  // 单行约 44（12+20+12）+ 分隔线；略留余量。
+  final estimatedH = items.length * 48.0 + (items.length - 1).clamp(0, 99);
 
   double menuLeft;
   double? menuRight;
@@ -524,6 +529,20 @@ Future<T?> showGlassMenu<T>({
     menuLeft = topLeft.dx.clamp(8.0, screenW - minWidth - 8);
     menuRight = null;
   }
+
+  const gap = 4.0;
+  final preferBelow = topLeft.dy + size.height + gap;
+  final spaceBelow = screenH - preferBelow - safeBottom - 8;
+  final spaceAbove = topLeft.dy - safeTop - 8;
+  final openAbove = spaceBelow < estimatedH && spaceAbove > spaceBelow;
+  final maxTop = (screenH - estimatedH - safeBottom - 8).clamp(
+    safeTop + 8,
+    screenH,
+  );
+  final menuTop = openAbove
+      ? (topLeft.dy - gap - estimatedH).clamp(safeTop + 8, maxTop)
+      : preferBelow.clamp(safeTop + 8, maxTop);
+  final menuMaxH = (screenH - menuTop - safeBottom - 8).clamp(80.0, screenH);
 
   final scheme = Theme.of(context).colorScheme;
 
@@ -555,24 +574,27 @@ Future<T?> showGlassMenu<T>({
                     constraints: BoxConstraints(
                       minWidth: minWidth,
                       maxWidth: cappedMax,
+                      maxHeight: menuMaxH,
                     ),
                     child: IntrinsicWidth(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          for (var i = 0; i < items.length; i++) ...[
-                            if (i > 0)
-                              Divider(
-                                height: 1,
-                                thickness: 1,
-                                color: scheme.outlineVariant.withValues(
-                                  alpha: 0.45,
+                      child: SingleChildScrollView(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            for (var i = 0; i < items.length; i++) ...[
+                              if (i > 0)
+                                Divider(
+                                  height: 1,
+                                  thickness: 1,
+                                  color: scheme.outlineVariant.withValues(
+                                    alpha: 0.45,
+                                  ),
                                 ),
-                              ),
-                            _CentliMenuTile<T>(item: items[i]),
+                              _CentliMenuTile<T>(item: items[i]),
+                            ],
                           ],
-                        ],
+                        ),
                       ),
                     ),
                   ),
@@ -651,7 +673,7 @@ GlassSnackTone inferGlassSnackTone(String message) {
   if (RegExp(r'已入账|已保存|已删除|已修改|已恢复|已清空|已忽略|成功|完成|已复制').hasMatch(m)) {
     return GlassSnackTone.success;
   }
-  if (RegExp(r'^请|注意|将补|未选|缺少|即将').hasMatch(m)) {
+  if (RegExp(r'^请|注意|将补|未选|缺少|即将|再按一次|退出应用').hasMatch(m)) {
     return GlassSnackTone.warning;
   }
   return GlassSnackTone.info;
@@ -700,23 +722,6 @@ Color _glassSnackForeground(bool dark, GlassSnackTone tone) {
     GlassSnackTone.success => const Color(0xFF2E7D32),
     GlassSnackTone.error => const Color(0xFFC62828),
     GlassSnackTone.warning || GlassSnackTone.info => const Color(0xFF8D6E00),
-  };
-}
-
-Color _glassSnackBorder(bool dark, GlassSnackTone tone) {
-  if (dark) {
-    return switch (tone) {
-      GlassSnackTone.success => const Color(0xFF81C784).withValues(alpha: 0.35),
-      GlassSnackTone.error => const Color(0xFFE57373).withValues(alpha: 0.35),
-      GlassSnackTone.warning ||
-      GlassSnackTone.info => const Color(0xFFFFD54F).withValues(alpha: 0.30),
-    };
-  }
-  return switch (tone) {
-    GlassSnackTone.success => const Color(0xFF43A047).withValues(alpha: 0.28),
-    GlassSnackTone.error => const Color(0xFFE53935).withValues(alpha: 0.28),
-    GlassSnackTone.warning ||
-    GlassSnackTone.info => const Color(0xFFF9A825).withValues(alpha: 0.35),
   };
 }
 
@@ -797,8 +802,8 @@ void showGlassSnackBar(
             blur: true,
             sigma: CentliTheme.glassSigma,
             tint: _glassSnackTint(isDark, resolved),
-            borderColor: _glassSnackBorder(isDark, resolved),
-            borderWidth: 1,
+            borderColor: Colors.transparent,
+            borderWidth: 0,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: hasAction
                 ? Row(

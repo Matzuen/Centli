@@ -1,3 +1,5 @@
+import 'dart:ui' show ImageFilter, TileMode;
+
 import 'package:flutter/material.dart';
 
 import '../core/widgets/glass.dart';
@@ -78,10 +80,10 @@ abstract final class CentliTheme {
     return dark ? brandGradientDark : brandGradient;
   }
 
-  // 背景渐变：薄荷绿 → 淡紫 → 丁香紫（浅色紫略提亮，避免发闷）。
-  static const gradientTop = Color(0xFFE4F2EC);
-  static const gradientMid = Color(0xFFF3EFFA);
-  static const gradientBottom = Color(0xFFF6F1FB);
+  // 背景渐变：薄荷绿 → 淡紫 → 丁香紫（整体略压深，底部紫更明显）。
+  static const gradientTop = Color(0xFFD8EBE2);
+  static const gradientMid = Color(0xFFE6DFF2);
+  static const gradientBottom = Color(0xFFD9CCE8);
 
   static const cardRadius = 22.0;
   static const pillRadius = 28.0;
@@ -185,11 +187,14 @@ abstract final class CentliTheme {
   // 玻璃层叠在渐变之上，所以视觉主色不变，只多了一层磨砂质感。
   // ---------------------------------------------------------------------------
 
-  /// 模糊半径：卡片 / 弹层 / 浮动菜单统一磨砂强度。
-  static const double glassSigma = 28;
+  /// 页面背景亚克力：渐变层自身的高斯模糊强度。
+  static const double scaffoldFrostSigma = 36;
+
+  /// 模糊半径：弹层 / 浮动菜单 / 弹窗（SoftCard 不开模糊）。
+  static const double glassSigma = 42;
 
   /// 模糊半径：弹窗自身的玻璃面板（与 [glassSigma] 同档）。
-  static const double glassDialogSigma = 28;
+  static const double glassDialogSigma = 48;
 
   /// 浮动菜单圆角（与首页账本下拉一致）。
   static const double glassMenuRadius = 16;
@@ -198,20 +203,20 @@ abstract final class CentliTheme {
   static const double glassSnackBottomGap = 88;
 
 
-  /// 玻璃填充色：浅色白雾 0.2 / 深色炭灰 0.15。
+  /// 玻璃填充色：浅色白雾 0.28 / 深色炭灰 0.24（更通透，靠模糊 + 投影分界）。
   static Color glassTint(BuildContext context, {bool? dark}) {
     final d = dark ?? Theme.of(context).brightness == Brightness.dark;
     return d
-        ? const Color(0xFF1B1F24).withValues(alpha: 0.15)
-        : Colors.white.withValues(alpha: 0.2);
+        ? const Color(0xFF1B1F24).withValues(alpha: 0.24)
+        : Colors.white.withValues(alpha: 0.28);
   }
 
-  /// 底部导航：浅色白雾约 0.4，比卡片略实、仍透渐变。
+  /// 底部导航：比卡片略实一点，仍透渐变。
   static Color glassNavTint(BuildContext context, {bool? dark}) {
     final d = dark ?? Theme.of(context).brightness == Brightness.dark;
     return d
-        ? const Color(0xFF1B1F24).withValues(alpha: 0.42)
-        : Colors.white.withValues(alpha: 0.4);
+        ? const Color(0xFF1B1F24).withValues(alpha: 0.36)
+        : Colors.white.withValues(alpha: 0.38);
   }
 
   /// 弹窗 / 弹层 / 菜单表面：与 [glassTint] 同套调教参数。
@@ -219,66 +224,64 @@ abstract final class CentliTheme {
     return glassTint(context, dark: dark);
   }
 
-  /// 磨砂底的色纱：很薄，只把对比度抬一点，避免纯模糊发灰。
+  /// 磨砂底的色纱：偏薄，避免盖住模糊。
   static Color glassVeil(BuildContext context, {bool? dark}) {
     final d = dark ?? Theme.of(context).brightness == Brightness.dark;
     return d
-        ? const Color(0xFF0E1114).withValues(alpha: 0.30)
-        : Colors.white.withValues(alpha: 0.16);
+        ? const Color(0xFF0E1114).withValues(alpha: 0.22)
+        : Colors.white.withValues(alpha: 0.12);
   }
 
-  /// 玻璃描边线宽（弹窗 / sheet / 菜单 / 底栏）。
-  static const double glassBorderWidth = 1.5;
+  /// 玻璃描边线宽：全站玻璃面（弹窗 / sheet / 菜单 / 底栏 / SoftCard）统一不描边。
+  static const double glassBorderWidth = 0;
 
-  /// 玻璃边缘描边：浅色深灰约 20% 透明，深色白边提高对比。
-  static Color glassBorder(BuildContext context, {bool? dark}) {
+  /// 玻璃边缘描边：已弃用描边，保留 API；靠雾面 + 投影分界。
+  static Color glassBorder(BuildContext context, {bool? dark}) =>
+      Colors.transparent;
+
+  /// SoftCard 与玻璃体同一套：无描边。
+  static const double glassCardBorderWidth = glassBorderWidth;
+
+  static Color glassCardBorder(BuildContext context, {bool? dark}) =>
+      glassBorder(context, dark: dark);
+
+  /// 卡片内部分界线（摘要卡净资产/资产负债分隔、流水行界等）。
+  static const double cardDividerThickness = 1.0;
+
+  static Color cardDivider(BuildContext context, {bool? dark}) {
     final d = dark ?? Theme.of(context).brightness == Brightness.dark;
     return d
-        ? Colors.white.withValues(alpha: 0.28)
-        : const Color(0xFF3D4A5C).withValues(alpha: 0.20);
+        ? Colors.white.withValues(alpha: 0.22)
+        : const Color(0xFF3D4A5C).withValues(alpha: 0.16);
   }
 
-  /// 卡片描边线宽（仅 [CentliSoftCard]）。
-  static const double glassCardBorderWidth = 0.5;
-
-  /// 卡片描边：浅色 `#3D4A5C` 5% / 深色白 10%。
-  static Color glassCardBorder(BuildContext context, {bool? dark}) {
-    final d = dark ?? Theme.of(context).brightness == Brightness.dark;
-    return d
-        ? Colors.white.withValues(alpha: 0.10)
-        : const Color(0xFF3D4A5C).withValues(alpha: 0.05);
-  }
-
-  /// 玻璃卡片的投影：比纯白卡片略深，玻璃才「浮」得起来。
+  /// 玻璃卡片的投影：略加强，体块从渐变上「浮」起来。
   static List<BoxShadow> glassShadow(BuildContext context, {bool? dark}) {
     final d = dark ?? Theme.of(context).brightness == Brightness.dark;
     return d
         ? [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.28),
-              blurRadius: 24,
-              offset: const Offset(0, 8),
+              color: Colors.black.withValues(alpha: 0.34),
+              blurRadius: 26,
+              offset: const Offset(0, 10),
             ),
           ]
         : [
             BoxShadow(
-              color: const Color(0xFF5A6B7A).withValues(alpha: 0.10),
-              blurRadius: 22,
-              offset: const Offset(0, 8),
+              color: const Color(0xFF5A6B7A).withValues(alpha: 0.14),
+              blurRadius: 24,
+              offset: const Offset(0, 10),
             ),
           ];
   }
 
   static ThemeData _chrome(ThemeData theme, {required bool dark}) {
-    // 毛玻璃：弹窗 / 弹层 / 菜单统一用调教好的半透雾面（浅 0.2 / 深 0.15）。
+    // 毛玻璃：弹窗 / 弹层 / 菜单与 [glassTint] 同档（浅 0.28 / 深 0.24）。
     final surface = dark
-        ? const Color(0xFF1B1F24).withValues(alpha: 0.15)
-        : Colors.white.withValues(alpha: 0.2);
-    // 与 [glassBorder] 同色同宽，避免主题兜底描边和 CentliGlass 不一致。
-    final hairline = dark
-        ? Colors.white.withValues(alpha: 0.28)
-        : const Color(0xFF3D4A5C).withValues(alpha: 0.20);
-    final edge = BorderSide(color: hairline, width: glassBorderWidth);
+        ? const Color(0xFF1B1F24).withValues(alpha: 0.24)
+        : Colors.white.withValues(alpha: 0.28);
+    // 玻璃面不描边；主题 shape 与 CentliGlass 一致用 BorderSide.none。
+    final edge = BorderSide.none;
     final menuShape = RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(glassMenuRadius),
       side: edge,
@@ -471,8 +474,8 @@ abstract final class CentliTheme {
       ),
       dividerTheme: const DividerThemeData(
         space: 1,
-        thickness: 0.5,
-        color: Color(0xFFEEEEEE),
+        thickness: cardDividerThickness,
+        color: Color(0x333D4A5C), // ≈ #3D4A5C @ 20%，与 glassBorder 一致
       ),
       listTileTheme: const ListTileThemeData(
         contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 2),
@@ -646,6 +649,11 @@ abstract final class CentliTheme {
         ),
         clipBehavior: Clip.antiAlias,
       ),
+      dividerTheme: const DividerThemeData(
+        space: 1,
+        thickness: cardDividerThickness,
+        color: Color(0x47FFFFFF), // 白 @ 28%，与 glassBorder 一致
+      ),
       listTileTheme: const ListTileThemeData(
         contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 2),
         minVerticalPadding: 10,
@@ -683,24 +691,50 @@ class CentliGradientScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
-    return DecoratedBox(
-      decoration: CentliTheme.scaffoldGradient(dark: dark),
-      child: Scaffold(
-        extendBody: extendBody,
-        backgroundColor: Colors.transparent,
-        appBar: appBar,
-        floatingActionButton: floatingActionButton,
-        bottomNavigationBar: bottomNavigationBar,
-        body: body,
-      ),
+    // 背景：渐变放大后高斯模糊 + 薄纱 → 整页亚克力底；卡片只叠半透明雾面。
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Positioned.fill(
+          child: ClipRect(
+            child: ImageFiltered(
+              imageFilter: ImageFilter.blur(
+                sigmaX: CentliTheme.scaffoldFrostSigma,
+                sigmaY: CentliTheme.scaffoldFrostSigma,
+                tileMode: TileMode.decal,
+              ),
+              child: Transform.scale(
+                scale: 1.14,
+                child: DecoratedBox(
+                  decoration: CentliTheme.scaffoldGradient(dark: dark),
+                  child: const SizedBox.expand(),
+                ),
+              ),
+            ),
+          ),
+        ),
+        Positioned.fill(
+          child: ColoredBox(
+            color: CentliTheme.glassVeil(context, dark: dark),
+          ),
+        ),
+        Scaffold(
+          extendBody: extendBody,
+          backgroundColor: Colors.transparent,
+          appBar: appBar,
+          floatingActionButton: floatingActionButton,
+          bottomNavigationBar: bottomNavigationBar,
+          body: body,
+        ),
+      ],
     );
   }
 }
 
-/// 毛玻璃圆角卡片。
+/// 雾面圆角卡片。
 ///
-/// 表面是一层半透明雾面 + 1px 高光描边，背后经过模糊，所以卡片会「透出」
-/// 下层渐变的颜色 —— 渐变本身没有被修改，只是被磨砂了一层。
+/// 半透明叠在已磨砂的页面背景上；不在卡片上再开 [BackdropFilter]，
+/// 避免列表里每张卡各糊一遍。弹窗 / 菜单仍走真毛玻璃。
 class CentliSoftCard extends StatelessWidget {
   const CentliSoftCard({
     super.key,
@@ -767,7 +801,6 @@ class CentliSoftCard extends StatelessWidget {
       borderRadius: radius,
       clipBehavior: clipBehavior,
       tint: color,
-      // 卡片背后只有平滑渐变，不开模糊；弹窗 / sheet 仍走真毛玻璃。
       blur: false,
       shadow: shadow,
       borderColor: CentliTheme.glassCardBorder(context, dark: dark),
